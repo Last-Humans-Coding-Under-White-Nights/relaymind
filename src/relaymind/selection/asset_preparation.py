@@ -7,12 +7,19 @@ import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 
-from relaymind.assets.catalog import MAX_OFFER_BYTES, text, validate_asset_record, validate_document
+from relaymind.assets.catalog import (
+    MAX_OFFER_BYTES,
+    acquisition_budgets,
+    text,
+    validate_asset_record,
+    validate_document,
+)
 from relaymind.canonical import canonical_digest, canonical_json
 from relaymind.schema_util import StrictValidator, load_packaged_schema
 from relaymind.selection.asset_contract import AttemptFailure, SelectorContext, parse_asset_result
 from relaymind.selection.asset_http import post_json
 from relaymind.selection.http import validate_url
+from relaymind.store.index_job_event import validate_job_event
 
 DEFAULT_PREPARATION = dict(
     mode="none", url=None, profile=None, total_ms=60000, request_ms=2000, poll_ms=250, max_polls=240
@@ -41,9 +48,17 @@ _VALIDATORS = {
     )
     for kind in ("request", "response")
 }
+_BINDING_VALIDATOR = StrictValidator(_VALIDATORS["request"].schema["properties"]["binding"])
+_READINESS_VALIDATOR = StrictValidator(
+    load_packaged_schema("relaymind.store", "recommendation_readiness.v1.json")
+)
+_COST_SCHEMA = load_packaged_schema("relaymind.store", "recommendation_result.v1.json")
+_COST_VALIDATOR = StrictValidator({"$ref": "#/$defs/CostV1", "$defs": _COST_SCHEMA["$defs"]})
 
 
-def normalize_preparation(value: Mapping | None, *, http_primary: bool = True) -> dict:
+def normalize_preparation(
+    value: Mapping | None, *, http_primary: bool = True, local_primary: bool = False
+) -> dict:
     if value is not None and not isinstance(value, Mapping):
         raise ValueError("invalid_preparation_config")
     value = {} if value is None else dict(value)
@@ -58,7 +73,7 @@ def normalize_preparation(value: Mapping | None, *, http_primary: bool = True) -
     ):
         if type(value[key]) is not int or not low <= value[key] <= high:
             raise ValueError("invalid_preparation_config")
-    if value["request_ms"] > value["total_ms"]:
+    if value["mode"] != "local" and value["request_ms"] > value["total_ms"]:
         raise ValueError("invalid_preparation_config")
     if value["mode"] == "none":
         if value["url"] is not None or value["profile"] is not None:
@@ -66,6 +81,17 @@ def normalize_preparation(value: Mapping | None, *, http_primary: bool = True) -
     elif value["mode"] == "http" and http_primary and value["profile"] in ("cold", "reuse"):
         value["url"] = validate_url(value["url"])
         if len(value["url"].encode()) > 2048:
+            raise ValueError("invalid_preparation_config")
+    elif value["mode"] == "local" and local_primary:
+        if (
+            value["url"] is not None
+            or value["profile"] != "cold"
+            or value["total_ms"] > 60000
+            or any(
+                value[key] != DEFAULT_PREPARATION[key]
+                for key in ("request_ms", "poll_ms", "max_polls")
+            )
+        ):
             raise ValueError("invalid_preparation_config")
     else:
         raise ValueError("invalid_preparation_config")
@@ -105,11 +131,166 @@ def preparation_binding(
 
 
 def _binding(value):
+    validate_document(value, _BINDING_VALIDATOR)
     for item in (*value["selector"].values(), *value["scope"].values(), *value["permissions"]):
         text(item, 256)
     for key in ("permissions", "requested_kinds"):
         if value[key] != sorted(set(value[key])):
             raise ValueError("invalid_preparation_binding")
+
+
+def _validate_local_preparation(record, *, binding=None):
+    required = {
+        "config",
+        "binding",
+        "preparation_id",
+        "status",
+        "reason",
+        "index_revision",
+        "observed_ms",
+        "cleanup_ms",
+        "exchanges",
+        "observed_costs",
+        "local",
+    }
+    if set(record) != required or record["binding"] is None:
+        raise ValueError("invalid_preparation_record")
+    _binding(record["binding"])
+    if binding is not None and record["binding"] != binding:
+        raise ValueError("preparation_binding")
+    if record["preparation_id"] is not None or record["exchanges"] != []:
+        raise ValueError("invalid_preparation_record")
+    local = record["local"]
+    if not isinstance(local, Mapping) or set(local) != {"job_events", "readiness"}:
+        raise ValueError("invalid_local_preparation")
+    events = local["job_events"]
+    if not isinstance(events, (list, tuple)) or len(events) > 100000:
+        raise ValueError("job_evidence_limit")
+    states, batches, kinds = {}, {}, {}
+    accepted, failed = 0, 0
+    for value in events:
+        event = validate_job_event(value)
+        job_id = event["job_id"]
+        text(job_id, 256)
+        state, seq = states.get(job_id, ("new", 0))
+        kind, payload = event["event_type"], event["payload"]
+        if event["seq"] != seq + 1 or state in ("published", "failed", "cancelled"):
+            raise ValueError("invalid_local_job_sequence")
+        if kind == "queued":
+            if state != "new" or payload["budgets"] != acquisition_budgets():
+                raise ValueError("invalid_local_job_sequence")
+            if payload["source_id"] is not None or payload["job_kind"] not in (
+                "lexical",
+                "embedding",
+            ):
+                raise ValueError("invalid_local_job_kind")
+            kinds[job_id] = payload["job_kind"]
+        elif kind == "started":
+            if state != "queued":
+                raise ValueError("invalid_local_job_sequence")
+        elif kind == "batch.finished":
+            if state != "started" or payload["batch"] != batches.get(job_id, 0) + 1:
+                raise ValueError("invalid_local_job_sequence")
+            batches[job_id] = payload["batch"]
+            if kinds[job_id] == "embedding":
+                accepted += payload["accepted_count"]
+            elif payload["embeddings"]:
+                raise ValueError("invalid_local_job_kind")
+            for observation in payload["embeddings"]:
+                for item in (
+                    *observation["model"].values(),
+                    observation["device"],
+                    observation["representation_revision"],
+                ):
+                    text(item, 256)
+                if observation["representation_revision"] != "asset_fields.v1":
+                    raise ValueError("invalid_local_embedding")
+        elif kind in ("published", "failed", "cancelled"):
+            if state != "started":
+                raise ValueError("invalid_local_job_sequence")
+            failed += int(kind == "failed")
+            if (
+                kind == "published"
+                and kinds[job_id] == "embedding"
+                and record["status"] == "ready"
+                and payload["index_revision"] != record["index_revision"]
+            ):
+                raise ValueError("preparation_index_binding")
+        else:
+            raise ValueError("invalid_local_job_sequence")
+        if (
+            kind in ("queued", "started", "published")
+            and payload["catalog_revision"] != record["binding"]["catalog_revision"]
+        ):
+            raise ValueError("preparation_binding")
+        states[job_id] = (state if kind == "batch.finished" else kind, event["seq"])
+    readiness = local["readiness"]
+    if readiness is not None:
+        validate_document(readiness, _READINESS_VALIDATOR)
+        coverage = readiness["semantic_coverage"]
+        if (
+            readiness["catalog_revision"] != record["binding"]["catalog_revision"]
+            or not 0 <= coverage["ready"] <= coverage["total"] == readiness["catalog_size"] <= 1000
+        ):
+            raise ValueError("preparation_readiness_binding")
+    reasons = {
+        "ready": None,
+        "not_applicable": None,
+        "failed": "build_failed",
+        "timeout": "deadline_exceeded",
+        "cancelled": "cancelled",
+        "stale_catalog": "catalog_stale",
+    }
+    status = record["status"]
+    if status not in reasons or record["reason"] != reasons[status]:
+        raise ValueError("invalid_preparation_reason")
+    for key in ("observed_ms", "cleanup_ms"):
+        value = record[key]
+        if value is not None and (
+            type(value) not in (int, float) or not math.isfinite(value) or value < 0
+        ):
+            raise ValueError("invalid_preparation_time")
+    if status in ("ready", "not_applicable"):
+        if (
+            readiness is None
+            or readiness["pending_jobs"]
+            or record["observed_ms"] is None
+            or record["observed_ms"] >= record["config"]["total_ms"]
+        ):
+            raise ValueError("invalid_preparation_deadline")
+        if (
+            any(state not in ("published", "failed", "cancelled") for state, seq in states.values())
+            or readiness["failed_jobs"] != failed
+        ):
+            raise ValueError("invalid_local_job_sequence")
+        if status == "ready":
+            if (
+                readiness["state"] != "ready"
+                or not readiness["lexical_ready"]
+                or readiness["semantic_coverage"]["ready"] <= 0
+                or accepted < readiness["semantic_coverage"]["ready"]
+                or record["index_revision"] is None
+            ):
+                raise ValueError("invalid_preparation_readiness")
+            text(record["index_revision"], 256)
+        elif (
+            readiness["state"] != "empty"
+            or readiness["catalog_size"] != 0
+            or record["index_revision"] is not None
+            or record["binding"]["catalog_digest"] != canonical_digest([])
+        ):
+            raise ValueError("invalid_preparation_readiness")
+    elif record["index_revision"] is not None:
+        raise ValueError("invalid_preparation_outcome")
+    costs = record["observed_costs"]
+    if not isinstance(costs, (list, tuple)) or len(costs) > 1:
+        raise ValueError("invalid_preparation_costs")
+    for observation in costs:
+        if set(observation) != {"provenance", "value"} or observation["provenance"] != "observed":
+            raise ValueError("invalid_preparation_costs")
+        validate_document(observation["value"], _COST_VALIDATOR)
+    if len(canonical_json(record).encode("utf-8")) > 256 * 1024 * 1024:
+        raise ValueError("preparation_size_limit")
 
 
 def parse_preparation_request(value: object) -> dict:
@@ -302,7 +483,7 @@ def validate_preparation_record(
     record: Mapping, *, config: Mapping | None = None, binding: Mapping | None = None
 ) -> None:
     """Recheck transcript semantics before an offline report can earn grades."""
-    normalized = normalize_preparation(record["config"])
+    normalized = normalize_preparation(record["config"], local_primary=True)
     if normalized != record["config"] or config is not None and normalized != config:
         raise ValueError("preparation_config_binding")
     if normalized["mode"] == "none":
@@ -320,6 +501,9 @@ def validate_preparation_record(
         )
         if record != expected:
             raise ValueError("invalid_preparation_record")
+        return
+    if normalized["mode"] == "local":
+        _validate_local_preparation(record, binding=binding)
         return
     if binding is not None and record["binding"] != binding:
         raise ValueError("preparation_binding")
@@ -443,12 +627,16 @@ def _verified_exchange(exchange: Mapping, request: Mapping, request_ms: int) -> 
 class PreparedAssetSelector:
     """Validate pinned preparation identity before ordinary v2 coordinator admission."""
 
-    transport = "http"
-    mechanism = "http"
-
     def __init__(self, primary, preparation: Mapping) -> None:
         self.primary, self.preparation = primary, copy.deepcopy(preparation)
         self.name, self.version = primary.name, primary.version
+        self.builtin = getattr(primary, "builtin", False)
+        self.transport = getattr(primary, "transport", "in_process" if self.builtin else "http")
+        self.mechanism = getattr(primary, "mechanism", self.transport)
+
+    def __getattr__(self, name):
+        # Actual request observations stay owned by the underlying selector.
+        return getattr(self.primary, name)
 
     async def select(self, request, context: SelectorContext) -> object:
         binding = preparation_binding(

@@ -16,6 +16,7 @@ HOST_VERSION = "2026.10.7"
 AUTHCRUNCH_VERSION = "1.5.0"
 AUTHCRUNCH_SHA256 = "86a1ed8446bca803149bdcf1335005b840033a17c41680a067d7de11dfbaeca9"
 AUTHCRUNCH_BYTES = 31627615
+PERSON_SCOPES = ("operator.read", "operator.write", "operator.approvals", "operator.questions")
 AUTHCRUNCH_URL = (
     "https://github.com/authcrunch/authcrunch/releases/download/v1.5.0/"
     "authcrunch_1.5.0_linux_amd64.tar.gz"
@@ -114,6 +115,8 @@ def person_composition_pass(capture: dict) -> bool:
     try:
         if capture["status"] != "completed" or capture["host_version"] != HOST_VERSION:
             return False
+        if capture.get("configured_session_policy") != person_role_config(list(PERSON_SCOPES)):
+            return False
         if capture["checks"]["production_adapter_qualified"] is not False:
             return False
         if capture["steps"] != [dict(name=name, status="passed") for name in STEPS]:
@@ -206,6 +209,8 @@ def person_composition_pass(capture: dict) -> bool:
                 ):
                     return False
             native = rpc["payload"]
+            if native["authenticatedControlUi"] is not True:
+                return False
             bindings = {
                 "requestId": "rpc_evidence_id",
                 "profileId": "profile_id",
@@ -237,13 +242,22 @@ def person_composition_pass(capture: dict) -> bool:
             or cross["error_code"] not in {"FORBIDDEN", "INVALID_REQUEST", "NOT_FOUND"}
         ):
             return False
-        prepared, denied = retirement["prepared"], retirement["denied"]
+        prepared, observed_close, denied = (
+            retirement["prepared"],
+            retirement["retired"],
+            retirement["denied"],
+        )
         if (
             retirement["browser_context_closed"] is not True
+            or retirement["native_sequence"] != ["prepared", "connection_retired", "guard_denied"]
             or prepared["phase"] != "prepared"
+            or observed_close["phase"] != "connection_retired"
+            or observed_close["connection_aborted"] is not True
             or denied["phase"] != "guard_denied"
+            or observed_close["requestId"] != prepared["requestId"]
             or prepared["requestId"] != denied["requestId"]
             or denied["reason"] != "post_await_authority_retired"
+            or observed_close["connectionId"] != prepared["connectionId"]
             or denied["connectionId"] != prepared["connectionId"]
             or prepared["connectionId"] != accounts[0]["connection_id"]
         ):
@@ -251,6 +265,16 @@ def person_composition_pass(capture: dict) -> bool:
         return len(profiles) == len(sessions) == len(keys) == len(sockets) == len(create_ids) == 2
     except (KeyError, TypeError):
         return False
+
+
+def person_role_config(scopes: list[str]) -> dict:
+    """Use the host's named role to hide another person's native sessions."""
+    return dict(
+        default="person",
+        definitions=dict(
+            person=dict(sessions=dict(others="none"), agents=["main"], scopes=list(scopes))
+        ),
+    )
 
 
 def session_create_receipt(observed: dict, account_email: str) -> dict:
@@ -353,6 +377,53 @@ def project_person_rpc_failure(path: Path, request_id: str) -> dict:
             return dict(status="event_file_invalid", **empty)
         observations.append(observation)
         if len(observations) > 4:
+            return dict(status="event_file_invalid", **empty)
+    return {
+        "status": "handler_event_present" if observations else "handler_event_absent",
+        "observations": observations,
+    }
+
+
+def project_held_native_events(path: Path, request_id: str) -> dict:
+    """Retain only fixed facts from the bound held request before fixture cleanup."""
+    empty = {"observations": []}
+    if not isinstance(request_id, str) or not 0 < len(request_id) <= 128:
+        return dict(status="event_file_invalid", **empty)
+    try:
+        with path.open("rb") as source:
+            raw = source.read(1024 * 1024 + 1)
+    except OSError:
+        return dict(status="event_file_unavailable", **empty)
+    if len(raw) > 1024 * 1024:
+        return dict(status="event_file_oversize", **empty)
+    observations = []
+    for line in raw.splitlines():
+        try:
+            event = json.loads(line)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return dict(status="event_file_invalid", **empty)
+        if not isinstance(event, dict):
+            return dict(status="event_file_invalid", **empty)
+        if event.get("requestId") != request_id:
+            continue
+        connection_id = event.get("connectionId")
+        if not isinstance(connection_id, str) or not 0 < len(connection_id) <= 128:
+            return dict(status="event_file_invalid", **empty)
+        phase, reason = event.get("phase"), event.get("reason")
+        if phase in {"prepared", "admitted"} and reason is None:
+            observation = {"phase": phase, "reason": None}
+        elif (
+            phase == "connection_retired"
+            and reason is None
+            and type(event.get("connection_aborted")) is bool
+        ):
+            observation = {"phase": phase, "connection_aborted": event["connection_aborted"]}
+        elif phase in PERSON_RPC_EVENT_REASONS and reason in PERSON_RPC_EVENT_REASONS[phase]:
+            observation = {"phase": phase, "reason": reason}
+        else:
+            return dict(status="event_file_invalid", **empty)
+        observations.append(observation)
+        if len(observations) > 8:
             return dict(status="event_file_invalid", **empty)
     return {
         "status": "handler_event_present" if observations else "handler_event_absent",
@@ -613,12 +684,13 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
     events_path.write_bytes(b"")
     events_path.chmod(0o600)
     plugin = Path(__file__).resolve().parent
-    scopes = ["operator.read", "operator.write", "operator.approvals", "operator.questions"]
+    scopes = list(PERSON_SCOPES)
     config = dict(
         gateway=dict(
             mode="local",
             bind="loopback",
             port=gateway_port,
+            roles=person_role_config(scopes),
             publicOrigin=origin,
             trustedProxies=["127.0.0.1"],
             controlUi=dict(allowedOrigins=[origin]),
@@ -651,6 +723,7 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
     config_path = work / "openclaw.json"
     config_path.write_bytes((json.dumps(config) + "\n").encode("utf-8"))
     config_path.chmod(0o600)
+    capture["configured_session_policy"] = config["gateway"]["roles"]
     environment = host_environment(work)
     allowed = {
         "PATH",
@@ -748,6 +821,7 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
     capture["proxy"] = dict(release=AUTHCRUNCH_VERSION, sha256=AUTHCRUNCH_SHA256)
     capture["events"] = []
     processes, files = [], []
+    held_request_id = None
 
     def mark(name):
         for step in capture["steps"]:
@@ -1019,6 +1093,7 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                     "params => window.__rmPersonWire.startRpc('rmqualification.person', params)",
                     dict(sessions[0], hold=True),
                 )
+                held_request_id = request_id
                 deadline = time.monotonic() + 3
                 while not any(
                     event.get("requestId") == request_id and event.get("phase") == "prepared"
@@ -1027,7 +1102,27 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                     if time.monotonic() >= deadline:
                         raise TimeoutError("native_hold_not_observed")
                     time.sleep(0.01)
+                observed_events = native_events()
+                prepared_event = next(
+                    event
+                    for event in observed_events
+                    if event.get("requestId") == request_id and event.get("phase") == "prepared"
+                )
+                connection_id = capture["accounts"][0]["connection_id"]
+                if prepared_event.get("connectionId") != connection_id:
+                    raise ValueError("native_revocation_unverified")
                 contexts[0].close()
+                deadline = time.monotonic() + 3
+                while not any(
+                    event.get("requestId") == request_id
+                    and event.get("connectionId") == connection_id
+                    and event.get("phase") == "connection_retired"
+                    and event.get("connection_aborted") is True
+                    for event in native_events()
+                ):
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError("native_connection_retirement_not_observed")
+                    time.sleep(0.01)
                 release_path.write_bytes(b"release\n")
                 deadline = time.monotonic() + 5
                 while not any(
@@ -1039,10 +1134,13 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                         raise TimeoutError("native_revocation_not_observed")
                     time.sleep(0.01)
                 observed_events = native_events()
-                prepared_event = next(
+                retired_event = next(
                     event
                     for event in observed_events
-                    if event.get("requestId") == request_id and event.get("phase") == "prepared"
+                    if event.get("requestId") == request_id
+                    and event.get("connectionId") == connection_id
+                    and event.get("phase") == "connection_retired"
+                    and event.get("connection_aborted") is True
                 )
                 denied_event = next(
                     event
@@ -1056,7 +1154,13 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                         kind="connection_revocation",
                         browser_context_closed=True,
                         prepared=prepared_event,
+                        retired=retired_event,
                         denied=denied_event,
+                        native_sequence=[
+                            event.get("phase")
+                            for event in observed_events
+                            if event.get("requestId") == request_id
+                        ],
                     )
                 )
                 if denied_event.get("reason") != "post_await_authority_retired" or denied_event.get(
@@ -1071,6 +1175,10 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                 if any(secret in json.dumps(capture) for secret in secrets_to_exclude):
                     raise ValueError("credential_export_refused")
             finally:
+                if held_request_id is not None:
+                    capture["held_native_observations"] = project_held_native_events(
+                        events_path, held_request_id
+                    )
                 browser.close()
     finally:
         release_path.write_bytes(b"release\n")
@@ -1153,6 +1261,7 @@ def run_qualification(work: Path, output: Path) -> int:
             "cross_account_admitted",
             "native_hold_not_observed",
             "native_revocation_not_observed",
+            "native_connection_retirement_not_observed",
             "native_revocation_unverified",
             "native_session_create_binding",
             "native_ui_pairing_timeout",

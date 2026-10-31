@@ -491,6 +491,9 @@ def test_complete_login_claim_still_needs_bound_denial_observations():
 def complete_capture(api):
     """Controlled receipts include actual create response and same-socket RPC identity."""
     capture = mechanical_capture(api)
+    capture["configured_session_policy"] = api.person_role_config(
+        ["operator.read", "operator.write", "operator.approvals", "operator.questions"]
+    )
     capture["events"] = []
     for i, account in enumerate(capture["accounts"], 1):
         account.update(
@@ -544,6 +547,7 @@ def complete_capture(api):
                         requestId=account["rpc_evidence_id"],
                         profileId=account["profile_id"],
                         authenticatedUserId=account["native_person_email"],
+                        authenticatedControlUi=True,
                         sessionKey=account["session_key"],
                         sessionId=account["native_session_id"],
                         lifecycleRevision=account["lifecycle_revision"],
@@ -572,12 +576,19 @@ def complete_capture(api):
                 prepared=dict(
                     phase="prepared", requestId="held", connectionId="native-connection-1"
                 ),
+                retired=dict(
+                    phase="connection_retired",
+                    requestId="held",
+                    connectionId="native-connection-1",
+                    connection_aborted=True,
+                ),
                 denied=dict(
                     phase="guard_denied",
                     requestId="held",
                     connectionId="native-connection-1",
                     reason="post_await_authority_retired",
                 ),
+                native_sequence=["prepared", "connection_retired", "guard_denied"],
             ),
         ]
     )
@@ -587,6 +598,34 @@ def complete_capture(api):
 def test_complete_same_socket_create_and_person_receipts_pass_fixture_mechanics_only():
     api = module()
     assert api.person_composition_pass(complete_capture(api)) is True
+
+
+@pytest.mark.parametrize("mutation", ["missing", "shared", "admin"])
+def test_missing_or_broad_host_session_policy_never_qualifies(mutation):
+    """RM39/AC30: a request denial must be backed by the configured person role."""
+    api = module()
+    capture = complete_capture(api)
+    person = capture["configured_session_policy"]["definitions"]["person"]
+    if mutation == "missing":
+        del capture["configured_session_policy"]
+    elif mutation == "shared":
+        person["sessions"]["others"] = "write"
+    else:
+        person["scopes"].append("operator.admin")
+    assert api.person_composition_pass(capture) is False
+
+
+@pytest.mark.parametrize("attestation", [False, None])
+def test_missing_or_false_native_control_ui_attestation_never_qualifies(attestation):
+    """RM39/AC30: browser origin alone cannot attest a native Control UI client."""
+    api = module()
+    capture = complete_capture(api)
+    receipt = next(event for event in capture["events"] if event["kind"] == "person_rpc")["payload"]
+    if attestation is None:
+        del receipt["authenticatedControlUi"]
+    else:
+        receipt["authenticatedControlUi"] = False
+    assert api.person_composition_pass(capture) is False
 
 
 @pytest.mark.parametrize(
@@ -605,6 +644,11 @@ def test_complete_same_socket_create_and_person_receipts_pass_fixture_mechanics_
         "cross_target",
         "generic_denial",
         "wrong_denial_connection",
+        "missing_retirement",
+        "false_abort",
+        "foreign_retirement",
+        "retirement_before_prepared",
+        "admitted_held",
     ],
 )
 def test_incomplete_or_mismatched_create_and_retirement_receipts_never_qualify(mutation):
@@ -642,6 +686,20 @@ def test_incomplete_or_mismatched_create_and_retirement_receipts_never_qualify(m
         capture["events"][-2]["target_session_key"] = "wrong"
     elif mutation == "generic_denial":
         capture["events"][-1]["denied"]["reason"] = "fixture_hold_timeout"
+    elif mutation == "missing_retirement":
+        del capture["events"][-1]["retired"]
+    elif mutation == "false_abort":
+        capture["events"][-1]["retired"]["connection_aborted"] = False
+    elif mutation == "foreign_retirement":
+        capture["events"][-1]["retired"]["connectionId"] = "other"
+    elif mutation == "retirement_before_prepared":
+        capture["events"][-1]["native_sequence"] = [
+            "connection_retired",
+            "prepared",
+            "guard_denied",
+        ]
+    elif mutation == "admitted_held":
+        capture["events"][-1]["native_sequence"].insert(2, "admitted")
     else:
         capture["events"][-1]["denied"]["connectionId"] = "other"
     assert api.person_composition_pass(capture) is False
@@ -681,6 +739,46 @@ def test_native_create_export_keeps_only_bounded_nonsecret_binding():
             api.session_create_receipt(observed | changed, "fixture@example.test")
 
 
+def test_held_native_failure_projection_is_bounded_and_closed(tmp_path):
+    """RM39/AC30: a failed held control retains fixed facts without private payloads."""
+    api = module()
+    events = tmp_path / "native-events.jsonl"
+    rows = [
+        dict(phase="prepared", requestId="held", connectionId="connection-a", token="secret"),
+        dict(
+            phase="connection_retired",
+            requestId="held",
+            connectionId="connection-a",
+            connection_aborted=True,
+            url="https://private.invalid/secret",
+        ),
+        dict(
+            phase="guard_denied",
+            requestId="held",
+            connectionId="connection-a",
+            reason="post_await_authority_retired",
+        ),
+        dict(phase="admitted", requestId="other", connectionId="connection-b"),
+    ]
+    events.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    projection = api.project_held_native_events(events, "held")
+    assert projection == {
+        "status": "handler_event_present",
+        "observations": [
+            {"phase": "prepared", "reason": None},
+            {"phase": "connection_retired", "connection_aborted": True},
+            {"phase": "guard_denied", "reason": "post_await_authority_retired"},
+        ],
+    }
+    assert "secret" not in repr(projection)
+    assert "connection-a" not in repr(projection)
+    events.write_text(json.dumps(dict(phase="unknown", requestId="held")) + "\n")
+    assert api.project_held_native_events(events, "held") == {
+        "status": "event_file_invalid",
+        "observations": [],
+    }
+
+
 def test_each_account_session_has_its_own_key_and_label():
     """RM37/AC28: the host refuses a second session that reuses a label."""
     m = module()
@@ -691,3 +789,18 @@ def test_each_account_session_has_its_own_key_and_label():
     assert first["label"] != second["label"]
     assert first["key"].startswith("agent:main:person-")
     assert 0 < len(first["label"]) <= 512
+
+
+def test_disposable_host_configures_person_session_boundary():
+    """RM39/AC30: native accounts cannot target another person's session."""
+    scopes = ["operator.read", "operator.write", "operator.approvals", "operator.questions"]
+    assert module().person_role_config(scopes) == {
+        "default": "person",
+        "definitions": {
+            "person": {
+                "sessions": {"others": "none"},
+                "agents": ["main"],
+                "scopes": scopes,
+            }
+        },
+    }

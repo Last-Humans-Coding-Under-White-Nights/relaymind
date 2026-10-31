@@ -8,6 +8,8 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from relaymind.assets.catalog import (
+    MAX_OFFER_BYTES,
+    MAX_OFFER_RECORDS,
     AssetRecord,
     AssetValidationError,
     CatalogSnapshot,
@@ -98,6 +100,92 @@ class AssetCatalogStore:
     def __init__(self, store: RunStore) -> None:
         self.store = store
         self._normalize_stale_bytes()
+
+    def initialize_evaluation_offer(
+        self,
+        documents: tuple[SearchDocument, ...],
+        *,
+        config_digests: Mapping[str, str],
+        check: Callable[[], None] = lambda: None,
+    ) -> CatalogSnapshot:
+        """Install a locked evaluation offer once in an unused private store.
+
+        This trusted catalog-input seam grants no source acquisition/qualification
+        or host authority. Preserve every record byte/state; invent neither a
+        successful source capture nor an acquisition job. Ordinary stores cannot
+        be replaced by this fresh-store-only initialization.
+        """
+        check()
+        if len(documents) > MAX_OFFER_RECORDS:
+            raise AssetValidationError("offer_size_limit")
+        rows, source_counts, seen = [], {}, set()
+        byte_count = 2
+        for document in documents:
+            check()
+            record = validate_asset_record(document.record.to_json_object())
+            verified = project_asset(record, body=None, redactor=Redactor(), secrets=())
+            if (
+                document.body is not None
+                or verified.projection_digest != document.projection_digest
+                or record.asset_id in seen
+                or record.source_id not in config_digests
+            ):
+                raise AssetValidationError("invalid_evaluation_offer")
+            config_digest = config_digests[record.source_id]
+            if (
+                not isinstance(config_digest, str)
+                or len(config_digest) != 64
+                or any(char not in "0123456789abcdef" for char in config_digest)
+            ):
+                raise AssetValidationError("invalid_evaluation_offer")
+            seen.add(record.asset_id)
+            encoded = canonical_json(record.to_json_object())
+            byte_count += len(encoded.encode("utf-8")) + int(bool(rows))
+            if byte_count > MAX_OFFER_BYTES:
+                raise AssetValidationError("offer_size_limit")
+            source_counts[record.source_id] = source_counts.get(record.source_id, 0) + 1
+            rows.append(
+                (
+                    record.asset_id,
+                    record.source_id,
+                    encoded,
+                    canonical_json({"body": None, "projection_digest": document.projection_digest}),
+                    document.projection_digest,
+                    None,
+                    int(record.stale),
+                )
+            )
+        with self.store.sql_transaction() as db:
+            check()
+            meta = db.execute("SELECT * FROM asset_catalog_meta").fetchone()
+            if meta["revision"] != 0 or meta["published_at"] != "1970-01-01T00:00:00.000000Z":
+                raise CatalogConflict("evaluation_store_not_fresh")
+            for table in (
+                "runs",
+                "recommendations",
+                "asset_catalog_sources",
+                "asset_catalog_assets",
+                "asset_catalog_jobs",
+                "asset_catalog_tombstones",
+            ):
+                if db.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone():
+                    raise CatalogConflict("evaluation_store_not_fresh")
+            for source_id, count in source_counts.items():
+                self._ensure_source(db, source_id)
+                # No captured_at/content_hash/last_success_at is fabricated.
+                # The evaluation provider separately labels its locked input.
+                db.execute(
+                    "UPDATE asset_catalog_sources SET stale=0,accepted_count=?,config_digest=? "
+                    "WHERE source_id=?",
+                    (count, config_digests[source_id], source_id),
+                )
+            db.executemany("INSERT INTO asset_catalog_assets VALUES(?,?,?,?,?,?,?)", rows)
+            db.execute(
+                "UPDATE asset_catalog_meta SET revision=?,published_at=?",
+                (int(bool(rows)), utc_iso(self.store.clock.utc_now())),
+            )
+            check()
+        return self.snapshot()
 
     def _normalize_stale_bytes(self) -> None:
         """Rewrite rows stored before record bytes carried the effective stale flag.
@@ -675,6 +763,24 @@ class AssetCatalogStore:
                     (job_id,),
                 )
             )
+
+    def job_event_stream(self, *, limit: int = 100000) -> tuple[Mapping, ...]:
+        """Bounded actual insertion order across jobs, never UUID/time sorting."""
+        if type(limit) is not int or not 0 <= limit <= 100000:
+            raise ValueError("job_evidence_limit")
+        events, size = [], 2
+        with self.store.sql_read() as db:
+            for row in db.execute(
+                "SELECT event_json FROM asset_index_job_events ORDER BY rowid LIMIT ?",
+                (limit + 1,),
+            ):
+                if len(events) == limit:
+                    raise ValueError("job_evidence_limit")
+                size += len(row[0].encode("utf-8")) + int(bool(events))
+                if size > 256 * 1024 * 1024:
+                    raise ValueError("job_evidence_limit")
+                events.append(validate_job_event(json.loads(row[0])))
+        return tuple(events)
 
     def begin_job(
         self, source_id: str | None, config_digest: str, *, job_kind: str = "refresh"

@@ -2,6 +2,21 @@
 
 ## Current
 
+- `source_asset_benchmark.py` — acquire pinned originals, build offline inputs,
+  run identical source-backed skill/MCP cases, compare internal JSON diagnostics
+  and emit explicit user-choice stdout receipts (RM34/RM40/RM44). Start with the
+  [source tutorial](../docs/SOURCE_BENCHMARK.md); choice does not modify the report
+  or execute an asset. Source compare has no Markdown option.
+- `asset_selection_benchmark.py` — formal locked-profile run, explicit optional
+  preparation and offline JSON/Markdown comparison (RM35/RM40/RM44). The
+  [formal guide](../docs/ASSET_BENCHMARK.md) covers resolver/privacy commitments,
+  provisional fixtures and independent qualification separately.
+- `example_asset_selector.py` — v2 loopback skill/tool example, with optional
+  catalog-bound HTTP index preparation (RM35/RM40). Use `--port 8933`, or
+  `--port 8934 --preparation-path /index`; the example's exact identity is
+  `example_lexical/1`. This is separate from managed v1 `example_selector.py`.
+  [English setup](../docs/asset-selection.md) · [简体中文](../docs/asset-selection.zh-CN.md).
+
 - `probes/qualify_matrix.py` — offline Matrix capture integrity probe (#188;
   RM07, RM12, RM16, RM25). Reads an operator manifest and opaque original files;
   checks IDs, hashes, UTC capture metadata, size bounds and path containment.

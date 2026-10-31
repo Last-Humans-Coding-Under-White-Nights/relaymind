@@ -15,6 +15,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Runtime snapshots and native MCP activation retain their existing qualification gates.
 
 
+
 - Specification 0.55 → 0.56 (RM40/RM44; AC31/AC36; review #219):
   names `Case.conversation` and attempt/embedding `cost_observations` as
   order-preserving arrays for canonical hashing. Types `Rate.value` and Wilson
@@ -32,6 +33,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   All samples, failure denominators and outstanding live qualification gates remain.
 
 ### Added
+
+- Native retrieval benchmark tooling (#201; RM16/RM35/RM38/RM40/RM41/RM44;
+  AC26/AC29/AC31/AC32): shared semantic factory/parser and offline preimages,
+  explicit local preparation, native/floor cost conservation and self-contained
+  runtime comparison evidence. Qualified artifact activation, actual native
+  controls and ordinary-process proof remain separate; the registry stays empty.
 
 - Customer recommendation guides (#207; RM34–RM44/AC25–AC37): English and
   Chinese entry/navigation, v1/v2 migration, current HTTP index preparation,

@@ -82,56 +82,93 @@
       "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
     },
     "preparation": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {
-        "mode": {
-          "enum": [
-            "none",
-            "http"
-          ]
-        },
-        "url": {
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 2048
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {
+            "mode": {
+              "enum": [
+                "none",
+                "http"
+              ]
             },
-            {
-              "type": "null"
+            "url": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "profile": {
+              "enum": [
+                null,
+                "cold",
+                "reuse"
+              ]
+            },
+            "total_ms": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 600000
+            },
+            "request_ms": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "poll_ms": {
+              "type": "integer",
+              "minimum": 50,
+              "maximum": 5000
+            },
+            "max_polls": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
             }
-          ]
+          }
         },
-        "profile": {
-          "enum": [
-            null,
-            "cold",
-            "reuse"
-          ]
-        },
-        "total_ms": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 600000
-        },
-        "request_ms": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 10000
-        },
-        "poll_ms": {
-          "type": "integer",
-          "minimum": 50,
-          "maximum": 5000
-        },
-        "max_polls": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 1000
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "profile"
+          ],
+          "properties": {
+            "mode": {
+              "const": "local"
+            },
+            "url": {
+              "type": "null"
+            },
+            "profile": {
+              "const": "cold"
+            },
+            "total_ms": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60000
+            },
+            "request_ms": {
+              "const": 2000
+            },
+            "poll_ms": {
+              "const": 250
+            },
+            "max_polls": {
+              "const": 240
+            }
+          }
         }
-      }
+      ]
     }
   }
 }

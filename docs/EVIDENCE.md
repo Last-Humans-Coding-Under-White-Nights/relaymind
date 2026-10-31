@@ -1,5 +1,14 @@
 # Live evidence record
 
+For current M10 navigation, use [English setup](asset-selection.md) or
+[简体中文](asset-selection.zh-CN.md). The
+[source diagnostic record](SOURCE_BENCHMARK.md#recorded-development-results)
+retains actual misses, timeouts, floors and reassessment, while the
+[qualified-source record](evidence/2026-10-30-github-skill-source/README.md)
+separates acquisition, scheduled product jobs and fixture controls. These links
+do not replace the original dated measurements or establish host/model/platform
+acceptance. See [privacy and export handling](asset-privacy-security.md).
+
 Recorded runs of the live model tests and timing probes. A milestone closes
 when its deterministic tests pass and its live checks appear here
 ([`ROADMAP.md`](ROADMAP.md)). Entries are what actually ran, on the machine

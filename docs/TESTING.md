@@ -1,5 +1,11 @@
 # Testing RelayMind (Milestones 1 to 5)
 
+For current independent skill/tool setup, start with the
+[English](asset-selection.md) or [简体中文](asset-selection.zh-CN.md) guide and
+[privacy/recovery reference](asset-privacy-security.md). Historical issue sections
+below retain their original scope; later catalog/refresh work does not turn an
+earlier backend fixture into installed-host evidence.
+
 How to verify the M1 to M5 deliverables, by hand on macOS and Windows
 and with the automated suites. M1 qualifies the local model runtime and
 the adapters; M2 adds the bounded local loop; M3 adds handoff,
@@ -2598,6 +2604,35 @@ MCP provenance, and leaves no output on tamper/denied rights. It launches no MCP
 server and performs no source acquisition. All generated input data remain
 explicitly synthetic test fixtures; there is no checked-in real 300-asset release.
 See the acceptance/custodian checklist in `evaluation/assets/README.md`.
+
+## Customer recommendation workflow checks (#207)
+
+RM34–RM44; AC25–AC37. The [English](asset-selection.md) and
+[Chinese](asset-selection.zh-CN.md) entry guides share the same current commands.
+The local-library walkthrough uses a disposable store, one ordinary SKILL.md,
+the production launcher, application bearer, readiness and an idempotent create;
+retrieval needs no model inference. Restart with that store and its protected
+erasure key, then read the same recommendation with the new bearer. This does
+not exercise a qualified host action or target-platform privacy gate.
+
+Run the existing deterministic CLI/index and privacy boundaries:
+
+```bash
+pytest tests/test_source_benchmark_cli.py tests/test_source_index_preparation.py \
+  tests/test_source_benchmark_interop_review.py tests/test_asset_preparation.py \
+  tests/test_asset_index_preparation_integration.py
+pytest tests/test_asset_user_actions.py tests/test_asset_feedback_privacy.py \
+  tests/test_recommendation_recovery.py
+```
+
+[Source diagnostics](SOURCE_BENCHMARK.md) compare JSON only; the separate
+[formal fixture walkthrough](ASSET_BENCHMARK.md#built-in-team-a-and-team-b-on-the-same-fixture)
+uses its companion resolver for JSON/Markdown comparison. Reuse already verified
+private source cache bytes for offline build checks; preserve old captures and
+their failures. CLI choose prints options to stderr and a new receipt to stdout,
+without modifying the run report or enrolling a host action channel. The
+installed M10 skill/MCP/approval/correction walkthrough needs its delivered host
+artifact and real authority checks, separately from these repository examples.
 
 ## Qualified public source refresh (spec 0.59; RM34/RM38/RM43)
 
