@@ -46,6 +46,11 @@ The UI tests launch Chromium's default headless shell, so CI installs it with
 `playwright install --with-deps --only-shell chromium`, including system
 requirements. Test selection and all six platform checks remain unchanged.
 
+Each job has a 60-minute limit, and each platform reports its own result
+without cancelling the others. A newer push to the same pull request cancels its
+older run; pushes to `master` and tags always finish. Timing artifacts are kept
+for 30 days, and the workflow token is read-only.
+
 The [30 October baseline](https://github.com/Last-Humans-Coding-Under-White-Nights/relaymind/actions/runs/41135214423)
 put Windows OpenClaw at 18m43s: 592s in Python tests and 400s in the host
 lifecycle, including 195s installing the plugin. These observations do not

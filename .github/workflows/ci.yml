@@ -8,13 +8,25 @@ on:
   # branch) must get CI too.
   pull_request:
 
+permissions:
+  contents: read
+
+# A newer push to the same pull request replaces its older run; branch and tag
+# runs always finish.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check:
     strategy:
+      # Each platform reports its own result, as the OpenClaw job does.
+      fail-fast: false
       matrix:
         # Target platforms per spec (macOS and Windows); Ubuntu as the fast default.
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +58,7 @@ jobs:
           name: core-test-profile-${{ matrix.os }}
           path: ci-evidence/core-tests.xml
           if-no-files-found: warn
+          retention-days: 30
 
   # The OpenClaw provider plugin (#145; RM33, section 7.5): type, test, and a
   # reproducible release build; the transport and plugin tiers against the real
@@ -61,6 +74,7 @@ jobs:
         # The pinned host documents macOS, Linux, and native Windows (WSL2 optional).
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
@@ -132,3 +146,4 @@ jobs:
             release/openclaw/
             ci-evidence/
           if-no-files-found: warn
+          retention-days: 30
