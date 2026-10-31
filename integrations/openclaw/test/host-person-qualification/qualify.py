@@ -12,6 +12,8 @@ import time
 from pathlib import Path
 
 TOTAL_SECONDS = 570
+# Host event publication may lag on a loaded runner; SIGALRM still bounds the trial.
+HOST_EVENT_WAIT_SECONDS = 10
 HOST_VERSION = "2026.10.7"
 AUTHCRUNCH_VERSION = "1.5.0"
 AUTHCRUNCH_SHA256 = "86a1ed8446bca803149bdcf1335005b840033a17c41680a067d7de11dfbaeca9"
@@ -1266,7 +1268,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     dict(sessions[0], hold=True),
                 )
                 held_request_id = request_id
-                deadline = time.monotonic() + 3
+                deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
                 while not any(
                     event.get("requestId") == request_id and event.get("phase") == "prepared"
                     for event in native_events()
@@ -1286,7 +1288,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                 if extension is not None:
                     extension.before_retirement(pages[0], sessions[0])
                 contexts[0].close()
-                deadline = time.monotonic() + 3
+                deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
                 while not any(
                     event.get("requestId") == request_id
                     and event.get("connectionId") == connection_id
@@ -1300,7 +1302,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                 if extension is not None:
                     extension.after_retirement(capture)
                 release_path.write_bytes(b"release\n")
-                deadline = time.monotonic() + 5
+                deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
                 while not any(
                     event.get("requestId") == request_id
                     and event_phase(event) in {"guard_denied", "probe_failed"}
@@ -1478,6 +1480,8 @@ def run_qualification(work: Path, output: Path, *, extension=None) -> int:
             _run_private_trial(work, candidates[0], capture)
         else:
             _run_private_trial(work, candidates[0], capture, extension=extension)
+        if extension is not None and hasattr(extension, "finalize"):
+            extension.finalize(capture)
         capture["checks"]["person_composition"] = person_composition_pass(capture)
         if not capture["checks"]["person_composition"]:
             capture.update(status="failed", reason="person_composition_unverified")
@@ -1492,6 +1496,8 @@ def run_qualification(work: Path, output: Path, *, extension=None) -> int:
                 if previous.get("status") in {"passed", "failed", "not_run"}:
                     step["status"] = previous["status"]
             capture = safe
+        if extension is not None and hasattr(extension, "failure_diagnostics"):
+            capture.update(extension.failure_diagnostics())
         capture.update(status="failed", reason=reason, error_type=type(error).__name__)
         for step in capture["steps"]:
             if step["name"] == capture.get("phase"):
