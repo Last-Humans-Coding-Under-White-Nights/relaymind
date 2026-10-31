@@ -322,3 +322,50 @@ def test_rm35_file_rows_require_a_non_empty_string_id(tmp_path):
     )
     with pytest.raises(AssetCorpusError, match="invalid_source_recipe"):
         build_recipe(recipe, tmp_path / "cache", tmp_path / "catalog.json")
+
+
+def test_rm35_asset_version_is_optional(tmp_path):
+    # RM35/AC26: SourceOriginal.version is nullable; a missing key means None.
+    from relaymind.evaluation.asset_source_recipe import build_recipe
+
+    payload = archive(
+        [
+            (
+                "SKILL.md",
+                b"---\nname: english-skill\ndescription: Inspect source code.\n---\nInspect it.",
+            )
+        ]
+    )
+    digest = hashlib.sha256(payload).hexdigest()
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / (digest + ".original")).write_bytes(payload)
+    recipe = dict(
+        schema_version=1,
+        dataset_id="fixture-source-benchmark",
+        files=[
+            {
+                "id": "file",
+                "url": "https://example.org/original",
+                "sha256": digest,
+                "bytes": len(payload),
+            }
+        ],
+        assets=[
+            {
+                "file_id": "file",
+                "asset_id": "source:skill",
+                "source_id": "source",
+                "source_url": "https://example.org/original",
+                "revision": "r1",
+                "captured_at": "2026-10-30T20:00:00Z",
+                "kind": "skill",
+                "name": "english-skill",
+                "format": "skill_zip",
+            }
+        ],
+        evidence_files=[],
+    )
+    result = build_recipe(recipe, cache, tmp_path / "catalog.json")
+    assert result.admitted == 1
+    assert result.excluded == 0

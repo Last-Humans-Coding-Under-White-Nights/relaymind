@@ -80,11 +80,19 @@ def build_recipe(recipe: Mapping, cache_root: Path, output: Path) -> SourceCatal
         file_id = row.pop("file_id")
         metadata_id = row.pop("metadata_file_id", None)
         license_id = row.pop("license_file_id", None)
+        version = row.pop("version", None)
+        if (
+            (metadata_id is not None and not isinstance(metadata_id, str))
+            or (license_id is not None and not isinstance(license_id, str))
+            or (version is not None and not isinstance(version, str))
+        ):
+            raise AssetCorpusError("invalid_source_recipe")
         if file_id not in files:
             raise AssetCorpusError("unknown_source_file")
         originals.append(
             SourceOriginal(
                 **row,
+                version=version,
                 payload=cached(file_id),
                 sha256=files[file_id]["sha256"],
                 metadata_bytes=cached(metadata_id) if metadata_id else None,
