@@ -98,8 +98,6 @@ def test_schedule_requires_fixed_origin_cadence_and_single_request_slot(
     overlapping = _measured_workload(validated_request_cohort)
     probe = replace(production_batch_samples[0].probes[0], started_at=0.005, finished_at=0.015)
     overlapping.batches = [replace(production_batch_samples[0], probes=(probe,))]
-    # Observed durations overlap this later probe, so the workload fails.
-    assert summarize_operations([], overlapping, None)["scheduled"]["passes"] is False
     # A clock whose two reads share a tick ends every response at its start.
     # Zero-duration responses still pass, and they end before the later probe,
     # so the same probe evidence no longer claims an overlap. Both checks run

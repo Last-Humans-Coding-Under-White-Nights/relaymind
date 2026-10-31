@@ -13,6 +13,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   order-preserving arrays for canonical hashing. Types `Rate.value` and Wilson
   bounds as `nonnegative_number`, consistent with their existing [0, 1] limits.
 
+- The current 0.57 baseline carries these master 0.56 benchmark clarifications
+  and the parallel source-grounded 0.56 additions below as distinct histories.
+
 - Specification 0.52 → 0.53 (RM16, RM38/AC29; #196, review #218):
   fixed 500 ms request slots admit measured dispatch delay within the original
   deadline, with a separate scheduled-to-response p95 ≤300 ms gate. Service and
@@ -22,6 +25,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   All samples, failure denominators and outstanding live qualification gates remain.
 
 ### Added
+
+- Source-grounded asset benchmark delivery (#191/#199/#200; RM35/RM40/RM44;
+  AC26/AC31/AC36): pinned acquisition/build and a 412-asset working catalog
+  (87 Matrix skills, 194 original-English SkillsBench skills, 131 genuine MCP
+  tools), 128 preregistered Chinese/English/mixed references, and shared
+  production-path builtin/team run/compare with explicit index readiness.
+  Preserve actual primary timeouts, blocked setup, unknown costs and historical
+  report hashes. Developer-authored references support the working development
+  profile; independent formal corpus, host/human and platform gates remain
+  separate. Reproduction, team integration and shortlist guides are included.
+
+- Specification 0.56 → 0.57 (#191/#199/#200; RM35/RM40; AC26/AC31):
+  optional explicit loopback index prepare/status/cancel binds the exact offered
+  catalog and scope, with bounded cold/reuse preparation and separate readiness,
+  wall-time and observed/reported costs. Stateless mode remains explicit;
+  selection v2 stays unchanged. Closed benchmark config/report/comparison
+  preparation records and protocol identities preserve historical truth.
+  Other original skill origins are permitted only in source-grounded development;
+  independent qualified sources, minima and all numerical gates are unchanged.
+
+- Specification 0.55 → 0.56 (#191/#199/#200; RM34/RM35/RM40/RM44;
+  AC25/AC26/AC31/AC36): source-grounded development benchmarks and actual Matrix
+  examples use documented author-defined references without invented human
+  judgments or fixed-size delivery prerequisites. Bounded standalone in-memory
+  ZIP inspection preserves originals separately from projections. Shared mixed
+  catalogs support available language pairs and team algorithms; formal
+  independent qualification, product source choices and resource limits remain.
 
 - Acceptance corpus input tooling (#199; RM40/AC31): assess exact 200-to-300
   source continuity, per-lane and all-target hard-subset cohorts through the

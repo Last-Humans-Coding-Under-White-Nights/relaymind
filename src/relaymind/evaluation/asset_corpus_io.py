@@ -147,7 +147,7 @@ _CorpusValidator = extend(
 )
 _VALIDATORS = {
     name: _CorpusValidator(load_packaged_schema("relaymind.evaluation", f"asset_{name}.v1.json"))
-    for name in ("catalog_set", "cases", "labels", "lock")
+    for name in ("catalog_set", "cases", "labels", "lock", "diagnostic")
 }
 
 

@@ -11,3 +11,12 @@
 # The asset corpus fixtures and locks are hashed as exact bytes (RM40/AC31).
 /tests/fixtures/asset-corpus/** text eol=lf
 /evaluation/assets/** text eol=lf
+# Frozen M10 originals/artifacts retain exact captured bytes, including newlines.
+/tests/fixtures/asset-benchmark/** -text
+/evaluation/assets/matrix-development/*.json -text
+# Compiled benchmark inventories and reviewed anchors use stable source bytes.
+/src/**/*.py text eol=lf
+/src/**/*.json text eol=lf
+/scripts/*.py text eol=lf
+/pyproject.toml text eol=lf
+/docs/SPECIFICATION.md text eol=lf

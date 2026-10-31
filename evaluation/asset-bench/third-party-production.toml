@@ -1,0 +1,23 @@
+# Fixture protocol only. Run scripts/example_asset_selector.py --port 8913.
+[external_model]
+base_url = "http://127.0.0.1:1/v1"
+model = "unused-fixture"
+context_limit = 1024
+
+[policy]
+permissions = []
+
+[recommendations]
+enabled = true
+user_id = "fixture-user"
+workspace_id = "fixture-workspace"
+primary = "http"
+name = "example_lexical"
+version = "1"
+url = "http://127.0.0.1:8913/select"
+fallback = false
+
+[[assets.sources]]
+source_id = "fixture"
+kind = "local_directory"
+path = "originals"
