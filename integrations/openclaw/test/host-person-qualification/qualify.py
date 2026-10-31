@@ -320,6 +320,12 @@ PERSON_RECEIPT_FIELDS = (
 )
 
 
+def event_phase(event: dict) -> str | None:
+    """An observed event's phase only when it is a string."""
+    phase = event.get("phase")
+    return phase if isinstance(phase, str) else None
+
+
 def native_error_code(frame: dict) -> str | None:
     """A host error code only from a mapping error; any other shape has none."""
     error = frame.get("error")
@@ -401,7 +407,8 @@ def project_person_rpc_failure(path: Path, request_id: str) -> dict:
         return dict(status="event_file_oversize", **empty)
     observations = []
     for line in raw.splitlines():
-        if not line.strip():
+        # Only JSON whitespace makes a blank line; other bytes stay corrupt.
+        if not line.strip(b" \t\r"):
             continue
         try:
             event = json.loads(line)
@@ -443,7 +450,8 @@ def project_held_native_events(path: Path, request_id: str) -> dict:
         return dict(status="event_file_oversize", **empty)
     observations = []
     for line in raw.splitlines():
-        if not line.strip():
+        # Only JSON whitespace makes a blank line; other bytes stay corrupt.
+        if not line.strip(b" \t\r"):
             continue
         try:
             event = json.loads(line)
@@ -457,6 +465,8 @@ def project_held_native_events(path: Path, request_id: str) -> dict:
         if not isinstance(connection_id, str) or not 0 < len(connection_id) <= 128:
             return dict(status="event_file_invalid", **empty)
         phase, reason = event.get("phase"), event.get("reason")
+        if not isinstance(phase, str) or (reason is not None and not isinstance(reason, str)):
+            return dict(status="event_file_invalid", **empty)
         if phase in {"prepared", "admitted"} and reason is None:
             observation = {"phase": phase, "reason": None}
         elif (
@@ -486,7 +496,7 @@ def read_bound_peer(page, address: str, email: str) -> dict:
             return response.json();
         }"""
     )
-    if peer.get("peer") != address or peer.get("email") != email:
+    if not isinstance(peer, dict) or peer.get("peer") != address or peer.get("email") != email:
         raise ValueError("actual_peer_binding")
     return peer
 
@@ -1218,7 +1228,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                 deadline = time.monotonic() + 5
                 while not any(
                     event.get("requestId") == request_id
-                    and event.get("phase") in {"guard_denied", "probe_failed"}
+                    and event_phase(event) in {"guard_denied", "probe_failed"}
                     for event in native_events()
                 ):
                     if time.monotonic() >= deadline:
@@ -1237,7 +1247,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     event
                     for event in observed_events
                     if event.get("requestId") == request_id
-                    and event.get("phase") in {"guard_denied", "probe_failed"}
+                    and event_phase(event) in {"guard_denied", "probe_failed"}
                 )
                 capture["events"].append(
                     dict(
