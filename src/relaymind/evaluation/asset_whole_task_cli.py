@@ -29,6 +29,7 @@ from relaymind.evaluation.asset_whole_task import (
     validate_whole_task,
     verify_host_tasks,
 )
+from relaymind.evaluation.asset_whole_task_corpus import corpus_offers
 from relaymind.evaluation.asset_whole_task_inputs import (
     UNVERIFIED,
     WholeTaskBlocked,
@@ -57,6 +58,13 @@ def _grade(args) -> tuple[str, dict]:
             inputs.labels,
             reset_preimages=reset_preimages(inputs.evidence),
             registry=inputs.registry,
+            offers=corpus_offers(
+                inputs.release,
+                dict(
+                    off=inputs.configs[inputs.freeze["off_config_digest"]],
+                    on=inputs.configs[inputs.freeze["on_config_digest"]],
+                ),
+            ),
         )
         return summary["gate"], dict(summary=summary, unverified=list(UNVERIFIED["adaptation"]))
     inputs = resolve_whole_task_inputs("host", report, args.inputs, resolver=resolver)

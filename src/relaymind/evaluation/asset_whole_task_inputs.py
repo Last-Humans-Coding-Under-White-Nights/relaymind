@@ -53,11 +53,7 @@ _SHAPES = {
 # What this revision does not verify; always reported next to a grade.
 UNVERIFIED = {
     "host": ("configuration_semantics", "qualified_evidence_review"),
-    "adaptation": (
-        "adaptation_config_semantics",
-        "probe_offer_binding",
-        "qualified_evidence_review",
-    ),
+    "adaptation": ("adaptation_config_semantics", "qualified_evidence_review"),
 }
 _UNRESOLVED = {"input_unresolved", "unsafe_file", "missing_file"}
 

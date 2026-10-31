@@ -151,7 +151,7 @@ def _top1(row: Mapping, label: Mapping) -> bool:
     return result["final_candidates"][0]["asset_id"] in set(label["acceptable_asset_ids"])
 
 
-def _check_probe_row(row: Mapping, case_id: str, ordinal: int, label: Mapping) -> None:
+def _check_probe_row(row: Mapping, case_id: str, ordinal: int, label: Mapping, offer=None) -> None:
     validate_whole_task("Row", row)
     if row["slot"] != dict(phase="measured", repetition=0, case_id=case_id, ordinal=ordinal):
         raise WholeTaskRejected("probe_slot")
@@ -178,6 +178,13 @@ def _check_probe_row(row: Mapping, case_id: str, ordinal: int, label: Mapping) -
         raise WholeTaskRejected("probe_revision")
     if row["grade"] != grade_asset_result(label, result):
         raise WholeTaskRejected("probe_grade")
+    if offer is not None and (status == "ready" or row["request_digest"] is not None):
+        # A dispatched probe binds its exact offered request and catalog projection.
+        if row["request_digest"] is None or (
+            row["request_digest"],
+            row["offered_projection_digest"],
+        ) != offer(row["catalog_revision"]):
+            raise WholeTaskRejected("probe_offer")
 
 
 def _check_episode(
@@ -185,6 +192,7 @@ def _check_episode(
     episode: Mapping,
     labels: Mapping[str, Mapping],
     preimages: Mapping[str, tuple] | None,
+    offers=None,
 ) -> bool | None | object:
     """Verify one EpisodeResult; return the verified reset equality, None or PENDING."""
     status = result["status"]
@@ -210,8 +218,13 @@ def _check_episode(
         label = labels.get(probe["case_id"])
         if label is None:
             raise WholeTaskRejected("probe_label")
-        _check_probe_row(probe["off"], probe["case_id"], ordinal, label)
-        _check_probe_row(probe["on"], probe["case_id"], ordinal, label)
+        for arm in ("off", "on"):
+            offer = (
+                None
+                if offers is None
+                else (lambda revision, c=probe["case_id"], a=arm: offers(c, a, revision))
+            )
+            _check_probe_row(probe[arm], probe["case_id"], ordinal, label, offer)
     if status == "not_run" and any(
         p[arm]["status"] != "not_run" for p in result["probes"] for arm in ("off", "on")
     ):
@@ -236,12 +249,13 @@ def _check_episode(
     return equal
 
 
-def _verified(report, episodes, labels, preimages) -> list[bool | None]:
+def _verified(report, episodes, labels, preimages, offers=None) -> list[bool | None]:
     by_id = {e["id"]: e for e in episodes["episodes"]}
     if [r["episode_id"] for r in report["episodes"]] != list(by_id):
         raise WholeTaskRejected("episode_conservation")
     return [
-        _check_episode(r, by_id[r["episode_id"]], labels, preimages) for r in report["episodes"]
+        _check_episode(r, by_id[r["episode_id"]], labels, preimages, offers)
+        for r in report["episodes"]
     ]
 
 
@@ -315,6 +329,7 @@ def grade_adaptation_report(
     *,
     reset_preimages: Mapping[str, tuple] | None = None,
     registry: Mapping[str, Mapping] | None = None,
+    offers=None,
 ) -> dict:
     """Verify an AssetAdaptationReportV1 and return its recomputed summary.
 
@@ -334,7 +349,7 @@ def grade_adaptation_report(
         freeze["on_config_digest"],
     ):
         raise WholeTaskRejected("config_binding")
-    checked = _verified(report, episodes, labels, reset_preimages)
+    checked = _verified(report, episodes, labels, reset_preimages, offers)
     verify_evidence(report["evidence"], set(), registry)
     pending = [value is PENDING for value in checked]
     # The stored summary must agree with the report's own rows and claims

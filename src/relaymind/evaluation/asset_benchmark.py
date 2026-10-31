@@ -300,6 +300,7 @@ async def execute_asset_slot(service, provider, normal, case, slot, label):
     """
     status = None
     cancel = None
+    recommendation_id = None
     request = dict(
         schema_version=1,
         task_text=case["task_text"],
@@ -357,6 +358,7 @@ async def execute_asset_slot(service, provider, normal, case, slot, label):
             if cancel.recommendation_id is not None
             else dict(response.body)
         )
+        recommendation_id = body.get("recommendation_id")
         if body.get("state") == "ready":
             result = dict(body["result"])
             row.update(
@@ -374,12 +376,8 @@ async def execute_asset_slot(service, provider, normal, case, slot, label):
                 ("failed", "cancelled"),
             )
             row.update(
-                status="cancelled"
-                if body.get("state") == "cancelled"
-                else "failed",
-                reason=(body.get("error") or {}).get(
-                    "code", "recommendation_unavailable"
-                ),
+                status="cancelled" if body.get("state") == "cancelled" else "failed",
+                reason=(body.get("error") or {}).get("code", "recommendation_unavailable"),
                 attempts=list(terminal["attempts"]),
                 embeddings=list(terminal.get("embeddings", [])),
             )
@@ -424,10 +422,7 @@ async def execute_asset_slot(service, provider, normal, case, slot, label):
         status = "interrupted"
     # Actual observed no-dispatch is zero inference only for the
     # admitted initial empty catalog, never an unavailable catalog.
-    if (
-        row["result"] is not None
-        and row["result"]["decision"] == "empty_catalog"
-    ):
+    if row["result"] is not None and row["result"]["decision"] == "empty_catalog":
         row["observed_costs"] = [
             dict(
                 provenance="observed",
@@ -435,7 +430,8 @@ async def execute_asset_slot(service, provider, normal, case, slot, label):
             )
         ]
     row["grade"] = grade_asset_result(label, row["result"])
-    recommendation_id = None if cancel is None else cancel.recommendation_id
+    if recommendation_id is None and cancel is not None:
+        recommendation_id = cancel.recommendation_id
     return row, status, recommendation_id
 
 

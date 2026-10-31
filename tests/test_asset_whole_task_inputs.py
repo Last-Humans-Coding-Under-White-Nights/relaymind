@@ -470,14 +470,31 @@ def test_missing_inventory_preimage_file_blocks(bundle):
 # --- end-to-end adaptation grading over a verified corpus (#229, #202) ----------
 
 
-def adaptation_case(bundle, *, with_reset_evidence=True, on_top="calendar"):
-    from relaymind.evaluation.asset_episode_export import episode_summary
-    from relaymind.evaluation.asset_whole_task_corpus import release_labels, resolve_corpus
-    from test_asset_episode_platform_export import episode_result, reset_array
-    from whole_task_helpers import effective_pair
+def adaptation_case(bundle, *, with_reset_evidence=True):
+    """A real driver run over the bundle's verified corpus (fixture-qualified)."""
+    import asyncio
 
-    adaptation = {"fixture_adaptation_config": 1}
-    off, on = effective_pair(canonical_digest(adaptation))
+    from relaymind.assets.embedding_backends import EmbeddingEngine
+    from relaymind.evaluation.asset_episode_driver import (
+        locked_episode_arms,
+        run_adaptation_episodes,
+    )
+    from relaymind.evaluation.asset_whole_task_corpus import resolve_corpus
+    from relaymind.selection.adaptation_stage import AdaptationStage
+    from test_asset_adaptation_stage import config as adaptation_config
+    from test_embedding_backend import NativeDouble
+    from whole_task_helpers import effective_pair, fixture_production
+
+    documents = {d["id"]: (bundle.root / d["path"]).read_bytes() for d in bundle.documents}
+    evidence = {
+        e["id"]: dict(e, payload=(bundle.root / e["path"]).read_bytes())
+        for e in bundle.corpus_evidence
+    }
+    release = resolve_corpus(canonical_digest(bundle.lock), documents, evidence)
+    (bundle.root / "semantic").mkdir()
+    semantic = adaptation_config(bundle.root / "semantic")
+    adaptation = {"identity": "fixture", "manifest_digest": semantic.manifest.manifest_digest}
+    off, on = effective_pair(canonical_digest(adaptation), release)
     for value in (off, on, adaptation):
         bundle.add("referenced_config", value)
     freeze = dict(
@@ -488,60 +505,56 @@ def adaptation_case(bundle, *, with_reset_evidence=True, on_top="calendar"):
         seed=1,
     )
     bundle.add("episode_freeze", freeze)
-    episode = dict(
-        id="e1",
-        intent_family_ids=["task-calendar"],
-        corrections=[
-            dict(
-                case_id=c,
-                target_asset_id="calendar",
-                content_hash=bundle.freeze["asset_bindings"][0]["content_hash"],
-                schema_hash=None,
-            )
-            for c in ("case-03", "case-01", "case-02")
-        ],
-        paraphrase_case_ids=["case-04", "case-05"],
-        control_case_ids=["case-06"],
-        reset_probe_case_ids=["case-07"],
-    )
+    record = release.catalog["assets"][0]["record"]
     episodes = dict(
         schema_version=1,
         dataset_lock_digest=canonical_digest(bundle.lock),
         config_digest=canonical_digest(freeze),
-        episodes=[episode],
+        episodes=[
+            dict(
+                id="e1",
+                intent_family_ids=["task-calendar"],
+                corrections=[
+                    dict(
+                        case_id=c,
+                        target_asset_id=record["asset_id"],
+                        content_hash=record["content_hash"],
+                        schema_hash=None,
+                    )
+                    for c in ("case-03", "case-01", "case-02")
+                ],
+                paraphrase_case_ids=["case-04", "case-05"],
+                control_case_ids=["case-06"],
+                reset_probe_case_ids=["case-07"],
+            )
+        ],
     )
     bundle.add("episodes", episodes)
-    documents = {d["id"]: (bundle.root / d["path"]).read_bytes() for d in bundle.documents}
-    evidence = {
-        e["id"]: dict(e, payload=(bundle.root / e["path"]).read_bytes())
-        for e in bundle.corpus_evidence
-    }
-    labels = release_labels(resolve_corpus(canonical_digest(bundle.lock), documents, evidence))
-    result = episode_result(episode, labels, off="other", on=on_top)
-    if with_reset_evidence:
-        bundle.extra_evidence["reset:e1"] = canonical_json(
-            dict(
-                schema_version=1,
-                episode_id="e1",
-                baseline=reset_array(episode),
-                after=reset_array(episode),
-            )
-        ).encode()
-    report = dict(
-        schema_version=1,
-        kind="adaptation",
-        qualification="fixture",
-        input_digest=canonical_digest(episodes),
-        input_manifest=None,
-        off_config_digest=freeze["off_config_digest"],
-        on_config_digest=freeze["on_config_digest"],
-        environment=ENVIRONMENT,
-        episodes=[result],
-        summary=None,
-        evidence=[],
+    arms = locked_episode_arms(
+        release,
+        dict(off=off, on=on),
+        fixture_production().recommendations,
+        bundle.root / "work",
+        adaptation_stage=lambda feedback: AdaptationStage(
+            feedback, semantic, EmbeddingEngine(semantic.manifest, NativeDouble())
+        ),
     )
+    report, reset = asyncio.run(
+        run_adaptation_episodes(
+            episodes,
+            freeze,
+            release,
+            arms,
+            environment=ENVIRONMENT,
+            qualification="fixture",
+            input_manifest=dict(path="inputs.json", digest="0" * 64, bytes=1),
+            interrupted=lambda: False,
+        )
+    )
+    if with_reset_evidence:
+        for evidence_id, item in reset.items():
+            bundle.extra_evidence[evidence_id] = item["payload"]
     report["input_manifest"] = bundle.write_manifest()
-    report["summary"] = episode_summary(report, episodes, labels)
     return report
 
 
@@ -549,7 +562,7 @@ def test_adaptation_report_grades_end_to_end_with_reset_evidence(bundle):
     code, result = _grade(bundle, "grade-adaptation", adaptation_case(bundle))
     assert (code, result["status"], result["gate"]) == (0, "graded", "not_applicable")
     summary = result["summary"]
-    assert summary["reset_passed"] == 1 and summary["paraphrases"]["numerator"] == 2
+    assert summary["reset_passed"] == 1 and summary["paraphrases"]["denominator"] == 2
     assert "adaptation_config_semantics" in result["unverified"]
 
 

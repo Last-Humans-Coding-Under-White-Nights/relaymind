@@ -218,3 +218,42 @@ def verify_episode_configs(freeze: Mapping, configs: Mapping[str, Mapping]) -> N
         or off["generator"] != on["generator"]
     ):
         raise WholeTaskRejected("ablation_policy")
+
+
+def corpus_offers(release: VerifiedAssetRelease, effective: Mapping[str, Mapping]):
+    """Independent probe offer reconstruction for the off/on arms.
+
+    Returns ``offers(case_id, arm, revision) -> (request_digest,
+    projection_digest)`` using the retrieval comparator's request
+    reconstruction over the verified catalog projection and the arm's
+    verified effective configuration (section 12.6.2 Row offer binding).
+    """
+    from relaymind.evaluation.asset_benchmark import stable_request_digest
+    from relaymind.evaluation.asset_comparison import _request_for_case
+
+    cases = {case["id"]: case for case in release.cases["cases"]}
+    arms = {}
+    for arm, config in effective.items():
+        eligible = {e["asset_id"] for e in config["eligibility"] if e["eligible"]}
+        catalog = [
+            dict(a["record"])
+            for a in release.catalog["assets"]
+            if a["record"]["asset_id"] in eligible
+            and a["record"]["kind"] in config["requested_kinds"]
+        ]
+        settings = config["recommendations"]
+        normal = dict(
+            scope={k: settings[k] for k in ("user_id", "workspace_id")},
+            permissions=config["permissions"],
+            requested_kinds=config["requested_kinds"],
+            selection_scope=config["selection_scope"],
+            budgets=config["budgets"],
+        )
+        arms[arm] = (normal, catalog, canonical_digest(catalog))
+
+    def offers(case_id: str, arm: str, revision: int) -> tuple[str, str]:
+        normal, catalog, projection = arms[arm]
+        request = _request_for_case(cases[case_id], normal, catalog, revision)
+        return stable_request_digest(request.to_json_object()), projection
+
+    return offers
