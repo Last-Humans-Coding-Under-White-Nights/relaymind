@@ -1572,3 +1572,54 @@ def test_overall_deadline_interrupts_an_ordinary_extension_wait(tmp_path, monkey
     assert capture["checks"]["person_composition"] is False
     assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)
     assert signal.getsignal(signal.SIGALRM) == previous_handler
+
+
+# --- readiness after navigation (#231, CI run 41251465501) ------------------------
+
+
+class _WirePage:
+    def __init__(self, raise_with=None):
+        self.calls, self.raise_with = [], raise_with
+
+    def wait_for_function(self, expression, **options):
+        self.calls.append((expression, options))
+        if self.raise_with is not None:
+            raise self.raise_with
+
+    def evaluate(self, *args):  # a navigation destroys this context
+        raise RuntimeError("Execution context was destroyed, most likely because of a navigation")
+
+
+def test_wire_readiness_waits_across_navigations_with_a_bound():
+    page = _WirePage()
+    module().wait_for_wire_ready(page, 20, ValueError("x"))
+    ((expression, options),) = page.calls
+    assert "__rmPersonWire" in expression and "ready === true" in expression
+    assert options["timeout"] == 20000 and options["polling"] == 100
+
+
+def test_wire_readiness_timeout_raises_the_callers_fixed_failure():
+    playwright = pytest.importorskip("playwright.sync_api")
+    page = _WirePage(playwright.TimeoutError("Timeout 20000ms exceeded."))
+    with pytest.raises(ValueError, match="^ordinary_entry_unavailable$"):
+        module().wait_for_wire_ready(page, 20, ValueError("ordinary_entry_unavailable"))
+
+
+def test_wire_readiness_keeps_the_overall_deadline_and_other_errors():
+    page = _WirePage(TimeoutError("overall_deadline_exceeded"))
+    with pytest.raises(TimeoutError, match="overall_deadline_exceeded"):
+        module().wait_for_wire_ready(page, 20, ValueError("x"))
+    page = _WirePage(RuntimeError("Target closed"))
+    with pytest.raises(RuntimeError, match="Target closed"):
+        module().wait_for_wire_ready(page, 20, ValueError("x"))
+
+
+def test_no_harness_polls_wire_readiness_with_raw_evaluate():
+    """A raw evaluate loop fails when the single-page UI navigates."""
+    root = Path(__file__).resolve().parents[1] / "integrations/openclaw/test"
+    for path in (
+        root / "host-person-qualification/qualify.py",
+        root / "host-ordinary-qualification/qualify.py",
+    ):
+        source = path.read_text(encoding="utf-8")
+        assert 'evaluate("() => window.__rmPersonWire?.state().ready' not in source, path

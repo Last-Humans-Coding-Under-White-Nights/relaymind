@@ -707,6 +707,9 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
         def evaluate(self, *args):
             return True
 
+        def wait_for_function(self, *args, **kwargs):
+            return True
+
         def close(self):
             if stage == "cleanup_deadline":
                 raise TimeoutError("overall_deadline_exceeded")
