@@ -18,6 +18,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.58 → 0.59 (#203; RM34/RM38/RM43; AC25/AC29/AC34):
+  define the installed public GitHub Git skill-source profile with immutable
+  original/manifest/rights verification, complete scoped removal proof, closed
+  origins/credentials and mandatory persisted cooldown. Reuse the existing single
+  worker, atomic publication and stale/recovery evidence. Matrix market refresh
+  and independent corpus, host, platform/resource and full-M10 gates remain
+  separately assessed. No provider, budget or public wire revision. The actual
+  six-skill acquisition qualifies this narrow profile; runtime activation and
+  repeated scheduled product refresh remain pending.
+
+- Specification 0.57 → 0.58 (#201/#202; RM37/RM38/RM41/RM42;
+  AC28/AC29/AC32/AC33): publish the closed local embedding manifest and
+  hybrid/adaptation semantic configurations. Specify deterministic representation,
+  byte and ordered-segmentation identities, vector/fusion and bounded correction
+  voting, reviewed activation with no initially qualified artifact, and fail-closed
+  adaptation with actual inference evidence on failure. Existing recommendation
+  wire versions/errors and corpus/benchmark contracts are retained. Model/runtime/
+  device quality and operational qualification remain open.
+
 - Source-grounded asset benchmark delivery (#191/#199/#200; RM35/RM40/RM44;
   AC26/AC31/AC36): pinned acquisition/build and a 412-asset working catalog
   (87 Matrix skills, 194 original-English SkillsBench skills, 131 genuine MCP
