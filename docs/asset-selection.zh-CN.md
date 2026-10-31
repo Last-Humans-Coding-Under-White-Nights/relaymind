@@ -180,4 +180,45 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 不共享拉丁标识的中文内存泄漏请求仍未命中英文原始目标；这些诊断不证明翻译能力、
 语义质量或独立人工标注达标。开始使用工具不要求客户提供外部数据集或人工评审组。
 生产语义模型资格验证，以及已安装宿主的 M10 执行、审批、纠正演练仍是单独的工作；
-参见[当前状态](ROADMAP.md#m10--multilingual-asset-recommendations-spec-063)。
+参见[当前状态](ROADMAP.md#m10--multilingual-asset-recommendations-spec-064)。
+
+## 整任务试验、适配回合与平台导出
+
+规范 0.60/0.64 第 12.6.5 节的离线工具服务于 #198（早期已安装技能试验）、#202（适配回合）、
+#204（宿主 MCP 使用行）、#205（成对整任务）和 #206（平台生命周期）。它们校验冻结输入、
+确定性地规划执行、通过真实推荐生命周期驱动适配回合，并重新评分导出的报告。工具不运行宿主、
+不授予审批，也不执行任何工具：宿主试验的执行器由调用方提供，只有宿主执行工具。
+英文完整说明见 [ASSET_BENCHMARK.md](ASSET_BENCHMARK.md#whole-host-trials-adaptation-episodes-and-platform-exports-spec-060064-section-1265)。
+
+| 命令 | 作用 |
+| --- | --- |
+| `python scripts/asset_whole_task.py plan-host --tasks T --freeze F --output P` | 按冻结的任务顺序写出三组（native、provider_only、recommendations）执行计划 |
+| `python scripts/asset_whole_task.py grade-host --report R --inputs M [--resolver X] --output O` | 解析配套输入清单，校验并重新评分宿主报告 |
+| `python scripts/asset_whole_task.py grade-platform --report R --inputs M [--resolver X] --output O` | 校验平台报告的十一个生命周期步骤 |
+| `python scripts/asset_whole_task.py grade-adaptation --report R --inputs M [--resolver X] --output O` | 校验并重新评分适配报告；探测标签来自清单中经过验证的语料 |
+
+退出码：`0` 通过或不适用于验收（夹具平台报告、未达资格的适配报告）；`1` 已知门槛失败；
+`2` 报告或输入被拒绝（摘要、身份、顺序、绑定或算术矛盾）；`3` 阻塞（缺少必需的文档、配置、
+语料文档、清单原文或证据）。阻塞永远不会被报告为通过。评分结果还会列出 `unverified`：
+宿主与平台报告为 `configuration_semantics` 和 `qualified_evidence_review`，适配报告为
+`adaptation_config_semantics` 和 `qualified_evidence_review`。
+
+**输入。** 清单必须包含唯一的 `environment_lock`、`runner_inventory`、`protocol_inventory`，
+报告指向的根输入及其冻结文档，冻结文档列出的每个配置（`referenced_config:<摘要>`），
+以及冻结语料的 `lock:`、`catalog:`、`cases:`、`labels:` 文档和证据。语料只在私有临时目录中
+重建，并由现有发布校验器验证。宿主任务绑定到用例的车道、任务族和目录资产的确切字节；
+适配回合绑定到已存在的用例，目录中存在的纠正目标必须字节一致，不在池中的目标被保留而不会被替换。
+
+**重置证据（规范 0.64）。** 证据登记项 `reset:<回合 ID>` 保存封闭的 JSON 文档
+`{schema_version:1,episode_id,baseline,after}`。缺少该文档的重置声明不会被计入通过，
+在没有更早的结构矛盾或已知门槛失败时，评分结果为阻塞。
+
+**适配回合驱动。** `relaymind.evaluation.asset_episode_driver` 在进程内对真实推荐服务运行每个冻结回合：
+每个对照组使用一次性存储，关闭组运行禁用基线；开启组记录重置基线，通过产品反馈存储依次提交三次纠正，
+运行成对探测，经真实生命周期重置反馈后重复重置探测，并导出报告和重置证据。评分器根据经验证的语料和
+对照组配置重新计算每个探测的请求与候选目录摘要。驱动使用的评估专用操作登记不是个人或宿主证据，
+因此不能产生 `qualified` 报告。
+
+**当前限制。** 尚无经过评审的资格证据校验器，因此资格验收报告只会评为阻塞，不会通过；
+实测平台报告在绑定工作负载评分器并在真实 Apple Silicon macOS 与原生 Windows 上评审前同样阻塞。
+真实回合、成对宿主任务和平台运行需要真实独立语料、宿主与硬件；夹具运行不构成任何测量结果。

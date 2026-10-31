@@ -186,4 +186,4 @@ memory-leak request still missed its original English target. No translation,
 semantic-quality or independent-annotation pass follows from these diagnostics.
 No external customer dataset or human panel is needed to start using the tooling.
 Production semantic qualification and installed M10 host execution/approval/
-correction walkthroughs are separate pending work; see [status](ROADMAP.md#m10--multilingual-asset-recommendations-spec-063).
+correction walkthroughs are separate pending work; see [status](ROADMAP.md#m10--multilingual-asset-recommendations-spec-064).

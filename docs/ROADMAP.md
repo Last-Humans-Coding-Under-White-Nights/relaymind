@@ -1040,7 +1040,7 @@ listed here so the current order can be traced to its reason.
   so it does not wait for the plugin.
 
 
-## M10 — Multilingual asset recommendations (spec 0.63)
+## M10 — Multilingual asset recommendations (spec 0.64)
 
 #207 customer documentation now has [English](asset-selection.md) and
 [简体中文](asset-selection.zh-CN.md) entry guides, v1/v2 migration and third-party
@@ -1299,10 +1299,18 @@ paired probe/three-arm denominators, per-model costs and evidence-bound reset
 remain required. The closed schemas, deterministic three-arm plan, conserving
 host driver and offline graders are implemented (`asset_whole_task.py`,
 `asset_episode_export.py`, `asset_platform_export.py`,
-`scripts/asset_whole_task.py`; see docs/ASSET_BENCHMARK.md) and verified only
-over explicitly fixture-qualified documents. No qualified-evidence verifier
-exists yet, so qualified acceptance grades blocked, never pass; no new measured
-gate is claimed. Read-only native RPC and genuine MCP qualification probes do not
+`scripts/asset_whole_task.py`; see docs/ASSET_BENCHMARK.md and the Chinese
+section of docs/asset-selection.zh-CN.md) and verified over explicitly
+fixture-qualified documents. Spec 0.64 adds the reset evidence document. The
+graders verify the frozen corpus closure, bind host tasks and episodes to it,
+check the off/on adaptation ablation, and recompute every dispatched probe's
+offer. `asset_episode_driver.py` runs episodes through the real
+recommendation lifecycle on the locked corpus projection (evaluation-only, so
+never qualified). The parsing of native host and section 14.5.2 configurations
+and a qualified-evidence verifier remain open (#229), so qualified acceptance
+grades blocked, never pass. No new measured gate is claimed; genuine episodes,
+paired host tasks and platform runs still need real corpora, hosts and
+hardware. Read-only native RPC and genuine MCP qualification probes do not
 enable runtime snapshots or further host operations. The separate spec0.62
 direct-action profile above is qualified; exact selected skill/MCP use and
 post-approval currentness still require their own qualification. Missing genuine

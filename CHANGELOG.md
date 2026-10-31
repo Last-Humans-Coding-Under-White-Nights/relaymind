@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Section 12.6.5 verifier closure and episode driver (#229, #202, #205, #207):
+  - The frozen corpus is verified from the input manifest, and host tasks and episodes are bound to it.
+  - Off/on adaptation configurations are checked as a named ablation.
+  - Every dispatched probe's request and offered-catalog digests are recomputed.
+  - Spec 0.64 reset evidence lets the command verify resets.
+  - A driver runs adaptation episodes through the real recommendation lifecycle on the locked corpus projection; it is evaluation-only and never qualified.
+  - A Simplified Chinese command guide is added.
 - Spec 0.60 section 12.6.5 exports (#198/#202/#204/#205/#206; RM16, RM38–RM44;
   AC29–AC37): closed host freeze, task, report, adaptation episode and platform
   schemas; a deterministic three-arm plan and conserving host driver; offline
