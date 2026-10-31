@@ -6,6 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process.
 ### Changed
 
 - Specification 0.55 → 0.56 (RM40/RM44; AC31/AC36; review #219):

@@ -45,12 +45,29 @@ jobs:
       - name: Format check
         run: ruff format --check .
 
+      # The browser download is cached per OS and Playwright version; Linux
+      # still installs its system packages on every run.
+      - name: Playwright version
+        id: playwright
+        shell: bash
+        # One browser location per runner, so the cache can restore it.
+        run: |
+          python -c "from importlib.metadata import version; print('version=' + version('playwright'))" >> "$GITHUB_OUTPUT"
+          echo "PLAYWRIGHT_BROWSERS_PATH=${RUNNER_TEMP}/ms-playwright" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium-shell
+
       # The browser test of the demo UI page script (#89) needs Chromium.
       - name: Install browser
         run: playwright install --with-deps --only-shell chromium
 
       - name: Test
-        run: pytest --durations=30 --junitxml=ci-evidence/core-tests.xml
+        # Parallel workers, one test file per worker at a time; on Windows the
+        # single-process run took about 29 minutes.
+        run: pytest -n auto --dist loadfile --durations=30 --junitxml=ci-evidence/core-tests.xml
 
       - uses: actions/upload-artifact@v4
         if: always()

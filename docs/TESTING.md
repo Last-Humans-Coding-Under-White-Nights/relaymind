@@ -27,6 +27,18 @@ ruff check .
 ruff format --check .
 ```
 
+### Parallel tests in CI
+
+The core `check` job runs `pytest -n auto --dist loadfile` (pytest-xdist, in
+the `dev` extra). Each worker runs whole test files, so tests in one file keep
+running in order in one process. Locally, `pytest -n 4 --dist loadfile` ran
+the full suite in about 3 minutes, against about 8 in one process. On Windows,
+the single-process `check` test step took about 29 minutes. The Chromium shell
+download is cached per OS and Playwright version under
+`$RUNNER_TEMP/ms-playwright`; Linux still installs its system packages on every
+run. A test that needs a fixed port, a shared file or global state must isolate
+it per test (`tmp_path`, a free port), so it can run beside other files.
+
 ### CI timing reports
 
 The `check` and `openclaw-plugin` jobs each run on Ubuntu, macOS and Windows.

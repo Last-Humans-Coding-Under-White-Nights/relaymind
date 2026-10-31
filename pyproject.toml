@@ -40,6 +40,8 @@ dev = [
     # The browser test of the demo UI page script (#89); CI installs Chromium.
     "playwright>=1.49",
     "pytest>=8.0",
+    # Parallel test workers; CI runs the suite with -n auto (docs/TESTING.md).
+    "pytest-xdist>=3.6",
     "ruff>=0.6",
 ]
 
