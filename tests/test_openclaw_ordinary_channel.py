@@ -331,3 +331,21 @@ def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
     elif change == "negative_missing":
         value["negatives"].pop()
     assert not api.ordinary_skill_pass(capture)
+
+
+def test_the_browser_observer_allows_every_method_the_ordinary_run_calls():
+    """#197: a method missing from the observer allowlist never reaches the host."""
+    import re
+
+    root = Path(__file__).resolve().parents[1] / "integrations/openclaw/test"
+    ordinary = (root / "host-ordinary-qualification/qualify.py").read_text(encoding="utf-8")
+    person = (root / "host-person-qualification/qualify.py").read_text(encoding="utf-8")
+    wire = (root / "host-person-qualification/browser-wire.mjs").read_text(encoding="utf-8")
+    called = set(re.findall(r'rpc\(\s*[^,]+,\s*"([a-z.]+)"', ordinary))
+    assert {"skills.library.save", "skills.library.list", "relaymind.recommendations"} <= called
+    requested = re.search(r"installNativeSocketObserver\(window, \[(.*?)\]\)", person, re.S)
+    extras = set(re.findall(r'"([a-z.]+)"', requested.group(1)))
+    base = {"rmqualification.person", "sessions.create", "sessions.reset"}
+    assert called <= base | extras
+    allowed = re.search(r"some\(method => !\[(.*?)\]\.includes", wire).group(1)
+    assert extras <= set(re.findall(r'"([a-z.]+)"', allowed))

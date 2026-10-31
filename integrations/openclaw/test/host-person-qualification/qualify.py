@@ -1070,7 +1070,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     script = script.replace(
                         "installNativeSocketObserver();",
                         'installNativeSocketObserver(window, ["relaymind.recommendations", '
-                        '"relaymind.skill"]);',
+                        '"relaymind.skill", "skills.library.save", "skills.library.list"]);',
                     )
                 pages, sessions = [], []
 
