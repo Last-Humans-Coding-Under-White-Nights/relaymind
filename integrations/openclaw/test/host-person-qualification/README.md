@@ -2,7 +2,10 @@
 
 This opt-in Ubuntu x86-64 harness tests disposable account login through
 AuthCrunch, the bundled OpenClaw Control UI's native device pairing, and a
-registered read-only RPC on that same authenticated browser socket. It uses
+registered fixture RPC on that same authenticated browser socket. The RPC is
+registered with `operator.write` scope and write session access so that it runs
+behind the native session mutation commit guard; it changes no session itself
+and only reads the effective tool inventory. It uses
 OpenClaw 2026.10.7 and the AuthCrunch 1.5.0 Linux distribution. The archive's
 pinned SHA-256 is
 `86a1ed8446bca803149bdcf1335005b840033a17c41680a067d7de11dfbaeca9`.

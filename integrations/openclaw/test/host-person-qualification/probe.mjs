@@ -16,6 +16,7 @@ export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMe
           client.internal?.authenticatedControlUi !== true || client.internal?.agentToolCaller ||
           client.browserOrigin?.origin !== origin ||
           !client.connect?.device?.id || !client.presenceKey || !mutation || !target ||
+          !params || typeof params !== "object" || Array.isArray(params) ||
           Object.keys(params).some(key => !["sessionKey", "agentId", "expectedSessionId", "expectedLifecycleRevision", "hold"].includes(key)) ||
           params.sessionKey !== target.sessionKey || params.expectedSessionId !== target.sessionId ||
           !target.lifecycleRevision || params.expectedLifecycleRevision !== target.lifecycleRevision ||

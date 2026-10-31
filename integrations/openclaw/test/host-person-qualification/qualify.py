@@ -4,12 +4,24 @@ Only an actual assigned private IPv4 interface is eligible. No public bind,
 synthetic forwarding address, actor row, external account or human claim.
 """
 
+import argparse
+import hashlib
 import ipaddress
 import json
+import os
+import platform
+import re
 import secrets
+import signal
+import socket
 import subprocess
+import sys
+import tarfile
 import time
+import urllib.request
+import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
 TOTAL_SECONDS = 570
 HOST_VERSION = "2026.10.7"
@@ -54,6 +66,7 @@ PERSON_RPC_EVENT_REASONS = {
         {"fixture_hold_timeout", "fixture_pause_failed", "inventory_unavailable"}
     ),
 }
+CROSS_ACCOUNT_DENIAL_CODES = frozenset({"FORBIDDEN", "INVALID_REQUEST", "NOT_FOUND"})
 _PRIVATE = tuple(
     ipaddress.IPv4Network(value) for value in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
 )
@@ -239,7 +252,7 @@ def person_composition_pass(capture: dict) -> bool:
             or cross["target_lifecycle_revision"] != accounts[0]["lifecycle_revision"]
             or cross["target_session_id"] != accounts[0]["native_session_id"]
             or cross["ok"] is not False
-            or cross["error_code"] not in {"FORBIDDEN", "INVALID_REQUEST", "NOT_FOUND"}
+            or cross["error_code"] not in CROSS_ACCOUNT_DENIAL_CODES
         ):
             return False
         prepared, observed_close, denied = (
@@ -344,7 +357,7 @@ def observe_login_subphase(capture: dict, account: str, subphase: str, action, *
         )
 
 
-def project_person_rpc_failure(path: Path, request_id: str) -> dict:
+def _project_native_events(path: Path, request_id: str, *, limit: int, held: bool) -> dict:
     """Project one native request's fixed event classes from a bounded private file."""
     empty = {"observations": []}
     if not isinstance(request_id, str) or not 0 < len(request_id) <= 128:
@@ -366,54 +379,18 @@ def project_person_rpc_failure(path: Path, request_id: str) -> dict:
             return dict(status="event_file_invalid", **empty)
         if event.get("requestId") != request_id:
             continue
+        if held:
+            connection_id = event.get("connectionId")
+            if not isinstance(connection_id, str) or not 0 < len(connection_id) <= 128:
+                return dict(status="event_file_invalid", **empty)
         phase, reason = event.get("phase"), event.get("reason")
         if not isinstance(phase, str) or (reason is not None and not isinstance(reason, str)):
             return dict(status="event_file_invalid", **empty)
         if phase in {"prepared", "admitted"} and reason is None:
             observation = {"phase": phase, "reason": None}
-        elif phase in PERSON_RPC_EVENT_REASONS and reason in PERSON_RPC_EVENT_REASONS[phase]:
-            observation = {"phase": phase, "reason": reason}
-        else:
-            return dict(status="event_file_invalid", **empty)
-        observations.append(observation)
-        if len(observations) > 4:
-            return dict(status="event_file_invalid", **empty)
-    return {
-        "status": "handler_event_present" if observations else "handler_event_absent",
-        "observations": observations,
-    }
-
-
-def project_held_native_events(path: Path, request_id: str) -> dict:
-    """Retain only fixed facts from the bound held request before fixture cleanup."""
-    empty = {"observations": []}
-    if not isinstance(request_id, str) or not 0 < len(request_id) <= 128:
-        return dict(status="event_file_invalid", **empty)
-    try:
-        with path.open("rb") as source:
-            raw = source.read(1024 * 1024 + 1)
-    except OSError:
-        return dict(status="event_file_unavailable", **empty)
-    if len(raw) > 1024 * 1024:
-        return dict(status="event_file_oversize", **empty)
-    observations = []
-    for line in raw.splitlines():
-        try:
-            event = json.loads(line)
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            return dict(status="event_file_invalid", **empty)
-        if not isinstance(event, dict):
-            return dict(status="event_file_invalid", **empty)
-        if event.get("requestId") != request_id:
-            continue
-        connection_id = event.get("connectionId")
-        if not isinstance(connection_id, str) or not 0 < len(connection_id) <= 128:
-            return dict(status="event_file_invalid", **empty)
-        phase, reason = event.get("phase"), event.get("reason")
-        if phase in {"prepared", "admitted"} and reason is None:
-            observation = {"phase": phase, "reason": None}
         elif (
-            phase == "connection_retired"
+            held
+            and phase == "connection_retired"
             and reason is None
             and type(event.get("connection_aborted")) is bool
         ):
@@ -423,12 +400,22 @@ def project_held_native_events(path: Path, request_id: str) -> dict:
         else:
             return dict(status="event_file_invalid", **empty)
         observations.append(observation)
-        if len(observations) > 8:
+        if len(observations) > limit:
             return dict(status="event_file_invalid", **empty)
     return {
         "status": "handler_event_present" if observations else "handler_event_absent",
         "observations": observations,
     }
+
+
+def project_person_rpc_failure(path: Path, request_id: str) -> dict:
+    """One failed person RPC's fixed event classes."""
+    return _project_native_events(path, request_id, limit=4, held=False)
+
+
+def project_held_native_events(path: Path, request_id: str) -> dict:
+    """Retain only fixed facts from the bound held request before fixture cleanup."""
+    return _project_native_events(path, request_id, limit=8, held=True)
 
 
 def read_bound_peer(page, address: str, email: str) -> dict:
@@ -446,16 +433,10 @@ def read_bound_peer(page, address: str, email: str) -> dict:
 
 def install_authcrunch(archive: Path, destination: Path) -> Path:
     """Extract only the pinned executable; no arbitrary archive path is used."""
-    import hashlib
-    import os
-    import tarfile
-
     if archive.stat().st_size != AUTHCRUNCH_BYTES:
         raise ValueError("artifact_digest")
-    digest = hashlib.sha256()
     with archive.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
+        digest = hashlib.file_digest(source, "sha256")
     if digest.hexdigest() != AUTHCRUNCH_SHA256:
         raise ValueError("artifact_digest")
     with tarfile.open(archive, "r:gz") as package:
@@ -491,8 +472,6 @@ def proxy_configuration(
     work: Path,
 ) -> str:
     """Supported local-store login, actual socket attribution, fixed loopback upstream."""
-    import re
-
     if not _private_ipv4(bind_ip):
         raise ValueError("private_network_required")
     if any(
@@ -579,9 +558,6 @@ def proxy_configuration(
 
 def download_authcrunch(path: Path) -> None:
     """Fetch one fixed release with finite bounds; no ambient proxy/auth headers."""
-    import time
-    import urllib.request
-    from urllib.parse import urlsplit
 
     class ReleaseRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -623,35 +599,84 @@ def download_authcrunch(path: Path) -> None:
 
 
 def _free_port(address: str) -> int:
-    import socket
-
     with socket.socket() as listener:
         listener.bind((address, 0))
         return listener.getsockname()[1]
 
 
-def _wait_listener(process, address: str, port: int) -> None:
-    import socket
-    import time
+def _distinct_ports(address: str, attempts: int = 16) -> tuple[int, int]:
+    """Gateway and proxy ports differ, so a check of one never reaches the other."""
+    gateway_port = _free_port("127.0.0.1")
+    for _ in range(attempts):
+        proxy_port = _free_port(address)
+        if proxy_port != gateway_port:
+            return gateway_port, proxy_port
+    raise ValueError("qualification_port")
 
+
+def _unreachable(address: str, port: int) -> bool:
+    """A refused, dropped or filtered connection means nothing listens for us there."""
+    try:
+        with socket.create_connection((address, port), timeout=0.2):
+            return False
+    except OSError:
+        return True
+
+
+def _close_contexts(contexts: list) -> None:
+    """Close every browser context; one failed close does not keep the others open."""
+    for context in contexts:
+        try:
+            context.close()
+        except Exception:
+            pass
+
+
+def read_native_events(path: Path) -> list[dict]:
+    """Complete JSONL events only; a trailing line still being appended is retried later."""
+    raw = path.read_bytes()
+    if len(raw) > 1024 * 1024:
+        raise ValueError("native_event_bound")
+    complete, _, _partial = raw.rpartition(b"\n")
+    events = []
+    for line in complete.split(b"\n"):
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise ValueError("native_event_invalid") from None
+        if not isinstance(event, dict):
+            raise ValueError("native_event_invalid")
+        events.append(event)
+    return events
+
+
+def _wait_listener(process, address: str, port: int) -> None:
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise ValueError("child_startup_failed")
-        try:
-            with socket.create_connection((address, port), timeout=0.2):
-                return
-        except OSError:
-            time.sleep(0.05)
+        if not _unreachable(address, port):
+            return
+        time.sleep(0.05)
     raise TimeoutError("child_startup_timeout")
 
 
-def _run_private_trial(work: Path, address: str, capture: dict) -> None:
-    import socket
-    import sys
-    import time
-    import uuid
+def _wait_native_event(path: Path, predicate, seconds: float, reason: str) -> tuple[dict, list]:
+    """Poll the native event file until one event matches; return it and all events read."""
+    deadline = time.monotonic() + seconds
+    while True:
+        events = read_native_events(path)
+        match = next((event for event in events if predicate(event)), None)
+        if match is not None:
+            return match, events
+        if time.monotonic() >= deadline:
+            raise TimeoutError(reason)
+        time.sleep(0.01)
 
+
+def _run_private_trial(work: Path, address: str, capture: dict) -> None:
     from playwright.sync_api import sync_playwright
 
     root = Path(__file__).resolve().parents[4]
@@ -664,10 +689,7 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
     archive = work / "authcrunch.tar.gz"
     download_authcrunch(archive)
     binary = install_authcrunch(archive, work / "proxy-bin")
-    gateway_port = _free_port("127.0.0.1")
-    proxy_port = _free_port(address)
-    if gateway_port == proxy_port:
-        proxy_port = _free_port(address)
+    gateway_port, proxy_port = _distinct_ports(address)
     origin = f"https://rm-person.test:{proxy_port}"
     nonce = secrets.token_hex(6)
     accounts = [
@@ -724,7 +746,6 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
     config_path.write_bytes((json.dumps(config) + "\n").encode("utf-8"))
     config_path.chmod(0o600)
     capture["configured_session_policy"] = config["gateway"]["roles"]
-    environment = host_environment(work)
     allowed = {
         "PATH",
         "LANG",
@@ -733,13 +754,11 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
         "TMPDIR",
         "LD_LIBRARY_PATH",
         "PLAYWRIGHT_BROWSERS_PATH",
+        "OPENCLAW_HOME",
+        "OPENCLAW_STATE_DIR",
+        "OPENCLAW_CONFIG_PATH",
     }
-    environment = {
-        name: value
-        for name, value in environment.items()
-        if name in allowed
-        or name in {"OPENCLAW_HOME", "OPENCLAW_STATE_DIR", "OPENCLAW_CONFIG_PATH"}
-    }
+    environment = {name: value for name, value in host_environment(work).items() if name in allowed}
     environment.update(
         HOME=str(work / "home"),
         XDG_CONFIG_HOME=str(work / "home/.config"),
@@ -775,8 +794,6 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
             )
             if completed.returncode != 0:
                 raise ValueError("configuration_invalid")
-    import hashlib
-
     source_paths = [
         plugin / "qualify.py",
         plugin / "probe.mjs",
@@ -830,12 +847,6 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                 return
         raise ValueError("unknown_step")
 
-    def native_events():
-        raw = events_path.read_bytes()
-        if len(raw) > 1024 * 1024:
-            raise ValueError("native_event_bound")
-        return [json.loads(line) for line in raw.splitlines() if line]
-
     try:
         for label, command in (
             ("gateway", host + ["gateway", "run", "--compact"]),
@@ -852,17 +863,11 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
         _wait_listener(processes[0], "127.0.0.1", gateway_port)
         _wait_listener(processes[1], address, proxy_port)
         # The gateway must not become a direct private-interface ingress.
-        try:
-            with socket.create_connection((address, gateway_port), timeout=0.2):
-                raise ValueError("gateway_nonloopback_listener")
-        except ConnectionRefusedError:
-            pass
+        if not _unreachable(address, gateway_port):
+            raise ValueError("gateway_nonloopback_listener")
         # A wildcard proxy listener would also accept loopback; refuse it.
-        try:
-            with socket.create_connection(("127.0.0.1", proxy_port), timeout=0.2):
-                raise ValueError("proxy_loopback_listener")
-        except ConnectionRefusedError:
-            pass
+        if not _unreachable("127.0.0.1", proxy_port):
+            raise ValueError("proxy_loopback_listener")
         capture["listeners"] = dict(
             gateway=dict(address="127.0.0.1", port=gateway_port),
             proxy=dict(address=address, port=proxy_port),
@@ -874,6 +879,7 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                 args=["--no-proxy-server", f"--host-resolver-rules=MAP rm-person.test {address}"],
                 env=environment,
             )
+            contexts = []
             try:
                 capture["phase"] = "proxy_signature_controls"
                 for forged in (False, True):
@@ -905,7 +911,7 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                     "function installNativeSocketObserver",
                     1,
                 ) + "\ninstallNativeSocketObserver();\n"
-                contexts, pages, sessions = [], [], []
+                pages, sessions = [], []
 
                 def rpc(page, method, params):
                     observed = page.evaluate(
@@ -993,7 +999,6 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                     capture["network"] = dict(
                         bind_ip=address, peer_ip=peer["peer"], upstream="127.0.0.1"
                     )
-                    mark("network_peer")
                     login_id = str(uuid.uuid4())
                     capture["events"].append(
                         dict(
@@ -1066,14 +1071,15 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                         )
                     )
                     mark(prefix + "_person_rpc")
+                # Every account's actual TCP peer is bound before the step passes.
+                mark("network_peer")
                 capture["phase"] = "cross_account_denied"
                 denied = rpc(pages[1], "rmqualification.person", sessions[0])
                 denial_code = (denied["frame"].get("error") or {}).get("code")
-                if denied["frame"].get("ok") is not False or denial_code not in {
-                    "FORBIDDEN",
-                    "INVALID_REQUEST",
-                    "NOT_FOUND",
-                }:
+                if (
+                    denied["frame"].get("ok") is not False
+                    or denial_code not in CROSS_ACCOUNT_DENIAL_CODES
+                ):
                     raise ValueError("cross_account_admitted")
                 capture["events"].append(
                     dict(
@@ -1094,59 +1100,35 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                     dict(sessions[0], hold=True),
                 )
                 held_request_id = request_id
-                deadline = time.monotonic() + 3
-                while not any(
-                    event.get("requestId") == request_id and event.get("phase") == "prepared"
-                    for event in native_events()
-                ):
-                    if time.monotonic() >= deadline:
-                        raise TimeoutError("native_hold_not_observed")
-                    time.sleep(0.01)
-                observed_events = native_events()
-                prepared_event = next(
-                    event
-                    for event in observed_events
-                    if event.get("requestId") == request_id and event.get("phase") == "prepared"
+
+                def held(*phases):
+                    return lambda event: (
+                        event.get("requestId") == request_id and event.get("phase") in phases
+                    )
+
+                prepared_event, _ = _wait_native_event(
+                    events_path, held("prepared"), 3, "native_hold_not_observed"
                 )
                 connection_id = capture["accounts"][0]["connection_id"]
                 if prepared_event.get("connectionId") != connection_id:
                     raise ValueError("native_revocation_unverified")
                 contexts[0].close()
-                deadline = time.monotonic() + 3
-                while not any(
-                    event.get("requestId") == request_id
-                    and event.get("connectionId") == connection_id
-                    and event.get("phase") == "connection_retired"
-                    and event.get("connection_aborted") is True
-                    for event in native_events()
-                ):
-                    if time.monotonic() >= deadline:
-                        raise TimeoutError("native_connection_retirement_not_observed")
-                    time.sleep(0.01)
-                release_path.write_bytes(b"release\n")
-                deadline = time.monotonic() + 5
-                while not any(
-                    event.get("requestId") == request_id
-                    and event.get("phase") in {"guard_denied", "probe_failed"}
-                    for event in native_events()
-                ):
-                    if time.monotonic() >= deadline:
-                        raise TimeoutError("native_revocation_not_observed")
-                    time.sleep(0.01)
-                observed_events = native_events()
-                retired_event = next(
-                    event
-                    for event in observed_events
-                    if event.get("requestId") == request_id
-                    and event.get("connectionId") == connection_id
-                    and event.get("phase") == "connection_retired"
-                    and event.get("connection_aborted") is True
+                retired_event, _ = _wait_native_event(
+                    events_path,
+                    lambda event: (
+                        held("connection_retired")(event)
+                        and event.get("connectionId") == connection_id
+                        and event.get("connection_aborted") is True
+                    ),
+                    3,
+                    "native_connection_retirement_not_observed",
                 )
-                denied_event = next(
-                    event
-                    for event in observed_events
-                    if event.get("requestId") == request_id
-                    and event.get("phase") in {"guard_denied", "probe_failed"}
+                release_path.write_bytes(b"release\n")
+                denied_event, observed_events = _wait_native_event(
+                    events_path,
+                    held("guard_denied", "probe_failed"),
+                    5,
+                    "native_revocation_not_observed",
                 )
                 capture["events"].append(
                     dict(
@@ -1172,13 +1154,12 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                     "programmatic fixture RPC on native authenticated Control UI socket"
                 )
                 capture["status"], capture["reason"] = "completed", None
-                if any(secret in json.dumps(capture) for secret in secrets_to_exclude):
-                    raise ValueError("credential_export_refused")
             finally:
                 if held_request_id is not None:
                     capture["held_native_observations"] = project_held_native_events(
                         events_path, held_request_id
                     )
+                _close_contexts(contexts)
                 browser.close()
     finally:
         release_path.write_bytes(b"release\n")
@@ -1205,12 +1186,56 @@ def session_create_params() -> dict:
     )
 
 
+# Every reason the harness raises by name is exported as itself.
+SAFE_REASONS = frozenset(
+    {
+        "private_network_required",
+        "linux_runner_required",
+        "caller_alarm_in_use",
+        "native_host_version",
+        "configuration_invalid",
+        "gateway_nonloopback_listener",
+        "proxy_loopback_listener",
+        "unauthenticated_proxy_ingress",
+        "actual_peer_binding",
+        "native_response_binding",
+        "native_session_create_denied",
+        "native_person_rpc_denied",
+        "native_person_identity_binding",
+        "cross_account_admitted",
+        "native_hold_not_observed",
+        "native_revocation_not_observed",
+        "native_connection_retirement_not_observed",
+        "native_revocation_unverified",
+        "native_session_create_binding",
+        "native_ui_pairing_timeout",
+        "credential_export_refused",
+        "overall_deadline_exceeded",
+        "artifact_digest",
+        "artifact_size",
+        "artifact_redirect",
+        "artifact_members",
+        "artifact_executable",
+        "artifact_expansion",
+        "artifact_path",
+        "child_startup_failed",
+        "child_startup_timeout",
+        "native_event_bound",
+        "artifact_deadline",
+        "native_event_invalid",
+        "network_inventory_size",
+        "network_inventory_invalid",
+        "qualification_port",
+        "qualification_accounts",
+        "login_subphase_invalid",
+        "login_subphase_bound",
+        "unknown_step",
+    }
+)
+
+
 def run_qualification(work: Path, output: Path) -> int:
     """Requested integration fails honestly when private setup is unavailable."""
-    import platform
-    import signal
-    import time
-
     capture = unavailable_capture("private_network_unavailable")
     started = time.monotonic()
     previous_handler = None
@@ -1219,15 +1244,18 @@ def run_qualification(work: Path, output: Path) -> int:
     def expired(_number, _frame):
         raise TimeoutError("overall_deadline_exceeded")
 
+    def finish() -> int:
+        capture["observed_ms"] = (time.monotonic() - started) * 1000
+        write_capture(output, capture)
+        return 0 if capture["checks"]["person_composition"] else 2
+
     try:
         if platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"}:
             capture["reason"] = "linux_runner_required"
-            write_capture(output, capture)
-            return 2
+            return finish()
         candidates = discover_network()
         if not candidates:
-            write_capture(output, capture)
-            return 2
+            return finish()
         if not _private_ipv4(candidates[0]):
             raise ValueError("private_network_required")
         work = work.parent.resolve(strict=True) / work.name
@@ -1244,41 +1272,7 @@ def run_qualification(work: Path, output: Path) -> int:
         if not capture["checks"]["person_composition"]:
             capture.update(status="failed", reason="person_composition_unverified")
     except Exception as error:
-        safe_reasons = {
-            "private_network_required",
-            "linux_runner_required",
-            "caller_alarm_in_use",
-            "native_host_version",
-            "configuration_invalid",
-            "gateway_nonloopback_listener",
-            "proxy_loopback_listener",
-            "unauthenticated_proxy_ingress",
-            "actual_peer_binding",
-            "native_response_binding",
-            "native_session_create_denied",
-            "native_person_rpc_denied",
-            "native_person_identity_binding",
-            "cross_account_admitted",
-            "native_hold_not_observed",
-            "native_revocation_not_observed",
-            "native_connection_retirement_not_observed",
-            "native_revocation_unverified",
-            "native_session_create_binding",
-            "native_ui_pairing_timeout",
-            "credential_export_refused",
-            "overall_deadline_exceeded",
-            "artifact_digest",
-            "artifact_size",
-            "artifact_redirect",
-            "artifact_members",
-            "artifact_executable",
-            "artifact_expansion",
-            "artifact_path",
-            "child_startup_failed",
-            "child_startup_timeout",
-            "native_event_bound",
-        }
-        reason = str(error) if str(error) in safe_reasons else "qualification_failed"
+        reason = str(error) if str(error) in SAFE_REASONS else "qualification_failed"
         if reason == "credential_export_refused":
             safe = unavailable_capture(reason)
             for previous, step in zip(capture["steps"], safe["steps"], strict=True):
@@ -1293,14 +1287,10 @@ def run_qualification(work: Path, output: Path) -> int:
         if timer_installed:
             signal.setitimer(signal.ITIMER_REAL, 0)
             signal.signal(signal.SIGALRM, previous_handler)
-    capture["observed_ms"] = (time.monotonic() - started) * 1000
-    write_capture(output, capture)
-    return 0 if capture["checks"]["person_composition"] else 2
+    return finish()
 
 
 def main(argv=None) -> int:
-    import argparse
-
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--work-dir", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
