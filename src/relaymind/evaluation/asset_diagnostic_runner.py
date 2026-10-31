@@ -552,6 +552,8 @@ def _produced_by_admitted_attempt(result: Mapping) -> bool:
     """
     if result["decision"] == "empty_catalog":
         return not result["attempts"]
+    if not result["attempts"]:
+        return False
     producer = result["attempts"][-1]
     output = producer["result"]
     return (
@@ -781,7 +783,7 @@ def _verify_development_report(report: Mapping) -> dict | None:
             "coverage"
         ] != _reference_coverage(doc, catalog):
             raise ValueError
-    except (ValueError, TypeError, KeyError, RecursionError):
+    except (ValueError, TypeError, KeyError, IndexError, AttributeError, RecursionError):
         raise AssetCorpusError("invalid_development_report") from None
     return runtime
 
