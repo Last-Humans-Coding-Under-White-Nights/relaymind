@@ -190,7 +190,7 @@ _GENERATOR_ANCHORS = {
     "docs/SPECIFICATION.md": frozenset(
         {
             # Reviewed 0.65 skill-use/MCP fences and native configuration evidence.
-            ("15edc434fd1c131b47d70e6178447555f8b762d26d47ba4f8007306087e23a7a", 608708),
+            ("ccd552fe981c4206c38b11cbe74ab84e5ff51f5c83f6aeadb2ad2ee1fdaf1c2e", 609833),
             # Reviewed 0.64 reset evidence document for section 12.6.5.
             ("c97a1d103c4bcdb97ac8c27b4d756bee1567d90f47ad1a68514fc9f5294440c7", 584053),
             # Reviewed 0.63 expected-scope, native role and skill expiry rules.

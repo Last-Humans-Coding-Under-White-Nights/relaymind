@@ -1316,15 +1316,19 @@ observe actual native instruction bytes in the next actual model request of the
 same session incarnation, correlate native and RelayMind runs, and enforce the
 later-use fence for removal, choice expiry/erasure/remapping, reset and revoked
 authority. Native pins surviving removal do not satisfy that fence. A real-host
-model-double round trip may qualify only the explicitly labeled deterministic
-functional tier with all controls; live-model capability and full acceptance
+model-double round trip with every listed control may support a reviewed
+skill_loaded_use registry entry for that exact composition in the
+deterministic-model functional tier; live-model capability and full acceptance
 remain separate. The current selection receipt still says not_observed.
 
 #204 may build a disposable qualification harness against public authenticated
 dispatch and actual native approval paths, but MCP activation remains disabled.
 Section 7.6.2 defines a separate explicit direct-use request and ten qualification
-conditions; neither name-only tools.invoke nor the narrower MCP App view route
-proves a generic independent-tool bridge. Exact native identity/lifetime,
+conditions. Section 14.5 caps native RPC requests at 512 KiB; the 60-second
+preparation/dispatch deadline excludes the separately bounded native approval
+wait, without changing any existing budget. The mcp_use registry operation is
+separate from the platform-report lifecycle step of the same name. Neither
+name-only tools.invoke nor the narrower MCP App view route proves a generic independent-tool bridge. Exact native identity/lifetime,
 post-approval and final-I/O currentness, actual server effects and negative
 controls must pass for the exact pinned operation/route/transport. Automated
 native UI allow/deny is functional evidence only; genuine human approval,
@@ -1333,7 +1337,9 @@ No adapter/registry activation or host-use measurement is supplied by this
 revision; its only code change adds the reviewed specification evidence anchor.
 
 #240 host_config evidence must validate with the pinned host's own validator
-and captured schema/validator identities, including ECMAScript regex semantics.
+and captured schema/validator identities, including the native regex dialect.
+The pinned config validate command is recorded in the
+[host probe](evidence/2026-10-27-openclaw-mac-probe/REPORT.md).
 Provider/sampling/budget documents need their own applicable source-bound
 schema or a verified extraction from a validated parent; otherwise they remain
 unverified. These section 12.6.5 requirements do not implement the verifier or

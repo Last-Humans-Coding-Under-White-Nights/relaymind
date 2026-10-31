@@ -48,7 +48,9 @@ skill.used event alone is not enough. A prior manifest-verified RPC does not
 prove that a later mutable-file read delivered the same bytes.
 
 Deterministic models can verify native loading and authority controls without
-claiming model capability. The revision explicitly labels that functional tier
+claiming model capability. When every control passes, their evidence may
+support a reviewed skill_loaded_use registry entry for that exact composition.
+The revision explicitly labels the deterministic-model functional tier
 and the separate live-model capability tier. Both need their own actual results;
 neither supplies missing platform/human/whole-task acceptance.
 
@@ -64,9 +66,13 @@ An implicit future model turn would require an additional delegation protocol.
 The chosen initial contract is a separate explicit person request after a
 committed discovery choice. The reserved relaymind.mcp request carries explicit
 arguments and expected session incarnation, not invented server/schema identity
-or a model-origin action. It has closed receipts/errors, a finite 60-second
-operation deadline including approval, at-most-once dispatch recovery and honest
-indeterminate outcomes. That deadline is a design limit, not a measurement; no
+or a model-origin action. Section 14.5 caps native RPC requests at 512 KiB.
+The operation has closed receipts/errors, a finite 60-second preparation/dispatch
+deadline excluding only approval waiting, at-most-once dispatch recovery and
+honest indeterminate outcomes. Approval waiting is bounded by the native approval
+deadline and the operation's finite declared maximum approval wait; expiry means
+timeout with zero new server calls. Host cancellation and earlier native tool
+deadlines still apply throughout. These are design limits, not measurements; no
 existing gateway, model or direct-action budget changes.
 
 Public authenticated dispatch is a verified ingress facility, not proof of an
@@ -94,8 +100,10 @@ effects. It cannot supply a human allow/deny observation. Transport, App versus
 ordinary tool, model and platform evidence remain separately scoped.
 
 The revision defines the contract while retaining the passing-qualification
-gate. It changes no product RPC implementation or qualification registry. Runtime
-snapshots and runtime recommendations still need a separate normative contract
+gate. The mcp_use registry operation is separate from the platform-report
+lifecycle step with the same name. It changes no product RPC implementation or
+qualification registry. Runtime snapshots and runtime recommendations still
+need a separate normative contract
 and qualification. No gateway MCP client/executor, fork/upgrade, private import,
 synthetic identity or milestone reduction is authorized.
 
@@ -105,9 +113,9 @@ Digest equality and JSON/TOML parsing prove neither a valid host configuration
 nor its execution-effective settings. A generic schema validator is also
 insufficient where regex dialect, refinements, plugins or defaults differ.
 The chosen requirement uses the pinned OpenClaw config validate path and captures
-its schema, validator, input, result and extraction identities. The schema uses
-ECMAScript regex semantics; Python re or skipped unsupported patterns cannot be
-called equivalent validation.
+its schema, validator, input, result and extraction identities, including the
+validator's regex dialect. Python re without demonstrated equivalent native
+semantics, or skipped unsupported patterns, cannot be called equivalent validation.
 
 Private validation and source-bound redaction must establish how the exported
 preimage relates to the actual validated input. Secrets and secret hashes remain
