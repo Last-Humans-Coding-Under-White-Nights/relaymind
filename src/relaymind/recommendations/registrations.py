@@ -31,13 +31,15 @@ def production_qualification(
     The shipped adapter independently pins the host and exact implementation.
     A local registration still needs its private credential and exact active scope.
     """
-    if contract != "openclaw-native-2026.10.7.v1":
-        return False
+    return contract == "openclaw-native-2026.10.7.v1" and all(
+        _bounded_reference(value) for value in (adapter_id, host_identity, session_mapping)
+    )
+
+
+def _bounded_reference(value: object) -> bool:
+    """A non-blank string of 1 to 256 UTF-8 bytes."""
     try:
-        return all(
-            type(value) is str and bool(value.strip()) and 1 <= len(value.encode("utf-8")) <= 256
-            for value in (adapter_id, host_identity, session_mapping)
-        )
+        return type(value) is str and bool(value.strip()) and 1 <= len(value.encode("utf-8")) <= 256
     except UnicodeError:
         return False
 
@@ -116,14 +118,10 @@ def load_registrations(
                 or item["schema_version"] != 1
             ):
                 raise ValueError
-            for name in keys - {"schema_version", "enabled"}:
-                value = item[name]
-                if (
-                    type(value) is not str
-                    or not value.strip()
-                    or not 1 <= len(value.encode("utf-8")) <= 256
-                ):
-                    raise ValueError
+            if not all(
+                _bounded_reference(item[name]) for name in keys - {"schema_version", "enabled"}
+            ):
+                raise ValueError
             if type(item["enabled"]) is not bool:
                 raise ValueError
             digest = item["credential_sha256"]

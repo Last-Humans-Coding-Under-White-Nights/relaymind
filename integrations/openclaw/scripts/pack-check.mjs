@@ -14,13 +14,14 @@ const host = JSON.parse(readFileSync(new URL("node_modules/openclaw/package.json
 const report = packReport(npm(["pack", "--dry-run", "--json", "--ignore-scripts"]));
 const files = report.files.map((f) => f.path).sort();
 const problems = [];
+const topLevel = ["openclaw.plugin.json", "README.md", "README.zh-CN.md", "package.json"];
 
-for (const required of ["dist/index.js", "openclaw.plugin.json", "README.md", "README.zh-CN.md", "package.json"]) {
+for (const required of ["dist/index.js", ...topLevel]) {
   if (!files.includes(required)) problems.push(`missing ${required}`);
 }
 for (const file of files) {
   const allowed =
-    ["openclaw.plugin.json", "README.md", "README.zh-CN.md", "package.json"].includes(file) ||
+    topLevel.includes(file) ||
     (file.startsWith("dist/") && file.endsWith(".js"));
   if (!allowed) problems.push(`unexpected file ${file}`);
 }

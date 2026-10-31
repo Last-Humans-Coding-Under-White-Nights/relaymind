@@ -87,6 +87,18 @@ def require_node_build_dependencies() -> None:
         pytest.skip(reason)
 
 
+def run_tsc(*args: str) -> None:
+    """Compile the plugin with its pinned TypeScript; a failure raises."""
+    subprocess.run(
+        [_node(), str(PACKAGE / "node_modules/typescript/bin/tsc"), *args],
+        cwd=PACKAGE,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
 def test_node_is_found_on_path_as_the_harness_finds_it(monkeypatch, tmp_path):
     """The tests run the Node the qualification harness runs (#135).
 

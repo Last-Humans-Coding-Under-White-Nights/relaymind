@@ -16,6 +16,32 @@ from test_openclaw_host_transport import PACKAGE, REQUIRED, _missing, _node
 from test_openclaw_plugin import driver_env
 
 
+def drive_actions(app, driver: str, output, *, timeout: float, env=None) -> dict:
+    """Run one recommendation-transport driver against the gateway with the action token.
+
+    Neither token may appear in the result or the driver's output.
+    """
+    with RunningServer(app) as running:
+        environment = driver_env(running.base_url, app.state.application_token)
+        environment["RELAYMIND_ACTION_TOKEN"] = ACTION_TOKEN
+        environment.update(env or {})
+        process = subprocess.run(
+            [_node(), str(PACKAGE / "test/recommendation-transport" / driver), str(output)],
+            cwd=PACKAGE,
+            env=environment,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=timeout,
+        )
+    assert output.exists(), process.stderr
+    raw = output.read_text(encoding="utf-8")
+    assert ACTION_TOKEN not in raw + process.stdout + process.stderr
+    assert app.state.application_token not in raw + process.stdout + process.stderr
+    assert process.returncode == 0, raw + process.stderr
+    return json.loads(raw)
+
+
 @pytest.fixture(autouse=True)
 def node_dependencies():
     reason = _missing()
@@ -30,28 +56,10 @@ def test_dormant_client_routes_and_explicit_fixture_actions(tmp_path):
     app, service, runs, _ = setup(tmp_path)
     enable_fixture_action(app, service, runs)
     asyncio.run(service.refresh_catalog())
-    output = tmp_path / "commands.json"
     try:
-        with RunningServer(app) as running:
-            env = driver_env(running.base_url, app.state.application_token)
-            env["RELAYMIND_ACTION_TOKEN"] = ACTION_TOKEN
-            process = subprocess.run(
-                [
-                    _node(),
-                    str(PACKAGE / "test/recommendation-transport/drive-recommendations.mjs"),
-                    str(output),
-                ],
-                cwd=PACKAGE,
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-        raw = output.read_text()
-        assert ACTION_TOKEN not in raw + process.stdout + process.stderr
-        assert app.state.application_token not in raw + process.stdout + process.stderr
-        assert process.returncode == 0, raw + process.stderr
-        result = json.loads(raw)
+        result = drive_actions(
+            app, "drive-recommendations.mjs", tmp_path / "commands.json", timeout=60
+        )
         assert result["ready"]["state"] == "ready"
         assert result["created"] == result["replay"] == result["get"]
         assert result["created"]["state_version"] == "1"

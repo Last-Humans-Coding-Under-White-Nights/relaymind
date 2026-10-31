@@ -3,7 +3,6 @@
 import functools
 import http.server
 import json
-import subprocess
 import threading
 from contextlib import contextmanager
 from pathlib import Path
@@ -11,7 +10,7 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import expect, sync_playwright
 
-from test_openclaw_host_transport import PACKAGE, _node, require_node_build_dependencies
+from test_openclaw_host_transport import PACKAGE, require_node_build_dependencies, run_tsc
 
 
 @pytest.fixture(scope="module")
@@ -19,21 +18,7 @@ def panel_build(tmp_path_factory):
     """Compile the shipped browser entry/codec into an owned, disposable directory."""
     require_node_build_dependencies()
     target = tmp_path_factory.mktemp("native-panel")
-    subprocess.run(
-        [
-            _node(),
-            str(PACKAGE / "node_modules/typescript/bin/tsc"),
-            "-p",
-            str(PACKAGE / "tsconfig.control-ui.json"),
-            "--outDir",
-            str(target),
-        ],
-        cwd=PACKAGE,
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+    run_tsc("-p", str(PACKAGE / "tsconfig.control-ui.json"), "--outDir", str(target))
     return target
 
 
