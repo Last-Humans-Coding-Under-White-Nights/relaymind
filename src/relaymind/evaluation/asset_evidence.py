@@ -65,6 +65,9 @@ def semantic_document(payload: bytes, format: str, *, semantic: bool = False) ->
             )
         canonical_digest(value)
         return value
+    except AssetCorpusError:
+        # A specific limit reason (AssetCorpusError is a ValueError) stays visible.
+        raise
     except (ValueError, TypeError, UnicodeError):
         raise AssetCorpusError("invalid_document") from None
 
