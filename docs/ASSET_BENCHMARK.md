@@ -1,5 +1,9 @@
 # Benchmarking skill and tool recommendation selectors
 
+[English setup](asset-selection.md) · [简体中文入口](asset-selection.zh-CN.md) ·
+[Source-backed development tutorial](SOURCE_BENCHMARK.md) ·
+[Privacy and recovery](asset-privacy-security.md)
+
 For the actual 412-asset Matrix/English-skill/MCP development catalog and 128 frozen
 Chinese, English and mixed cases, start with [SOURCE_BENCHMARK.md](SOURCE_BENCHMARK.md).
 It provides tested acquisition/build commands, the same v2 team integration and
@@ -339,9 +343,12 @@ own resources establish implementation identity; they are never a fallback
 location for missing input evidence. An omitted member or an unknown generator
 is incompatible, even when both arms supply matching rehashed claims.
 
-Current lexical/HTTP gateway primaries own no local runtime configuration.
-Non-null runtime claims, dangling effective-config references, unused config
-preimages and unsupported config schemas are refused in both comparison modes.
+Lexical/HTTP gateway primaries do not use a local selector embedding runtime.
+Pinned hybrid and disabled adaptation preimages use the same production semantic
+validators offline; the comparator never opens their embedded paths, loads a
+model or imports a native runtime. Every supplied preimage must belong to the
+exact configuration closure. Dangling references, unsupported schemas and
+inconsistent runtime/artifact bindings are refused in both comparison modes.
 A valid hash or a JSON version number does not activate a runtime or an artifact.
 
 Expected production admission failures produce fixed incompatible JSON/Markdown
@@ -384,9 +391,11 @@ reference method and acceptable targets before comparing algorithms; include
 available language-pair/kind cohorts and explicit missing coverage. This internal
 profile uses author-defined source-backed references, diagnostic top-1/Hit@3,
 abstention and false confidence, without inventing human annotators or formal
-confidence intervals. Its builder/runner is separate work: the formal `run`
-command above currently expects the §12.6.1 four-document lock, not a development
-diagnostic file. Matrix is one source, not a fixed required count or an installed
+confidence intervals. The working [source workflow](SOURCE_BENCHMARK.md) provides
+acquire/build/run/compare/choose; its comparison output is internal JSON only.
+The formal `run` command above expects the §12.6.1 four-document lock, not a
+development diagnostic file; formal compare writes JSON and Markdown. Matrix is
+one source, not a fixed required count or an installed
 library allowlist. Original English assets and actual upstream MCP definitions
 may supplement it; translated replacements do not become original English assets.
 
@@ -516,3 +525,44 @@ with explicit `not_applicable` versus observed setup, never missing-as-zero.
 `--quality-only` still makes latency/resource/cost values not comparable. These
 synthetic examples validate protocol replacement, not multilingual usefulness or
 independent qualification. The v2 query/result wire remains unchanged.
+
+
+## Local native preparation and runtime evidence
+
+The benchmark tooling supports a separately qualified configured hybrid through
+the production service and its single index worker. The production artifact
+registry includes an exact reviewed Linux CPU bundle with a fresh ordinary
+launch record; see the model status below for its strict runtime/device scope. The lexical/HTTP examples above remain
+usable without a native model. See [model status](../models/README.md#local-multilingual-embedding-development-candidate).
+
+For a qualified hybrid, add this table to the benchmark TOML before freezing its
+inputs (the production file separately supplies `[asset_hybrid]` manifest/config
+paths). Local setup is cold only; omit a URL. HTTP polling settings retain their
+fixed, inapplicable defaults:
+
+```toml
+[preparation]
+mode = "local"
+profile = "cold"
+total_ms = 60000
+request_ms = 2000
+poll_ms = 250
+max_polls = 240
+```
+
+Preparation occurs once before all query slots. The report preserves actual job
+events, semantic readiness, decision time, owned cleanup and available model costs.
+A partial usable index retains missing coverage and failed jobs; it is not full
+coverage. Failed or cancelled required setup retains every planned slot as
+`not_run`. A genuinely empty offer records `not_applicable`, its actual empty
+binding/readiness, and no invented model call. Query budgets stay unchanged.
+
+Current comparisons carry a closed runtime display for each arm. Verified native
+use can compare with verified local-runtime non-use; unknown is incompatible.
+Two native arms must share backend/version/build/device and execution controls;
+model/artifact and semantic index choices remain the declared variables.
+`--quality-only` relaxes machine fields alone and labels all raw setup, query,
+resource and cost quantities not comparable. Its Markdown renderer uses only the
+comparison object. Unknown CPU/memory and incomplete costs remain unknown;
+setup inference is never added to query inference a second time. Historical
+comparison objects retain their original closed shape and are not upgraded.

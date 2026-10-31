@@ -116,6 +116,7 @@ class CaptureContext:
     native_io_ms: list[float] = field(default_factory=list)
     cpu_resuming: bool = True
     cpu_quiescent_at: float | None = field(init=False)
+    external_check: Callable[[], None] = lambda: None
 
     def __post_init__(self) -> None:
         utc_iso(self.captured_at)
@@ -166,6 +167,7 @@ class CaptureContext:
             self.busy_since = None
         if self.cancelled():
             raise SourceFailure("cancelled", rejected_count=0)
+        self.external_check()
         if self.monotonic() >= self.deadline:
             raise SourceFailure("deadline")
 

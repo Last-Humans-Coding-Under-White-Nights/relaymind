@@ -6,11 +6,21 @@ measured live, and which targets are unmet or not measured. A passing
 model-double test is never a live result, and a live result on one
 machine is never a result for another (section 12.1).
 
-State as of 2026-10-23, including the supplied Windows exports at
+Historical measurement baseline as of 2026-10-23, including the supplied Windows exports at
 `d18745d` (#110). Nothing here is a production reliability claim
 (section 12.3).
 
 ## Implemented behavior
+
+- M10 customer navigation updated 2026-10-31: [English](asset-selection.md),
+  [简体中文](asset-selection.zh-CN.md), [source-backed run/compare](SOURCE_BENCHMARK.md),
+  [formal JSON/Markdown comparison](ASSET_BENCHMARK.md) and
+  [privacy/recovery](asset-privacy-security.md). Catalog discovery, v2 lexical/HTTP
+  recommendations and the installed qualified GitHub refresh profile have their
+  current scope in [ROADMAP](ROADMAP.md#m10--multilingual-asset-recommendations-spec-061).
+  The exact Linux CPU embedding bundle is registered; other native model and
+  platform qualifications, the installed M10 skill/MCP/approval/correction
+  walkthrough and whole-task/platform gates are separate pending deliverables.
 
 - M1 to M5, as listed in [`ROADMAP.md`](ROADMAP.md): the llama.cpp and
   external Chat Completions adapters, the bounded local skill-and-tool

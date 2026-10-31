@@ -55,6 +55,7 @@ class AssetCatalogService:
         index_lifecycle: IndexLifecycle | None = None,
         embedding_lifecycle=None,
         effective_config_digest=None,
+        work_check: Callable[[], None] = lambda: None,
     ) -> None:
         self.settings, self.store = settings, store
         self.clock = clock or TraceClock()
@@ -64,6 +65,7 @@ class AssetCatalogService:
         self.index_lifecycle = index_lifecycle
         self.embedding_lifecycle = embedding_lifecycle
         self.effective_config_digest = effective_config_digest
+        self.work_check = work_check
         self.scheduler = AssetWorkScheduler(busy=lambda: self.busy())
         self._sources = {s.source_id: s for s in settings.sources}
         self.remote_state = RemoteSourceStateStore(store.store)
@@ -376,6 +378,7 @@ class AssetCatalogService:
                 self.clock.utc_now(),
                 monotonic=self.clock.monotonic,
                 cancelled=lambda: self._cancel.is_set() or self._stopping,
+                external_check=self.work_check,
                 observe_busy=self.busy,
                 observe_busy_since=lambda: self.busy_since(),
                 utc_now=self.clock.utc_now,
@@ -489,6 +492,7 @@ class AssetCatalogService:
             self.clock.utc_now(),
             monotonic=self.clock.monotonic,
             cancelled=lambda: self._cancel.is_set() or self._stopping,
+            external_check=self.work_check,
             observe_busy=self.busy,
             observe_busy_since=lambda: self.busy_since(),
             utc_now=self.clock.utc_now,
