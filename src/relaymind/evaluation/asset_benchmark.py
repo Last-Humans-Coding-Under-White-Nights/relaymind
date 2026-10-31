@@ -651,7 +651,13 @@ async def run_asset_benchmark(
     # The library result itself has a real companion commitment and verified
     # snapshot; a disk writer later binds the same inputs to its chosen locator.
     with tempfile.TemporaryDirectory(prefix="asset-report-inputs-") as directory:
-        write_asset_benchmark_report(report, Path(directory) / "capture.json")
+        # This root was just created and is owned by this call. Canonicalize
+        # OS temp aliases (for example macOS /var), never caller artifact paths.
+        temporary_root = Path(directory)
+        root = temporary_root.parent.resolve(strict=True) / temporary_root.name
+        if root.is_symlink():
+            raise AssetCorpusError("unsafe_file")
+        write_asset_benchmark_report(report, root / "capture.json")
     report.data["input_manifest"]["path"] = None
     return report
 

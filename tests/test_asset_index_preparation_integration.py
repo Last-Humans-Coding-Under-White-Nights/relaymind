@@ -107,24 +107,29 @@ def test_none_runner_record_is_explicit_and_comparison_is_self_contained(tmp_pat
     assert "Preparation" in render_asset_comparison(result)
 
 
-def test_failed_preparation_preserves_all_planned_slots_without_query(tmp_path):
+def test_failed_preparation_preserves_all_planned_slots_without_query(tmp_path, indexed_server):
     from relaymind.evaluation.asset_benchmark import (
         load_benchmark_config,
         refresh_fixture_benchmark_config,
         run_asset_benchmark,
     )
 
-    config = fixture_config(tmp_path, primary="http", url="http://127.0.0.1:1/select")
+    _, server, url = indexed_server
+    config = fixture_config(tmp_path, primary="http", url=url + "/select")
     with config.path.open("a") as out:
         out.write(
-            '\n[preparation]\nmode="http"\nurl="http://127.0.0.1:1/index"\nprofile="cold"\ntotal_ms=100\nrequest_ms=50\npoll_ms=50\nmax_polls=1\n'
+            '\n[preparation]\nmode="http"\nurl="'
+            + url
+            + '/missing"\nprofile="cold"\ntotal_ms=5000\nrequest_ms=1000\npoll_ms=50\nmax_polls=1\n'
         )
     refresh_fixture_benchmark_config(config.path)
     report = asyncio.run(run_asset_benchmark(load_benchmark_config(config.path))).data
     assert report["status"] == "blocked"
     assert report["preparation"]["status"] == "failed"
+    assert report["preparation"]["reason"] == "http_status"
     assert len(report["results"]) == len(report["planned_slots"]) == 3
     assert all(row["status"] == "not_run" and row["attempts"] == [] for row in report["results"])
+    assert server.registry.jobs == {}
 
 
 def test_standalone_prepare_command_emits_explicit_none_transcript(tmp_path):

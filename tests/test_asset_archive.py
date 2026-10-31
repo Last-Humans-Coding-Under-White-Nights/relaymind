@@ -59,8 +59,17 @@ def test_rm40_ac31_reads_only_selected_ordinary_text_and_preserves_original_hash
     ["/escape", "../escape", "nested/../escape", "C:/escape", "nested\\escape", "./SKILL.md"],
 )
 def test_rm40_ac31_rejects_unsafe_names_even_on_opaque_members(name):
+    # ZipInfo normalizes backslashes while writing on Windows. Put the unsafe
+    # bytes in both ZIP headers so this always tests the inspector's boundary.
+    if name == "nested\\escape":
+        payload = archive([("SKILL.md", b"Original"), ("nested/escape", b"opaque")])
+        assert payload.count(b"nested/escape") == 2
+        payload = payload.replace(b"nested/escape", b"nested\\escape")
+        assert payload.count(b"nested\\escape") == 2
+    else:
+        payload = archive([("SKILL.md", b"Original"), (name, b"opaque")])
     with pytest.raises(ValueError, match="unsafe_archive_path"):
-        inspect(archive([("SKILL.md", b"Original"), (name, b"opaque")]))
+        inspect(payload)
 
 
 @pytest.mark.parametrize("names", [("a", "a"), ("a", "A"), ("caf\u00e9", "cafe\u0301")])

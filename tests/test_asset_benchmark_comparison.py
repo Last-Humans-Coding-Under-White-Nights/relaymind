@@ -99,8 +99,17 @@ def test_missing_required_evidence_refuses_offline_and_quality_only(saved, tmp_p
     assert any(r["reason"] == "input_unresolved" for r in result["reasons"])
 
 
-def test_unknown_machine_does_not_establish_performance_match(saved):
-    result = comparison(saved, saved)
+def test_unknown_machine_does_not_establish_performance_match(disk_bundle):
+    # RM40/AC31: pin an unknown GPU in the complete, recommitted input bundle.
+    # Runner hardware may report a known GPU, including on Windows CI.
+    def unknown_gpu(documents, report, _overrides):
+        documents["environment_lock"]["gpu"] = None
+        report["environment"]["gpu"] = None
+
+    unknown = rewrite_fixture_bundle(disk_bundle, unknown_gpu)
+    assert unknown.data["environment"]["gpu"] is None
+    assert unknown.inputs.documents["environment_lock"]["gpu"] is None
+    result = comparison(unknown, unknown)
     assert result["status"] == "incompatible"
     assert any(r["field"].endswith("/gpu") for r in result["reasons"])
 

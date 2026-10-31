@@ -360,11 +360,13 @@ def test_rm40_cancellation_conserves_planned_slots_and_consumed_attempts(
     ] * (2 - completed)
     current = report["rows"][completed]
     assert current["attempts"][0]["outcome"] == "cancelled"
-    assert current["observed_ms"] is not None and current["observed_ms"] > 0
+    # RM40: a coarse monotonic clock may report zero for consumed work.
+    assert current["observed_ms"] is not None and current["observed_ms"] >= 0
     assert current["terminal_observation"]["attempts"] == current["attempts"]
     for future in report["rows"][completed + 1 :]:
         assert future["observed_ms"] is None
         assert future["attempts"] == [] and future["observed_costs"] == []
     assert report["latency"]["unknown"] == 2 - completed
+    assert report["latency"]["known"] == completed + 1
     assert drained == [True]
     assert api().compare_source_benchmarks(report, copy.deepcopy(report))["compatible"]
