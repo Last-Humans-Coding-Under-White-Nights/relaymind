@@ -1,6 +1,7 @@
 // TEST ONLY: same production factories, real host authenticated-request context.
 import { readFileSync, appendFileSync, statSync } from 'node:fs';
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry';
+import { observeFetch } from './fetch-observer.mjs';
 import { parsePluginConfig } from '../../dist/config.js';
 import { nativeRecommendationDependencies, nativeAdapterRevision } from '../../dist/recommendation-native.js';
 import { createNativeActionHandler } from '../../dist/recommendation-native-actions.js';
@@ -9,13 +10,7 @@ export default definePluginEntry({
   id: 'relaymind-action-qualification', name: 'Disposable production-factory action qualification',
   register(api) {
     const record = value => { if (statSync(api.pluginConfig.eventFile).size > 1024*1024) throw Error('capture_bound'); appendFileSync(api.pluginConfig.eventFile, JSON.stringify(value)+'\n', {encoding:'utf8'}); };
-    const fetcher = globalThis.fetch;
-    globalThis.fetch = async (url, options) => {
-      record({kind:'http_attempt', method:options?.method ?? 'GET', path:new URL(url).pathname});
-      const response = await fetcher(url, options);
-      record({kind:'http', path:new URL(url).pathname, status:response.status});
-      return response;
-    };
+    globalThis.fetch = observeFetch(globalThis.fetch, record);
     const options = {scope:'operator.write',profileAccess:'required',sessionAccess:{mode:'write'}};
     for (const [name, factory] of [['relaymind.recommendations',createNativeActionHandler],['relaymind.skill',createNativeSkillHandler]]) {
       api.registerGatewayMethod(name, async request => {

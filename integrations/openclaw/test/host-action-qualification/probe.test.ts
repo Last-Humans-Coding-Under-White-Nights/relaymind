@@ -2,8 +2,8 @@ import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-// @ts-expect-error exact test-only plugin loaded by the real host
-import plugin from './probe.mjs';
+// @ts-expect-error pure JS observer used unchanged by the real-host fixture
+import { observeFetch } from './fetch-observer.mjs';
 const original = globalThis.fetch;
 let work: string | undefined;
 afterEach(() => { globalThis.fetch = original; if (work) rmSync(work, {recursive:true, force:true}); });
@@ -11,7 +11,7 @@ it.each(['rejected','aborted'])('RM39 records the attempted safe path even when 
   work = mkdtempSync(join(tmpdir(), 'rm-action-attempt-'));
   const eventFile = join(work, 'events.jsonl'); writeFileSync(eventFile, '');
   globalThis.fetch = vi.fn(async () => { throw kind === 'aborted' ? new DOMException('stopped','AbortError') : Error('fixture failure'); });
-  plugin.register({pluginConfig:{eventFile},registerGatewayMethod:vi.fn()});
+  globalThis.fetch = observeFetch(globalThis.fetch, (event: unknown) => writeFileSync(eventFile, JSON.stringify(event)+'\n', {flag:'a'}));
   await expect(globalThis.fetch('http://127.0.0.1:12345/relay/v1/feedback?private=excluded', {
     method:'GET', headers:{authorization:'not-exported'},
   })).rejects.toThrow();
