@@ -335,8 +335,9 @@ class NativeBenchmarkRuntime:
             self._preparation_deadline = None
         # Raw job embeddings are the cost source. No inclusive duplicate is
         # added here; unknown native resource counters stay unknown in that wire.
-        if stopped:
-            validate_preparation_record(record, binding=binding)
+        # Check the record exactly as returned: a ready record's decision time
+        # is written after the in-budget check above.
+        validate_preparation_record(record, binding=binding)
         return record
 
     async def close(self):
