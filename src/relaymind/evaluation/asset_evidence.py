@@ -5,6 +5,7 @@ human review or fetches artifacts. Private source locators are attestation data.
 """
 
 import copy
+import functools
 import hashlib
 import importlib.metadata
 import tempfile
@@ -236,13 +237,20 @@ def verify_compiled_asset_inventory(kind: str, inventory: Mapping) -> None:
         raise AssetCorpusError("unsupported_generator")
 
 
+@functools.cache
+def _dependencies_digest() -> str:
+    """The installed distributions this process imports from, scanned once."""
+    return canonical_digest(
+        sorted(
+            (d.metadata["Name"].lower(), d.version)
+            for d in importlib.metadata.distributions()
+            if d.metadata.get("Name")
+        )
+    )
+
+
 def collect_benchmark_environment(*, production: "LauncherConfig | None" = None) -> dict:
     facts = machine_manifest()
-    dependencies = sorted(
-        (d.metadata["Name"].lower(), d.version)
-        for d in importlib.metadata.distributions()
-        if d.metadata.get("Name")
-    )
     # The standard collector cannot establish GPU absence on every platform.
     # Leave that unknown rather than inventing a performance match.
     gpu = facts["gpu"]
@@ -263,7 +271,7 @@ def collect_benchmark_environment(*, production: "LauncherConfig | None" = None)
         ram_bytes=facts["ram_bytes"],
         gpu=gpu,
         python=facts["python"],
-        dependencies_digest=canonical_digest(dependencies),
+        dependencies_digest=_dependencies_digest(),
         runtime=None,
         runtime_version=None,
         runtime_config_digest=None,

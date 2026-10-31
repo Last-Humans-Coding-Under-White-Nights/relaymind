@@ -89,11 +89,16 @@ def benchmark_inventories() -> dict:
     import relaymind
 
     imported_root = Path(relaymind.__file__).absolute().parent
+    # An editable install imports the very files just hashed; reading them a
+    # second time cannot disagree, so only a separate installation is reread.
+    same_tree = imported_root.resolve() == (root / "src/relaymind").resolve()
     expected = set()
     for item in inventories["runner_inventory"]["files"]:
         if item["path"].startswith("src/relaymind/"):
             relative = item["path"].removeprefix("src/relaymind/")
             expected.add(relative)
+            if same_tree:
+                continue
             payload = read_local(imported_root, relative, CONFIG_BYTES)
             if (
                 hashlib.sha256(payload).hexdigest() != item["sha256"]
