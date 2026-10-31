@@ -646,7 +646,7 @@ def _wait_listener(process, address: str, port: int) -> None:
     raise TimeoutError("child_startup_timeout")
 
 
-def _run_private_trial(work: Path, address: str, capture: dict) -> None:
+def _run_private_trial(work: Path, address: str, capture: dict, *, extension=None) -> None:
     import socket
     import sys
     import time
@@ -720,6 +720,8 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
             },
         ),
     )
+    if extension is not None:
+        extension.configure(config, work, origin)
     config_path = work / "openclaw.json"
     config_path.write_bytes((json.dumps(config) + "\n").encode("utf-8"))
     config_path.chmod(0o600)
@@ -746,6 +748,9 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
         XDG_DATA_HOME=str(work / "home/.local/share"),
         NO_PROXY="127.0.0.1,localhost,::1," + address + ",rm-person.test",
     )
+    if extension is not None:
+        environment.update(extension.environment())
+        secrets_to_exclude.extend(extension.secrets())
     host = ["node", str(root / "integrations/openclaw/node_modules/openclaw/openclaw.mjs")]
     actual_version = json.loads(
         (root / "integrations/openclaw/node_modules/openclaw/package.json").read_bytes()
@@ -785,6 +790,8 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
         plugin / "package.json",
         root / "integrations/openclaw/package-lock.json",
     ]
+    if extension is not None:
+        source_paths.extend(extension.source_paths())
     source_inventory = []
     for source_path in sorted(source_paths):
         payload = source_path.read_bytes()
@@ -905,6 +912,12 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                     "function installNativeSocketObserver",
                     1,
                 ) + "\ninstallNativeSocketObserver();\n"
+                if extension is not None:
+                    script = script.replace(
+                        "installNativeSocketObserver();",
+                        'installNativeSocketObserver(window, ["relaymind.recommendations", '
+                        '"relaymind.skill"]);',
+                    )
                 contexts, pages, sessions = [], [], []
 
                 def rpc(page, method, params):
@@ -1066,6 +1079,8 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                         )
                     )
                     mark(prefix + "_person_rpc")
+                if extension is not None:
+                    extension.persons_ready(rpc, pages, sessions, capture)
                 capture["phase"] = "cross_account_denied"
                 denied = rpc(pages[1], "rmqualification.person", sessions[0])
                 denial_code = (denied["frame"].get("error") or {}).get("code")
@@ -1111,6 +1126,8 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                 connection_id = capture["accounts"][0]["connection_id"]
                 if prepared_event.get("connectionId") != connection_id:
                     raise ValueError("native_revocation_unverified")
+                if extension is not None:
+                    extension.before_retirement(pages[0], sessions[0])
                 contexts[0].close()
                 deadline = time.monotonic() + 3
                 while not any(
@@ -1123,6 +1140,8 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                     if time.monotonic() >= deadline:
                         raise TimeoutError("native_connection_retirement_not_observed")
                     time.sleep(0.01)
+                if extension is not None:
+                    extension.after_retirement(capture)
                 release_path.write_bytes(b"release\n")
                 deadline = time.monotonic() + 5
                 while not any(
@@ -1205,7 +1224,7 @@ def session_create_params() -> dict:
     )
 
 
-def run_qualification(work: Path, output: Path) -> int:
+def run_qualification(work: Path, output: Path, *, extension=None) -> int:
     """Requested integration fails honestly when private setup is unavailable."""
     import platform
     import signal
@@ -1239,7 +1258,10 @@ def run_qualification(work: Path, output: Path) -> int:
         previous_handler = signal.signal(signal.SIGALRM, expired)
         signal.setitimer(signal.ITIMER_REAL, TOTAL_SECONDS)
         timer_installed = True
-        _run_private_trial(work, candidates[0], capture)
+        if extension is None:
+            _run_private_trial(work, candidates[0], capture)
+        else:
+            _run_private_trial(work, candidates[0], capture, extension=extension)
         capture["checks"]["person_composition"] = person_composition_pass(capture)
         if not capture["checks"]["person_composition"]:
             capture.update(status="failed", reason="person_composition_unverified")
@@ -1278,6 +1300,8 @@ def run_qualification(work: Path, output: Path) -> int:
             "child_startup_timeout",
             "native_event_bound",
         }
+        if extension is not None:
+            safe_reasons.update(extension.failure_reasons())
         reason = str(error) if str(error) in safe_reasons else "qualification_failed"
         if reason == "credential_export_refused":
             safe = unavailable_capture(reason)

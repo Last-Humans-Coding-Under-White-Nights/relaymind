@@ -76,6 +76,17 @@ def _missing() -> str | None:
     return None
 
 
+def require_node_build_dependencies() -> None:
+    """Apply the existing optional/required Node policy to TypeScript builds."""
+    reason = _missing()
+    if reason is None and not (PACKAGE / "node_modules/typescript/bin/tsc").is_file():
+        reason = "run npm ci in integrations/openclaw (typescript is missing)"
+    if reason is not None:
+        if REQUIRED:
+            pytest.fail(f"RELAYMIND_OPENCLAW_NODE=1 but {reason}")
+        pytest.skip(reason)
+
+
 def test_node_is_found_on_path_as_the_harness_finds_it(monkeypatch, tmp_path):
     """The tests run the Node the qualification harness runs (#135).
 

@@ -7,6 +7,9 @@ import asyncio
 import json
 import subprocess
 
+import pytest
+
+import test_openclaw_host_transport as node_guard
 from api_helpers import RunningServer
 from recommendation_helpers import setup
 from test_asset_user_actions import ACTION_TOKEN, enable_fixture_action
@@ -14,8 +17,34 @@ from test_openclaw_host_transport import PACKAGE, _node
 from test_openclaw_plugin import driver_env
 
 
+@pytest.mark.parametrize(
+    ("required", "typescript_present", "outcome"),
+    [(False, False, "skip"), (True, False, "fail"), (True, True, "pass")],
+)
+def test_node_build_guard_respects_optional_and_required_modes(
+    monkeypatch, tmp_path, required, typescript_present, outcome
+):
+    """RM39/AC30: core may skip missing npm deps; the plugin job must fail."""
+    monkeypatch.setattr(node_guard, "PACKAGE", tmp_path)
+    monkeypatch.setattr(node_guard, "_missing", lambda: None)
+    monkeypatch.setattr(node_guard, "REQUIRED", required)
+    if typescript_present:
+        tsc = tmp_path / "node_modules/typescript/bin/tsc"
+        tsc.parent.mkdir(parents=True)
+        tsc.write_text("", encoding="utf-8")
+    if outcome == "skip":
+        with pytest.raises(pytest.skip.Exception, match="typescript"):
+            node_guard.require_node_build_dependencies()
+    elif outcome == "fail":
+        with pytest.raises(pytest.fail.Exception, match="RELAYMIND_OPENCLAW_NODE=1"):
+            node_guard.require_node_build_dependencies()
+    else:
+        assert node_guard.require_node_build_dependencies() is None
+
+
 def test_native_action_factory_records_explicit_choice_and_private_feedback_once(tmp_path):
     """RM37/RM39: actual routes/CAS, scope, deduplication and erasure survive native translation."""
+    node_guard.require_node_build_dependencies()
     for config in ("tsconfig.build.json", "tsconfig.control-ui.json"):
         subprocess.run(
             [_node(), str(PACKAGE / "node_modules/typescript/bin/tsc"), "-p", config],

@@ -11,12 +11,13 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import expect, sync_playwright
 
-from test_openclaw_host_transport import PACKAGE, _node
+from test_openclaw_host_transport import PACKAGE, _node, require_node_build_dependencies
 
 
 @pytest.fixture(scope="module")
 def panel_build(tmp_path_factory):
     """Compile the shipped browser entry/codec into an owned, disposable directory."""
+    require_node_build_dependencies()
     target = tmp_path_factory.mktemp("native-panel")
     subprocess.run(
         [

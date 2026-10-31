@@ -1,9 +1,10 @@
 // Programmatic fixture RPC on the native UI's actual authenticated socket.
 // This observer never sends/replaces connect, auth, device or signature frames.
-export function installNativeSocketObserver(target = window) {
+export function installNativeSocketObserver(target = window, extraMethods = []) {
   const Original = target.WebSocket;
   const origin = target.location.origin;
-  const methods = new Set(["rmqualification.person", "sessions.create", "sessions.reset"]);
+  if (!Array.isArray(extraMethods) || extraMethods.some(method => !["relaymind.recommendations", "relaymind.skill"].includes(method))) throw new Error("invalid_fixture_method");
+  const methods = new Set(["rmqualification.person", "sessions.create", "sessions.reset", ...extraMethods]);
   let socket, socketId, ready = false, retired = false;
   const pending = new Map(), used = new Set(), completed = new Map();
   const retire = () => {

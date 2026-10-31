@@ -8,7 +8,7 @@ const { WebSocketServer } = createRequire(import.meta.url)("ws");
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); });
 
-async function fixture() {
+async function fixture(extraMethods: string[] = []) {
   const server = createServer();
   const wss = new WebSocketServer({ server });
   const requests: any[] = [];
@@ -25,7 +25,7 @@ async function fixture() {
   const listeners = new Map<string, () => void>();
   const target: any = { WebSocket, location: { origin }, crypto, setTimeout, clearTimeout,
     addEventListener: (name: string, fn: () => void) => listeners.set(name, fn) };
-  installNativeSocketObserver(target);
+  installNativeSocketObserver(target, extraMethods);
   const socket = new target.WebSocket(origin.replace("http:", "ws:"));
   cleanup.push(async () => { for (const ws of wss.clients) ws.terminate(); socket.close(); await new Promise<void>(resolve => server.close(() => resolve())); });
   for (let i = 0; i < 100 && !target.__rmPersonWire.state().ready; i++) await new Promise(resolve => setTimeout(resolve, 5));
@@ -70,4 +70,12 @@ it("correlates create and person responses on one actual browser socket", async 
   expect(created.socket_id).toBeTypeOf("string");
   expect(created.socket_id).toBe(person.socket_id);
   expect(created.id).not.toBe(person.id);
+});
+
+it("RM37/RM39 permits only the two explicitly requested production-factory fixture methods", async () => {
+  const f = await fixture(["relaymind.recommendations", "relaymind.skill"]);
+  const result = await f.target.__rmPersonWire.rpc("relaymind.recommendations", {});
+  expect(result.frame.payload.method).toBe("relaymind.recommendations");
+  await expect(f.target.__rmPersonWire.rpc("connect", {})).rejects.toThrow();
+  await expect(f.target.__rmPersonWire.rpc("exec", {})).rejects.toThrow();
 });
