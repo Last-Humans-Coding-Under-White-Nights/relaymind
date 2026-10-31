@@ -607,3 +607,93 @@ def test_attempt_times_keep_full_fractional_precision(start, end, ok):
     else:
         with pytest.raises(WholeTaskRejected, match="attempt_timing"):
             grade_host_report(report, tasks, freeze)
+
+
+# --- #230 review (ArcsinX, 1 Nov) -------------------------------------------------
+
+
+def test_a_failed_lane_fails_the_whole_report_even_when_pooled_totals_pass():
+    """Spec 12.6: no overall average hides a failed lane."""
+    freeze, tasks = two_task_setup()
+
+    def make(task_id, arm):
+        if arm == "recommendations" and task_id == "t1":
+            return row(task_id, arm, success=False)  # en lane: a loss
+        if arm == "native" and task_id == "t2":
+            return row(task_id, arm, success=False)  # zh lane: a gain
+        return row(task_id, arm)
+
+    summary = grade_host_report(report_for(freeze, tasks, ordered_rows(tasks, make)), tasks, freeze)
+    assert summary["gains"] == summary["losses"] == 1 and summary["success_gate"] == "pass"
+    assert [lane["gate"] for lane in summary["lanes"]] == ["fail", "blocked"]
+    assert summary["gate"] == "fail"
+
+
+def test_not_run_rows_carry_no_row_evidence():
+    freeze, tasks = two_task_setup()
+    report = report_for(
+        freeze, tasks, ordered_rows(tasks, lambda t, a: row(t, a, status="not_run"))
+    )
+    report["rows"][0]["evidence_ids"] = ["host-transcript"]
+    with pytest.raises(WholeTaskRejected, match="not_run_work"):
+        grade_host_report(report, tasks, freeze)
+
+
+@pytest.mark.parametrize(
+    "timing",
+    [
+        dict(elapsed_ms=100.0, active_ms=80.0, human_wait_ms=80.0),
+        dict(elapsed_ms=None, active_ms=10.0, human_wait_ms=None),
+        dict(elapsed_ms=None, active_ms=None, human_wait_ms=5.0),
+    ],
+)
+def test_row_timing_components_fit_inside_elapsed(timing):
+    freeze, tasks = two_task_setup()
+    report = report_for(freeze, tasks, ordered_rows(tasks, row))
+    report["rows"][0].update(timing)
+    with pytest.raises(WholeTaskRejected, match="row_timing"):
+        grade_host_report(report, tasks, freeze)
+
+
+def test_row_timing_components_may_fill_elapsed_exactly():
+    freeze, tasks = two_task_setup()
+    report = report_for(freeze, tasks, ordered_rows(tasks, row))
+    report["rows"][0].update(elapsed_ms=100.0, active_ms=60.0, human_wait_ms=40.0)
+    grade_host_report(report, tasks, freeze)
+
+
+@pytest.mark.parametrize("provenance", ["observed", "reported"])
+def test_claimed_usage_provenance_needs_a_token_count(provenance):
+    freeze, tasks = two_task_setup()
+    report = report_for(freeze, tasks, ordered_rows(tasks, row))
+    report["rows"][0]["attempts"][0].update(
+        usage_provenance=provenance,
+        input_tokens=None,
+        output_tokens=None,
+        cached_tokens=None,
+        reasoning_tokens=None,
+        total_tokens=None,
+    )
+    with pytest.raises(WholeTaskRejected, match="usage_provenance"):
+        grade_host_report(report, tasks, freeze)
+
+
+def test_cli_document_limit_is_the_shared_document_limit():
+    import inspect
+
+    from relaymind.evaluation import asset_whole_task_cli as cli
+
+    assert "64 * 1024 * 1024" not in inspect.getsource(cli)
+
+
+def test_cli_resolver_help_says_grading_blocks_without_it():
+    import contextlib
+    import io
+
+    from relaymind.evaluation import asset_whole_task_cli as cli
+
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out), pytest.raises(SystemExit):
+        cli.main(["grade-host", "--help"])
+    text = " ".join(out.getvalue().split())
+    assert "inventory_preimage_unresolved" in text
