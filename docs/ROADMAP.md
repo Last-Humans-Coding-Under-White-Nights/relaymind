@@ -1275,7 +1275,8 @@ isolation and connection retirement. Its unmodified capture is
 (SHA-256 `d5c186ac552b6028cd47c9bd4679f79259eab1092d20dd95b48c36fa35437a39`), which the registry's evidence revision names. The 31 October
 capture remains the record of the earlier revision. As before, this is
 Linux functional evidence with disposable accounts, not macOS/Windows or
-customer acceptance.
+customer acceptance. Hardening of the person-ingress harness raised in the #224
+review changes evidence-bound files and is tracked with its recapture in #228.
 
 #197 first-slice status (RM36, RM37, RM39; AC27/AC28, partial AC30): the
 package includes dormant recommendation/action clients, closed lossless protocol
@@ -1290,8 +1291,13 @@ HOST-EXACT-SKILL-USE and later approval/currentness gates remain open. Full
 adaptation episode, whole-task and platform exports authorize the independent
 drivers/graders. Exact freeze companions, three-correction chronology, complete
 paired probe/three-arm denominators, per-model costs and evidence-bound reset
-remain required. Schema/driver implementation is planned; no new measured gate
-is claimed. Read-only native RPC and genuine MCP qualification probes do not
+remain required. The closed schemas, deterministic three-arm plan, conserving
+host driver and offline graders are implemented (`asset_whole_task.py`,
+`asset_episode_export.py`, `asset_platform_export.py`,
+`scripts/asset_whole_task.py`; see docs/ASSET_BENCHMARK.md) and verified only
+over explicitly fixture-qualified documents. No qualified-evidence verifier
+exists yet, so qualified acceptance grades blocked, never pass; no new measured
+gate is claimed. Read-only native RPC and genuine MCP qualification probes do not
 enable runtime snapshots or further host operations. The separate spec0.62
 direct-action profile above is qualified; exact selected skill/MCP use and
 post-approval currentness still require their own qualification. Missing genuine

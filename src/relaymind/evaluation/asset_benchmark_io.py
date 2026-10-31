@@ -99,16 +99,17 @@ _SCHEMAS = {
 }
 
 
-def validate_benchmark_document(kind: str, value: Any, *, definition: str | None = None) -> dict:
-    """Validate exact JSON types, byte bounds and closed nested product contracts."""
-    schema = _SCHEMAS[kind]
-    if definition:
-        schema = {"$ref": "#/$defs/" + definition, "$defs": schema["$defs"]}
+def validate_closed_document(schema: Mapping, value: Any, error: str) -> None:
+    """Strict closed-schema check shared by every asset evaluation export.
+
+    Adds the byte-bound, safe-relative-path and sorted-set keywords, finite
+    numbers and UTF-8 text; any violation raises ``ValueError(error)``.
+    """
     try:
         if not isinstance(value, Mapping) or next(
             _Validator(schema, format_checker=FormatChecker()).iter_errors(value), None
         ):
-            raise ValueError("invalid_benchmark_" + kind)
+            raise ValueError(error)
         pending = [value]
         while pending:
             current = pending.pop()
@@ -121,7 +122,15 @@ def validate_benchmark_document(kind: str, value: Any, *, definition: str | None
             elif isinstance(current, str):
                 current.encode("utf-8")
     except (TypeError, RecursionError, UnicodeError, OverflowError):
-        raise ValueError("invalid_benchmark_" + kind) from None
+        raise ValueError(error) from None
+
+
+def validate_benchmark_document(kind: str, value: Any, *, definition: str | None = None) -> dict:
+    """Validate exact JSON types, byte bounds and closed nested product contracts."""
+    schema = _SCHEMAS[kind]
+    if definition:
+        schema = {"$ref": "#/$defs/" + definition, "$defs": schema["$defs"]}
+    validate_closed_document(schema, value, "invalid_benchmark_" + kind)
     if definition is None and kind == "comparison":
         rows = value["paired"]
         keys = [asset_dimension_sort_key(row["dimensions"]) for row in rows]
