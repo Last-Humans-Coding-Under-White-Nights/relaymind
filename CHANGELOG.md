@@ -12,6 +12,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.62 → 0.63 (RM37/RM39; AC28/AC30): adds the optional expected-scope
+  headers and the scope_mismatch error, checked before any read or write; requires the
+  native adapter to send its binding's scope on every gateway request; clarifies that
+  write privilege and target-agent access are resolved for the actual caller, not
+  required of unrelated roles, and that exact skill selection rechecks choice expiry
+  before each native dispatch.
 - Specification 0.61 → 0.62 (RM37/RM39; AC28/AC30): names the pinned
   authenticated native action channel and explicit profile/workspace registration,
   preserves direct choice/feedback/privacy and distributed-commit semantics, and
