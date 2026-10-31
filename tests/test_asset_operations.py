@@ -1,6 +1,7 @@
 """RM38/AC29: deterministic observations for the operational protocol."""
 
 import asyncio
+import copy
 import shutil
 import time
 from contextlib import asynccontextmanager
@@ -31,6 +32,25 @@ from relaymind.store.recommendation_event import validate_view
 from test_asset_sources import capture, skill
 
 
+def _synthetic_timing(record, start, *, elapsed=0.05, observed_ms=50.0):
+    """Real view and events with synthetic times, so host speed never decides a test.
+
+    These fixtures test the AC29 grader, not this machine: under parallel test
+    workers a real 300 ms or 1 s budget is not a property of the code.
+    """
+    view = copy.deepcopy(dict(record.view))
+    events = [copy.deepcopy(dict(event)) for event in record.events]
+    view["result"]["observed_ms"] = observed_ms
+    events[-1]["payload"]["result"] = view["result"]
+    return replace(
+        record,
+        started_at=start,
+        finished_at=start + elapsed,
+        view=view,
+        events=tuple(events),
+    )
+
+
 @pytest.fixture(scope="module")
 def validated_request_cohort(tmp_path_factory):
     """Real API evidence with synthetic timestamps; never AC29 measurement."""
@@ -45,12 +65,7 @@ def validated_request_cohort(tmp_path_factory):
                     for i in range(120)
                 ]
             return [
-                replace(
-                    record,
-                    scheduled_at=i / 2,
-                    started_at=i / 2,
-                    finished_at=i / 2 + record.client_elapsed_ms / 1000,
-                )
+                replace(_synthetic_timing(record, i / 2), scheduled_at=i / 2)
                 for i, record in enumerate(records)
             ]
         finally:
@@ -1188,7 +1203,8 @@ def production_batch_samples(tmp_path_factory):
                     begin = batch_number * 25
                     for number in range(begin, begin + 25):
                         shutil.copytree(template / f"p{number}", source / f"p{number}")
-                    receipt = time.monotonic()
+                    # Synthetic receipt and probe times (see _synthetic_timing).
+                    receipt = float(batch_number * 10)
                     await worker.rescan("example")
                     probes = []
                     expected = []
@@ -1219,6 +1235,10 @@ def production_batch_samples(tmp_path_factory):
                         if probe.view and probe.view["result"]
                         for candidate in probe.view["result"]["final_candidates"]
                     }
+                    probes = [
+                        _synthetic_timing(probe, receipt + 0.01 + 0.1 * k)
+                        for k, probe in enumerate(probes)
+                    ]
                     visible = max(probe.finished_at for probe in probes)
                     batches.append(
                         BatchSample(

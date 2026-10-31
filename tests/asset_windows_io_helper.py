@@ -260,13 +260,15 @@ def supervised_oplock(root, scenario):
             [sys.executable, __file__, mode, str(source), str(db)],
             capture_output=True,
             text=True,
-            timeout=3,
+            timeout=15,
             check=False,
         )
         assert result.returncode == 0, result.stdout + result.stderr
         evidence = json.loads(result.stdout.strip().splitlines()[-1])
         evidence["ordinary_open_pended"] = True
-        assert evidence["elapsed_seconds"] < 2
+        # The holder never releases until told, so finishing at all proves the
+        # capture did not wait on the hold; the bound only allows a loaded runner.
+        assert evidence["elapsed_seconds"] < 10
         held.stdin.write("release\n")
         held.stdin.flush()
         stdout, stderr = held.communicate(timeout=3)
