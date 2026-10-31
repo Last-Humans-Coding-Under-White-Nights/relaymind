@@ -54,9 +54,11 @@ def validate_hybrid_config(value: object, manifest: EmbeddingManifest) -> Semant
 
 
 def load_adaptation_config(path: Path) -> SemanticConfig:
+    # One closed check before following the recorded locator; `raw` is already
+    # the checked copy, so it is bound directly (as validate_adaptation_config does).
     raw = _validate(read_semantic_json(path), "asset_adaptation_config.v1.json")
     manifest = load_embedding_manifest(path.parent / raw["manifest"])
-    return validate_adaptation_config(raw, manifest)
+    return _bind(raw, manifest)
 
 
 def validate_adaptation_config(value: object, manifest: EmbeddingManifest) -> SemanticConfig:

@@ -196,6 +196,42 @@ def test_local_evidence_collection_consumes_original_deadline(tmp_path, monkeypa
     asyncio.run(scenario())
 
 
+def test_local_ready_record_is_validated_in_its_returned_state(tmp_path, monkeypatch):
+    """RM03/RM40/AC31: the decision time written last is part of the checked record."""
+    import itertools
+
+    from relaymind.evaluation import asset_native_runtime
+    from relaymind.evaluation.asset_native_runtime import NativeBenchmarkRuntime
+
+    checked = []
+    real = asset_native_runtime.validate_preparation_record
+
+    def recorded(record, **options):
+        checked.append(copy.deepcopy(record))
+        return real(record, **options)
+
+    monkeypatch.setattr(asset_native_runtime, "validate_preparation_record", recorded)
+    # Every clock read advances 0.1 ms, so the decision time always differs
+    # from the evidence time, even where the real monotonic clock is coarse.
+    ticks = itertools.count()
+
+    async def scenario():
+        production, release, effective = native_fixture(tmp_path)
+        runtime = await NativeBenchmarkRuntime.create(production, release, effective)
+        try:
+            return await runtime.prepare_local(
+                local_config(),
+                requested_kinds=("mcp_tool", "skill"),
+                clock=lambda: next(ticks) / 10000,
+            )
+        finally:
+            await runtime.close()
+
+    record = asyncio.run(scenario())
+    assert record["status"] == "ready"
+    assert checked and checked[-1] == record
+
+
 def test_local_catalog_change_retains_old_binding_and_failed_job_cost(tmp_path):
     """RM16/RM38/RM40: stale source input cannot be rebound after inference."""
     from relaymind.assets.embedding_activation import BackendRegistration

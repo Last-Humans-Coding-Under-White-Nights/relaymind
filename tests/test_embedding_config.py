@@ -113,6 +113,47 @@ def test_adaptation_reuses_manifest_and_has_no_hidden_ranking_settings(tmp_path)
         api().load_adaptation_config(target)
 
 
+def test_adaptation_load_checks_the_document_once_and_binds_the_same_value(tmp_path, monkeypatch):
+    """RM42/AC33: loading checks the closed schema once; the checks stay complete."""
+    from relaymind.assets.embedding_manifest import load_embedding_manifest
+
+    path, _ = fixture(tmp_path)
+    manifest = load_embedding_manifest(path)
+    value = dict(
+        schema_version=1,
+        identity=dict(name="fixture_adaptation", version="1"),
+        manifest="manifest.json",
+        manifest_digest=manifest.manifest_digest,
+        representation=dict(
+            version="task_text.v1",
+            normalization="NFC",
+            query_prefix="",
+            max_tokens=100,
+            overflow="unavailable",
+        ),
+        similarity=dict(version="exact_cosine.v1", threshold=0.9),
+        ranking_version="bounded_votes.v1",
+    )
+    target = tmp_path / "adaptation.json"
+    target.write_text(json.dumps(value))
+    checked = []
+    real = api()._validate
+
+    def counted(document, name):
+        checked.append(name)
+        return real(document, name)
+
+    monkeypatch.setattr(api(), "_validate", counted)
+    loaded = api().load_adaptation_config(target)
+    assert checked == ["asset_adaptation_config.v1.json"]
+    supplied = api().validate_adaptation_config(value, manifest)
+    assert (loaded.data, loaded.digest) == (supplied.data, supplied.digest)
+    value["manifest_digest"] = "0" * 64
+    target.write_text(json.dumps(value))
+    with pytest.raises(api().EmbeddingError, match="manifest_digest_mismatch"):
+        api().load_adaptation_config(target)
+
+
 def test_weights_inside_sum_tolerance_are_preserved_without_renormalizing(tmp_path):
     from relaymind.assets.embedding_manifest import load_embedding_manifest
 
