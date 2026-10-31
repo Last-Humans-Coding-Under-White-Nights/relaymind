@@ -203,7 +203,32 @@
       "user_choices": 0
     },
     "lexical_report_sha256": "7b3f327ca9ec9e0bdded51fba963121729d789371d9d589ab87a1043b63e657d",
-    "hybrid_report_sha256": "571fabd907e850c162bf810d88d2063fde556a040aa5b5fe7090fe8356515cc0"
+    "hybrid_report_sha256": "571fabd907e850c162bf810d88d2063fde556a040aa5b5fe7090fe8356515cc0",
+    "offline_comparison": {
+      "compatible": true,
+      "performance_comparable": false,
+      "paired_slots": 128,
+      "delta_hit3": -17,
+      "runtime": {
+        "left": {
+          "backend": null,
+          "build": null,
+          "config_digest": null,
+          "device": null,
+          "use": "unused",
+          "version": null
+        },
+        "right": {
+          "backend": "onnx_e5_cpu",
+          "build": "f3543633fa2f66713cc90563a862af952d40f55cfc70b0d95cf25f4deba07eb1",
+          "config_digest": "420a2fcd5564ade1d81216a8c85947267300d5cc09a1e888d4bcd5361b7b13fa",
+          "device": "cpu:Linux:x86_64:Intel Xeon Processor (Skylake, IBRS)",
+          "use": "used",
+          "version": "1.31.1"
+        }
+      },
+      "sha256": "1b9a6efa62484dbe379661ff245da7ebaa78abf54f46080e60c9da7672d7d106"
+    }
   },
   "limits": [
     "Exact reviewed Linux CPU/runtime/device only; no macOS or native Windows qualification.",
@@ -211,5 +236,27 @@
     "Hybrid Hit@3 regressed from 63/116 to 46/116; no calibration or corpus changes made.",
     "Partial semantic coverage and two failed index jobs retained; lexical remains available.",
     "No production host correction authority or formal feedback-episode acceptance."
-  ]
+  ],
+  "formal_fixture_comparison": {
+    "status": "compatible",
+    "performance_comparable": false,
+    "mode": "quality_only",
+    "normal_performance_rejection": "unknown GPU facts",
+    "acceptance_eligible": false
+  },
+  "adaptation_no_history_control": {
+    "ordinary_process": true,
+    "metadata": "one synthetic SKILL, no execution",
+    "state": "ready",
+    "adaptation": {
+      "changed": false,
+      "feedback_revision": 0,
+      "identity": {
+        "name": "local_e5_adaptation",
+        "version": "1"
+      }
+    },
+    "query_embeddings": 1,
+    "episode_acceptance": false
+  }
 }
