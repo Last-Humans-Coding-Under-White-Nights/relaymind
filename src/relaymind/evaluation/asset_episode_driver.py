@@ -12,6 +12,7 @@ disposable store. This is never qualified host or person evidence, so a report
 from this driver cannot claim ``qualified``.
 """
 
+import asyncio
 import contextlib
 import copy
 import hashlib
@@ -316,6 +317,9 @@ async def _run_episode(episode, cases, labels, open_arm, evidence, interrupted):
                 if row["status"] != "ready" or recommendation_id is None:
                     entry["status"] = "failed"
                     raise _Stop("failed", "correction_parent_failed")
+                if interrupted():
+                    # No correction is admitted once an interruption is pending.
+                    raise _Stop("cancelled", "interrupted")
                 try:
                     feedback_id, event_digest, revision = await _correct(
                         on, recommendation_id, correction, revision, f"{episode_id}-c{n}"
@@ -362,6 +366,10 @@ async def _run_episode(episode, cases, labels, open_arm, evidence, interrupted):
         )
     except _Stop as stop:
         result.update(status=stop.status, reason=stop.reason)
+    except asyncio.CancelledError:
+        # Actual task cancellation conserves this episode's completed work; the
+        # caller then fills every later planned episode as not_run.
+        result.update(status="cancelled", reason="interrupted")
     except RecommendationError:
         result.update(status="failed", reason="recommendation_unavailable")
     except Exception:
@@ -407,7 +415,12 @@ async def run_adaptation_episodes(
         if interrupted():
             results.append(_not_run_episode(episode, labels, "interrupted"))
             continue
-        results.append(await _run_episode(episode, cases, labels, open_arm, evidence, interrupted))
+        result = await _run_episode(episode, cases, labels, open_arm, evidence, interrupted)
+        results.append(result)
+        if result["status"] == "cancelled":
+            for later in episodes["episodes"][len(results) :]:
+                results.append(_not_run_episode(later, labels, "interrupted"))
+            break
     report = dict(
         schema_version=1,
         kind="adaptation",
