@@ -34,6 +34,7 @@ local storage is not claimed to be encrypted.
 
 import hashlib
 import json
+import logging
 import sqlite3
 import threading
 import time
@@ -685,6 +686,48 @@ def _only_comments(text: str) -> bool:
     return all(not line.strip() or line.strip().startswith("--") for line in text.splitlines())
 
 
+class ForegroundWindow:
+    """One capture's active CPU window; never an owner or a busy-state authority."""
+
+    def __init__(self, monotonic: Callable[[], float]) -> None:
+        self._monotonic = monotonic
+        self._lock = threading.Lock()
+        self._active = False
+        self._pending: float | None = None
+        self._started: float | None = None
+
+    def begin(self) -> None:
+        with self._lock:
+            if not self._active:
+                self._pending = None
+                self._started = self._monotonic()
+                self._active = True
+
+    def record(self, onset: float) -> None:
+        with self._lock:
+            if (
+                self._active
+                and self._started is not None
+                and self._started <= onset <= self._monotonic()
+            ):
+                self._pending = onset if self._pending is None else min(self._pending, onset)
+
+    def end(self, current_onset: float | None = None) -> tuple[bool, float | None, float]:
+        """Quiesce and consume the exact earliest onset at one atomic boundary."""
+        with self._lock:
+            now = self._monotonic()
+            if self._active and current_onset is not None:
+                if self._started is not None and self._started <= current_onset <= now:
+                    self._pending = (
+                        current_onset
+                        if self._pending is None
+                        else min(self._pending, current_onset)
+                    )
+            active, onset = self._active, self._pending
+            self._active, self._pending = False, None
+            return active, onset, now
+
+
 class RunStore:
     """Runs, events, tool operations, approvals, and artifact refs in SQLite."""
 
@@ -711,6 +754,7 @@ class RunStore:
         # Process-local onset evidence; restored with the owning transaction.
         self._slot_started: tuple[str, int, float] | None = None
         self._probe_started: tuple[str, float] | None = None
+        self._foreground_windows: set[ForegroundWindow] = set()
         # One connection is shared by every thread using this store; the
         # lock keeps each transaction and read whole (RM17: a racing
         # writer gets 409, never a nested-transaction error).
@@ -843,6 +887,20 @@ class RunStore:
             try:
                 yield
                 self._conn.execute("COMMIT")
+                # Only successfully committed local acquisitions notify active
+                # CPU captures. Releases cannot erase their pending observation.
+                if self._slot_started is not None and (
+                    slot_started is None
+                    or self._slot_started[0] != slot_started[0]
+                    or self._slot_started[2] != slot_started[2]
+                ):
+                    onset = self.clock.monotonic()
+                    self._slot_started = (*self._slot_started[:2], onset)
+                    self.note_foreground_start(onset)
+                if self._probe_started is not None and self._probe_started != probe_started:
+                    onset = self.clock.monotonic()
+                    self._probe_started = (self._probe_started[0], onset)
+                    self.note_foreground_start(onset)
             except BaseException as exc:
                 self._rollback()
                 self._slot_started, self._probe_started = slot_started, probe_started
@@ -864,6 +922,30 @@ class RunStore:
             finally:
                 self._depth = 0
                 self._transaction_clocks.clear()
+
+    def foreground_window(
+        self, *, monotonic: Callable[[], float] | None = None
+    ) -> ForegroundWindow:
+        """Register one quiescent capture; its scheduler admits individual CPU windows."""
+        with self._lock:
+            window = ForegroundWindow(monotonic or (lambda: self.clock.monotonic()))
+            self._foreground_windows.add(window)
+            return window
+
+    def release_foreground_window(self, window: ForegroundWindow) -> None:
+        with self._lock:
+            window.end()
+            self._foreground_windows.discard(window)
+
+    def note_foreground_start(self, onset: float) -> None:
+        """Retain a known local start without granting any pause or execution authority."""
+        with self._lock:
+            for window in self._foreground_windows:
+                try:
+                    window.record(onset)
+                except Exception:
+                    # Observation failure must never rewrite a committed receipt.
+                    logging.getLogger(__name__).exception("foreground CPU observation failed")
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
@@ -974,6 +1056,9 @@ class RunStore:
                 " cancel_requested=0, last_attempt_at=? WHERE token=? AND owner_instance=?",
                 (_iso(self.clock.utc_now()), token, owner_instance),
             )
+            if changed.rowcount and self._probe_started is not None:
+                if self._probe_started[0] == token:
+                    self._probe_started = None
             return changed.rowcount == 1
 
     def recover_probe_after_restart(self) -> None:
@@ -985,6 +1070,7 @@ class RunStore:
                 " WHERE token IS NOT NULL",
                 (_iso(self.clock.utc_now()),),
             )
+            self._probe_started = None
 
     # -- runs ------------------------------------------------------------
 

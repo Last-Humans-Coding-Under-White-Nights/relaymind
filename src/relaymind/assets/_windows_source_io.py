@@ -461,6 +461,7 @@ class WindowsSourceTree:
         self._owns_control = native is None
         self._handles: list[int] = []
         self._directories: dict[tuple[str, ...], int] = {}
+        self._closed = False
         try:
             anchor, parts = _root_parts(root)
             handle = self._directory_open(anchor, None)
@@ -483,6 +484,7 @@ class WindowsSourceTree:
         return handle
 
     def _parent(self, relative: str) -> tuple[int, str]:
+        self._check_open()
         parts = tuple(relative.split("/"))
         for part in parts:
             _component(part)
@@ -493,6 +495,10 @@ class WindowsSourceTree:
                     parts[index - 1], self._directories[prefix[:-1]]
                 )
         return self._directories[parts[:-1]], parts[-1]
+
+    def _check_open(self) -> None:
+        if self._closed:
+            raise OSError(errno.EBADF, "source_tree_closed")
 
     def info(self, relative: str) -> SourceInfo:
         parent, name = self._parent(relative)
@@ -516,6 +522,7 @@ class WindowsSourceTree:
             raise
 
     def names(self) -> Iterator[str]:
+        self._check_open()
         buffer = C.create_string_buffer(65536)
         info_class = 15  # FileFullDirectoryRestartInfo, then FileFullDirectoryInfo.
         while True:
@@ -530,6 +537,7 @@ class WindowsSourceTree:
             info_class = 14
 
     def verify_root(self) -> None:
+        self._check_open()
         for handle in self._directories.values():
             info = self.api.information(handle)
             if info.is_reparse or not info.is_directory:
@@ -542,6 +550,9 @@ class WindowsSourceTree:
             checked.close()
 
     def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
         for handle in reversed(self._handles):
             self.control.invoke(self.api.close, handle, cleanup=True)
         self._handles.clear()

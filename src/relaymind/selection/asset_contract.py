@@ -86,8 +86,12 @@ class AssetSelectionResult(_FrozenJSONData):
     """One parsed SelectionResultV2."""
 
 
+@dataclass(frozen=True)
 class RecommendationSelectionResult(_FrozenJSONData):
     """One parsed RecommendationResultV1."""
+
+    commit_guard: Callable[[], None] | None = field(default=None, repr=False, compare=False)
+    release: Callable[[], None] | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -268,6 +272,7 @@ class SelectorContext:
     clock: Callable[[], float]
     check: Callable[[], None]
     yield_control: Callable[[], Awaitable[None]] | None = None
+    observe_embedding: Callable | None = None
 
 
 class AssetSelector(Protocol):

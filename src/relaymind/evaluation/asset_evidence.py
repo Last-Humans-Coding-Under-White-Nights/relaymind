@@ -164,13 +164,21 @@ def file_inventory(root: Path, *, protocol: bool = False) -> dict:
 # require a reviewed implementation update, never caller self-attestation.
 _GENERATOR_ANCHORS = {
     "pyproject.toml": frozenset(
-        {("ef222b8befa59a1edb4cdc3a0718bb4c1f5bdda0ab9dca0cb1d21f42c020872c", 2244)}
+        {
+            ("ef222b8befa59a1edb4cdc3a0718bb4c1f5bdda0ab9dca0cb1d21f42c020872c", 2244),
+            # Reviewed semantic/refresh integration adds only optional embedding extras.
+            ("950dff8707e05c8b16e3ea6c55e32c2a78597b3318f236c16023eab8da5b4cc2", 2397),
+        }
     ),
     "scripts/asset_selection_benchmark.py": frozenset(
         {("faac6cd65170f4f2f330cfee875daaef3f7d5dfa4f72f0633f3d08cfe54c4f6b", 182)}
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed Source 0.59 and master benchmark union (cd7b8a95).
+            ("184d14da9cfca536769744967fdf87811b7fcbaf6de0603e17943f8f59f70d86", 527306),
+            # Reviewed normative0.59 semantic and qualified-refresh contracts.
+            ("056c4c32119be9385b1c39e617f6b61a59bb48006fbcf4b21d2baf6a37607b95", 526059),
             # Reviewed master 0.56 and preparation 0.57 union (769cc247).
             ("b66b775e4d40cd9386689c43c5a7bce98243e08683b81967aa3cec0132beb756", 485852),
             # Reviewed normative0.57 companion preparation contract (d1490fe).

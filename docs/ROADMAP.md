@@ -1040,22 +1040,23 @@ listed here so the current order can be traced to its reason.
   so it does not wait for the plugin.
 
 
-## M10 — Multilingual asset recommendations (spec 0.57)
+## M10 — Multilingual asset recommendations (spec 0.59)
 
 The #192 implementation supplies independent catalog discovery: closed records
 and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
 imports, safe internal searchable bodies, atomic shared-SQLite publication,
 source-owned tombstones, retained stale observations, recovery and one bounded
 local worker. `[recommendations]` defaults disabled; enabled catalog work starts
-in the application lifespan. This is development on the explicitly authorized
-reviewed-spec stack while #187's merge remains pending. #192 alone did not change
-the warm-up serving order; #196's lifecycle work is recorded below. No qualified
-external refresh or current host availability is claimed.
+in the application lifespan. The #187 foundation merged in #212. The three
+#192 catalog criteria, discovery, atomic change visibility and honest provenance
+without execution, are implemented and verified. #192 alone did not change the
+warm-up serving order; #196's lifecycle work is recorded below. The qualified
+#203 GitHub refresh profile is recorded below; catalog discovery supplies no
+host availability or execution authority.
 #193 selection and #194's partial lifecycle implementation are recorded below.
-The AC25 live host/source subcases, full 300-asset measurements,
-Windows/macOS qualification and Matrix rights/cohort/refresh remain open; these
-deterministic catalog tests do not close #192's qualified adapter gates or the
-formal independent corpus/acceptance gates.
+The AC25 live host subcases, full 300-asset measurements, Windows/macOS
+qualification, Matrix rights/cohort/refresh and formal independent corpus gates
+remain separate from #192's completed catalog criteria.
 
 The #193 selection component implements RM35/AC26: separate closed selection
 v2 and recommendation-result schemas, projection-only lexical ranking, strict
@@ -1160,6 +1161,31 @@ gates. The hybrid selector and adaptation keep the trial and data dependencies
 in the table below. Partial PRs must state retained acceptance; incomplete host,
 model and platform deliverables stay open. Development completion of
 #191/#199/#200 does not assert independent corpus or full M10 acceptance.
+
+#201/#202 backend integration checkpoint (spec 0.59): the bounded local artifact
+loader, cooperative hybrid ranking/vector lifecycle and private explicit-correction
+adaptation/reset backend are implemented. Native loading reacquires the same CPU
+owner and retains actual cancellation/drain evidence. The production embedding
+qualification registry remains empty: no ordinary-config activation or portable
+qualified model is claimed. Historical 47-asset/36-case native development results
+remain provisional, distinct from the current 412-asset/128-case source benchmark.
+Real host correction authority, formal chronological episodes and final quality,
+whole-task, supported-platform and resource gates remain open.
+
+#203 source qualification checkpoint (spec 0.59): the reviewed fixed public
+GitHub Git skill profile has an actual complete six-skill/twelve-file acquisition
+plus root MIT evidence, 17 serial GETs and two ref observations separated by
+704.62 seconds. The commit remained 849c1be; change was not observed. Section
+4.6.1.1 defines this installed protocol profile. The implementation candidate
+now includes bounded transport, immutable acquisition, profile-persisted cooldown
+and scheduling on the existing worker. Two actual periodic product jobs were
+304.28 seconds apart; both published six assets with lexical readiness/API200,
+and the upstream was unchanged. Controlled source-server tests cover changes,
+outage/recovery, cancellation, atomic restart and foreground I/O boundaries.
+Independent review and integrated functional verification passed; no AC29/AC34 full workload or
+supported-platform pass, Matrix market refresh or corpus substitution is inferred.
+Local/import user libraries remain supported. Actual/fixture distinctions and
+versioned observations are in [the source record](evidence/2026-10-30-github-skill-source/README.md).
 
 The table retains the other issues' direct dependencies and foundations.
 #191/#199/#200 describe the delivered working profile; their separate formal
