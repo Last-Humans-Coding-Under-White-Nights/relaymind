@@ -584,3 +584,26 @@ def test_frozen_package_bytes_must_match_their_registry_evidence():
     registry["ev-package"] = dict(sha256=h("other"), bytes=package["bytes"], path=None)
     with pytest.raises(WholeTaskRejected, match="package_binding"):
         grade_host_report(report, tasks, freeze, registry=registry)
+
+
+@pytest.mark.parametrize(
+    "start, end, ok",
+    [
+        ("2026-10-31T00:00:00.1234561Z", "2026-10-31T00:00:00.1234569Z", True),
+        ("2026-10-31T00:00:00.1234569Z", "2026-10-31T00:00:00.1234561Z", False),
+        ("2026-10-31T00:00:00.10Z", "2026-10-31T00:00:00.1Z", True),
+    ],
+)
+def test_attempt_times_keep_full_fractional_precision(start, end, ok):
+    freeze, tasks = two_task_setup()
+
+    def build(task_id, arm):
+        a = dict(attempt(f"{task_id}-{arm}-1"), started_at=start, ended_at=end)
+        return row(task_id, arm, attempts=[a])
+
+    report = report_for(freeze, tasks, ordered_rows(tasks, build))
+    if ok:
+        grade_host_report(report, tasks, freeze)
+    else:
+        with pytest.raises(WholeTaskRejected, match="attempt_timing"):
+            grade_host_report(report, tasks, freeze)

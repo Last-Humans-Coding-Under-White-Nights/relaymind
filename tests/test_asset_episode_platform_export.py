@@ -563,3 +563,43 @@ def test_null_reasons_are_allowed_where_published():
     grade_adaptation_report(
         report, episodes, episode_freeze(), labels, reset_preimages=preimages(episodes)
     )
+
+
+# --- second review follow-ups -------------------------------------------------
+
+
+def test_known_failure_is_reported_before_an_unresolved_reset_blocks():
+    episodes = episodes_doc()
+    labels = labels_for(episodes)
+    results = [episode_result(e, labels, on="asset-b") for e in episodes["episodes"]]
+    report = adaptation_report(episodes, results, qualification="qualified")
+    summary = grade_adaptation_report(
+        report, episodes, episode_freeze(), labels, reset_preimages={}
+    )
+    assert summary["gate"] == "fail"
+    assert summary["reset_passed"] == 0 and summary["reset_unknown"] == 2
+
+
+def test_a_verified_false_reset_is_not_hidden_by_a_later_unresolved_one():
+    episodes = episodes_doc()
+    labels = labels_for(episodes)
+    results = [
+        episode_result(episodes["episodes"][0], labels, reset_after="asset-b"),
+        episode_result(episodes["episodes"][1], labels),
+    ]
+    report = adaptation_report(episodes, results, qualification="qualified")
+    partial = {"e1": preimages(episodes, "asset-b")["e1"]}
+    summary = grade_adaptation_report(
+        report, episodes, episode_freeze(), labels, reset_preimages=partial
+    )
+    assert summary["gate"] == "fail"
+
+
+def test_a_later_contradiction_is_rejected_before_an_unresolved_reset_blocks():
+    episodes = episodes_doc()
+    labels = labels_for(episodes)
+    results = [episode_result(e, labels) for e in episodes["episodes"]]
+    report = adaptation_report(episodes, results)
+    report["episodes"][1]["corrections"].reverse()
+    with pytest.raises(WholeTaskRejected, match="correction_order"):
+        grade_adaptation_report(report, episodes, episode_freeze(), labels, reset_preimages={})

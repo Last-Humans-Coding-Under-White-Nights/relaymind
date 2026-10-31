@@ -10,8 +10,10 @@ recomputed from verified rows; a stored summary is compared, never trusted.
 
 import copy
 import hashlib
+import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
+from fractions import Fraction
 from typing import Any
 
 from relaymind.canonical import canonical_digest, canonical_json
@@ -213,12 +215,21 @@ _NOT_RUN_NULLS = (
 )
 
 
-def _instant(value: str) -> datetime:
-    """A UTC RFC3339 time as an instant; text order differs across precisions."""
+_TIME = re.compile(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?Z")
+
+
+def _instant(value: str) -> tuple[datetime, Fraction]:
+    """A UTC RFC3339 time as an exact instant: whole seconds plus the full
+    fractional part (datetime alone would truncate below a microsecond)."""
+    match = _TIME.fullmatch(value)
+    if match is None:
+        raise WholeTaskRejected("attempt_timing")
     try:
-        return datetime.fromisoformat(value)
+        seconds = datetime.fromisoformat(match.group(1) + "+00:00")
     except ValueError:
         raise WholeTaskRejected("attempt_timing") from None
+    digits = match.group(2) or "0"
+    return seconds, Fraction(int(digits), 10 ** len(digits))
 
 
 def _check_attempts(row: Mapping, seen: set[str]) -> None:

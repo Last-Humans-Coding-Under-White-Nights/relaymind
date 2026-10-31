@@ -1,6 +1,6 @@
 """Plan and grade the section 12.6.5 host, adaptation and platform exports.
 
-Spec 0.60 section 12.6.5 (RM16, RM37–RM44; AC28–AC37). Exit codes:
+Spec 0.60 section 12.6.5 (RM16, RM38–RM44; AC29–AC37). Exit codes:
 0 the gate passed or is not_applicable to acceptance (fixture platform or
 adaptation report), 1 a known gate failure, 2 the export or its inputs were
 rejected (contradiction), 3 blocked (missing or unverifiable required input or
@@ -47,7 +47,14 @@ _REPORTS = {
 def _labels(lock: Path, evidence_root: Path, digest: str) -> dict:
     from relaymind.evaluation.asset_corpus import load_asset_release
 
-    release = load_asset_release(lock, evidence_root=evidence_root, related_roots={})
+    try:
+        release = load_asset_release(lock, evidence_root=evidence_root, related_roots={})
+    except FileNotFoundError:
+        raise WholeTaskBlocked("corpus_unresolved") from None
+    except AssetCorpusError as exc:
+        if str(exc) in ("missing_file", "input_unresolved"):
+            raise WholeTaskBlocked("corpus_unresolved") from None
+        raise
     if canonical_digest(release.lock) != digest:
         raise WholeTaskRejected("dataset_lock_binding")
     return {
@@ -85,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    plan = sub.add_parser("plan-host", help="print the deterministic three-arm plan")
+    plan = sub.add_parser("plan-host", help="write the deterministic three-arm plan")
     plan.add_argument("--tasks", type=Path, required=True)
     plan.add_argument("--freeze", type=Path, required=True)
     plan.add_argument("--output", type=Path, required=True)

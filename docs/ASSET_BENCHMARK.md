@@ -570,7 +570,9 @@ comparison objects retain their original closed shape and are not upgraded.
 ## Whole-host trials, adaptation episodes and platform exports (spec 0.60 section 12.6.5)
 
 These offline tools serve #198 (early installed-skill trial), #202 (adaptation
-episodes), #205 (paired whole-host tasks) and #206 (platform lifecycle). They
+episodes), #204 (host MCP-use rows), #205 (paired whole-host tasks) and #206
+(platform lifecycle). RM16, RM38–RM44; AC29–AC37. Remaining verifier gaps are
+tracked in #229. They
 check frozen inputs, plan runs deterministically and grade exported reports.
 They do not run a host, grant an approval, execute a tool or create a measured
 result: the host executor is supplied by the caller, and only the host executes
@@ -584,12 +586,14 @@ differs is rejected.
 | `python scripts/asset_whole_task.py grade-platform --report R --inputs M [--resolver X] --output O` | The same for an `AssetPlatformReportV1` (eleven lifecycle steps in fixed order) |
 | `python scripts/asset_whole_task.py grade-adaptation --report R --inputs M --lock L --evidence-root E [--resolver X] --output O` | Regrades an `AssetAdaptationReportV1`; probe labels come from the verified corpus lock `L`, which must match `dataset_lock_digest` |
 
-Exit codes: `0` the gate passed or is `not_applicable` (fixture platform or
-adaptation report); `1` a known gate failure; `2` the report or an input was
+Exit codes: `0` the gate passed or is `not_applicable` (a fixture platform
+report, or an adaptation report that is not qualified); `1` a known gate failure; `2` the report or an input was
 rejected (a digest, identity, order or arithmetic contradiction); `3` blocked
 (a required document, configuration, inventory preimage or evidence is
-missing). Blocked is never reported as a pass. The output file always records
-`status`, `gate` and a fixed safe `reason`. A graded result also lists
+missing, including a missing `--lock` corpus). Blocked is never reported as a
+pass. A grading command's output file always records `status`, `gate` and a
+fixed safe `reason`; `plan-host` writes only the plan, and on rejection it
+writes nothing and prints the reason to standard error. A graded result also lists
 `unverified`: `configuration_semantics`, `corpus_closure` and
 `qualified_evidence_review`, the parts this revision does not yet check.
 
@@ -598,7 +602,7 @@ kinds extended (only here) by `host_tasks`, `host_freeze`, `episodes` and
 `episode_freeze`. It must hold exactly one `environment_lock`,
 `runner_inventory` and `protocol_inventory`; the root input named by the
 report's `input_digest`; its freeze; and every configuration digest the freeze
-names, as `referenced_config:<digest>` (plain strict JSON, 4 MiB), and the
+names, as `referenced_config:<digest>` (strict JSON or TOML, 4 MiB), and the
 corpus lock as `lock:<digest>` (its presence is checked; its closure is not yet
 verified). The report, root and freeze shapes are checked before any reference
 is followed. Inventory
@@ -615,7 +619,7 @@ grader, and the other files must match reviewed bytes.
   bindings and rubrics bind to the freeze. Rows equal the plan, and `not_run`
   rows carry no work. Success needs a host session and execution evidence.
   Attempt ordinals are consecutive and attempt IDs unique report-wide, and
-  attempt times compare as instants. Each frozen package's bytes must equal its
+  attempt times compare as exact instants at full fractional precision. Each frozen package's bytes must equal its
   registry evidence. Totals are normalized only from evidenced token
   relationships. A started row with no external attempt has unknown, not zero,
   cost, because complete no-dispatch evidence cannot be verified offline. A
@@ -628,7 +632,9 @@ grader, and the other files must match reviewed bytes.
   0.02 are compared exactly, so both boundaries are allowed. At most 100,000
   planned observations are allowed across all episodes. Reset digests are
   verified against complete before/after preimages (product candidates and a
-  published decision). A claimed reset without its preimages is blocked.
+  published decision). A claimed reset without its preimages is never
+  credited: structural contradictions are rejected and known gate failures
+  reported first, otherwise the grade is blocked.
 - Platform: steps `install` … `uninstall` exactly once and in order. A passed
   step needs receipts, and the dedicated operations/approvals references must
   equal registry entries.

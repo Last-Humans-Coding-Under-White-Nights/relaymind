@@ -25,6 +25,9 @@ CONTROL_LOSS_LIMIT = (1, 50)
 PLANNED_OBSERVATIONS = 100_000
 _RESET_FIELDS = {"case_id", "final_candidates", "final_decision"}
 _DECISIONS = {"confident", "choice_required", "no_match", "empty_catalog"}
+# A reset claim whose preimages were not supplied: uncredited, and blocking
+# only when no structural contradiction or known gate failure precedes it.
+PENDING = object()
 
 
 def planned_observations(episode: Mapping) -> int:
@@ -148,8 +151,8 @@ def _check_episode(
     episode: Mapping,
     labels: Mapping[str, Mapping],
     preimages: Mapping[str, tuple] | None,
-) -> bool | None:
-    """Verify one EpisodeResult; return the verified reset equality or None."""
+) -> bool | None | object:
+    """Verify one EpisodeResult; return the verified reset equality, None or PENDING."""
     status = result["status"]
     corrections = result["corrections"]
     if [(c["ordinal"], c["case_id"]) for c in corrections] != [
@@ -189,10 +192,9 @@ def _check_episode(
         raise WholeTaskRejected("reset_equality")
     preimage = None if preimages is None else preimages.get(result["episode_id"])
     if preimage is None:
-        if equal is not None:
-            # A claimed reset needs its evidence preimages; never a pass.
-            raise WholeTaskBlocked("reset_evidence_unresolved")
-        return None
+        # A claimed reset needs its evidence preimages; never a pass. The
+        # blocker is reported only after every other check (see below).
+        return PENDING if equal is not None else None
     for digest, items in zip((baseline, after), preimage, strict=True):
         _check_reset_preimage(items, episode["reset_probe_case_ids"])
         if reset_preimage_digest(items) != digest:
@@ -284,8 +286,10 @@ def grade_adaptation_report(
 
     ``labels`` maps each probe case ID to its frozen ``{class,
     acceptable_asset_ids}``. ``reset_preimages`` maps an episode ID to its
-    (baseline, after) reset arrays resolved from evidence; a digest without
-    its preimage is counted unknown.
+    (baseline, after) reset arrays resolved from evidence. A claimed reset
+    without its preimages is never credited: after all structural checks, a
+    known gate failure is returned, otherwise the grade is blocked
+    (``reset_evidence_unresolved``).
     """
     input_digest = verify_episodes(episodes, freeze)
     validate_whole_task("AssetAdaptationReportV1", report)
@@ -296,10 +300,23 @@ def grade_adaptation_report(
         freeze["on_config_digest"],
     ):
         raise WholeTaskRejected("config_binding")
-    resets = _verified(report, episodes, labels, reset_preimages)
+    checked = _verified(report, episodes, labels, reset_preimages)
     verify_evidence(report["evidence"], set(), registry)
-    # Recompute from verified rows and resets; the stored summary must agree.
-    summary = episode_summary(report, episodes, labels, resets=resets)
-    if canonical_json(report["summary"]) != canonical_json(summary):
+    pending = [value is PENDING for value in checked]
+    # The stored summary must agree with the report's own rows and claims
+    # (verified values where available): a disagreement is a contradiction.
+    claimed = [
+        result["reset_equal"] if wait else value
+        for result, value, wait in zip(report["episodes"], checked, pending, strict=True)
+    ]
+    if canonical_json(report["summary"]) != canonical_json(
+        episode_summary(report, episodes, labels, resets=claimed)
+    ):
         raise WholeTaskRejected("summary_mismatch")
+    # The returned summary credits only verified resets. Known violations
+    # fail before a missing reset preimage blocks.
+    verified = [None if wait else value for value, wait in zip(checked, pending, strict=True)]
+    summary = episode_summary(report, episodes, labels, resets=verified)
+    if any(pending) and summary["gate"] != "fail":
+        raise WholeTaskBlocked("reset_evidence_unresolved")
     return summary

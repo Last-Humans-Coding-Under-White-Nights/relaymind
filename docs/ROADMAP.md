@@ -1275,7 +1275,8 @@ isolation and connection retirement. Its unmodified capture is
 (SHA-256 `d5c186ac552b6028cd47c9bd4679f79259eab1092d20dd95b48c36fa35437a39`), which the registry's evidence revision names. The 31 October
 capture remains the record of the earlier revision. As before, this is
 Linux functional evidence with disposable accounts, not macOS/Windows or
-customer acceptance.
+customer acceptance. Hardening of the person-ingress harness raised in the #224
+review changes evidence-bound files and is tracked with its recapture in #228.
 
 #197 first-slice status (RM36, RM37, RM39; AC27/AC28, partial AC30): the
 package includes dormant recommendation/action clients, closed lossless protocol
