@@ -290,6 +290,155 @@ class _LockedProjectionProvider:
         )
 
 
+async def execute_asset_slot(service, provider, normal, case, slot, label):
+    """Run one planned slot through the production offer and service.
+
+    Returns ``(row, status, recommendation_id)``: ``status`` is ``None`` or the
+    run status the slot forces (``interrupted`` or ``blocked``), and
+    ``recommendation_id`` names the stored recommendation when one exists.
+    Shared by the retrieval benchmark and the section 12.6.5 episode driver.
+    """
+    status = None
+    cancel = None
+    request = dict(
+        schema_version=1,
+        task_text=case["task_text"],
+        conversation=list(case["conversation"]),
+        requested_kinds=normal["requested_kinds"],
+        selection_scope=normal["selection_scope"],
+        host_snapshot_revision=None,
+        language_tags=list(case["language_tags"]),
+        code_switched=case["code_switched"],
+    )
+    budget = service.new_budget()
+    row = _not_run(slot, label)
+    try:
+        offer = service.precheck(request)
+        # Same production offer.request envelope as service.create;
+        # volatile ID/deadline fields alone are removed from digest.
+        envelope = dict(
+            request,
+            schema_version=2,
+            recommendation_id=str(uuid.uuid4()),
+            task_id=canonical_digest(
+                dict(
+                    task_text=request["task_text"],
+                    conversation=request["conversation"],
+                )
+            ),
+            scope=provider.scope,
+            permissions=list(provider.permissions),
+            catalog_revision=offer.catalog_revision,
+            deadline_ms=budget.remaining_ms(),
+            candidate_limit=normal["budgets"]["candidate_limit"],
+        )
+        selection = offer.request(
+            envelope,
+            context=SelectorContext(budget.clock.monotonic, budget.check),
+        )
+        row.update(
+            request_digest=stable_request_digest(selection.to_json_object()),
+            offered_projection_digest=canonical_digest(list(offer.catalog)),
+            catalog_revision=offer.catalog_revision,
+        )
+        claim = RecommendationClaim(
+            provider.scope,
+            "evaluation",
+            "POST",
+            "/relay/v1/recommendations",
+            None,
+            str(slot["ordinal"]),
+            canonical_digest(request),
+        )
+        cancel = CancellationSignal()
+        response = await service.create(request, claim, budget, cancel)
+        body = (
+            dict(service.get(provider.scope, cancel.recommendation_id))
+            if cancel.recommendation_id is not None
+            else dict(response.body)
+        )
+        if body.get("state") == "ready":
+            result = dict(body["result"])
+            row.update(
+                status="ready",
+                reason=None,
+                result=result,
+                attempts=list(result["attempts"]),
+                embeddings=list(result["embeddings"]),
+            )
+        else:
+            terminal = terminal_payload(
+                service,
+                provider.scope,
+                body["recommendation_id"],
+                ("failed", "cancelled"),
+            )
+            row.update(
+                status="cancelled"
+                if body.get("state") == "cancelled"
+                else "failed",
+                reason=(body.get("error") or {}).get(
+                    "code", "recommendation_unavailable"
+                ),
+                attempts=list(terminal["attempts"]),
+                embeddings=list(terminal.get("embeddings", [])),
+            )
+        row["observed_ms"] = budget.elapsed_ms()
+    except RecommendationError as failure:
+        row.update(
+            status="failed",
+            reason=failure.code,
+            observed_ms=budget.elapsed_ms(),
+        )
+    except asyncio.CancelledError:
+        row.update(
+            status="cancelled",
+            reason="cancelled",
+            observed_ms=budget.elapsed_ms(),
+        )
+        if cancel.recommendation_id is not None:
+            terminal = terminal_payload(
+                service,
+                provider.scope,
+                cancel.recommendation_id,
+                ("cancelled",),
+            )
+            row.update(
+                attempts=list(terminal["attempts"]),
+                embeddings=list(terminal.get("embeddings", [])),
+            )
+        status = "interrupted"
+    except Exception:
+        row.update(
+            status="failed",
+            reason="internal_error",
+            observed_ms=budget.elapsed_ms(),
+        )
+        status = "blocked"
+    except KeyboardInterrupt:
+        row.update(
+            status="cancelled",
+            reason="cancelled",
+            observed_ms=budget.elapsed_ms(),
+        )
+        status = "interrupted"
+    # Actual observed no-dispatch is zero inference only for the
+    # admitted initial empty catalog, never an unavailable catalog.
+    if (
+        row["result"] is not None
+        and row["result"]["decision"] == "empty_catalog"
+    ):
+        row["observed_costs"] = [
+            dict(
+                provenance="observed",
+                value=dict(LexicalAssetSelector.observed_cost),
+            )
+        ]
+    row["grade"] = grade_asset_result(label, row["result"])
+    recommendation_id = None if cancel is None else cancel.recommendation_id
+    return row, status, recommendation_id
+
+
 @dataclass
 class AssetBenchmarkReport:
     data: dict
@@ -515,141 +664,11 @@ async def run_asset_benchmark(
                             )
                             continue
                         case = cases[slot["case_id"]]
-                        request = dict(
-                            schema_version=1,
-                            task_text=case["task_text"],
-                            conversation=list(case["conversation"]),
-                            requested_kinds=normal["requested_kinds"],
-                            selection_scope=normal["selection_scope"],
-                            host_snapshot_revision=None,
-                            language_tags=list(case["language_tags"]),
-                            code_switched=case["code_switched"],
+                        row, forced, _ = await execute_asset_slot(
+                            service, provider, normal, case, slot, label
                         )
-                        budget = service.new_budget()
-                        row = _not_run(slot, label)
-                        try:
-                            offer = service.precheck(request)
-                            # Same production offer.request envelope as service.create;
-                            # volatile ID/deadline fields alone are removed from digest.
-                            envelope = dict(
-                                request,
-                                schema_version=2,
-                                recommendation_id=str(uuid.uuid4()),
-                                task_id=canonical_digest(
-                                    dict(
-                                        task_text=request["task_text"],
-                                        conversation=request["conversation"],
-                                    )
-                                ),
-                                scope=provider.scope,
-                                permissions=list(provider.permissions),
-                                catalog_revision=offer.catalog_revision,
-                                deadline_ms=budget.remaining_ms(),
-                                candidate_limit=normal["budgets"]["candidate_limit"],
-                            )
-                            selection = offer.request(
-                                envelope,
-                                context=SelectorContext(budget.clock.monotonic, budget.check),
-                            )
-                            row.update(
-                                request_digest=stable_request_digest(selection.to_json_object()),
-                                offered_projection_digest=canonical_digest(list(offer.catalog)),
-                                catalog_revision=offer.catalog_revision,
-                            )
-                            claim = RecommendationClaim(
-                                provider.scope,
-                                "evaluation",
-                                "POST",
-                                "/relay/v1/recommendations",
-                                None,
-                                str(slot["ordinal"]),
-                                canonical_digest(request),
-                            )
-                            cancel = CancellationSignal()
-                            response = await service.create(request, claim, budget, cancel)
-                            body = (
-                                dict(service.get(provider.scope, cancel.recommendation_id))
-                                if cancel.recommendation_id is not None
-                                else dict(response.body)
-                            )
-                            if body.get("state") == "ready":
-                                result = dict(body["result"])
-                                row.update(
-                                    status="ready",
-                                    reason=None,
-                                    result=result,
-                                    attempts=list(result["attempts"]),
-                                    embeddings=list(result["embeddings"]),
-                                )
-                            else:
-                                terminal = terminal_payload(
-                                    service,
-                                    provider.scope,
-                                    body["recommendation_id"],
-                                    ("failed", "cancelled"),
-                                )
-                                row.update(
-                                    status="cancelled"
-                                    if body.get("state") == "cancelled"
-                                    else "failed",
-                                    reason=(body.get("error") or {}).get(
-                                        "code", "recommendation_unavailable"
-                                    ),
-                                    attempts=list(terminal["attempts"]),
-                                    embeddings=list(terminal.get("embeddings", [])),
-                                )
-                            row["observed_ms"] = budget.elapsed_ms()
-                        except RecommendationError as failure:
-                            row.update(
-                                status="failed",
-                                reason=failure.code,
-                                observed_ms=budget.elapsed_ms(),
-                            )
-                        except asyncio.CancelledError:
-                            row.update(
-                                status="cancelled",
-                                reason="cancelled",
-                                observed_ms=budget.elapsed_ms(),
-                            )
-                            if cancel.recommendation_id is not None:
-                                terminal = terminal_payload(
-                                    service,
-                                    provider.scope,
-                                    cancel.recommendation_id,
-                                    ("cancelled",),
-                                )
-                                row.update(
-                                    attempts=list(terminal["attempts"]),
-                                    embeddings=list(terminal.get("embeddings", [])),
-                                )
-                            status = "interrupted"
-                        except Exception:
-                            row.update(
-                                status="failed",
-                                reason="internal_error",
-                                observed_ms=budget.elapsed_ms(),
-                            )
-                            status = "blocked"
-                        except KeyboardInterrupt:
-                            row.update(
-                                status="cancelled",
-                                reason="cancelled",
-                                observed_ms=budget.elapsed_ms(),
-                            )
-                            status = "interrupted"
-                        # Actual observed no-dispatch is zero inference only for the
-                        # admitted initial empty catalog, never an unavailable catalog.
-                        if (
-                            row["result"] is not None
-                            and row["result"]["decision"] == "empty_catalog"
-                        ):
-                            row["observed_costs"] = [
-                                dict(
-                                    provenance="observed",
-                                    value=dict(LexicalAssetSelector.observed_cost),
-                                )
-                            ]
-                        row["grade"] = grade_asset_result(label, row["result"])
+                        if forced is not None:
+                            status = forced
                         rows.append(row)
                 finally:
                     if runtime is None:
