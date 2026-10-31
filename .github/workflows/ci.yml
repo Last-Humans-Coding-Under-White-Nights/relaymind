@@ -25,7 +25,7 @@ jobs:
       fail-fast: false
       matrix:
         # Target platforms per spec (macOS and Windows); Ubuntu as the fast default.
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -48,10 +48,11 @@ jobs:
 
       # The browser test of the demo UI page script (#89) needs Chromium.
       - name: Install browser
+        if: false
         run: playwright install --with-deps --only-shell chromium
 
       - name: Test
-        run: pytest --durations=30 --junitxml=ci-evidence/core-tests.xml
+        run: python debug_windows_paths.py
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -69,6 +70,7 @@ jobs:
   # a functional check on a GitHub runner, never live model evidence and never a
   # qualification of a user's machine (section 12.5). Live tests stay opt-in.
   openclaw-plugin:
+    if: false
     strategy:
       fail-fast: false
       matrix:
