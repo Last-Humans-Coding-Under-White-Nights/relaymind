@@ -18,6 +18,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Specification 0.60 → 0.61 (#201/#200; RM16/RM35/RM38/RM40/RM41/RM44;
+  AC26/AC29/AC31/AC32): add explicit cold local native preparation using existing
+  worker events/readiness, actual setup/cleanup timing and unknown-aware costs.
+  Define narrow native-versus-unused runtime applicability, a closed self-contained
+  comparison runtime display, and invariant native build/device/execution controls. Preserve none/HTTP, semantic/artifact/Row,
+  source-proof and 0.60 episode/host/platform contracts and all acceptance gates.
+  This publishes tooling contracts, not model activation or measured acceptance.
+
 - Specification 0.59 → 0.60 (#198/#202/#204/#205/#206; RM16/RM38–RM44;
   AC29–AC37): define closed adaptation episode, whole-host three-arm and
   platform exports, exact freeze/companion resolution, conserved observations

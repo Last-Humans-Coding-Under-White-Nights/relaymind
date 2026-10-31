@@ -1209,3 +1209,17 @@ enable production host actions or runtime snapshots. Personal authenticated
 ingress, exact selected skill/MCP use and post-approval currentness must qualify
 before the later native adapter activation revision. Missing genuine inputs do
 not block tooling implementation or explicitly unqualified fixture runs.
+
+#201 native benchmark contract checkpoint (spec 0.61): explicit local-cold
+preparation records actual gateway worker jobs/readiness, setup and owned cleanup
+without fabricated HTTP or hidden query initialization. Narrow runtime
+applicability permits a verified local selector runtime versus corroborated
+non-use, with a closed per-arm runtime display for the comparison-only renderer.
+Native build/device/execution controls, Python/dependencies,
+source/label/policy and normal machine equality stay enforced. Existing0.58
+semantic documents and artifact/reference slots suffice; parser/factory/offline
+closure support remains implementation work. Ordinary exact-identity native
+activation and both benchmark commands still require implementation, independent
+registry review and fresh unmodified-process proof before publication. No
+production entry, host correction authority, dataset/hardware qualification,
+new numerical threshold or final-M10 pass is supplied by this contract.
