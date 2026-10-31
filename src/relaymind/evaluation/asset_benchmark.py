@@ -34,6 +34,7 @@ from relaymind.evaluation.asset_corpus_io import (
     ORIGINAL_BYTES,
     AssetCorpusError,
     document,
+    matches_original,
     read_local,
     relative_path,
 )
@@ -43,7 +44,9 @@ from relaymind.evaluation.asset_evidence import (
     VerifiedBenchmarkInputs,
     collect_benchmark_environment,
     effective_asset_config,
+    file_evidence_id,
     file_inventory,
+    selector_identity,
     source_proof,
     validate_definition,
     verify_benchmark_inputs,
@@ -56,7 +59,7 @@ from relaymind.recommendations.errors import RecommendationError
 from relaymind.recommendations.service import CancellationSignal, RecommendationService
 from relaymind.selection.asset_contract import SelectorContext
 from relaymind.selection.asset_factory import build_asset_selector
-from relaymind.selection.asset_lexical import OfferCache
+from relaymind.selection.asset_lexical import LexicalAssetSelector, OfferCache
 from relaymind.selection.asset_preparation import (
     PreparedAssetSelector,
     normalize_preparation,
@@ -93,10 +96,7 @@ def benchmark_inventories() -> dict:
             relative = item["path"].removeprefix("src/relaymind/")
             expected.add(relative)
             payload = read_local(imported_root, relative, CONFIG_BYTES)
-            if (
-                hashlib.sha256(payload).hexdigest() != item["sha256"]
-                or len(payload) != item["bytes"]
-            ):
+            if not matches_original(payload, item["sha256"], item["bytes"]):
                 raise AssetCorpusError("installed_runner_mismatch")
     actual = {
         p.relative_to(imported_root).as_posix()
@@ -182,20 +182,35 @@ def _load_benchmark_release(lock_path: Path):
     return load_asset_release(lock_path, evidence_root=root, related_roots=aliases)
 
 
-def _benchmark_requested_kinds(release, split: str) -> tuple[str, ...]:
-    included = {
-        label["case_id"]
+def included_cases(release, split: str) -> tuple[dict, dict]:
+    """Included labels by case ID, and the labeled cases of one split."""
+    labels = {
+        label["case_id"]: label
         for label in release.labels["adjudications"]
         if label["disposition"] == "include"
     }
-    envelopes = {
-        tuple(sorted(case["requested_kinds"]))
-        for case in release.cases["cases"]
-        if case["split"] == split and case["id"] in included
+    cases = {
+        c["id"]: c for c in release.cases["cases"] if c["id"] in labels and c["split"] == split
     }
+    return labels, cases
+
+
+def _benchmark_requested_kinds(release, split: str) -> tuple[str, ...]:
+    _, cases = included_cases(release, split)
+    envelopes = {tuple(sorted(case["requested_kinds"])) for case in cases.values()}
     if len(envelopes) > 1:
         raise AssetCorpusError("heterogeneous_requested_kinds")
     return next(iter(envelopes), ("mcp_tool", "skill"))
+
+
+def _effective_config(production, release, inventories: Mapping, split: str) -> dict:
+    return effective_asset_config(
+        production,
+        release,
+        runner_digest=canonical_digest(inventories["runner_inventory"]),
+        protocol_digest=canonical_digest(inventories["protocol_inventory"]),
+        requested_kinds=_benchmark_requested_kinds(release, split),
+    )
 
 
 def load_benchmark_config(path: Path) -> AssetBenchmarkConfig:
@@ -228,13 +243,7 @@ def load_benchmark_config(path: Path) -> AssetBenchmarkConfig:
         if value is not None and value != observed[key]:
             raise AssetCorpusError("environment_lock_mismatch")
     inventories = benchmark_inventories()
-    effective = effective_asset_config(
-        production,
-        release,
-        runner_digest=canonical_digest(inventories["runner_inventory"]),
-        protocol_digest=canonical_digest(inventories["protocol_inventory"]),
-        requested_kinds=_benchmark_requested_kinds(release, raw["split"]),
-    )
+    effective = _effective_config(production, release, inventories, raw["split"])
     if canonical_digest(effective) != raw["production_config_digest"]:
         raise AssetCorpusError("production_config_digest")
     # No benchmark-only authorization or arbitrary subset is introduced.
@@ -312,18 +321,13 @@ def _not_run(slot, label, reason="interrupted") -> dict:
 def _normal(config: AssetBenchmarkConfig) -> dict:
     effective = config.effective
     s = config.production.recommendations
-    selector = (
-        dict(name="lexical", version="1", transport="in_process")
-        if s.primary == "lexical"
-        else dict(name=s.name, version=s.version, transport="http")
-    )
     return dict(
         **{k: config.data[k] for k in ("split", "track", "seed", "repetitions", "warmups")},
         scope={k: getattr(s, k) for k in ("user_id", "workspace_id")},
         permissions=effective["permissions"],
         selection_scope=effective["selection_scope"],
         requested_kinds=effective["requested_kinds"],
-        selector=selector,
+        selector=selector_identity(s.primary, s.name, s.version),
         budgets=effective["budgets"],
         fallback=s.fallback,
         adaptation_enabled=False,
@@ -332,6 +336,42 @@ def _normal(config: AssetBenchmarkConfig) -> dict:
         preparation=normalize_preparation(
             config.data.get("preparation"), http_primary=s.primary == "http"
         ),
+    )
+
+
+def _offer_binding(provider: _LockedProjectionProvider, normal: Mapping) -> tuple[dict, list]:
+    """The preparation binding of the pinned production offer, and its catalog."""
+    offer = provider.pin(normal["requested_kinds"])
+    catalog = list(offer.catalog)
+    binding = preparation_binding(
+        selector={k: normal["selector"][k] for k in ("name", "version")},
+        catalog_revision=offer.catalog_revision,
+        catalog=catalog,
+        scope=normal["scope"],
+        permissions=normal["permissions"],
+        selection_scope=normal["selection_scope"],
+        requested_kinds=normal["requested_kinds"],
+    )
+    return binding, catalog
+
+
+def stable_request_digest(request: Mapping) -> str:
+    """Digest of a v2 request without its volatile ID and deadline fields."""
+    return canonical_digest(
+        {
+            k: v
+            for k, v in request.items()
+            if k not in ("recommendation_id", "task_id", "deadline_ms")
+        }
+    )
+
+
+def terminal_payload(service, scope, recommendation_id: str, event_types) -> dict:
+    """The payload of the last terminal event of the given types, or no attempts."""
+    events = service.events(scope, recommendation_id, after_seq=0, limit=1000)["events"]
+    return next(
+        (e["payload"] for e in reversed(events) if e["event_type"] in event_types),
+        dict(attempts=[], embeddings=[]),
     )
 
 
@@ -345,17 +385,7 @@ async def prepare_benchmark_index(
     provider = _LockedProjectionProvider(config.release, config.effective)
     try:
         await provider.publish()
-        offer = provider.pin(normal["requested_kinds"])
-        catalog = list(offer.catalog)
-        binding = preparation_binding(
-            selector={k: normal["selector"][k] for k in ("name", "version")},
-            catalog_revision=offer.catalog_revision,
-            catalog=catalog,
-            scope=normal["scope"],
-            permissions=normal["permissions"],
-            selection_scope=normal["selection_scope"],
-            requested_kinds=normal["requested_kinds"],
-        )
+        binding, catalog = _offer_binding(provider, normal)
         return await prepare_asset_index(
             normal["preparation"], binding, catalog, cancelled=interrupted
         )
@@ -368,16 +398,7 @@ async def run_asset_benchmark(
 ) -> AssetBenchmarkReport:
     """Attempt each preregistered slot once, conserving interrupted work."""
     normal = _normal(config)
-    labels = {
-        label["case_id"]: label
-        for label in config.release.labels["adjudications"]
-        if label["disposition"] == "include"
-    }
-    cases = {
-        c["id"]: c
-        for c in config.release.cases["cases"]
-        if c["id"] in labels and c["split"] == normal["split"]
-    }
+    labels, cases = included_cases(config.release, normal["split"])
     slots = plan_asset_slots(
         cases, seed=normal["seed"], repetitions=normal["repetitions"], warmups=normal["warmups"]
     )
@@ -395,17 +416,7 @@ async def run_asset_benchmark(
     try:
         await provider.publish()
         if normal["preparation"]["mode"] == "http":
-            offer = provider.pin(normal["requested_kinds"])
-            catalog = list(offer.catalog)
-            binding = preparation_binding(
-                selector={k: normal["selector"][k] for k in ("name", "version")},
-                catalog_revision=offer.catalog_revision,
-                catalog=catalog,
-                scope=normal["scope"],
-                permissions=normal["permissions"],
-                selection_scope=normal["selection_scope"],
-                requested_kinds=normal["requested_kinds"],
-            )
+            binding, catalog = _offer_binding(provider, normal)
             preparation = await prepare_asset_index(
                 normal["preparation"], binding, catalog, cancelled=interrupted
             )
@@ -474,13 +485,8 @@ async def run_asset_benchmark(
                         selection = offer.request(
                             envelope, context=SelectorContext(budget.clock.monotonic, budget.check)
                         )
-                        stable = {
-                            k: v
-                            for k, v in selection.to_json_object().items()
-                            if k not in ("recommendation_id", "task_id", "deadline_ms")
-                        }
                         row.update(
-                            request_digest=canonical_digest(stable),
+                            request_digest=stable_request_digest(selection.to_json_object()),
                             offered_projection_digest=canonical_digest(list(offer.catalog)),
                             catalog_revision=offer.catalog_revision,
                         )
@@ -510,16 +516,11 @@ async def run_asset_benchmark(
                                 embeddings=list(result["embeddings"]),
                             )
                         else:
-                            events = service.events(
-                                provider.scope, body["recommendation_id"], after_seq=0, limit=1000
-                            )["events"]
-                            terminal = next(
-                                (
-                                    e["payload"]
-                                    for e in reversed(events)
-                                    if e["event_type"] in ("failed", "cancelled")
-                                ),
-                                dict(attempts=[], embeddings=[]),
+                            terminal = terminal_payload(
+                                service,
+                                provider.scope,
+                                body["recommendation_id"],
+                                ("failed", "cancelled"),
                             )
                             row.update(
                                 status="cancelled"
@@ -541,16 +542,8 @@ async def run_asset_benchmark(
                             status="cancelled", reason="cancelled", observed_ms=budget.elapsed_ms()
                         )
                         if cancel.recommendation_id is not None:
-                            events = service.events(
-                                provider.scope, cancel.recommendation_id, after_seq=0, limit=1000
-                            )["events"]
-                            terminal = next(
-                                (
-                                    e["payload"]
-                                    for e in reversed(events)
-                                    if e["event_type"] == "cancelled"
-                                ),
-                                dict(attempts=[], embeddings=[]),
+                            terminal = terminal_payload(
+                                service, provider.scope, cancel.recommendation_id, ("cancelled",)
                             )
                             row.update(
                                 attempts=list(terminal["attempts"]),
@@ -575,18 +568,7 @@ async def run_asset_benchmark(
                         row["observed_costs"] = [
                             dict(
                                 provenance="observed",
-                                value={
-                                    k: (None if k in ("cpu_ms", "peak_bytes") else 0)
-                                    for k in (
-                                        "input_tokens",
-                                        "output_tokens",
-                                        "cached_tokens",
-                                        "reasoning_tokens",
-                                        "calls",
-                                        "cpu_ms",
-                                        "peak_bytes",
-                                    )
-                                },
+                                value=dict(LexicalAssetSelector.observed_cost),
                             )
                         ]
                     row["grade"] = grade_asset_result(label, row["result"])
@@ -747,10 +729,7 @@ def _write_bundle(report: AssetBenchmarkReport, path: Path) -> dict:
             if payload is None:
                 evidence.append(dict(item, path=None))
                 continue
-            if (
-                hashlib.sha256(payload).hexdigest() != item["sha256"]
-                or len(payload) != item["bytes"]
-            ):
+            if not matches_original(payload, item["sha256"], item["bytes"]):
                 raise AssetCorpusError("input_digest")
             entry = dict(item)
             if item["access"] == "restricted":
@@ -758,28 +737,19 @@ def _write_bundle(report: AssetBenchmarkReport, path: Path) -> dict:
                     f"{private.name}/evidence/{hashlib.sha256(item['id'].encode()).hexdigest()}"
                 )
                 entry["path"] = None
-                resolver_entries.append(
-                    dict(
-                        id=item["id"],
-                        hash_kind="original",
-                        hash=item["sha256"],
-                        bytes=len(payload),
-                        path=relative,
-                    )
-                )
             else:
                 # The corpus locator is input data, never an output filename.
                 # An explicit resolver relocates its exact committed bytes.
                 relative = f"{bundle}/evidence/{item['sha256']}"
-                resolver_entries.append(
-                    dict(
-                        id=item["id"],
-                        hash_kind="original",
-                        hash=item["sha256"],
-                        bytes=len(payload),
-                        path=relative,
-                    )
+            resolver_entries.append(
+                dict(
+                    id=item["id"],
+                    hash_kind="original",
+                    hash=item["sha256"],
+                    bytes=len(payload),
+                    path=relative,
                 )
+            )
             atomic_bytes(base / relative, payload, limit=ORIGINAL_BYTES)
             evidence.append(entry)
     proof = source_proof(config.production, config.effective)
@@ -825,16 +795,13 @@ def _write_bundle(report: AssetBenchmarkReport, path: Path) -> dict:
     copied = set()
     for inventory in config.inventories.values():
         for item in inventory["files"]:
-            id = "file:" + hashlib.sha256(item["path"].encode()).hexdigest()
+            id = file_evidence_id(item["path"])
             key = (id, item["sha256"])
             if key in copied:
                 continue
             copied.add(key)
             payload = read_local(root, item["path"], CONFIG_BYTES)
-            if (
-                hashlib.sha256(payload).hexdigest() != item["sha256"]
-                or len(payload) != item["bytes"]
-            ):
+            if not matches_original(payload, item["sha256"], item["bytes"]):
                 raise AssetCorpusError("runner_changed")
             relative = f"{private.name}/files/{item['sha256']}"
             atomic_bytes(base / relative, payload, limit=CONFIG_BYTES)
@@ -949,13 +916,7 @@ def refresh_fixture_benchmark_config(path: Path, *, reauthor_fixture_unicode: bo
     read_local(path.parent, raw["production_config"], CONFIG_BYTES)
     production = _load_production_config(path.parent / raw["production_config"])
     inventories = benchmark_inventories()
-    effective = effective_asset_config(
-        production,
-        release,
-        runner_digest=canonical_digest(inventories["runner_inventory"]),
-        protocol_digest=canonical_digest(inventories["protocol_inventory"]),
-        requested_kinds=_benchmark_requested_kinds(release, raw["split"]),
-    )
+    effective = _effective_config(production, release, inventories, raw["split"])
     environment = collect_benchmark_environment()
     raw.update(
         lock_digest=release.lock["digest"],

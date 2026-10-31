@@ -1,6 +1,7 @@
 """Closed explicit hybrid/adaptation settings; no hidden calibration (RM41/RM42)."""
 
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 from relaymind.assets.embedding_manifest import (
@@ -21,10 +22,14 @@ class SemanticConfig:
     manifest: EmbeddingManifest
 
 
+@cache
+def _validator(name):
+    return StrictValidator(load_packaged_schema("relaymind.assets", name))
+
+
 def _read(path, name):
     raw = read_semantic_json(path)
-    validator = StrictValidator(load_packaged_schema("relaymind.assets", name))
-    if not validator.is_valid(raw):
+    if not _validator(name).is_valid(raw):
         raise EmbeddingError("invalid_semantic_config")
     try:
         check_strings(raw)

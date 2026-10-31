@@ -458,3 +458,23 @@ def test_coarse_clock_tolerance_covers_the_cleanup_exchange_and_record():
     record["cleanup_ms"] = cleanup["observed_ms"] = 1001
     with pytest.raises(ValueError, match="invalid_preparation_exchange"):
         m.validate_preparation_record(record, config=config, binding=binding)
+
+
+def test_ready_preparation_allows_coarse_clock_tolerance():
+    # RM35/RM40, AC26/AC31: a clock tick cannot turn an on-time ready setup late.
+    m, catalog, binding, config = inputs()
+
+    def handle(request):
+        return reply(200, json=response(json.loads(request.content)))
+
+    record = asyncio.run(
+        m.prepare_asset_index(
+            config, binding, catalog, transport_factory=lambda: httpx.MockTransport(handle)
+        )
+    )
+    m.validate_preparation_record(record, config=config, binding=binding)
+    record["observed_ms"] = float(config["total_ms"]) + 0.0005
+    m.validate_preparation_record(record, config=config, binding=binding)
+    record["observed_ms"] = float(config["total_ms"]) + 0.002
+    with pytest.raises(ValueError, match="invalid_preparation_deadline"):
+        m.validate_preparation_record(record, config=config, binding=binding)

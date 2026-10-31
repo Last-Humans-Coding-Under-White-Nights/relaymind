@@ -1,9 +1,9 @@
 """Source-grounded development inputs, separate from human qualification (RM40)."""
 
-import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 
 from relaymind.canonical import canonical_digest
 from relaymind.evaluation.asset_corpus import _catalog_checks, _evidence_references
@@ -11,6 +11,7 @@ from relaymind.evaluation.asset_corpus_io import (
     ORIGINAL_BYTES,
     AssetCorpusError,
     document,
+    matches_original,
     read_local,
 )
 from relaymind.evaluation.asset_judgments import check_references, id_map
@@ -24,6 +25,11 @@ class VerifiedDiagnostic:
     catalog: Mapping
     qualification: str = field(default="provisional", init=False)
     acceptance_eligible: bool = field(default=False, init=False)
+
+
+QUERY_LANGUAGE_TAGS = MappingProxyType(
+    {"zh": ("zh-Hans",), "en": ("en",), "mixed": ("en", "zh-Hans"), "unknown": ()}
+)
 
 
 def query_envelope(
@@ -43,9 +49,7 @@ def query_envelope(
         selection_scope="discovery",
         catalog_revision=revision,
         host_snapshot_revision=None,
-        language_tags={"zh": ["zh-Hans"], "en": ["en"], "mixed": ["en", "zh-Hans"], "unknown": []}[
-            language
-        ],
+        language_tags=list(QUERY_LANGUAGE_TAGS[language]),
         code_switched=language == "mixed",
         deadline_ms=deadline_ms,
         candidate_limit=10,
@@ -75,7 +79,7 @@ def load_asset_diagnostic(
         if row["path"] is None:
             raise AssetCorpusError("evidence_unavailable")
         payload = read_local(evidence_root, row["path"], ORIGINAL_BYTES)
-        if len(payload) != row["bytes"] or hashlib.sha256(payload).hexdigest() != row["sha256"]:
+        if not matches_original(payload, row["sha256"], row["bytes"]):
             raise AssetCorpusError("evidence_digest")
     check_references(_evidence_references(catalog), evidence)
     assets = {row["record"]["asset_id"]: row for row in catalog["assets"]}

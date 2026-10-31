@@ -192,3 +192,13 @@ def test_rm34_ac25_oversized_original_is_excluded_without_retaining_oversized_by
     assert result.admitted == 0 and result.excluded == 1
     assert catalog["exclusions"][0]["reason"] == "source_limit"
     assert not list((result.catalog_path.parent / "originals").glob("*"))
+
+
+def test_rm40_invalid_captured_at_is_an_exclusion_not_a_crash(tmp_path):
+    # RM40/AC31: a malformed capture timestamp is source data, not a crash.
+    source = original(captured_at="not-a-timestamp")
+    result = api().build_source_catalog([source], tmp_path / "out", dataset_id="actual-sources")
+    data = json.loads(result.catalog_path.read_text(encoding="utf-8"))
+    assert result.admitted == 0
+    assert result.excluded == 1
+    assert data["exclusions"][0]["reason"] == "invalid_source_text"

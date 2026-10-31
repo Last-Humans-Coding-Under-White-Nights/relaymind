@@ -191,3 +191,17 @@ def test_rm40_sync_capture_inside_active_loop_fails_before_any_io(tmp_path):
 
     asyncio.run(caller())
     assert not (tmp_path / "cache").exists()
+
+
+@pytest.mark.parametrize(
+    "host", ["abc.de", "cafe.de", "feed.cafe", "face.de", "ab.ca", "bad.ad", "beef.de"]
+)
+def test_rm40_hex_only_domains_are_public_hosts(tmp_path, host):
+    # RM40/AC31: a hostname made only of hex letters is still a DNS name.
+    payload = b"original"
+    data = recipe(payload, f"https://{host}/file")
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / (hashlib.sha256(payload).hexdigest() + ".original")).write_bytes(payload)
+    result = api().acquire_recipe(data, cache)
+    assert result[0]["status"] == "reused"

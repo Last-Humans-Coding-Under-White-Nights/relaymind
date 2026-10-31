@@ -5,6 +5,7 @@ published metadata supplies discovery data and never host execution authority.
 """
 
 import asyncio
+import functools
 import logging
 import math
 import threading
@@ -110,11 +111,14 @@ class AssetCatalogService:
                 # backoff or provider authority. Recompute it for current settings.
                 self._retry[source_id] = 0.0
                 next_time = datetime.fromisoformat(previous["last_success_at"]) + timedelta(
-                    seconds=max(self.settings.refresh.remote_seconds, profile.minimum_poll_seconds)
+                    seconds=self._remote_interval(profile)
                 )
                 self._next[source_id] = self.clock.monotonic() + max(
                     0.0, (next_time - self.clock.utc_now()).total_seconds()
                 )
+
+    def _remote_interval(self, profile) -> float:
+        return max(self.settings.refresh.remote_seconds, profile.minimum_poll_seconds)
 
     def _source_job_config(self, source):
         profile = self._profiles.get(source.source_id)
@@ -422,16 +426,12 @@ class AssetCatalogService:
                         prepared,
                         expected_revision=inventory.revision,
                         context=context,
-                        run_cpu=lambda function, *args, **kwargs: self._drained_cpu(
-                            context, function, *args, **kwargs
-                        ),
+                        run_cpu=functools.partial(self._drained_cpu, context),
                     )
                 self._failures[source_id] = 0
                 self._retry[source_id] = 0
                 if source.kind == "qualified_remote":
-                    interval = max(
-                        self.settings.refresh.remote_seconds, profile.minimum_poll_seconds
-                    )
+                    interval = self._remote_interval(profile)
                     self._next[source_id] = self.clock.monotonic() + interval
                     self.store.schedule_retry(
                         source_id, utc_iso(self.clock.utc_now() + timedelta(seconds=interval))
@@ -508,38 +508,34 @@ class AssetCatalogService:
         context.foreground_window = self.store.store.foreground_window(
             monotonic=self.clock.monotonic
         )
+
+        def finish(state: str, reason: str | None) -> None:
+            # The semantic owner's revision is read when the job ends.
+            self._finish(
+                job_id,
+                context,
+                started,
+                state,
+                reason,
+                index_revision=owner.revision if embedding else _DEFAULT_INDEX,
+            )
+
         try:
             await context.async_checkpoint()
             if embedding:
                 result = await owner.rebuild(
                     context=context,
-                    run_cpu=lambda function, *args, **kwargs: self._drained_cpu(
-                        context, function, *args, **kwargs
-                    ),
+                    run_cpu=functools.partial(self._drained_cpu, context),
                 )
             else:
                 result = await owner.rebuild(
                     check=context.check_limits, yield_control=context.async_checkpoint
                 )
             context.check_limits()
-            self._finish(
-                job_id,
-                context,
-                started,
-                "succeeded",
-                None,
-                index_revision=owner.revision if embedding else _DEFAULT_INDEX,
-            )
+            finish("succeeded", None)
         except asyncio.CancelledError:
             context.rejected_count = 0
-            self._finish(
-                job_id,
-                context,
-                started,
-                "cancelled",
-                "shutdown",
-                index_revision=owner.revision if embedding else _DEFAULT_INDEX,
-            )
+            finish("cancelled", "shutdown")
             raise
         except Exception as exc:
             failure = (
@@ -551,14 +547,7 @@ class AssetCatalogService:
             if failure.reason == "cancelled":
                 state, reason = "cancelled", "shutdown" if self._stopping else "operator"
             context.rejected_count = failure.rejected_count
-            self._finish(
-                job_id,
-                context,
-                started,
-                state,
-                reason,
-                index_revision=owner.revision if embedding else _DEFAULT_INDEX,
-            )
+            finish(state, reason)
             if not future.done():
                 future.set_exception(failure)
         else:
