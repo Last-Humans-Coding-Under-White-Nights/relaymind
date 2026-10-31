@@ -381,3 +381,30 @@ def test_rm40_cancellation_conserves_planned_slots_and_consumed_attempts(
     assert drained == [True]
     assert report["environment"] == environment
     assert api().compare_source_benchmarks(report, copy.deepcopy(report))["compatible"]
+
+
+def test_rm40_compare_rejects_final_decision_not_produced_by_the_admitted_attempt(
+    development_input,
+):
+    """RM35/RM40: an edited confident decision cannot replace the admitted choice_required."""
+    from relaymind.evaluation.asset_metrics import grade_asset_result
+
+    english_case(development_input)
+    report = run(development_input)
+    row = report["rows"][0]
+    assert row["result"]["final_decision"] == "choice_required"
+    assert row["result"]["attempts"][-1]["result"]["decision"] == "choice_required"
+    changed = copy.deepcopy(report)
+    row = changed["rows"][0]
+    for key in ("decision", "base_decision", "final_decision"):
+        row["result"][key] = "confident"
+    row["evaluated_decision"] = "confident"
+    case = next(c for c in changed["input_document"]["cases"] if c["id"] == row["slot"]["case_id"])
+    row["grade"] = grade_asset_result(
+        {"class": case["reference_class"], "acceptable_asset_ids": case["acceptable_asset_ids"]},
+        row["result"],
+    )
+    changed["summary"] = api()._summary(changed["rows"])
+    changed["language_pairs"] = api()._language_pairs(changed["rows"], changed["catalog_document"])
+    with pytest.raises(ValueError, match="invalid_development_report"):
+        api().compare_source_benchmarks(report, changed)
