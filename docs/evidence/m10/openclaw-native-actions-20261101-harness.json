@@ -1,0 +1,3901 @@
+{
+  "kind": "openclaw-native-person-ingress",
+  "host_version": "2026.10.7",
+  "fixture": "disposable local identity-provider accounts; no human qualification",
+  "status": "completed",
+  "reason": null,
+  "steps": [
+    {
+      "name": "network_peer",
+      "status": "passed"
+    },
+    {
+      "name": "proxy_signature_controls",
+      "status": "passed"
+    },
+    {
+      "name": "account_a_login",
+      "status": "passed"
+    },
+    {
+      "name": "account_a_pairing",
+      "status": "passed"
+    },
+    {
+      "name": "account_a_session",
+      "status": "passed"
+    },
+    {
+      "name": "account_a_person_rpc",
+      "status": "passed"
+    },
+    {
+      "name": "account_b_login",
+      "status": "passed"
+    },
+    {
+      "name": "account_b_pairing",
+      "status": "passed"
+    },
+    {
+      "name": "account_b_session",
+      "status": "passed"
+    },
+    {
+      "name": "account_b_person_rpc",
+      "status": "passed"
+    },
+    {
+      "name": "cross_account_denied",
+      "status": "passed"
+    },
+    {
+      "name": "revocation_denied",
+      "status": "passed"
+    }
+  ],
+  "login_progress": [
+    {
+      "account": "account_a",
+      "subphase": "navigation",
+      "status": "passed",
+      "observed_ms": 44.73595800001817
+    },
+    {
+      "account": "account_a",
+      "subphase": "username_fill",
+      "status": "passed",
+      "observed_ms": 78.06967600001258
+    },
+    {
+      "account": "account_a",
+      "subphase": "proceed_click",
+      "status": "passed",
+      "observed_ms": 72.1976449999886
+    },
+    {
+      "account": "account_a",
+      "subphase": "password_fill",
+      "status": "passed",
+      "observed_ms": 66.47653600001036
+    },
+    {
+      "account": "account_a",
+      "subphase": "authenticate_click",
+      "status": "passed",
+      "observed_ms": 1078.057857999994
+    },
+    {
+      "account": "account_a",
+      "subphase": "control_ui_attachment",
+      "status": "passed",
+      "observed_ms": 73.91701599999578
+    },
+    {
+      "account": "account_a",
+      "subphase": "peer_binding",
+      "status": "passed",
+      "observed_ms": 47.480600000000095
+    },
+    {
+      "account": "account_b",
+      "subphase": "navigation",
+      "status": "passed",
+      "observed_ms": 75.03433499999801
+    },
+    {
+      "account": "account_b",
+      "subphase": "username_fill",
+      "status": "passed",
+      "observed_ms": 118.26769099999979
+    },
+    {
+      "account": "account_b",
+      "subphase": "proceed_click",
+      "status": "passed",
+      "observed_ms": 92.51772499999333
+    },
+    {
+      "account": "account_b",
+      "subphase": "password_fill",
+      "status": "passed",
+      "observed_ms": 91.63848500000427
+    },
+    {
+      "account": "account_b",
+      "subphase": "authenticate_click",
+      "status": "passed",
+      "observed_ms": 224.33510600001227
+    },
+    {
+      "account": "account_b",
+      "subphase": "control_ui_attachment",
+      "status": "passed",
+      "observed_ms": 469.1211339999768
+    },
+    {
+      "account": "account_b",
+      "subphase": "peer_binding",
+      "status": "passed",
+      "observed_ms": 28.319565000003877
+    }
+  ],
+  "accounts": [
+    {
+      "login_verified": true,
+      "native_device_paired": true,
+      "scoped_rpc_admitted": true,
+      "proxy_email": "accounta72b57190b725@example.test",
+      "native_person_email": "accounta72b57190b725@example.test",
+      "profile_id": "e12d7537-29dd-4840-8b9d-486e1e7c06c3",
+      "session_key": "agent:main:person-38d62c89d297a341",
+      "socket_id": "4f063d6a-ddb0-4686-9bd3-ce4f20a7a4e4",
+      "create_evidence_id": "06e914a3-f9ef-4447-b2b0-27bd1694d96d",
+      "native_session_id": "84507fda-7dd5-4bc0-8fc1-9c89fe724e59",
+      "lifecycle_revision": "f0f55735-5275-4b4f-a56d-24ad2201dc0e",
+      "device_id": "df9f9d5b254d40192dcedbfd117ba880dcab68ca67d3ad7c186dd939e57fbb85",
+      "connection_id": "daacbd02-3ebb-421b-8f9d-3be1953d2a21",
+      "login_evidence_id": "0a36365d-1078-4f96-9d9a-b2951292076e",
+      "rpc_evidence_id": "2bbaced1-2bb1-4319-a0cd-0db6977df29a"
+    },
+    {
+      "login_verified": true,
+      "native_device_paired": true,
+      "scoped_rpc_admitted": true,
+      "proxy_email": "accountb72b57190b725@example.test",
+      "native_person_email": "accountb72b57190b725@example.test",
+      "profile_id": "fe539ee3-3de3-4d19-b2e1-78a253c6ce5a",
+      "session_key": "agent:main:person-7e12590f620d80d5",
+      "socket_id": "3dc0de08-dcf5-420d-a290-fb00f95f8d76",
+      "create_evidence_id": "ef7c791e-49f7-4d6f-ae3c-7474472c1ed9",
+      "native_session_id": "620942d8-3fb1-4e31-85ba-9b0e74760bb1",
+      "lifecycle_revision": "5ca25467-40f8-4317-9610-93910b1b6241",
+      "device_id": "952499a7eb825ac83cf417bac156b97b69f90a7631dca086cc5f4d0b1989912c",
+      "connection_id": "d0b1b73f-ee43-4fbb-baf3-c6bb4fdf7b83",
+      "login_evidence_id": "6239597e-4021-411b-9156-fb88bf9d934d",
+      "rpc_evidence_id": "84ad7777-5e81-40c5-a0d9-139383cf58ef"
+    }
+  ],
+  "network": {
+    "bind_ip": "10.1.0.225",
+    "peer_ip": "10.1.0.225",
+    "upstream": "127.0.0.1"
+  },
+  "checks": {
+    "person_composition": true,
+    "production_adapter_qualified": false,
+    "ordinary_actions": true
+  },
+  "phase": "revocation_denied",
+  "configured_session_policy": {
+    "default": "person",
+    "definitions": {
+      "person": {
+        "sessions": {
+          "others": "none"
+        },
+        "agents": [
+          "main"
+        ],
+        "scopes": [
+          "operator.read",
+          "operator.write",
+          "operator.approvals",
+          "operator.questions"
+        ]
+      }
+    }
+  },
+  "environment": {
+    "checkout": "1fb1c1cd8aa8f05e05d80cffa3dca0426a77a052",
+    "node_version": "v24.22.1",
+    "observed_host_version": "2026.10.7",
+    "sdk_package_version": "2026.10.7",
+    "fixture_plugin_sources": [
+      {
+        "path": "integrations/openclaw/package-lock.json",
+        "bytes": 302004,
+        "sha256": "f4722ebb94de2b8200890ba3247dbc42a2118325d110df7154c1a9a53cb39709"
+      },
+      {
+        "path": "integrations/openclaw/test/host-action-qualification/fetch-observer.mjs",
+        "bytes": 413,
+        "sha256": "6464986d4fe691a12723d6dcfe1caecb594de11ebc490acfee8cf7003d1e5615"
+      },
+      {
+        "path": "integrations/openclaw/test/host-action-qualification/openclaw.plugin.json",
+        "bytes": 376,
+        "sha256": "89e9b87823d6b26495cb5991dc503dd0c62c6d4893969665fee1ef288de77590"
+      },
+      {
+        "path": "integrations/openclaw/test/host-action-qualification/package.json",
+        "bytes": 210,
+        "sha256": "2dbd537aae61fb20a8cf0fec531122d0358732b5871c6e25c887d896210633b4"
+      },
+      {
+        "path": "integrations/openclaw/test/host-action-qualification/probe.mjs",
+        "bytes": 2552,
+        "sha256": "a161ee6cd428d3f34f17e6f06f0ed59dfa58fbf6a2a06e321b5daa756e3470b1"
+      },
+      {
+        "path": "integrations/openclaw/test/host-action-qualification/qualify.py",
+        "bytes": 20225,
+        "sha256": "0d7f3993f07fc378fcb4233a16a22f984f72cd988fb051cbaf6e32a233f6c97b"
+      },
+      {
+        "path": "integrations/openclaw/test/host-ordinary-qualification/observer/openclaw.plugin.json",
+        "bytes": 242,
+        "sha256": "3ddb310cb50e7ff056745d47c1721099ecd05477332b434e714bafa657dbd48e"
+      },
+      {
+        "path": "integrations/openclaw/test/host-ordinary-qualification/observer/package.json",
+        "bytes": 204,
+        "sha256": "cf7d5b9948c9a2233a946603372aba543a40975c85c559477e2ea9a53b209d3e"
+      },
+      {
+        "path": "integrations/openclaw/test/host-ordinary-qualification/observer/probe.mjs",
+        "bytes": 1409,
+        "sha256": "be7280f4c883d968bafb2f60778d79d2b3cad8051540731782c95a52f65b73f9"
+      },
+      {
+        "path": "integrations/openclaw/test/host-ordinary-qualification/qualify.py",
+        "bytes": 25866,
+        "sha256": "03f71e281e1deff1442096afca0c6d55ba8026e7118bb54b0c7849f49a22120e"
+      },
+      {
+        "path": "integrations/openclaw/test/host-person-qualification/browser-wire.mjs",
+        "bytes": 3341,
+        "sha256": "93dd48bbd79c93ab3234a7e6aa2cdcdc3b508563183241461dada7de23e13977"
+      },
+      {
+        "path": "integrations/openclaw/test/host-person-qualification/openclaw.plugin.json",
+        "bytes": 583,
+        "sha256": "03c2ee2fe3e821633a4a633ea442c6890eb2042a73c2f859e3d51a8aaff2022c"
+      },
+      {
+        "path": "integrations/openclaw/test/host-person-qualification/package.json",
+        "bytes": 251,
+        "sha256": "f770117345f3268d3c32220b2407ab191237fae286c811a6a6a05dc201227dbd"
+      },
+      {
+        "path": "integrations/openclaw/test/host-person-qualification/probe.mjs",
+        "bytes": 5950,
+        "sha256": "0193824e4d089c4a388301388b73a4ef023d05a7d3c18da62a9c7ecd8873df6c"
+      },
+      {
+        "path": "integrations/openclaw/test/host-person-qualification/qualify.py",
+        "bytes": 58738,
+        "sha256": "19b8d6d2559126393295273da2b66298cdcc1e4f35be5faada4c8ef3e64709f6"
+      }
+    ]
+  },
+  "proxy": {
+    "release": "1.5.0",
+    "sha256": "86a1ed8446bca803149bdcf1335005b840033a17c41680a067d7de11dfbaeca9"
+  },
+  "events": [
+    {
+      "id": "0a36365d-1078-4f96-9d9a-b2951292076e",
+      "kind": "authenticated_proxy",
+      "email": "accounta72b57190b725@example.test",
+      "peer_ip": "10.1.0.225"
+    },
+    {
+      "id": "request:06e914a3-f9ef-4447-b2b0-27bd1694d96d",
+      "kind": "native_rpc",
+      "method": "sessions.create",
+      "request_id": "06e914a3-f9ef-4447-b2b0-27bd1694d96d",
+      "socket_id": "4f063d6a-ddb0-4686-9bd3-ce4f20a7a4e4",
+      "ok": true,
+      "error_code": null
+    },
+    {
+      "id": "06e914a3-f9ef-4447-b2b0-27bd1694d96d",
+      "kind": "session_created",
+      "request_id": "06e914a3-f9ef-4447-b2b0-27bd1694d96d",
+      "socket_id": "4f063d6a-ddb0-4686-9bd3-ce4f20a7a4e4",
+      "account_email": "accounta72b57190b725@example.test",
+      "ok": true,
+      "session_key": "agent:main:person-38d62c89d297a341",
+      "session_id": "84507fda-7dd5-4bc0-8fc1-9c89fe724e59",
+      "lifecycle_revision": "f0f55735-5275-4b4f-a56d-24ad2201dc0e"
+    },
+    {
+      "id": "request:2bbaced1-2bb1-4319-a0cd-0db6977df29a",
+      "kind": "native_rpc",
+      "method": "rmqualification.person",
+      "request_id": "2bbaced1-2bb1-4319-a0cd-0db6977df29a",
+      "socket_id": "4f063d6a-ddb0-4686-9bd3-ce4f20a7a4e4",
+      "ok": true,
+      "error_code": null
+    },
+    {
+      "id": "2bbaced1-2bb1-4319-a0cd-0db6977df29a",
+      "kind": "person_rpc",
+      "socket_id": "4f063d6a-ddb0-4686-9bd3-ce4f20a7a4e4",
+      "ok": true,
+      "payload": {
+        "requestId": "2bbaced1-2bb1-4319-a0cd-0db6977df29a",
+        "profileId": "e12d7537-29dd-4840-8b9d-486e1e7c06c3",
+        "authenticatedUserId": "accounta72b57190b725@example.test",
+        "authenticatedControlUi": true,
+        "sessionKey": "agent:main:person-38d62c89d297a341",
+        "sessionId": "84507fda-7dd5-4bc0-8fc1-9c89fe724e59",
+        "lifecycleRevision": "f0f55735-5275-4b4f-a56d-24ad2201dc0e",
+        "connectionId": "daacbd02-3ebb-421b-8f9d-3be1953d2a21",
+        "deviceId": "df9f9d5b254d40192dcedbfd117ba880dcab68ca67d3ad7c186dd939e57fbb85",
+        "workspaceDir": "/home/runner/work/_temp/relaymind-person-qualification/sandbox"
+      }
+    },
+    {
+      "id": "6239597e-4021-411b-9156-fb88bf9d934d",
+      "kind": "authenticated_proxy",
+      "email": "accountb72b57190b725@example.test",
+      "peer_ip": "10.1.0.225"
+    },
+    {
+      "id": "request:ef7c791e-49f7-4d6f-ae3c-7474472c1ed9",
+      "kind": "native_rpc",
+      "method": "sessions.create",
+      "request_id": "ef7c791e-49f7-4d6f-ae3c-7474472c1ed9",
+      "socket_id": "3dc0de08-dcf5-420d-a290-fb00f95f8d76",
+      "ok": true,
+      "error_code": null
+    },
+    {
+      "id": "ef7c791e-49f7-4d6f-ae3c-7474472c1ed9",
+      "kind": "session_created",
+      "request_id": "ef7c791e-49f7-4d6f-ae3c-7474472c1ed9",
+      "socket_id": "3dc0de08-dcf5-420d-a290-fb00f95f8d76",
+      "account_email": "accountb72b57190b725@example.test",
+      "ok": true,
+      "session_key": "agent:main:person-7e12590f620d80d5",
+      "session_id": "620942d8-3fb1-4e31-85ba-9b0e74760bb1",
+      "lifecycle_revision": "5ca25467-40f8-4317-9610-93910b1b6241"
+    },
+    {
+      "id": "request:84ad7777-5e81-40c5-a0d9-139383cf58ef",
+      "kind": "native_rpc",
+      "method": "rmqualification.person",
+      "request_id": "84ad7777-5e81-40c5-a0d9-139383cf58ef",
+      "socket_id": "3dc0de08-dcf5-420d-a290-fb00f95f8d76",
+      "ok": true,
+      "error_code": null
+    },
+    {
+      "id": "84ad7777-5e81-40c5-a0d9-139383cf58ef",
+      "kind": "person_rpc",
+      "socket_id": "3dc0de08-dcf5-420d-a290-fb00f95f8d76",
+      "ok": true,
+      "payload": {
+        "requestId": "84ad7777-5e81-40c5-a0d9-139383cf58ef",
+        "profileId": "fe539ee3-3de3-4d19-b2e1-78a253c6ce5a",
+        "authenticatedUserId": "accountb72b57190b725@example.test",
+        "authenticatedControlUi": true,
+        "sessionKey": "agent:main:person-7e12590f620d80d5",
+        "sessionId": "620942d8-3fb1-4e31-85ba-9b0e74760bb1",
+        "lifecycleRevision": "5ca25467-40f8-4317-9610-93910b1b6241",
+        "connectionId": "d0b1b73f-ee43-4fbb-baf3-c6bb4fdf7b83",
+        "deviceId": "952499a7eb825ac83cf417bac156b97b69f90a7631dca086cc5f4d0b1989912c",
+        "workspaceDir": "/home/runner/work/_temp/relaymind-person-qualification/sandbox"
+      }
+    },
+    {
+      "id": "request:f647d5e4-9441-4e30-aef3-1f3a5ed3a90c",
+      "kind": "native_rpc",
+      "method": "relaymind.recommendations",
+      "request_id": "f647d5e4-9441-4e30-aef3-1f3a5ed3a90c",
+      "socket_id": "4f063d6a-ddb0-4686-9bd3-ce4f20a7a4e4",
+      "ok": false,
+      "error_code": "FORBIDDEN"
+    },
+    {
+      "id": "request:ea58b4f1-092e-4472-a1c6-0fc4816116ee",
+      "kind": "native_rpc",
+      "method": "relaymind.recommendations",
+      "request_id": "ea58b4f1-092e-4472-a1c6-0fc4816116ee",
+      "socket_id": "4f063d6a-ddb0-4686-9bd3-ce4f20a7a4e4",
+      "ok": false,
+      "error_code": "FORBIDDEN"
+    },
+    {
+      "id": "request:b19fd4c5-0c77-46ba-9b9a-f20b23d7fffe",
+      "kind": "native_rpc",
+      "method": "relaymind.recommendations",
+      "request_id": "b19fd4c5-0c77-46ba-9b9a-f20b23d7fffe",
+      "socket_id": "4f063d6a-ddb0-4686-9bd3-ce4f20a7a4e4",
+      "ok": false,
+      "error_code": "FORBIDDEN"
+    },
+    {
+      "id": "request:87195c03-56fe-499f-9312-42142d3c1baa",
+      "kind": "native_rpc",
+      "method": "relaymind.recommendations",
+      "request_id": "87195c03-56fe-499f-9312-42142d3c1baa",
+      "socket_id": "4f063d6a-ddb0-4686-9bd3-ce4f20a7a4e4",
+      "ok": true,
+      "error_code": null
+    },
+    {
+      "id": "request:df0c70bb-13f1-423b-b583-126fae1ad287",
+      "kind": "native_rpc",
+      "method": "rmqualification.person",
+      "request_id": "df0c70bb-13f1-423b-b583-126fae1ad287",
+      "socket_id": "62b62948-63a9-4d71-9602-35b028c36e0d",
+      "ok": true,
+      "error_code": null
+    },
+    {
+      "id": "request:d62998b8-e928-4f19-b364-773f94aeca25",
+      "kind": "native_rpc",
+      "method": "relaymind.recommendations",
+      "request_id": "d62998b8-e928-4f19-b364-773f94aeca25",
+      "socket_id": "3dc0de08-dcf5-420d-a290-fb00f95f8d76",
+      "ok": false,
+      "error_code": "FORBIDDEN"
+    },
+    {
+      "id": "request:a5f9ff18-54a4-45bc-b99d-3e91d0a046dc",
+      "kind": "native_rpc",
+      "method": "relaymind.recommendations",
+      "request_id": "a5f9ff18-54a4-45bc-b99d-3e91d0a046dc",
+      "socket_id": "3dc0de08-dcf5-420d-a290-fb00f95f8d76",
+      "ok": false,
+      "error_code": "INVALID_REQUEST"
+    },
+    {
+      "id": "request:8112e24a-2d9d-4080-9475-dc1b7d0dcd2e",
+      "kind": "native_rpc",
+      "method": "rmqualification.person",
+      "request_id": "8112e24a-2d9d-4080-9475-dc1b7d0dcd2e",
+      "socket_id": "3dc0de08-dcf5-420d-a290-fb00f95f8d76",
+      "ok": false,
+      "error_code": "FORBIDDEN"
+    },
+    {
+      "id": "cross:8112e24a-2d9d-4080-9475-dc1b7d0dcd2e",
+      "kind": "cross_account_denied",
+      "caller_connection_id": "d0b1b73f-ee43-4fbb-baf3-c6bb4fdf7b83",
+      "target_session_key": "agent:main:person-38d62c89d297a341",
+      "target_lifecycle_revision": "f0f55735-5275-4b4f-a56d-24ad2201dc0e",
+      "target_session_id": "84507fda-7dd5-4bc0-8fc1-9c89fe724e59",
+      "ok": false,
+      "error_code": "FORBIDDEN"
+    },
+    {
+      "id": "retired:263c6409-0899-43f3-aef8-c4ba8a1d7c24",
+      "kind": "connection_revocation",
+      "browser_context_closed": true,
+      "prepared": {
+        "phase": "prepared",
+        "requestId": "263c6409-0899-43f3-aef8-c4ba8a1d7c24",
+        "connectionId": "daacbd02-3ebb-421b-8f9d-3be1953d2a21",
+        "monotonic_ns": "162328364908"
+      },
+      "retired": {
+        "phase": "connection_retired",
+        "requestId": "263c6409-0899-43f3-aef8-c4ba8a1d7c24",
+        "connectionId": "daacbd02-3ebb-421b-8f9d-3be1953d2a21",
+        "connection_aborted": true,
+        "monotonic_ns": "162379662959"
+      },
+      "denied": {
+        "phase": "guard_denied",
+        "requestId": "263c6409-0899-43f3-aef8-c4ba8a1d7c24",
+        "connectionId": "daacbd02-3ebb-421b-8f9d-3be1953d2a21",
+        "reason": "post_await_authority_retired",
+        "monotonic_ns": "162388705277"
+      },
+      "native_sequence": [
+        "prepared",
+        "connection_retired",
+        "guard_denied"
+      ]
+    }
+  ],
+  "listeners": {
+    "gateway": {
+      "address": "127.0.0.1",
+      "port": 33877
+    },
+    "proxy": {
+      "address": "10.1.0.225",
+      "port": 37759
+    },
+    "gateway_private_refused": true,
+    "proxy_loopback_refused": true
+  },
+  "ordinary_actions": {
+    "installation": {
+      "exit_code": 0,
+      "archive_sha256": "1b2dfa29e4012c8495facdc89328440f8fc7e9df834dccb853ab1d8e63b51608"
+    },
+    "default_registration": true,
+    "constructor_override": false,
+    "entry_failures": [
+      {
+        "request_id": "f647d5e4-9441-4e30-aef3-1f3a5ed3a90c",
+        "socket_id": "4f063d6a-ddb0-4686-9bd3-ce4f20a7a4e4",
+        "error_code": "FORBIDDEN",
+        "message": "missing scope: operator.admin",
+        "pending_publication": true
+      },
+      {
+        "request_id": "ea58b4f1-092e-4472-a1c6-0fc4816116ee",
+        "socket_id": "4f063d6a-ddb0-4686-9bd3-ce4f20a7a4e4",
+        "error_code": "FORBIDDEN",
+        "message": "missing scope: operator.admin",
+        "pending_publication": true
+      },
+      {
+        "request_id": "b19fd4c5-0c77-46ba-9b9a-f20b23d7fffe",
+        "socket_id": "4f063d6a-ddb0-4686-9bd3-ce4f20a7a4e4",
+        "error_code": "FORBIDDEN",
+        "message": "missing scope: operator.admin",
+        "pending_publication": true
+      }
+    ],
+    "entry_read": {
+      "id": "87195c03-56fe-499f-9312-42142d3c1baa",
+      "socket_id": "4f063d6a-ddb0-4686-9bd3-ce4f20a7a4e4",
+      "frame": {
+        "type": "res",
+        "id": "87195c03-56fe-499f-9312-42142d3c1baa",
+        "ok": true,
+        "payload": {
+          "label": "privacy",
+          "receipt_json": "{\"schema_version\":1,\"records\":[],\"feedback_revision\":0,\"next_after_id\":null}"
+        }
+      }
+    },
+    "entry_events": [
+      {
+        "kind": "http_attempt",
+        "method": "GET",
+        "path": "/api/latest-version",
+        "attempt_id": "b5408075-a444-4900-bc15-f755ca8c0a86",
+        "monotonic_ns": "148024804963"
+      },
+      {
+        "kind": "http",
+        "path": "/api/latest-version",
+        "status": 200,
+        "attempt_id": "b5408075-a444-4900-bc15-f755ca8c0a86",
+        "monotonic_ns": "148544099445"
+      },
+      {
+        "kind": "http_attempt",
+        "method": "GET",
+        "path": "/avatar/e432f0f02ec00c1169bb5aab593e6cf17245f7e5c40ed882cdd71fc150a1ed63",
+        "attempt_id": "b7624c6e-d570-439a-8d54-b21710b87b50",
+        "monotonic_ns": "149653079601"
+      },
+      {
+        "kind": "http",
+        "path": "/avatar/e432f0f02ec00c1169bb5aab593e6cf17245f7e5c40ed882cdd71fc150a1ed63",
+        "status": 404,
+        "attempt_id": "b7624c6e-d570-439a-8d54-b21710b87b50",
+        "monotonic_ns": "150169759844"
+      },
+      {
+        "kind": "http_attempt",
+        "method": "GET",
+        "path": "/avatar/9b140c1ab6dfc2606537a076e6e89f5a37984a7735ce18dfd7a24eebfdb8df92",
+        "attempt_id": "334a5d91-3943-480c-82ec-a80eb275f8f1",
+        "monotonic_ns": "156021455237"
+      },
+      {
+        "kind": "http",
+        "path": "/avatar/9b140c1ab6dfc2606537a076e6e89f5a37984a7735ce18dfd7a24eebfdb8df92",
+        "status": 404,
+        "attempt_id": "334a5d91-3943-480c-82ec-a80eb275f8f1",
+        "monotonic_ns": "156135132949"
+      },
+      {
+        "kind": "http_attempt",
+        "method": "GET",
+        "path": "/relay/v1/feedback",
+        "attempt_id": "c0e8b275-217f-4934-ba7b-30d24a9f30ca",
+        "monotonic_ns": "158134964397"
+      },
+      {
+        "kind": "http",
+        "path": "/relay/v1/feedback",
+        "status": 200,
+        "attempt_id": "c0e8b275-217f-4934-ba7b-30d24a9f30ca",
+        "monotonic_ns": "158173942249"
+      }
+    ],
+    "production_registry_enabled": true,
+    "ui_person": {
+      "id": "df0c70bb-13f1-423b-b583-126fae1ad287",
+      "socket_id": "62b62948-63a9-4d71-9602-35b028c36e0d",
+      "frame": {
+        "type": "res",
+        "id": "df0c70bb-13f1-423b-b583-126fae1ad287",
+        "ok": true,
+        "payload": {
+          "requestId": "df0c70bb-13f1-423b-b583-126fae1ad287",
+          "profileId": "e12d7537-29dd-4840-8b9d-486e1e7c06c3",
+          "authenticatedUserId": "accounta72b57190b725@example.test",
+          "authenticatedControlUi": true,
+          "sessionKey": "agent:main:person-38d62c89d297a341",
+          "sessionId": "84507fda-7dd5-4bc0-8fc1-9c89fe724e59",
+          "lifecycleRevision": "f0f55735-5275-4b4f-a56d-24ad2201dc0e",
+          "connectionId": "77aefdc7-f4fa-46ce-b0c6-e334db9090bf",
+          "deviceId": "df9f9d5b254d40192dcedbfd117ba880dcab68ca67d3ad7c186dd939e57fbb85",
+          "workspaceDir": "/home/runner/work/_temp/relaymind-person-qualification/sandbox"
+        }
+      }
+    },
+    "ui": {
+      "snapshots": {
+        "recommend": {
+          "views": [
+            {
+              "catalog_revision": 2,
+              "choice_expires_at": "2026-10-31T18:42:47.486047Z",
+              "created_at": "2026-10-31T18:32:47.463627Z",
+              "decision": "choice_required",
+              "displayed_candidates": [
+                {
+                  "asset": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "availability": "unknown",
+                    "captured_at": "2026-10-29T00:00:00.000000Z",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "dependencies": [],
+                    "description": "Greeting skill",
+                    "identity": {
+                      "package_id": "Hello World",
+                      "package_version": null
+                    },
+                    "kind": "skill",
+                    "language_tags": [],
+                    "schema_version": 1,
+                    "source_id": "example",
+                    "source_locator": "/home/runner/work/_temp/relaymind-person-qualification-gateway/source/SKILL.md",
+                    "source_version": null,
+                    "stale": false
+                  },
+                  "candidate": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                }
+              ],
+              "error": null,
+              "feedback_revision": 0,
+              "host_snapshot_revision": null,
+              "ready_at": "2026-10-31T18:32:47.486047Z",
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "result": {
+                "adaptation": null,
+                "admission": {
+                  "checked_at": "2026-10-31T18:32:47.480452Z",
+                  "outcome": "accepted",
+                  "rechecked_catalog_revision": 2
+                },
+                "attempts": [
+                  {
+                    "attempt": 1,
+                    "cost_observations": [
+                      {
+                        "provenance": "observed",
+                        "value": {
+                          "cached_tokens": 0,
+                          "calls": 0,
+                          "cpu_ms": null,
+                          "input_tokens": 0,
+                          "output_tokens": 0,
+                          "peak_bytes": null,
+                          "reasoning_tokens": 0
+                        }
+                      }
+                    ],
+                    "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                    "mechanism": "lexical_overlap",
+                    "observed_ms": 3.5315829999831294,
+                    "outcome": "ranked",
+                    "reason": null,
+                    "reported_ms": 0.10357499999713582,
+                    "result": {
+                      "candidates": [
+                        {
+                          "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                          "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                          "evidence_refs": [
+                            "/description",
+                            "/identity/package_id"
+                          ],
+                          "kind": "skill",
+                          "score": 2,
+                          "score_kind": "token_overlap_count",
+                          "source_version": null
+                        }
+                      ],
+                      "catalog_revision": 2,
+                      "decision": "choice_required",
+                      "elapsed_ms": 0.10357499999713582,
+                      "host_snapshot_revision": null,
+                      "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                      "mechanism": "lexical_overlap",
+                      "outcome": "ranked",
+                      "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                      "schema_version": 2,
+                      "selector": {
+                        "name": "lexical",
+                        "version": "1"
+                      },
+                      "usage_claims": null
+                    },
+                    "selector": {
+                      "name": "lexical",
+                      "version": "1"
+                    }
+                  }
+                ],
+                "base_candidates": [
+                  {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                ],
+                "base_decision": "choice_required",
+                "catalog_revision": 2,
+                "decision": "choice_required",
+                "embeddings": [],
+                "fallback_reason": null,
+                "final_candidates": [
+                  {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                ],
+                "final_decision": "choice_required",
+                "host_run_ids": [],
+                "host_snapshot_revision": null,
+                "observed_ms": 20.825197000021944,
+                "primary_attempt": 0,
+                "schema_version": 1
+              },
+              "retain_until": "2026-11-30T18:32:47.463627Z",
+              "schema_version": 1,
+              "selected_action": null,
+              "state": "ready",
+              "state_version": 1,
+              "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+            }
+          ],
+          "records": [],
+          "audits": [],
+          "events": [
+            {
+              "actor": "gateway",
+              "elapsed_ms": 5.246858000020893,
+              "erased": false,
+              "event_type": "accepted",
+              "payload": {
+                "budgets": {
+                  "candidate_limit": 10,
+                  "choice_seconds": 600,
+                  "display_limit": 3,
+                  "fallback_enabled": true,
+                  "max_catalog_bytes": 33554432,
+                  "max_catalog_records": 1000,
+                  "max_conversation_bytes": 32768,
+                  "max_conversation_entries": 32,
+                  "max_create_bytes": 524288,
+                  "max_result_bytes": 1048576,
+                  "max_task_bytes": 8192,
+                  "primary_ms": 150,
+                  "retention_days": 30,
+                  "total_ms": 500
+                },
+                "catalog_revision": 2,
+                "code_switched": false,
+                "config_digest": "e6ed50c3f9fb7479c617f24b2893ede02b1a27f881bc252ec18f3c099d4897c7",
+                "configured_primary": {
+                  "name": "lexical",
+                  "version": "1"
+                },
+                "conversation": [],
+                "host_snapshot_revision": null,
+                "language_tags": [],
+                "requested_kinds": [
+                  "skill",
+                  "mcp_tool"
+                ],
+                "scope": {
+                  "user_id": "u",
+                  "workspace_id": "w"
+                },
+                "selection_scope": "discovery",
+                "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc",
+                "task_text": "hello greeting ordinary native person 06dfdd75"
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 1,
+              "timestamp": "2026-10-31T18:32:47.463627Z"
+            },
+            {
+              "actor": "selector",
+              "elapsed_ms": 12.824533000014071,
+              "erased": false,
+              "event_type": "selector.started",
+              "payload": {
+                "attempt": 1,
+                "mechanism": "lexical_overlap",
+                "remaining_ms": 150.00000000000568,
+                "selector": {
+                  "name": "lexical",
+                  "version": "1"
+                }
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 2,
+              "timestamp": "2026-10-31T18:32:47.472475Z"
+            },
+            {
+              "actor": "selector",
+              "elapsed_ms": 16.39868600000227,
+              "erased": false,
+              "event_type": "selector.finished",
+              "payload": {
+                "attempt_record": {
+                  "attempt": 1,
+                  "cost_observations": [
+                    {
+                      "provenance": "observed",
+                      "value": {
+                        "cached_tokens": 0,
+                        "calls": 0,
+                        "cpu_ms": null,
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "peak_bytes": null,
+                        "reasoning_tokens": 0
+                      }
+                    }
+                  ],
+                  "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                  "mechanism": "lexical_overlap",
+                  "observed_ms": 3.5315829999831294,
+                  "outcome": "ranked",
+                  "reason": null,
+                  "reported_ms": 0.10357499999713582,
+                  "result": {
+                    "candidates": [
+                      {
+                        "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                        "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                        "evidence_refs": [
+                          "/description",
+                          "/identity/package_id"
+                        ],
+                        "kind": "skill",
+                        "score": 2,
+                        "score_kind": "token_overlap_count",
+                        "source_version": null
+                      }
+                    ],
+                    "catalog_revision": 2,
+                    "decision": "choice_required",
+                    "elapsed_ms": 0.10357499999713582,
+                    "host_snapshot_revision": null,
+                    "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                    "mechanism": "lexical_overlap",
+                    "outcome": "ranked",
+                    "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                    "schema_version": 2,
+                    "selector": {
+                      "name": "lexical",
+                      "version": "1"
+                    },
+                    "usage_claims": null
+                  },
+                  "selector": {
+                    "name": "lexical",
+                    "version": "1"
+                  }
+                },
+                "embeddings": []
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 3,
+              "timestamp": "2026-10-31T18:32:47.476051Z"
+            },
+            {
+              "actor": "gateway",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "ready",
+              "payload": {
+                "choice_expires_at": "2026-10-31T18:42:47.486047Z",
+                "ready_at": "2026-10-31T18:32:47.486047Z",
+                "result": {
+                  "adaptation": null,
+                  "admission": {
+                    "checked_at": "2026-10-31T18:32:47.480452Z",
+                    "outcome": "accepted",
+                    "rechecked_catalog_revision": 2
+                  },
+                  "attempts": [
+                    {
+                      "attempt": 1,
+                      "cost_observations": [
+                        {
+                          "provenance": "observed",
+                          "value": {
+                            "cached_tokens": 0,
+                            "calls": 0,
+                            "cpu_ms": null,
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "peak_bytes": null,
+                            "reasoning_tokens": 0
+                          }
+                        }
+                      ],
+                      "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                      "mechanism": "lexical_overlap",
+                      "observed_ms": 3.5315829999831294,
+                      "outcome": "ranked",
+                      "reason": null,
+                      "reported_ms": 0.10357499999713582,
+                      "result": {
+                        "candidates": [
+                          {
+                            "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                            "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                            "evidence_refs": [
+                              "/description",
+                              "/identity/package_id"
+                            ],
+                            "kind": "skill",
+                            "score": 2,
+                            "score_kind": "token_overlap_count",
+                            "source_version": null
+                          }
+                        ],
+                        "catalog_revision": 2,
+                        "decision": "choice_required",
+                        "elapsed_ms": 0.10357499999713582,
+                        "host_snapshot_revision": null,
+                        "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                        "mechanism": "lexical_overlap",
+                        "outcome": "ranked",
+                        "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                        "schema_version": 2,
+                        "selector": {
+                          "name": "lexical",
+                          "version": "1"
+                        },
+                        "usage_claims": null
+                      },
+                      "selector": {
+                        "name": "lexical",
+                        "version": "1"
+                      }
+                    }
+                  ],
+                  "base_candidates": [
+                    {
+                      "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                      "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                      "evidence_refs": [
+                        "/description",
+                        "/identity/package_id"
+                      ],
+                      "kind": "skill",
+                      "score": 2,
+                      "score_kind": "token_overlap_count",
+                      "source_version": null
+                    }
+                  ],
+                  "base_decision": "choice_required",
+                  "catalog_revision": 2,
+                  "decision": "choice_required",
+                  "embeddings": [],
+                  "fallback_reason": null,
+                  "final_candidates": [
+                    {
+                      "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                      "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                      "evidence_refs": [
+                        "/description",
+                        "/identity/package_id"
+                      ],
+                      "kind": "skill",
+                      "score": 2,
+                      "score_kind": "token_overlap_count",
+                      "source_version": null
+                    }
+                  ],
+                  "final_decision": "choice_required",
+                  "host_run_ids": [],
+                  "host_snapshot_revision": null,
+                  "observed_ms": 20.825197000021944,
+                  "primary_attempt": 0,
+                  "schema_version": 1
+                },
+                "state_version": 1
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 4,
+              "timestamp": "2026-10-31T18:32:47.486047Z"
+            }
+          ]
+        },
+        "choice": {
+          "views": [
+            {
+              "catalog_revision": 2,
+              "choice_expires_at": "2026-10-31T18:42:47.486047Z",
+              "created_at": "2026-10-31T18:32:47.463627Z",
+              "decision": "choice_required",
+              "displayed_candidates": [
+                {
+                  "asset": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "availability": "unknown",
+                    "captured_at": "2026-10-29T00:00:00.000000Z",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "dependencies": [],
+                    "description": "Greeting skill",
+                    "identity": {
+                      "package_id": "Hello World",
+                      "package_version": null
+                    },
+                    "kind": "skill",
+                    "language_tags": [],
+                    "schema_version": 1,
+                    "source_id": "example",
+                    "source_locator": "/home/runner/work/_temp/relaymind-person-qualification-gateway/source/SKILL.md",
+                    "source_version": null,
+                    "stale": false
+                  },
+                  "candidate": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                }
+              ],
+              "error": null,
+              "feedback_revision": 0,
+              "host_snapshot_revision": null,
+              "ready_at": "2026-10-31T18:32:47.486047Z",
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "result": {
+                "adaptation": null,
+                "admission": {
+                  "checked_at": "2026-10-31T18:32:47.480452Z",
+                  "outcome": "accepted",
+                  "rechecked_catalog_revision": 2
+                },
+                "attempts": [
+                  {
+                    "attempt": 1,
+                    "cost_observations": [
+                      {
+                        "provenance": "observed",
+                        "value": {
+                          "cached_tokens": 0,
+                          "calls": 0,
+                          "cpu_ms": null,
+                          "input_tokens": 0,
+                          "output_tokens": 0,
+                          "peak_bytes": null,
+                          "reasoning_tokens": 0
+                        }
+                      }
+                    ],
+                    "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                    "mechanism": "lexical_overlap",
+                    "observed_ms": 3.5315829999831294,
+                    "outcome": "ranked",
+                    "reason": null,
+                    "reported_ms": 0.10357499999713582,
+                    "result": {
+                      "candidates": [
+                        {
+                          "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                          "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                          "evidence_refs": [
+                            "/description",
+                            "/identity/package_id"
+                          ],
+                          "kind": "skill",
+                          "score": 2,
+                          "score_kind": "token_overlap_count",
+                          "source_version": null
+                        }
+                      ],
+                      "catalog_revision": 2,
+                      "decision": "choice_required",
+                      "elapsed_ms": 0.10357499999713582,
+                      "host_snapshot_revision": null,
+                      "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                      "mechanism": "lexical_overlap",
+                      "outcome": "ranked",
+                      "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                      "schema_version": 2,
+                      "selector": {
+                        "name": "lexical",
+                        "version": "1"
+                      },
+                      "usage_claims": null
+                    },
+                    "selector": {
+                      "name": "lexical",
+                      "version": "1"
+                    }
+                  }
+                ],
+                "base_candidates": [
+                  {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                ],
+                "base_decision": "choice_required",
+                "catalog_revision": 2,
+                "decision": "choice_required",
+                "embeddings": [],
+                "fallback_reason": null,
+                "final_candidates": [
+                  {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                ],
+                "final_decision": "choice_required",
+                "host_run_ids": [],
+                "host_snapshot_revision": null,
+                "observed_ms": 20.825197000021944,
+                "primary_attempt": 0,
+                "schema_version": 1
+              },
+              "retain_until": "2026-11-30T18:32:47.463627Z",
+              "schema_version": 1,
+              "selected_action": {
+                "adapter_id": "ordinary-native-channel",
+                "catalog_revision": 2,
+                "choice": {
+                  "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                  "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                  "kind": "asset"
+                },
+                "host_snapshot_revision": null,
+                "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                "recorded_at": "2026-10-31T18:32:48.411915Z",
+                "scope": {
+                  "user_id": "u",
+                  "workspace_id": "w"
+                },
+                "state_version": 2,
+                "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+              },
+              "state": "chosen",
+              "state_version": 2,
+              "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+            }
+          ],
+          "records": [],
+          "audits": [],
+          "events": [
+            {
+              "actor": "gateway",
+              "elapsed_ms": 5.246858000020893,
+              "erased": false,
+              "event_type": "accepted",
+              "payload": {
+                "budgets": {
+                  "candidate_limit": 10,
+                  "choice_seconds": 600,
+                  "display_limit": 3,
+                  "fallback_enabled": true,
+                  "max_catalog_bytes": 33554432,
+                  "max_catalog_records": 1000,
+                  "max_conversation_bytes": 32768,
+                  "max_conversation_entries": 32,
+                  "max_create_bytes": 524288,
+                  "max_result_bytes": 1048576,
+                  "max_task_bytes": 8192,
+                  "primary_ms": 150,
+                  "retention_days": 30,
+                  "total_ms": 500
+                },
+                "catalog_revision": 2,
+                "code_switched": false,
+                "config_digest": "e6ed50c3f9fb7479c617f24b2893ede02b1a27f881bc252ec18f3c099d4897c7",
+                "configured_primary": {
+                  "name": "lexical",
+                  "version": "1"
+                },
+                "conversation": [],
+                "host_snapshot_revision": null,
+                "language_tags": [],
+                "requested_kinds": [
+                  "skill",
+                  "mcp_tool"
+                ],
+                "scope": {
+                  "user_id": "u",
+                  "workspace_id": "w"
+                },
+                "selection_scope": "discovery",
+                "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc",
+                "task_text": "hello greeting ordinary native person 06dfdd75"
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 1,
+              "timestamp": "2026-10-31T18:32:47.463627Z"
+            },
+            {
+              "actor": "selector",
+              "elapsed_ms": 12.824533000014071,
+              "erased": false,
+              "event_type": "selector.started",
+              "payload": {
+                "attempt": 1,
+                "mechanism": "lexical_overlap",
+                "remaining_ms": 150.00000000000568,
+                "selector": {
+                  "name": "lexical",
+                  "version": "1"
+                }
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 2,
+              "timestamp": "2026-10-31T18:32:47.472475Z"
+            },
+            {
+              "actor": "selector",
+              "elapsed_ms": 16.39868600000227,
+              "erased": false,
+              "event_type": "selector.finished",
+              "payload": {
+                "attempt_record": {
+                  "attempt": 1,
+                  "cost_observations": [
+                    {
+                      "provenance": "observed",
+                      "value": {
+                        "cached_tokens": 0,
+                        "calls": 0,
+                        "cpu_ms": null,
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "peak_bytes": null,
+                        "reasoning_tokens": 0
+                      }
+                    }
+                  ],
+                  "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                  "mechanism": "lexical_overlap",
+                  "observed_ms": 3.5315829999831294,
+                  "outcome": "ranked",
+                  "reason": null,
+                  "reported_ms": 0.10357499999713582,
+                  "result": {
+                    "candidates": [
+                      {
+                        "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                        "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                        "evidence_refs": [
+                          "/description",
+                          "/identity/package_id"
+                        ],
+                        "kind": "skill",
+                        "score": 2,
+                        "score_kind": "token_overlap_count",
+                        "source_version": null
+                      }
+                    ],
+                    "catalog_revision": 2,
+                    "decision": "choice_required",
+                    "elapsed_ms": 0.10357499999713582,
+                    "host_snapshot_revision": null,
+                    "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                    "mechanism": "lexical_overlap",
+                    "outcome": "ranked",
+                    "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                    "schema_version": 2,
+                    "selector": {
+                      "name": "lexical",
+                      "version": "1"
+                    },
+                    "usage_claims": null
+                  },
+                  "selector": {
+                    "name": "lexical",
+                    "version": "1"
+                  }
+                },
+                "embeddings": []
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 3,
+              "timestamp": "2026-10-31T18:32:47.476051Z"
+            },
+            {
+              "actor": "gateway",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "ready",
+              "payload": {
+                "choice_expires_at": "2026-10-31T18:42:47.486047Z",
+                "ready_at": "2026-10-31T18:32:47.486047Z",
+                "result": {
+                  "adaptation": null,
+                  "admission": {
+                    "checked_at": "2026-10-31T18:32:47.480452Z",
+                    "outcome": "accepted",
+                    "rechecked_catalog_revision": 2
+                  },
+                  "attempts": [
+                    {
+                      "attempt": 1,
+                      "cost_observations": [
+                        {
+                          "provenance": "observed",
+                          "value": {
+                            "cached_tokens": 0,
+                            "calls": 0,
+                            "cpu_ms": null,
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "peak_bytes": null,
+                            "reasoning_tokens": 0
+                          }
+                        }
+                      ],
+                      "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                      "mechanism": "lexical_overlap",
+                      "observed_ms": 3.5315829999831294,
+                      "outcome": "ranked",
+                      "reason": null,
+                      "reported_ms": 0.10357499999713582,
+                      "result": {
+                        "candidates": [
+                          {
+                            "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                            "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                            "evidence_refs": [
+                              "/description",
+                              "/identity/package_id"
+                            ],
+                            "kind": "skill",
+                            "score": 2,
+                            "score_kind": "token_overlap_count",
+                            "source_version": null
+                          }
+                        ],
+                        "catalog_revision": 2,
+                        "decision": "choice_required",
+                        "elapsed_ms": 0.10357499999713582,
+                        "host_snapshot_revision": null,
+                        "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                        "mechanism": "lexical_overlap",
+                        "outcome": "ranked",
+                        "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                        "schema_version": 2,
+                        "selector": {
+                          "name": "lexical",
+                          "version": "1"
+                        },
+                        "usage_claims": null
+                      },
+                      "selector": {
+                        "name": "lexical",
+                        "version": "1"
+                      }
+                    }
+                  ],
+                  "base_candidates": [
+                    {
+                      "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                      "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                      "evidence_refs": [
+                        "/description",
+                        "/identity/package_id"
+                      ],
+                      "kind": "skill",
+                      "score": 2,
+                      "score_kind": "token_overlap_count",
+                      "source_version": null
+                    }
+                  ],
+                  "base_decision": "choice_required",
+                  "catalog_revision": 2,
+                  "decision": "choice_required",
+                  "embeddings": [],
+                  "fallback_reason": null,
+                  "final_candidates": [
+                    {
+                      "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                      "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                      "evidence_refs": [
+                        "/description",
+                        "/identity/package_id"
+                      ],
+                      "kind": "skill",
+                      "score": 2,
+                      "score_kind": "token_overlap_count",
+                      "source_version": null
+                    }
+                  ],
+                  "final_decision": "choice_required",
+                  "host_run_ids": [],
+                  "host_snapshot_revision": null,
+                  "observed_ms": 20.825197000021944,
+                  "primary_attempt": 0,
+                  "schema_version": 1
+                },
+                "state_version": 1
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 4,
+              "timestamp": "2026-10-31T18:32:47.486047Z"
+            },
+            {
+              "actor": "adapter",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "chosen",
+              "payload": {
+                "action": {
+                  "adapter_id": "ordinary-native-channel",
+                  "catalog_revision": 2,
+                  "choice": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "kind": "asset"
+                  },
+                  "host_snapshot_revision": null,
+                  "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                  "recorded_at": "2026-10-31T18:32:48.411915Z",
+                  "scope": {
+                    "user_id": "u",
+                    "workspace_id": "w"
+                  },
+                  "state_version": 2,
+                  "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+                },
+                "state_version": 2
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 5,
+              "timestamp": "2026-10-31T18:32:48.411915Z"
+            }
+          ]
+        },
+        "correction": {
+          "views": [
+            {
+              "catalog_revision": 2,
+              "choice_expires_at": "2026-10-31T18:42:47.486047Z",
+              "created_at": "2026-10-31T18:32:47.463627Z",
+              "decision": "choice_required",
+              "displayed_candidates": [
+                {
+                  "asset": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "availability": "unknown",
+                    "captured_at": "2026-10-29T00:00:00.000000Z",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "dependencies": [],
+                    "description": "Greeting skill",
+                    "identity": {
+                      "package_id": "Hello World",
+                      "package_version": null
+                    },
+                    "kind": "skill",
+                    "language_tags": [],
+                    "schema_version": 1,
+                    "source_id": "example",
+                    "source_locator": "/home/runner/work/_temp/relaymind-person-qualification-gateway/source/SKILL.md",
+                    "source_version": null,
+                    "stale": false
+                  },
+                  "candidate": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                }
+              ],
+              "error": null,
+              "feedback_revision": 0,
+              "host_snapshot_revision": null,
+              "ready_at": "2026-10-31T18:32:47.486047Z",
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "result": {
+                "adaptation": null,
+                "admission": {
+                  "checked_at": "2026-10-31T18:32:47.480452Z",
+                  "outcome": "accepted",
+                  "rechecked_catalog_revision": 2
+                },
+                "attempts": [
+                  {
+                    "attempt": 1,
+                    "cost_observations": [
+                      {
+                        "provenance": "observed",
+                        "value": {
+                          "cached_tokens": 0,
+                          "calls": 0,
+                          "cpu_ms": null,
+                          "input_tokens": 0,
+                          "output_tokens": 0,
+                          "peak_bytes": null,
+                          "reasoning_tokens": 0
+                        }
+                      }
+                    ],
+                    "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                    "mechanism": "lexical_overlap",
+                    "observed_ms": 3.5315829999831294,
+                    "outcome": "ranked",
+                    "reason": null,
+                    "reported_ms": 0.10357499999713582,
+                    "result": {
+                      "candidates": [
+                        {
+                          "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                          "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                          "evidence_refs": [
+                            "/description",
+                            "/identity/package_id"
+                          ],
+                          "kind": "skill",
+                          "score": 2,
+                          "score_kind": "token_overlap_count",
+                          "source_version": null
+                        }
+                      ],
+                      "catalog_revision": 2,
+                      "decision": "choice_required",
+                      "elapsed_ms": 0.10357499999713582,
+                      "host_snapshot_revision": null,
+                      "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                      "mechanism": "lexical_overlap",
+                      "outcome": "ranked",
+                      "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                      "schema_version": 2,
+                      "selector": {
+                        "name": "lexical",
+                        "version": "1"
+                      },
+                      "usage_claims": null
+                    },
+                    "selector": {
+                      "name": "lexical",
+                      "version": "1"
+                    }
+                  }
+                ],
+                "base_candidates": [
+                  {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                ],
+                "base_decision": "choice_required",
+                "catalog_revision": 2,
+                "decision": "choice_required",
+                "embeddings": [],
+                "fallback_reason": null,
+                "final_candidates": [
+                  {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                ],
+                "final_decision": "choice_required",
+                "host_run_ids": [],
+                "host_snapshot_revision": null,
+                "observed_ms": 20.825197000021944,
+                "primary_attempt": 0,
+                "schema_version": 1
+              },
+              "retain_until": "2026-11-30T18:32:47.463627Z",
+              "schema_version": 1,
+              "selected_action": {
+                "adapter_id": "ordinary-native-channel",
+                "catalog_revision": 2,
+                "choice": {
+                  "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                  "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                  "kind": "asset"
+                },
+                "host_snapshot_revision": null,
+                "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                "recorded_at": "2026-10-31T18:32:48.411915Z",
+                "scope": {
+                  "user_id": "u",
+                  "workspace_id": "w"
+                },
+                "state_version": 2,
+                "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+              },
+              "state": "chosen",
+              "state_version": 2,
+              "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+            }
+          ],
+          "records": [
+            {
+              "adapter_id": "ordinary-native-channel",
+              "asset_content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+              "catalog_revision": 2,
+              "configured_primary": {
+                "name": "lexical",
+                "version": "1"
+              },
+              "event_id": "28024528-e6de-4775-ac59-988a77ffd099",
+              "feedback": {
+                "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                "kind": "correction"
+              },
+              "feedback_id": "f57015dd-1454-4b30-acc8-0f9000e6fc7c",
+              "feedback_revision": 1,
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "recorded_at": "2026-10-31T18:32:48.868738Z",
+              "redacted_task_text": "hello greeting ordinary native person 06dfdd75",
+              "retain_until": "2026-11-30T18:32:47.463627Z",
+              "schema_version": 1,
+              "scope": {
+                "user_id": "u",
+                "workspace_id": "w"
+              },
+              "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+            }
+          ],
+          "audits": [],
+          "events": [
+            {
+              "actor": "gateway",
+              "elapsed_ms": 5.246858000020893,
+              "erased": false,
+              "event_type": "accepted",
+              "payload": {
+                "budgets": {
+                  "candidate_limit": 10,
+                  "choice_seconds": 600,
+                  "display_limit": 3,
+                  "fallback_enabled": true,
+                  "max_catalog_bytes": 33554432,
+                  "max_catalog_records": 1000,
+                  "max_conversation_bytes": 32768,
+                  "max_conversation_entries": 32,
+                  "max_create_bytes": 524288,
+                  "max_result_bytes": 1048576,
+                  "max_task_bytes": 8192,
+                  "primary_ms": 150,
+                  "retention_days": 30,
+                  "total_ms": 500
+                },
+                "catalog_revision": 2,
+                "code_switched": false,
+                "config_digest": "e6ed50c3f9fb7479c617f24b2893ede02b1a27f881bc252ec18f3c099d4897c7",
+                "configured_primary": {
+                  "name": "lexical",
+                  "version": "1"
+                },
+                "conversation": [],
+                "host_snapshot_revision": null,
+                "language_tags": [],
+                "requested_kinds": [
+                  "skill",
+                  "mcp_tool"
+                ],
+                "scope": {
+                  "user_id": "u",
+                  "workspace_id": "w"
+                },
+                "selection_scope": "discovery",
+                "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc",
+                "task_text": "hello greeting ordinary native person 06dfdd75"
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 1,
+              "timestamp": "2026-10-31T18:32:47.463627Z"
+            },
+            {
+              "actor": "selector",
+              "elapsed_ms": 12.824533000014071,
+              "erased": false,
+              "event_type": "selector.started",
+              "payload": {
+                "attempt": 1,
+                "mechanism": "lexical_overlap",
+                "remaining_ms": 150.00000000000568,
+                "selector": {
+                  "name": "lexical",
+                  "version": "1"
+                }
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 2,
+              "timestamp": "2026-10-31T18:32:47.472475Z"
+            },
+            {
+              "actor": "selector",
+              "elapsed_ms": 16.39868600000227,
+              "erased": false,
+              "event_type": "selector.finished",
+              "payload": {
+                "attempt_record": {
+                  "attempt": 1,
+                  "cost_observations": [
+                    {
+                      "provenance": "observed",
+                      "value": {
+                        "cached_tokens": 0,
+                        "calls": 0,
+                        "cpu_ms": null,
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "peak_bytes": null,
+                        "reasoning_tokens": 0
+                      }
+                    }
+                  ],
+                  "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                  "mechanism": "lexical_overlap",
+                  "observed_ms": 3.5315829999831294,
+                  "outcome": "ranked",
+                  "reason": null,
+                  "reported_ms": 0.10357499999713582,
+                  "result": {
+                    "candidates": [
+                      {
+                        "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                        "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                        "evidence_refs": [
+                          "/description",
+                          "/identity/package_id"
+                        ],
+                        "kind": "skill",
+                        "score": 2,
+                        "score_kind": "token_overlap_count",
+                        "source_version": null
+                      }
+                    ],
+                    "catalog_revision": 2,
+                    "decision": "choice_required",
+                    "elapsed_ms": 0.10357499999713582,
+                    "host_snapshot_revision": null,
+                    "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                    "mechanism": "lexical_overlap",
+                    "outcome": "ranked",
+                    "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                    "schema_version": 2,
+                    "selector": {
+                      "name": "lexical",
+                      "version": "1"
+                    },
+                    "usage_claims": null
+                  },
+                  "selector": {
+                    "name": "lexical",
+                    "version": "1"
+                  }
+                },
+                "embeddings": []
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 3,
+              "timestamp": "2026-10-31T18:32:47.476051Z"
+            },
+            {
+              "actor": "gateway",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "ready",
+              "payload": {
+                "choice_expires_at": "2026-10-31T18:42:47.486047Z",
+                "ready_at": "2026-10-31T18:32:47.486047Z",
+                "result": {
+                  "adaptation": null,
+                  "admission": {
+                    "checked_at": "2026-10-31T18:32:47.480452Z",
+                    "outcome": "accepted",
+                    "rechecked_catalog_revision": 2
+                  },
+                  "attempts": [
+                    {
+                      "attempt": 1,
+                      "cost_observations": [
+                        {
+                          "provenance": "observed",
+                          "value": {
+                            "cached_tokens": 0,
+                            "calls": 0,
+                            "cpu_ms": null,
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "peak_bytes": null,
+                            "reasoning_tokens": 0
+                          }
+                        }
+                      ],
+                      "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                      "mechanism": "lexical_overlap",
+                      "observed_ms": 3.5315829999831294,
+                      "outcome": "ranked",
+                      "reason": null,
+                      "reported_ms": 0.10357499999713582,
+                      "result": {
+                        "candidates": [
+                          {
+                            "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                            "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                            "evidence_refs": [
+                              "/description",
+                              "/identity/package_id"
+                            ],
+                            "kind": "skill",
+                            "score": 2,
+                            "score_kind": "token_overlap_count",
+                            "source_version": null
+                          }
+                        ],
+                        "catalog_revision": 2,
+                        "decision": "choice_required",
+                        "elapsed_ms": 0.10357499999713582,
+                        "host_snapshot_revision": null,
+                        "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                        "mechanism": "lexical_overlap",
+                        "outcome": "ranked",
+                        "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                        "schema_version": 2,
+                        "selector": {
+                          "name": "lexical",
+                          "version": "1"
+                        },
+                        "usage_claims": null
+                      },
+                      "selector": {
+                        "name": "lexical",
+                        "version": "1"
+                      }
+                    }
+                  ],
+                  "base_candidates": [
+                    {
+                      "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                      "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                      "evidence_refs": [
+                        "/description",
+                        "/identity/package_id"
+                      ],
+                      "kind": "skill",
+                      "score": 2,
+                      "score_kind": "token_overlap_count",
+                      "source_version": null
+                    }
+                  ],
+                  "base_decision": "choice_required",
+                  "catalog_revision": 2,
+                  "decision": "choice_required",
+                  "embeddings": [],
+                  "fallback_reason": null,
+                  "final_candidates": [
+                    {
+                      "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                      "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                      "evidence_refs": [
+                        "/description",
+                        "/identity/package_id"
+                      ],
+                      "kind": "skill",
+                      "score": 2,
+                      "score_kind": "token_overlap_count",
+                      "source_version": null
+                    }
+                  ],
+                  "final_decision": "choice_required",
+                  "host_run_ids": [],
+                  "host_snapshot_revision": null,
+                  "observed_ms": 20.825197000021944,
+                  "primary_attempt": 0,
+                  "schema_version": 1
+                },
+                "state_version": 1
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 4,
+              "timestamp": "2026-10-31T18:32:47.486047Z"
+            },
+            {
+              "actor": "adapter",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "chosen",
+              "payload": {
+                "action": {
+                  "adapter_id": "ordinary-native-channel",
+                  "catalog_revision": 2,
+                  "choice": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "kind": "asset"
+                  },
+                  "host_snapshot_revision": null,
+                  "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                  "recorded_at": "2026-10-31T18:32:48.411915Z",
+                  "scope": {
+                    "user_id": "u",
+                    "workspace_id": "w"
+                  },
+                  "state_version": 2,
+                  "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+                },
+                "state_version": 2
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 5,
+              "timestamp": "2026-10-31T18:32:48.411915Z"
+            },
+            {
+              "actor": "adapter",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "feedback.recorded",
+              "payload": {
+                "feedback_id": "f57015dd-1454-4b30-acc8-0f9000e6fc7c",
+                "feedback_revision": 1
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 6,
+              "timestamp": "2026-10-31T18:32:48.868738Z"
+            }
+          ]
+        },
+        "inspect": {
+          "views": [
+            {
+              "catalog_revision": 2,
+              "choice_expires_at": "2026-10-31T18:42:47.486047Z",
+              "created_at": "2026-10-31T18:32:47.463627Z",
+              "decision": "choice_required",
+              "displayed_candidates": [
+                {
+                  "asset": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "availability": "unknown",
+                    "captured_at": "2026-10-29T00:00:00.000000Z",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "dependencies": [],
+                    "description": "Greeting skill",
+                    "identity": {
+                      "package_id": "Hello World",
+                      "package_version": null
+                    },
+                    "kind": "skill",
+                    "language_tags": [],
+                    "schema_version": 1,
+                    "source_id": "example",
+                    "source_locator": "/home/runner/work/_temp/relaymind-person-qualification-gateway/source/SKILL.md",
+                    "source_version": null,
+                    "stale": false
+                  },
+                  "candidate": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                }
+              ],
+              "error": null,
+              "feedback_revision": 0,
+              "host_snapshot_revision": null,
+              "ready_at": "2026-10-31T18:32:47.486047Z",
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "result": {
+                "adaptation": null,
+                "admission": {
+                  "checked_at": "2026-10-31T18:32:47.480452Z",
+                  "outcome": "accepted",
+                  "rechecked_catalog_revision": 2
+                },
+                "attempts": [
+                  {
+                    "attempt": 1,
+                    "cost_observations": [
+                      {
+                        "provenance": "observed",
+                        "value": {
+                          "cached_tokens": 0,
+                          "calls": 0,
+                          "cpu_ms": null,
+                          "input_tokens": 0,
+                          "output_tokens": 0,
+                          "peak_bytes": null,
+                          "reasoning_tokens": 0
+                        }
+                      }
+                    ],
+                    "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                    "mechanism": "lexical_overlap",
+                    "observed_ms": 3.5315829999831294,
+                    "outcome": "ranked",
+                    "reason": null,
+                    "reported_ms": 0.10357499999713582,
+                    "result": {
+                      "candidates": [
+                        {
+                          "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                          "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                          "evidence_refs": [
+                            "/description",
+                            "/identity/package_id"
+                          ],
+                          "kind": "skill",
+                          "score": 2,
+                          "score_kind": "token_overlap_count",
+                          "source_version": null
+                        }
+                      ],
+                      "catalog_revision": 2,
+                      "decision": "choice_required",
+                      "elapsed_ms": 0.10357499999713582,
+                      "host_snapshot_revision": null,
+                      "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                      "mechanism": "lexical_overlap",
+                      "outcome": "ranked",
+                      "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                      "schema_version": 2,
+                      "selector": {
+                        "name": "lexical",
+                        "version": "1"
+                      },
+                      "usage_claims": null
+                    },
+                    "selector": {
+                      "name": "lexical",
+                      "version": "1"
+                    }
+                  }
+                ],
+                "base_candidates": [
+                  {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                ],
+                "base_decision": "choice_required",
+                "catalog_revision": 2,
+                "decision": "choice_required",
+                "embeddings": [],
+                "fallback_reason": null,
+                "final_candidates": [
+                  {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                ],
+                "final_decision": "choice_required",
+                "host_run_ids": [],
+                "host_snapshot_revision": null,
+                "observed_ms": 20.825197000021944,
+                "primary_attempt": 0,
+                "schema_version": 1
+              },
+              "retain_until": "2026-11-30T18:32:47.463627Z",
+              "schema_version": 1,
+              "selected_action": {
+                "adapter_id": "ordinary-native-channel",
+                "catalog_revision": 2,
+                "choice": {
+                  "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                  "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                  "kind": "asset"
+                },
+                "host_snapshot_revision": null,
+                "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                "recorded_at": "2026-10-31T18:32:48.411915Z",
+                "scope": {
+                  "user_id": "u",
+                  "workspace_id": "w"
+                },
+                "state_version": 2,
+                "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+              },
+              "state": "chosen",
+              "state_version": 2,
+              "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+            }
+          ],
+          "records": [
+            {
+              "adapter_id": "ordinary-native-channel",
+              "asset_content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+              "catalog_revision": 2,
+              "configured_primary": {
+                "name": "lexical",
+                "version": "1"
+              },
+              "event_id": "28024528-e6de-4775-ac59-988a77ffd099",
+              "feedback": {
+                "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                "kind": "correction"
+              },
+              "feedback_id": "f57015dd-1454-4b30-acc8-0f9000e6fc7c",
+              "feedback_revision": 1,
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "recorded_at": "2026-10-31T18:32:48.868738Z",
+              "redacted_task_text": "hello greeting ordinary native person 06dfdd75",
+              "retain_until": "2026-11-30T18:32:47.463627Z",
+              "schema_version": 1,
+              "scope": {
+                "user_id": "u",
+                "workspace_id": "w"
+              },
+              "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+            }
+          ],
+          "audits": [],
+          "events": [
+            {
+              "actor": "gateway",
+              "elapsed_ms": 5.246858000020893,
+              "erased": false,
+              "event_type": "accepted",
+              "payload": {
+                "budgets": {
+                  "candidate_limit": 10,
+                  "choice_seconds": 600,
+                  "display_limit": 3,
+                  "fallback_enabled": true,
+                  "max_catalog_bytes": 33554432,
+                  "max_catalog_records": 1000,
+                  "max_conversation_bytes": 32768,
+                  "max_conversation_entries": 32,
+                  "max_create_bytes": 524288,
+                  "max_result_bytes": 1048576,
+                  "max_task_bytes": 8192,
+                  "primary_ms": 150,
+                  "retention_days": 30,
+                  "total_ms": 500
+                },
+                "catalog_revision": 2,
+                "code_switched": false,
+                "config_digest": "e6ed50c3f9fb7479c617f24b2893ede02b1a27f881bc252ec18f3c099d4897c7",
+                "configured_primary": {
+                  "name": "lexical",
+                  "version": "1"
+                },
+                "conversation": [],
+                "host_snapshot_revision": null,
+                "language_tags": [],
+                "requested_kinds": [
+                  "skill",
+                  "mcp_tool"
+                ],
+                "scope": {
+                  "user_id": "u",
+                  "workspace_id": "w"
+                },
+                "selection_scope": "discovery",
+                "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc",
+                "task_text": "hello greeting ordinary native person 06dfdd75"
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 1,
+              "timestamp": "2026-10-31T18:32:47.463627Z"
+            },
+            {
+              "actor": "selector",
+              "elapsed_ms": 12.824533000014071,
+              "erased": false,
+              "event_type": "selector.started",
+              "payload": {
+                "attempt": 1,
+                "mechanism": "lexical_overlap",
+                "remaining_ms": 150.00000000000568,
+                "selector": {
+                  "name": "lexical",
+                  "version": "1"
+                }
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 2,
+              "timestamp": "2026-10-31T18:32:47.472475Z"
+            },
+            {
+              "actor": "selector",
+              "elapsed_ms": 16.39868600000227,
+              "erased": false,
+              "event_type": "selector.finished",
+              "payload": {
+                "attempt_record": {
+                  "attempt": 1,
+                  "cost_observations": [
+                    {
+                      "provenance": "observed",
+                      "value": {
+                        "cached_tokens": 0,
+                        "calls": 0,
+                        "cpu_ms": null,
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "peak_bytes": null,
+                        "reasoning_tokens": 0
+                      }
+                    }
+                  ],
+                  "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                  "mechanism": "lexical_overlap",
+                  "observed_ms": 3.5315829999831294,
+                  "outcome": "ranked",
+                  "reason": null,
+                  "reported_ms": 0.10357499999713582,
+                  "result": {
+                    "candidates": [
+                      {
+                        "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                        "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                        "evidence_refs": [
+                          "/description",
+                          "/identity/package_id"
+                        ],
+                        "kind": "skill",
+                        "score": 2,
+                        "score_kind": "token_overlap_count",
+                        "source_version": null
+                      }
+                    ],
+                    "catalog_revision": 2,
+                    "decision": "choice_required",
+                    "elapsed_ms": 0.10357499999713582,
+                    "host_snapshot_revision": null,
+                    "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                    "mechanism": "lexical_overlap",
+                    "outcome": "ranked",
+                    "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                    "schema_version": 2,
+                    "selector": {
+                      "name": "lexical",
+                      "version": "1"
+                    },
+                    "usage_claims": null
+                  },
+                  "selector": {
+                    "name": "lexical",
+                    "version": "1"
+                  }
+                },
+                "embeddings": []
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 3,
+              "timestamp": "2026-10-31T18:32:47.476051Z"
+            },
+            {
+              "actor": "gateway",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "ready",
+              "payload": {
+                "choice_expires_at": "2026-10-31T18:42:47.486047Z",
+                "ready_at": "2026-10-31T18:32:47.486047Z",
+                "result": {
+                  "adaptation": null,
+                  "admission": {
+                    "checked_at": "2026-10-31T18:32:47.480452Z",
+                    "outcome": "accepted",
+                    "rechecked_catalog_revision": 2
+                  },
+                  "attempts": [
+                    {
+                      "attempt": 1,
+                      "cost_observations": [
+                        {
+                          "provenance": "observed",
+                          "value": {
+                            "cached_tokens": 0,
+                            "calls": 0,
+                            "cpu_ms": null,
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "peak_bytes": null,
+                            "reasoning_tokens": 0
+                          }
+                        }
+                      ],
+                      "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                      "mechanism": "lexical_overlap",
+                      "observed_ms": 3.5315829999831294,
+                      "outcome": "ranked",
+                      "reason": null,
+                      "reported_ms": 0.10357499999713582,
+                      "result": {
+                        "candidates": [
+                          {
+                            "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                            "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                            "evidence_refs": [
+                              "/description",
+                              "/identity/package_id"
+                            ],
+                            "kind": "skill",
+                            "score": 2,
+                            "score_kind": "token_overlap_count",
+                            "source_version": null
+                          }
+                        ],
+                        "catalog_revision": 2,
+                        "decision": "choice_required",
+                        "elapsed_ms": 0.10357499999713582,
+                        "host_snapshot_revision": null,
+                        "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                        "mechanism": "lexical_overlap",
+                        "outcome": "ranked",
+                        "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                        "schema_version": 2,
+                        "selector": {
+                          "name": "lexical",
+                          "version": "1"
+                        },
+                        "usage_claims": null
+                      },
+                      "selector": {
+                        "name": "lexical",
+                        "version": "1"
+                      }
+                    }
+                  ],
+                  "base_candidates": [
+                    {
+                      "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                      "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                      "evidence_refs": [
+                        "/description",
+                        "/identity/package_id"
+                      ],
+                      "kind": "skill",
+                      "score": 2,
+                      "score_kind": "token_overlap_count",
+                      "source_version": null
+                    }
+                  ],
+                  "base_decision": "choice_required",
+                  "catalog_revision": 2,
+                  "decision": "choice_required",
+                  "embeddings": [],
+                  "fallback_reason": null,
+                  "final_candidates": [
+                    {
+                      "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                      "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                      "evidence_refs": [
+                        "/description",
+                        "/identity/package_id"
+                      ],
+                      "kind": "skill",
+                      "score": 2,
+                      "score_kind": "token_overlap_count",
+                      "source_version": null
+                    }
+                  ],
+                  "final_decision": "choice_required",
+                  "host_run_ids": [],
+                  "host_snapshot_revision": null,
+                  "observed_ms": 20.825197000021944,
+                  "primary_attempt": 0,
+                  "schema_version": 1
+                },
+                "state_version": 1
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 4,
+              "timestamp": "2026-10-31T18:32:47.486047Z"
+            },
+            {
+              "actor": "adapter",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "chosen",
+              "payload": {
+                "action": {
+                  "adapter_id": "ordinary-native-channel",
+                  "catalog_revision": 2,
+                  "choice": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "kind": "asset"
+                  },
+                  "host_snapshot_revision": null,
+                  "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                  "recorded_at": "2026-10-31T18:32:48.411915Z",
+                  "scope": {
+                    "user_id": "u",
+                    "workspace_id": "w"
+                  },
+                  "state_version": 2,
+                  "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+                },
+                "state_version": 2
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 5,
+              "timestamp": "2026-10-31T18:32:48.411915Z"
+            },
+            {
+              "actor": "adapter",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "feedback.recorded",
+              "payload": {
+                "feedback_id": "f57015dd-1454-4b30-acc8-0f9000e6fc7c",
+                "feedback_revision": 1
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 6,
+              "timestamp": "2026-10-31T18:32:48.868738Z"
+            }
+          ]
+        },
+        "delete": {
+          "views": [
+            {
+              "catalog_revision": 2,
+              "choice_expires_at": "2026-10-31T18:42:47.486047Z",
+              "created_at": "2026-10-31T18:32:47.463627Z",
+              "decision": "choice_required",
+              "displayed_candidates": [
+                {
+                  "asset": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "availability": "unknown",
+                    "captured_at": "2026-10-29T00:00:00.000000Z",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "dependencies": [],
+                    "description": "Greeting skill",
+                    "identity": {
+                      "package_id": "Hello World",
+                      "package_version": null
+                    },
+                    "kind": "skill",
+                    "language_tags": [],
+                    "schema_version": 1,
+                    "source_id": "example",
+                    "source_locator": "/home/runner/work/_temp/relaymind-person-qualification-gateway/source/SKILL.md",
+                    "source_version": null,
+                    "stale": false
+                  },
+                  "candidate": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                }
+              ],
+              "error": null,
+              "feedback_revision": 0,
+              "host_snapshot_revision": null,
+              "ready_at": "2026-10-31T18:32:47.486047Z",
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "result": {
+                "adaptation": null,
+                "admission": {
+                  "checked_at": "2026-10-31T18:32:47.480452Z",
+                  "outcome": "accepted",
+                  "rechecked_catalog_revision": 2
+                },
+                "attempts": [
+                  {
+                    "attempt": 1,
+                    "cost_observations": [
+                      {
+                        "provenance": "observed",
+                        "value": {
+                          "cached_tokens": 0,
+                          "calls": 0,
+                          "cpu_ms": null,
+                          "input_tokens": 0,
+                          "output_tokens": 0,
+                          "peak_bytes": null,
+                          "reasoning_tokens": 0
+                        }
+                      }
+                    ],
+                    "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                    "mechanism": "lexical_overlap",
+                    "observed_ms": 3.5315829999831294,
+                    "outcome": "ranked",
+                    "reason": null,
+                    "reported_ms": 0.10357499999713582,
+                    "result": {
+                      "candidates": [
+                        {
+                          "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                          "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                          "evidence_refs": [
+                            "/description",
+                            "/identity/package_id"
+                          ],
+                          "kind": "skill",
+                          "score": 2,
+                          "score_kind": "token_overlap_count",
+                          "source_version": null
+                        }
+                      ],
+                      "catalog_revision": 2,
+                      "decision": "choice_required",
+                      "elapsed_ms": 0.10357499999713582,
+                      "host_snapshot_revision": null,
+                      "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                      "mechanism": "lexical_overlap",
+                      "outcome": "ranked",
+                      "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                      "schema_version": 2,
+                      "selector": {
+                        "name": "lexical",
+                        "version": "1"
+                      },
+                      "usage_claims": null
+                    },
+                    "selector": {
+                      "name": "lexical",
+                      "version": "1"
+                    }
+                  }
+                ],
+                "base_candidates": [
+                  {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                ],
+                "base_decision": "choice_required",
+                "catalog_revision": 2,
+                "decision": "choice_required",
+                "embeddings": [],
+                "fallback_reason": null,
+                "final_candidates": [
+                  {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                ],
+                "final_decision": "choice_required",
+                "host_run_ids": [],
+                "host_snapshot_revision": null,
+                "observed_ms": 20.825197000021944,
+                "primary_attempt": 0,
+                "schema_version": 1
+              },
+              "retain_until": "2026-11-30T18:32:47.463627Z",
+              "schema_version": 1,
+              "selected_action": {
+                "adapter_id": "ordinary-native-channel",
+                "catalog_revision": 2,
+                "choice": {
+                  "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                  "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                  "kind": "asset"
+                },
+                "host_snapshot_revision": null,
+                "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                "recorded_at": "2026-10-31T18:32:48.411915Z",
+                "scope": {
+                  "user_id": "u",
+                  "workspace_id": "w"
+                },
+                "state_version": 2,
+                "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+              },
+              "state": "chosen",
+              "state_version": 2,
+              "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+            }
+          ],
+          "records": [],
+          "audits": [
+            {
+              "adapter_id": "ordinary-native-channel",
+              "audit_id": "cf3b0a0a-da47-4ae3-90e8-db3a5f9ee9a9",
+              "feedback_revision": 2,
+              "idempotency_digest": "eb3c67b979386402793af91716763f7f87562b69edc7f1fd08f4169634293d16",
+              "operation": "delete",
+              "removed_count": 1,
+              "schema_version": 1,
+              "scope": {
+                "user_id": "u",
+                "workspace_id": "w"
+              },
+              "timestamp": "2026-10-31T18:32:49.121402Z"
+            }
+          ],
+          "events": [
+            {
+              "actor": "gateway",
+              "elapsed_ms": 5.246858000020893,
+              "erased": false,
+              "event_type": "accepted",
+              "payload": {
+                "budgets": {
+                  "candidate_limit": 10,
+                  "choice_seconds": 600,
+                  "display_limit": 3,
+                  "fallback_enabled": true,
+                  "max_catalog_bytes": 33554432,
+                  "max_catalog_records": 1000,
+                  "max_conversation_bytes": 32768,
+                  "max_conversation_entries": 32,
+                  "max_create_bytes": 524288,
+                  "max_result_bytes": 1048576,
+                  "max_task_bytes": 8192,
+                  "primary_ms": 150,
+                  "retention_days": 30,
+                  "total_ms": 500
+                },
+                "catalog_revision": 2,
+                "code_switched": false,
+                "config_digest": "e6ed50c3f9fb7479c617f24b2893ede02b1a27f881bc252ec18f3c099d4897c7",
+                "configured_primary": {
+                  "name": "lexical",
+                  "version": "1"
+                },
+                "conversation": [],
+                "host_snapshot_revision": null,
+                "language_tags": [],
+                "requested_kinds": [
+                  "skill",
+                  "mcp_tool"
+                ],
+                "scope": {
+                  "user_id": "u",
+                  "workspace_id": "w"
+                },
+                "selection_scope": "discovery",
+                "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc",
+                "task_text": "hello greeting ordinary native person 06dfdd75"
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 1,
+              "timestamp": "2026-10-31T18:32:47.463627Z"
+            },
+            {
+              "actor": "selector",
+              "elapsed_ms": 12.824533000014071,
+              "erased": false,
+              "event_type": "selector.started",
+              "payload": {
+                "attempt": 1,
+                "mechanism": "lexical_overlap",
+                "remaining_ms": 150.00000000000568,
+                "selector": {
+                  "name": "lexical",
+                  "version": "1"
+                }
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 2,
+              "timestamp": "2026-10-31T18:32:47.472475Z"
+            },
+            {
+              "actor": "selector",
+              "elapsed_ms": 16.39868600000227,
+              "erased": false,
+              "event_type": "selector.finished",
+              "payload": {
+                "attempt_record": {
+                  "attempt": 1,
+                  "cost_observations": [
+                    {
+                      "provenance": "observed",
+                      "value": {
+                        "cached_tokens": 0,
+                        "calls": 0,
+                        "cpu_ms": null,
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "peak_bytes": null,
+                        "reasoning_tokens": 0
+                      }
+                    }
+                  ],
+                  "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                  "mechanism": "lexical_overlap",
+                  "observed_ms": 3.5315829999831294,
+                  "outcome": "ranked",
+                  "reason": null,
+                  "reported_ms": 0.10357499999713582,
+                  "result": {
+                    "candidates": [
+                      {
+                        "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                        "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                        "evidence_refs": [
+                          "/description",
+                          "/identity/package_id"
+                        ],
+                        "kind": "skill",
+                        "score": 2,
+                        "score_kind": "token_overlap_count",
+                        "source_version": null
+                      }
+                    ],
+                    "catalog_revision": 2,
+                    "decision": "choice_required",
+                    "elapsed_ms": 0.10357499999713582,
+                    "host_snapshot_revision": null,
+                    "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                    "mechanism": "lexical_overlap",
+                    "outcome": "ranked",
+                    "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                    "schema_version": 2,
+                    "selector": {
+                      "name": "lexical",
+                      "version": "1"
+                    },
+                    "usage_claims": null
+                  },
+                  "selector": {
+                    "name": "lexical",
+                    "version": "1"
+                  }
+                },
+                "embeddings": []
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 3,
+              "timestamp": "2026-10-31T18:32:47.476051Z"
+            },
+            {
+              "actor": "gateway",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "ready",
+              "payload": {
+                "choice_expires_at": "2026-10-31T18:42:47.486047Z",
+                "ready_at": "2026-10-31T18:32:47.486047Z",
+                "result": {
+                  "adaptation": null,
+                  "admission": {
+                    "checked_at": "2026-10-31T18:32:47.480452Z",
+                    "outcome": "accepted",
+                    "rechecked_catalog_revision": 2
+                  },
+                  "attempts": [
+                    {
+                      "attempt": 1,
+                      "cost_observations": [
+                        {
+                          "provenance": "observed",
+                          "value": {
+                            "cached_tokens": 0,
+                            "calls": 0,
+                            "cpu_ms": null,
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "peak_bytes": null,
+                            "reasoning_tokens": 0
+                          }
+                        }
+                      ],
+                      "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                      "mechanism": "lexical_overlap",
+                      "observed_ms": 3.5315829999831294,
+                      "outcome": "ranked",
+                      "reason": null,
+                      "reported_ms": 0.10357499999713582,
+                      "result": {
+                        "candidates": [
+                          {
+                            "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                            "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                            "evidence_refs": [
+                              "/description",
+                              "/identity/package_id"
+                            ],
+                            "kind": "skill",
+                            "score": 2,
+                            "score_kind": "token_overlap_count",
+                            "source_version": null
+                          }
+                        ],
+                        "catalog_revision": 2,
+                        "decision": "choice_required",
+                        "elapsed_ms": 0.10357499999713582,
+                        "host_snapshot_revision": null,
+                        "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                        "mechanism": "lexical_overlap",
+                        "outcome": "ranked",
+                        "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                        "schema_version": 2,
+                        "selector": {
+                          "name": "lexical",
+                          "version": "1"
+                        },
+                        "usage_claims": null
+                      },
+                      "selector": {
+                        "name": "lexical",
+                        "version": "1"
+                      }
+                    }
+                  ],
+                  "base_candidates": [
+                    {
+                      "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                      "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                      "evidence_refs": [
+                        "/description",
+                        "/identity/package_id"
+                      ],
+                      "kind": "skill",
+                      "score": 2,
+                      "score_kind": "token_overlap_count",
+                      "source_version": null
+                    }
+                  ],
+                  "base_decision": "choice_required",
+                  "catalog_revision": 2,
+                  "decision": "choice_required",
+                  "embeddings": [],
+                  "fallback_reason": null,
+                  "final_candidates": [
+                    {
+                      "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                      "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                      "evidence_refs": [
+                        "/description",
+                        "/identity/package_id"
+                      ],
+                      "kind": "skill",
+                      "score": 2,
+                      "score_kind": "token_overlap_count",
+                      "source_version": null
+                    }
+                  ],
+                  "final_decision": "choice_required",
+                  "host_run_ids": [],
+                  "host_snapshot_revision": null,
+                  "observed_ms": 20.825197000021944,
+                  "primary_attempt": 0,
+                  "schema_version": 1
+                },
+                "state_version": 1
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 4,
+              "timestamp": "2026-10-31T18:32:47.486047Z"
+            },
+            {
+              "actor": "adapter",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "chosen",
+              "payload": {
+                "action": {
+                  "adapter_id": "ordinary-native-channel",
+                  "catalog_revision": 2,
+                  "choice": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "kind": "asset"
+                  },
+                  "host_snapshot_revision": null,
+                  "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                  "recorded_at": "2026-10-31T18:32:48.411915Z",
+                  "scope": {
+                    "user_id": "u",
+                    "workspace_id": "w"
+                  },
+                  "state_version": 2,
+                  "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+                },
+                "state_version": 2
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 5,
+              "timestamp": "2026-10-31T18:32:48.411915Z"
+            },
+            {
+              "actor": "adapter",
+              "elapsed_ms": 26.395304999994096,
+              "erased": true,
+              "event_type": "feedback.recorded",
+              "payload": null,
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 6,
+              "timestamp": "2026-10-31T18:32:48.868738Z"
+            },
+            {
+              "actor": "adapter",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "feedback.deleted",
+              "payload": {
+                "feedback_id_digest": "bb19c26737f642e731cd74b5b59cbe8ec4e3f9be5368cd72a23d6162cb69f87e",
+                "feedback_revision": 2
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 7,
+              "timestamp": "2026-10-31T18:32:49.121402Z"
+            }
+          ]
+        },
+        "reset": {
+          "views": [
+            {
+              "catalog_revision": 2,
+              "choice_expires_at": "2026-10-31T18:42:47.486047Z",
+              "created_at": "2026-10-31T18:32:47.463627Z",
+              "decision": "choice_required",
+              "displayed_candidates": [
+                {
+                  "asset": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "availability": "unknown",
+                    "captured_at": "2026-10-29T00:00:00.000000Z",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "dependencies": [],
+                    "description": "Greeting skill",
+                    "identity": {
+                      "package_id": "Hello World",
+                      "package_version": null
+                    },
+                    "kind": "skill",
+                    "language_tags": [],
+                    "schema_version": 1,
+                    "source_id": "example",
+                    "source_locator": "/home/runner/work/_temp/relaymind-person-qualification-gateway/source/SKILL.md",
+                    "source_version": null,
+                    "stale": false
+                  },
+                  "candidate": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                }
+              ],
+              "error": null,
+              "feedback_revision": 0,
+              "host_snapshot_revision": null,
+              "ready_at": "2026-10-31T18:32:47.486047Z",
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "result": {
+                "adaptation": null,
+                "admission": {
+                  "checked_at": "2026-10-31T18:32:47.480452Z",
+                  "outcome": "accepted",
+                  "rechecked_catalog_revision": 2
+                },
+                "attempts": [
+                  {
+                    "attempt": 1,
+                    "cost_observations": [
+                      {
+                        "provenance": "observed",
+                        "value": {
+                          "cached_tokens": 0,
+                          "calls": 0,
+                          "cpu_ms": null,
+                          "input_tokens": 0,
+                          "output_tokens": 0,
+                          "peak_bytes": null,
+                          "reasoning_tokens": 0
+                        }
+                      }
+                    ],
+                    "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                    "mechanism": "lexical_overlap",
+                    "observed_ms": 3.5315829999831294,
+                    "outcome": "ranked",
+                    "reason": null,
+                    "reported_ms": 0.10357499999713582,
+                    "result": {
+                      "candidates": [
+                        {
+                          "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                          "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                          "evidence_refs": [
+                            "/description",
+                            "/identity/package_id"
+                          ],
+                          "kind": "skill",
+                          "score": 2,
+                          "score_kind": "token_overlap_count",
+                          "source_version": null
+                        }
+                      ],
+                      "catalog_revision": 2,
+                      "decision": "choice_required",
+                      "elapsed_ms": 0.10357499999713582,
+                      "host_snapshot_revision": null,
+                      "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                      "mechanism": "lexical_overlap",
+                      "outcome": "ranked",
+                      "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                      "schema_version": 2,
+                      "selector": {
+                        "name": "lexical",
+                        "version": "1"
+                      },
+                      "usage_claims": null
+                    },
+                    "selector": {
+                      "name": "lexical",
+                      "version": "1"
+                    }
+                  }
+                ],
+                "base_candidates": [
+                  {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                ],
+                "base_decision": "choice_required",
+                "catalog_revision": 2,
+                "decision": "choice_required",
+                "embeddings": [],
+                "fallback_reason": null,
+                "final_candidates": [
+                  {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": null
+                  }
+                ],
+                "final_decision": "choice_required",
+                "host_run_ids": [],
+                "host_snapshot_revision": null,
+                "observed_ms": 20.825197000021944,
+                "primary_attempt": 0,
+                "schema_version": 1
+              },
+              "retain_until": "2026-11-30T18:32:47.463627Z",
+              "schema_version": 1,
+              "selected_action": {
+                "adapter_id": "ordinary-native-channel",
+                "catalog_revision": 2,
+                "choice": {
+                  "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                  "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                  "kind": "asset"
+                },
+                "host_snapshot_revision": null,
+                "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                "recorded_at": "2026-10-31T18:32:48.411915Z",
+                "scope": {
+                  "user_id": "u",
+                  "workspace_id": "w"
+                },
+                "state_version": 2,
+                "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+              },
+              "state": "chosen",
+              "state_version": 2,
+              "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+            }
+          ],
+          "records": [],
+          "audits": [
+            {
+              "adapter_id": "ordinary-native-channel",
+              "audit_id": "cf3b0a0a-da47-4ae3-90e8-db3a5f9ee9a9",
+              "feedback_revision": 2,
+              "idempotency_digest": "eb3c67b979386402793af91716763f7f87562b69edc7f1fd08f4169634293d16",
+              "operation": "delete",
+              "removed_count": 1,
+              "schema_version": 1,
+              "scope": {
+                "user_id": "u",
+                "workspace_id": "w"
+              },
+              "timestamp": "2026-10-31T18:32:49.121402Z"
+            },
+            {
+              "adapter_id": "ordinary-native-channel",
+              "audit_id": "128ce921-6c4d-4ec8-ad61-af40fa121fad",
+              "feedback_revision": 3,
+              "idempotency_digest": "f45f84c0636ddec1d939c19b8944971d5ae07ab8dff3d25ead1f141f1cc8e287",
+              "operation": "reset",
+              "removed_count": 0,
+              "schema_version": 1,
+              "scope": {
+                "user_id": "u",
+                "workspace_id": "w"
+              },
+              "timestamp": "2026-10-31T18:32:49.255062Z"
+            }
+          ],
+          "events": [
+            {
+              "actor": "gateway",
+              "elapsed_ms": 5.246858000020893,
+              "erased": false,
+              "event_type": "accepted",
+              "payload": {
+                "budgets": {
+                  "candidate_limit": 10,
+                  "choice_seconds": 600,
+                  "display_limit": 3,
+                  "fallback_enabled": true,
+                  "max_catalog_bytes": 33554432,
+                  "max_catalog_records": 1000,
+                  "max_conversation_bytes": 32768,
+                  "max_conversation_entries": 32,
+                  "max_create_bytes": 524288,
+                  "max_result_bytes": 1048576,
+                  "max_task_bytes": 8192,
+                  "primary_ms": 150,
+                  "retention_days": 30,
+                  "total_ms": 500
+                },
+                "catalog_revision": 2,
+                "code_switched": false,
+                "config_digest": "e6ed50c3f9fb7479c617f24b2893ede02b1a27f881bc252ec18f3c099d4897c7",
+                "configured_primary": {
+                  "name": "lexical",
+                  "version": "1"
+                },
+                "conversation": [],
+                "host_snapshot_revision": null,
+                "language_tags": [],
+                "requested_kinds": [
+                  "skill",
+                  "mcp_tool"
+                ],
+                "scope": {
+                  "user_id": "u",
+                  "workspace_id": "w"
+                },
+                "selection_scope": "discovery",
+                "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc",
+                "task_text": "hello greeting ordinary native person 06dfdd75"
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 1,
+              "timestamp": "2026-10-31T18:32:47.463627Z"
+            },
+            {
+              "actor": "selector",
+              "elapsed_ms": 12.824533000014071,
+              "erased": false,
+              "event_type": "selector.started",
+              "payload": {
+                "attempt": 1,
+                "mechanism": "lexical_overlap",
+                "remaining_ms": 150.00000000000568,
+                "selector": {
+                  "name": "lexical",
+                  "version": "1"
+                }
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 2,
+              "timestamp": "2026-10-31T18:32:47.472475Z"
+            },
+            {
+              "actor": "selector",
+              "elapsed_ms": 16.39868600000227,
+              "erased": false,
+              "event_type": "selector.finished",
+              "payload": {
+                "attempt_record": {
+                  "attempt": 1,
+                  "cost_observations": [
+                    {
+                      "provenance": "observed",
+                      "value": {
+                        "cached_tokens": 0,
+                        "calls": 0,
+                        "cpu_ms": null,
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "peak_bytes": null,
+                        "reasoning_tokens": 0
+                      }
+                    }
+                  ],
+                  "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                  "mechanism": "lexical_overlap",
+                  "observed_ms": 3.5315829999831294,
+                  "outcome": "ranked",
+                  "reason": null,
+                  "reported_ms": 0.10357499999713582,
+                  "result": {
+                    "candidates": [
+                      {
+                        "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                        "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                        "evidence_refs": [
+                          "/description",
+                          "/identity/package_id"
+                        ],
+                        "kind": "skill",
+                        "score": 2,
+                        "score_kind": "token_overlap_count",
+                        "source_version": null
+                      }
+                    ],
+                    "catalog_revision": 2,
+                    "decision": "choice_required",
+                    "elapsed_ms": 0.10357499999713582,
+                    "host_snapshot_revision": null,
+                    "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                    "mechanism": "lexical_overlap",
+                    "outcome": "ranked",
+                    "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                    "schema_version": 2,
+                    "selector": {
+                      "name": "lexical",
+                      "version": "1"
+                    },
+                    "usage_claims": null
+                  },
+                  "selector": {
+                    "name": "lexical",
+                    "version": "1"
+                  }
+                },
+                "embeddings": []
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 3,
+              "timestamp": "2026-10-31T18:32:47.476051Z"
+            },
+            {
+              "actor": "gateway",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "ready",
+              "payload": {
+                "choice_expires_at": "2026-10-31T18:42:47.486047Z",
+                "ready_at": "2026-10-31T18:32:47.486047Z",
+                "result": {
+                  "adaptation": null,
+                  "admission": {
+                    "checked_at": "2026-10-31T18:32:47.480452Z",
+                    "outcome": "accepted",
+                    "rechecked_catalog_revision": 2
+                  },
+                  "attempts": [
+                    {
+                      "attempt": 1,
+                      "cost_observations": [
+                        {
+                          "provenance": "observed",
+                          "value": {
+                            "cached_tokens": 0,
+                            "calls": 0,
+                            "cpu_ms": null,
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "peak_bytes": null,
+                            "reasoning_tokens": 0
+                          }
+                        }
+                      ],
+                      "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                      "mechanism": "lexical_overlap",
+                      "observed_ms": 3.5315829999831294,
+                      "outcome": "ranked",
+                      "reason": null,
+                      "reported_ms": 0.10357499999713582,
+                      "result": {
+                        "candidates": [
+                          {
+                            "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                            "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                            "evidence_refs": [
+                              "/description",
+                              "/identity/package_id"
+                            ],
+                            "kind": "skill",
+                            "score": 2,
+                            "score_kind": "token_overlap_count",
+                            "source_version": null
+                          }
+                        ],
+                        "catalog_revision": 2,
+                        "decision": "choice_required",
+                        "elapsed_ms": 0.10357499999713582,
+                        "host_snapshot_revision": null,
+                        "index_revision": "0132b7003217ac99f82c5d9827db87244545aede52a005b59b3b105632ba3e0e",
+                        "mechanism": "lexical_overlap",
+                        "outcome": "ranked",
+                        "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                        "schema_version": 2,
+                        "selector": {
+                          "name": "lexical",
+                          "version": "1"
+                        },
+                        "usage_claims": null
+                      },
+                      "selector": {
+                        "name": "lexical",
+                        "version": "1"
+                      }
+                    }
+                  ],
+                  "base_candidates": [
+                    {
+                      "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                      "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                      "evidence_refs": [
+                        "/description",
+                        "/identity/package_id"
+                      ],
+                      "kind": "skill",
+                      "score": 2,
+                      "score_kind": "token_overlap_count",
+                      "source_version": null
+                    }
+                  ],
+                  "base_decision": "choice_required",
+                  "catalog_revision": 2,
+                  "decision": "choice_required",
+                  "embeddings": [],
+                  "fallback_reason": null,
+                  "final_candidates": [
+                    {
+                      "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                      "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                      "evidence_refs": [
+                        "/description",
+                        "/identity/package_id"
+                      ],
+                      "kind": "skill",
+                      "score": 2,
+                      "score_kind": "token_overlap_count",
+                      "source_version": null
+                    }
+                  ],
+                  "final_decision": "choice_required",
+                  "host_run_ids": [],
+                  "host_snapshot_revision": null,
+                  "observed_ms": 20.825197000021944,
+                  "primary_attempt": 0,
+                  "schema_version": 1
+                },
+                "state_version": 1
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 4,
+              "timestamp": "2026-10-31T18:32:47.486047Z"
+            },
+            {
+              "actor": "adapter",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "chosen",
+              "payload": {
+                "action": {
+                  "adapter_id": "ordinary-native-channel",
+                  "catalog_revision": 2,
+                  "choice": {
+                    "asset_id": "skill:cda6337a9bea371e2780a4b5cde74d72754d99ff015e98323bbc481a047bc06a",
+                    "content_hash": "e725a50ff28609591b91c528ab0476a65a7c7f43e4fad5496a5dac342d632609",
+                    "kind": "asset"
+                  },
+                  "host_snapshot_revision": null,
+                  "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+                  "recorded_at": "2026-10-31T18:32:48.411915Z",
+                  "scope": {
+                    "user_id": "u",
+                    "workspace_id": "w"
+                  },
+                  "state_version": 2,
+                  "task_id": "894335e3364f741f2ce7249e5f63da537096641fe902bf1a47309ebf26d27ccc"
+                },
+                "state_version": 2
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 5,
+              "timestamp": "2026-10-31T18:32:48.411915Z"
+            },
+            {
+              "actor": "adapter",
+              "elapsed_ms": 26.395304999994096,
+              "erased": true,
+              "event_type": "feedback.recorded",
+              "payload": null,
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 6,
+              "timestamp": "2026-10-31T18:32:48.868738Z"
+            },
+            {
+              "actor": "adapter",
+              "elapsed_ms": 26.395304999994096,
+              "erased": false,
+              "event_type": "feedback.deleted",
+              "payload": {
+                "feedback_id_digest": "bb19c26737f642e731cd74b5b59cbe8ec4e3f9be5368cd72a23d6162cb69f87e",
+                "feedback_revision": 2
+              },
+              "recommendation_id": "91dea755-b496-4f37-b34a-b17643fc2afe",
+              "schema_version": 1,
+              "seq": 7,
+              "timestamp": "2026-10-31T18:32:49.121402Z"
+            }
+          ]
+        }
+      },
+      "mechanism": "official native ControlUiHost.request via real DOM buttons",
+      "locale": "en-US"
+    },
+    "positive_events": [
+      {
+        "kind": "http_attempt",
+        "method": "GET",
+        "path": "/api/latest-version",
+        "attempt_id": "b5408075-a444-4900-bc15-f755ca8c0a86",
+        "monotonic_ns": "148024804963"
+      },
+      {
+        "kind": "http",
+        "path": "/api/latest-version",
+        "status": 200,
+        "attempt_id": "b5408075-a444-4900-bc15-f755ca8c0a86",
+        "monotonic_ns": "148544099445"
+      },
+      {
+        "kind": "http_attempt",
+        "method": "GET",
+        "path": "/avatar/e432f0f02ec00c1169bb5aab593e6cf17245f7e5c40ed882cdd71fc150a1ed63",
+        "attempt_id": "b7624c6e-d570-439a-8d54-b21710b87b50",
+        "monotonic_ns": "149653079601"
+      },
+      {
+        "kind": "http",
+        "path": "/avatar/e432f0f02ec00c1169bb5aab593e6cf17245f7e5c40ed882cdd71fc150a1ed63",
+        "status": 404,
+        "attempt_id": "b7624c6e-d570-439a-8d54-b21710b87b50",
+        "monotonic_ns": "150169759844"
+      },
+      {
+        "kind": "http_attempt",
+        "method": "GET",
+        "path": "/avatar/9b140c1ab6dfc2606537a076e6e89f5a37984a7735ce18dfd7a24eebfdb8df92",
+        "attempt_id": "334a5d91-3943-480c-82ec-a80eb275f8f1",
+        "monotonic_ns": "156021455237"
+      },
+      {
+        "kind": "http",
+        "path": "/avatar/9b140c1ab6dfc2606537a076e6e89f5a37984a7735ce18dfd7a24eebfdb8df92",
+        "status": 404,
+        "attempt_id": "334a5d91-3943-480c-82ec-a80eb275f8f1",
+        "monotonic_ns": "156135132949"
+      },
+      {
+        "kind": "http_attempt",
+        "method": "GET",
+        "path": "/relay/v1/feedback",
+        "attempt_id": "c0e8b275-217f-4934-ba7b-30d24a9f30ca",
+        "monotonic_ns": "158134964397"
+      },
+      {
+        "kind": "http",
+        "path": "/relay/v1/feedback",
+        "status": 200,
+        "attempt_id": "c0e8b275-217f-4934-ba7b-30d24a9f30ca",
+        "monotonic_ns": "158173942249"
+      },
+      {
+        "kind": "http_attempt",
+        "method": "POST",
+        "path": "/relay/v1/recommendations",
+        "attempt_id": "5a18f84d-8d55-4e20-b3d5-f77fbbf71524",
+        "monotonic_ns": "160415417513"
+      },
+      {
+        "kind": "http",
+        "path": "/relay/v1/recommendations",
+        "status": 200,
+        "attempt_id": "5a18f84d-8d55-4e20-b3d5-f77fbbf71524",
+        "monotonic_ns": "160465617936"
+      },
+      {
+        "kind": "http_attempt",
+        "method": "POST",
+        "path": "/relay/v1/recommendations/91dea755-b496-4f37-b34a-b17643fc2afe/choice",
+        "attempt_id": "0ba96dd5-5d8e-4647-ac1b-b7fd67924d75",
+        "monotonic_ns": "161373459232"
+      },
+      {
+        "kind": "http",
+        "path": "/relay/v1/recommendations/91dea755-b496-4f37-b34a-b17643fc2afe/choice",
+        "status": 200,
+        "attempt_id": "0ba96dd5-5d8e-4647-ac1b-b7fd67924d75",
+        "monotonic_ns": "161393433844"
+      },
+      {
+        "kind": "http_attempt",
+        "method": "POST",
+        "path": "/relay/v1/recommendations/91dea755-b496-4f37-b34a-b17643fc2afe/feedback",
+        "attempt_id": "ac20c78b-90b5-4ca6-ba03-4ccc8c729a12",
+        "monotonic_ns": "161828974752"
+      },
+      {
+        "kind": "http",
+        "path": "/relay/v1/recommendations/91dea755-b496-4f37-b34a-b17643fc2afe/feedback",
+        "status": 200,
+        "attempt_id": "ac20c78b-90b5-4ca6-ba03-4ccc8c729a12",
+        "monotonic_ns": "161849811257"
+      },
+      {
+        "kind": "http_attempt",
+        "method": "GET",
+        "path": "/relay/v1/feedback",
+        "attempt_id": "02dfdf93-8c3a-4334-97b0-82ace86f72fb",
+        "monotonic_ns": "161933572141"
+      },
+      {
+        "kind": "http",
+        "path": "/relay/v1/feedback",
+        "status": 200,
+        "attempt_id": "02dfdf93-8c3a-4334-97b0-82ace86f72fb",
+        "monotonic_ns": "161936641661"
+      },
+      {
+        "kind": "http_attempt",
+        "method": "DELETE",
+        "path": "/relay/v1/feedback/f57015dd-1454-4b30-acc8-0f9000e6fc7c",
+        "attempt_id": "91b96aff-03fc-4021-9800-07d560746ac5",
+        "monotonic_ns": "162084344576"
+      },
+      {
+        "kind": "http",
+        "path": "/relay/v1/feedback/f57015dd-1454-4b30-acc8-0f9000e6fc7c",
+        "status": 200,
+        "attempt_id": "91b96aff-03fc-4021-9800-07d560746ac5",
+        "monotonic_ns": "162094897020"
+      },
+      {
+        "kind": "http_attempt",
+        "method": "POST",
+        "path": "/relay/v1/feedback/reset",
+        "attempt_id": "1d0daee7-f83d-4529-a1fb-957e7d101718",
+        "monotonic_ns": "162218105635"
+      },
+      {
+        "kind": "http",
+        "path": "/relay/v1/feedback/reset",
+        "status": 200,
+        "attempt_id": "1d0daee7-f83d-4529-a1fb-957e7d101718",
+        "monotonic_ns": "162223176461"
+      }
+    ],
+    "negative_receipts": [
+      {
+        "observed": {
+          "id": "d62998b8-e928-4f19-b364-773f94aeca25",
+          "socket_id": "3dc0de08-dcf5-420d-a290-fb00f95f8d76",
+          "frame": {
+            "type": "res",
+            "id": "d62998b8-e928-4f19-b364-773f94aeca25",
+            "ok": false,
+            "error": {
+              "code": "FORBIDDEN",
+              "message": "Session access changed; reopen the session before continuing.",
+              "details": {
+                "code": "SESSION_ACCESS_CHANGED"
+              }
+            }
+          }
+        },
+        "target": {
+          "sessionKey": "agent:main:person-38d62c89d297a341",
+          "expectedSessionId": "84507fda-7dd5-4bc0-8fc1-9c89fe724e59",
+          "expectedLifecycleRevision": "f0f55735-5275-4b4f-a56d-24ad2201dc0e"
+        }
+      },
+      {
+        "observed": {
+          "id": "a5f9ff18-54a4-45bc-b99d-3e91d0a046dc",
+          "socket_id": "3dc0de08-dcf5-420d-a290-fb00f95f8d76",
+          "frame": {
+            "type": "res",
+            "id": "a5f9ff18-54a4-45bc-b99d-3e91d0a046dc",
+            "ok": false,
+            "error": {
+              "code": "INVALID_REQUEST",
+              "message": "native_action_unavailable"
+            }
+          }
+        },
+        "target": {
+          "sessionKey": "agent:main:person-7e12590f620d80d5",
+          "expectedSessionId": "620942d8-3fb1-4e31-85ba-9b0e74760bb1",
+          "expectedLifecycleRevision": "5ca25467-40f8-4317-9610-93910b1b6241"
+        }
+      }
+    ],
+    "negative_events": [],
+    "retirement": {
+      "held_backend_entered": true,
+      "fetch_failures": [
+        {
+          "kind": "http_error",
+          "attempt_id": "af8ac6de-e5ac-455f-8cc1-78ee4e6e26a9",
+          "path": "/relay/v1/feedback",
+          "aborted": true,
+          "monotonic_ns": "162374824711"
+        }
+      ],
+      "attempt": {
+        "kind": "http_attempt",
+        "method": "GET",
+        "path": "/relay/v1/feedback",
+        "attempt_id": "af8ac6de-e5ac-455f-8cc1-78ee4e6e26a9",
+        "monotonic_ns": "162356079178"
+      },
+      "request_id": "32f45f45-0607-4c31-aca0-4e44a2bcea89",
+      "connection_id": "77aefdc7-f4fa-46ce-b0c6-e334db9090bf",
+      "native_socket_id": "62b62948-63a9-4d71-9602-35b028c36e0d",
+      "ui_guard_request": "1995a895-2d5f-487e-91f0-fa5bdbc99870",
+      "ui_retired": {
+        "phase": "connection_retired",
+        "requestId": "1995a895-2d5f-487e-91f0-fa5bdbc99870",
+        "connectionId": "77aefdc7-f4fa-46ce-b0c6-e334db9090bf",
+        "connection_aborted": true,
+        "monotonic_ns": "162369512570"
+      },
+      "after_window": [
+        {
+          "kind": "http_attempt",
+          "method": "GET",
+          "path": "/relay/v1/feedback",
+          "attempt_id": "af8ac6de-e5ac-455f-8cc1-78ee4e6e26a9",
+          "monotonic_ns": "162356079178"
+        },
+        {
+          "kind": "http_error",
+          "attempt_id": "af8ac6de-e5ac-455f-8cc1-78ee4e6e26a9",
+          "path": "/relay/v1/feedback",
+          "aborted": true,
+          "monotonic_ns": "162374824711"
+        }
+      ],
+      "ui_guard_events": [
+        {
+          "phase": "prepared",
+          "requestId": "1995a895-2d5f-487e-91f0-fa5bdbc99870",
+          "connectionId": "77aefdc7-f4fa-46ce-b0c6-e334db9090bf",
+          "monotonic_ns": "162344059766"
+        },
+        {
+          "phase": "connection_retired",
+          "requestId": "1995a895-2d5f-487e-91f0-fa5bdbc99870",
+          "connectionId": "77aefdc7-f4fa-46ce-b0c6-e334db9090bf",
+          "connection_aborted": true,
+          "monotonic_ns": "162369512570"
+        },
+        {
+          "phase": "guard_denied",
+          "requestId": "1995a895-2d5f-487e-91f0-fa5bdbc99870",
+          "connectionId": "77aefdc7-f4fa-46ce-b0c6-e334db9090bf",
+          "reason": "post_await_authority_retired",
+          "monotonic_ns": "162390410614"
+        }
+      ]
+    }
+  },
+  "transport": "programmatic fixture RPC on native authenticated Control UI socket",
+  "held_native_observations": {
+    "status": "handler_event_present",
+    "observations": [
+      {
+        "phase": "prepared",
+        "reason": null
+      },
+      {
+        "phase": "connection_retired",
+        "connection_aborted": true
+      },
+      {
+        "phase": "guard_denied",
+        "reason": "post_await_authority_retired"
+      }
+    ]
+  },
+  "observed_ms": 64526.65582399999
+}
