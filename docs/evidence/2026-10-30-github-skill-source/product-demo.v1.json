@@ -1,0 +1,1397 @@
+{
+  "profile": "qualified_source_refresh_demo",
+  "qualification": "provisional",
+  "acceptance_eligible": false,
+  "source_profile": "github.relaymind-skills.v1",
+  "specification_version": "0.59",
+  "capture_started_at": "2026-10-30T23:50:48.007044+00:00",
+  "production_configuration_sha256": "13742fce230597cb4b38379b72015bbbbc3705e0a029fb25e8aae978a46e2992",
+  "remote_seconds": 300,
+  "default_remote_seconds": 3600,
+  "job_trigger": "existing_worker_periodic",
+  "clock": "actual_monotonic_and_UTC",
+  "status": "completed",
+  "observations": [
+    {
+      "observed_elapsed_ms": 4688.099437975325,
+      "job": {
+        "job_id": "assetjob_4b8e3c380a144b9cb5f9fb6b2af874ac",
+        "source_id": "public-demo",
+        "config_digest": "c73da0c6e76848a41f9be39d9c40a20e03c9c1a84367fd6b7549b193de628d0e",
+        "state": "succeeded",
+        "started_at": "2026-10-30T23:50:48.128808Z",
+        "finished_at": "2026-10-30T23:50:52.410040Z",
+        "reason": null,
+        "duration_ms": 4277.991698007099,
+        "received_bytes": 28264,
+        "overlap_observed": false,
+        "drain_ms": null,
+        "batch_ms": [
+          50.03462440799922,
+          50.07290362846106,
+          50.25648116134107,
+          4251.172114047222,
+          40.48461909405887
+        ]
+      },
+      "events": [
+        {
+          "event_type": "queued",
+          "job_id": "assetjob_4b8e3c380a144b9cb5f9fb6b2af874ac",
+          "payload": {
+            "budgets": {
+              "background_gpu_with_llama": false,
+              "cpu_batch_ms": 50,
+              "exchange_seconds": 10,
+              "job_seconds": 60,
+              "max_asset_bytes": 10485760,
+              "max_metadata_bytes": 4194304,
+              "max_received_bytes": 104857600,
+              "max_records": 1000,
+              "max_requests": 1000,
+              "read_buffer_bytes": 1048576,
+              "workers": 1
+            },
+            "catalog_revision": 0,
+            "config_digest": "c73da0c6e76848a41f9be39d9c40a20e03c9c1a84367fd6b7549b193de628d0e",
+            "job_kind": "refresh",
+            "source_id": "public-demo"
+          },
+          "schema_version": 1,
+          "seq": 1,
+          "timestamp": "2026-10-30T23:50:48.128996Z"
+        },
+        {
+          "event_type": "started",
+          "job_id": "assetjob_4b8e3c380a144b9cb5f9fb6b2af874ac",
+          "payload": {
+            "catalog_revision": 0,
+            "index_revision": null
+          },
+          "schema_version": 1,
+          "seq": 2,
+          "timestamp": "2026-10-30T23:50:48.129818Z"
+        },
+        {
+          "event_type": "batch.finished",
+          "job_id": "assetjob_4b8e3c380a144b9cb5f9fb6b2af874ac",
+          "payload": {
+            "accepted_count": 0,
+            "batch": 1,
+            "duration_ms": 50.03462440799922,
+            "embeddings": [],
+            "received_bytes": 0,
+            "rejected_count": 0
+          },
+          "schema_version": 1,
+          "seq": 3,
+          "timestamp": "2026-10-30T23:50:48.958813Z"
+        },
+        {
+          "event_type": "batch.finished",
+          "job_id": "assetjob_4b8e3c380a144b9cb5f9fb6b2af874ac",
+          "payload": {
+            "accepted_count": 0,
+            "batch": 2,
+            "duration_ms": 50.07290362846106,
+            "embeddings": [],
+            "received_bytes": 0,
+            "rejected_count": 0
+          },
+          "schema_version": 1,
+          "seq": 4,
+          "timestamp": "2026-10-30T23:50:50.088905Z"
+        },
+        {
+          "event_type": "batch.finished",
+          "job_id": "assetjob_4b8e3c380a144b9cb5f9fb6b2af874ac",
+          "payload": {
+            "accepted_count": 0,
+            "batch": 3,
+            "duration_ms": 50.25648116134107,
+            "embeddings": [],
+            "received_bytes": 0,
+            "rejected_count": 0
+          },
+          "schema_version": 1,
+          "seq": 5,
+          "timestamp": "2026-10-30T23:50:51.760353Z"
+        },
+        {
+          "event_type": "batch.finished",
+          "job_id": "assetjob_4b8e3c380a144b9cb5f9fb6b2af874ac",
+          "payload": {
+            "accepted_count": 6,
+            "batch": 4,
+            "duration_ms": 4251.172114047222,
+            "embeddings": [],
+            "received_bytes": 28264,
+            "rejected_count": 0
+          },
+          "schema_version": 1,
+          "seq": 6,
+          "timestamp": "2026-10-30T23:50:52.381540Z"
+        },
+        {
+          "event_type": "batch.finished",
+          "job_id": "assetjob_4b8e3c380a144b9cb5f9fb6b2af874ac",
+          "payload": {
+            "accepted_count": 0,
+            "batch": 5,
+            "duration_ms": 40.48461909405887,
+            "embeddings": [],
+            "received_bytes": 0,
+            "rejected_count": 0
+          },
+          "schema_version": 1,
+          "seq": 7,
+          "timestamp": "2026-10-30T23:50:52.406683Z"
+        },
+        {
+          "event_type": "published",
+          "job_id": "assetjob_4b8e3c380a144b9cb5f9fb6b2af874ac",
+          "payload": {
+            "accepted_count": 6,
+            "catalog_revision": 1,
+            "duration_ms": 4277.991698007099,
+            "index_revision": "db926bd070590a08d196ffee62ef39e225ab2e9d09a8da45c93903af53019473",
+            "rejected_count": 0
+          },
+          "schema_version": 1,
+          "seq": 8,
+          "timestamp": "2026-10-30T23:50:52.409611Z"
+        }
+      ],
+      "catalog": {
+        "schema_version": 1,
+        "catalog_revision": 1,
+        "published_at": "2026-10-30T23:50:52.405470Z",
+        "sources": [
+          {
+            "source_id": "public-demo",
+            "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+            "content_hash": "2fa69bcc361427e863547ef454041177ead846c7cac2886b23cd082641c510c5",
+            "captured_at": "2026-10-30T23:50:48.130280Z",
+            "last_success_at": "2026-10-30T23:50:52.405470Z",
+            "accepted_count": 6,
+            "rejected_count": 0,
+            "stale": false,
+            "complete": true,
+            "exclusions": []
+          }
+        ],
+        "assets": [
+          {
+            "schema_version": 1,
+            "asset_id": "skill:1fc914493ab2656bd9b2cd6de47eb3216dbf9b4a34fb2bd8e2256cc653821646",
+            "kind": "skill",
+            "source_id": "public-demo",
+            "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/health-and-diagnostic-checklist/SKILL.md",
+            "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+            "captured_at": "2026-10-30T23:50:48.130280Z",
+            "content_hash": "fa1125586683763808d6883e0683e77a12267ec5d0e34db7ceb0faef57e9162d",
+            "description": "Run the fixed parallel demo workflow, where the local branch reads current service health and the external branch drafts a diagnostic checklist, then combine both. 并行演示：本地读取健康状态，外部模型起草诊断检查清单。",
+            "language_tags": [
+              "en",
+              "zh"
+            ],
+            "dependencies": [],
+            "availability": "unknown",
+            "stale": false,
+            "identity": {
+              "package_id": "health-and-diagnostic-checklist",
+              "package_version": "0.1.1"
+            }
+          },
+          {
+            "schema_version": 1,
+            "asset_id": "skill:43ce25d2b1ccd2549012a52698ab29d760470d412c554c9c23a3a878891ac7d1",
+            "kind": "skill",
+            "source_id": "public-demo",
+            "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/lookup-latest-deployment/SKILL.md",
+            "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+            "captured_at": "2026-10-30T23:50:48.130280Z",
+            "content_hash": "6c674428306fae0ecfb32a0ef23514f9140e0c5b5c3d43f093e5be9703078b9a",
+            "description": "Report the latest deployment of one demo service (staging-api or payments-api) with its deployment ID and time, or say that no deployment exists. 查询单个演示服务的最新部署。",
+            "language_tags": [
+              "en",
+              "zh"
+            ],
+            "dependencies": [],
+            "availability": "unknown",
+            "stale": false,
+            "identity": {
+              "package_id": "lookup-latest-deployment",
+              "package_version": "0.2.0"
+            }
+          },
+          {
+            "schema_version": 1,
+            "asset_id": "skill:65961644961100c898e0bb355f1f107ea04f649bdd8730c37b29adb8ff565f5e",
+            "kind": "skill",
+            "source_id": "public-demo",
+            "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/summarize-incident-counts/SKILL.md",
+            "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+            "captured_at": "2026-10-30T23:50:48.130280Z",
+            "content_hash": "dbb5d8ae163f928c60bb61707807080b68a4a3ec4f77574beede2b390f8e46bb",
+            "description": "Summarize incident counts for one demo service over a 15, 60, or 1440 minute window, using only the returned totals by severity. 汇总单个演示服务在指定时间窗口内的事件数量。",
+            "language_tags": [
+              "en",
+              "zh"
+            ],
+            "dependencies": [],
+            "availability": "unknown",
+            "stale": false,
+            "identity": {
+              "package_id": "summarize-incident-counts",
+              "package_version": "0.1.1"
+            }
+          },
+          {
+            "schema_version": 1,
+            "asset_id": "skill:d23c0068f9e3987977536893604cf2275c2c8fd25e6858afa8fdc16489e201b0",
+            "kind": "skill",
+            "source_id": "public-demo",
+            "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/check-service-health/SKILL.md",
+            "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+            "captured_at": "2026-10-30T23:50:48.130280Z",
+            "content_hash": "a7bbc4aa9dd18435d1299882576452bf55a0b150503013c5506a2665bbae8c0e",
+            "description": "Report the current health status of one demo service (staging-api or payments-api) with the exact status and check time the health tool returned. 查询单个演示服务的当前健康状态。",
+            "language_tags": [
+              "en",
+              "zh"
+            ],
+            "dependencies": [],
+            "availability": "unknown",
+            "stale": false,
+            "identity": {
+              "package_id": "check-service-health",
+              "package_version": "0.2.0"
+            }
+          },
+          {
+            "schema_version": 1,
+            "asset_id": "skill:d687ca5d674daddc2daa268522ba843924538435f0855bde1f8349a020711470",
+            "kind": "skill",
+            "source_id": "public-demo",
+            "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/delete-demo-database/SKILL.md",
+            "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+            "captured_at": "2026-10-30T23:50:48.130280Z",
+            "content_hash": "847d307ecb98012cfef73baf8e5dcc154997ee80993041ca3e4a9cd851b0b614",
+            "description": "Delete one disposable sandbox demo database after resolving its exact ID from the database list and getting the user's confirmation. 在确认后删除一个沙箱演示数据库。",
+            "language_tags": [
+              "en",
+              "zh"
+            ],
+            "dependencies": [],
+            "availability": "unknown",
+            "stale": false,
+            "identity": {
+              "package_id": "delete-demo-database",
+              "package_version": "0.1.1"
+            }
+          },
+          {
+            "schema_version": 1,
+            "asset_id": "skill:fac012365e748888c640877a1e4b72a73c50a9ef8abddba3e01d3734b7c2d4fc",
+            "kind": "skill",
+            "source_id": "public-demo",
+            "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/investigate-performance/SKILL.md",
+            "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+            "captured_at": "2026-10-30T23:50:48.130280Z",
+            "content_hash": "ff966b6441c0dcc36fa6e1c4013504cb4bd4b4c999b173bed7455dceffdf5fe6",
+            "description": "Collect deployment, metrics, and log evidence for a slow or failing demo service, then give an evidence-based assessment that keeps observations apart from hypotheses. 收集性能问题的证据，并区分观察与假设。",
+            "language_tags": [
+              "en",
+              "zh"
+            ],
+            "dependencies": [],
+            "availability": "unknown",
+            "stale": false,
+            "identity": {
+              "package_id": "investigate-performance",
+              "package_version": "0.2.0"
+            }
+          }
+        ]
+      },
+      "readiness": {
+        "schema_version": 1,
+        "state": "ready",
+        "reason": "usable_catalog",
+        "catalog_revision": 1,
+        "catalog_size": 6,
+        "lexical_ready": true,
+        "semantic_coverage": {
+          "ready": 0,
+          "total": 6
+        },
+        "pending_jobs": 0,
+        "failed_jobs": 0
+      },
+      "query_status": 200,
+      "query": {
+        "catalog_revision": 1,
+        "choice_expires_at": "2026-10-31T00:00:52.675642Z",
+        "created_at": "2026-10-30T23:50:52.661879Z",
+        "decision": "choice_required",
+        "displayed_candidates": [
+          {
+            "asset": {
+              "asset_id": "skill:d23c0068f9e3987977536893604cf2275c2c8fd25e6858afa8fdc16489e201b0",
+              "availability": "unknown",
+              "captured_at": "2026-10-30T23:50:48.130280Z",
+              "content_hash": "a7bbc4aa9dd18435d1299882576452bf55a0b150503013c5506a2665bbae8c0e",
+              "dependencies": [],
+              "description": "Report the current health status of one demo service (staging-api or payments-api) with the exact status and check time the health tool returned. 查询单个演示服务的当前健康状态。",
+              "identity": {
+                "package_id": "check-service-health",
+                "package_version": "0.2.0"
+              },
+              "kind": "skill",
+              "language_tags": [
+                "en",
+                "zh"
+              ],
+              "schema_version": 1,
+              "source_id": "public-demo",
+              "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/check-service-health/SKILL.md",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+              "stale": false
+            },
+            "candidate": {
+              "asset_id": "skill:d23c0068f9e3987977536893604cf2275c2c8fd25e6858afa8fdc16489e201b0",
+              "content_hash": "a7bbc4aa9dd18435d1299882576452bf55a0b150503013c5506a2665bbae8c0e",
+              "evidence_refs": [
+                "/description",
+                "/identity/package_id"
+              ],
+              "kind": "skill",
+              "score": 6,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            }
+          },
+          {
+            "asset": {
+              "asset_id": "skill:43ce25d2b1ccd2549012a52698ab29d760470d412c554c9c23a3a878891ac7d1",
+              "availability": "unknown",
+              "captured_at": "2026-10-30T23:50:48.130280Z",
+              "content_hash": "6c674428306fae0ecfb32a0ef23514f9140e0c5b5c3d43f093e5be9703078b9a",
+              "dependencies": [],
+              "description": "Report the latest deployment of one demo service (staging-api or payments-api) with its deployment ID and time, or say that no deployment exists. 查询单个演示服务的最新部署。",
+              "identity": {
+                "package_id": "lookup-latest-deployment",
+                "package_version": "0.2.0"
+              },
+              "kind": "skill",
+              "language_tags": [
+                "en",
+                "zh"
+              ],
+              "schema_version": 1,
+              "source_id": "public-demo",
+              "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/lookup-latest-deployment/SKILL.md",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+              "stale": false
+            },
+            "candidate": {
+              "asset_id": "skill:43ce25d2b1ccd2549012a52698ab29d760470d412c554c9c23a3a878891ac7d1",
+              "content_hash": "6c674428306fae0ecfb32a0ef23514f9140e0c5b5c3d43f093e5be9703078b9a",
+              "evidence_refs": [
+                "/description"
+              ],
+              "kind": "skill",
+              "score": 3,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            }
+          },
+          {
+            "asset": {
+              "asset_id": "skill:1fc914493ab2656bd9b2cd6de47eb3216dbf9b4a34fb2bd8e2256cc653821646",
+              "availability": "unknown",
+              "captured_at": "2026-10-30T23:50:48.130280Z",
+              "content_hash": "fa1125586683763808d6883e0683e77a12267ec5d0e34db7ceb0faef57e9162d",
+              "dependencies": [],
+              "description": "Run the fixed parallel demo workflow, where the local branch reads current service health and the external branch drafts a diagnostic checklist, then combine both. 并行演示：本地读取健康状态，外部模型起草诊断检查清单。",
+              "identity": {
+                "package_id": "health-and-diagnostic-checklist",
+                "package_version": "0.1.1"
+              },
+              "kind": "skill",
+              "language_tags": [
+                "en",
+                "zh"
+              ],
+              "schema_version": 1,
+              "source_id": "public-demo",
+              "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/health-and-diagnostic-checklist/SKILL.md",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+              "stale": false
+            },
+            "candidate": {
+              "asset_id": "skill:1fc914493ab2656bd9b2cd6de47eb3216dbf9b4a34fb2bd8e2256cc653821646",
+              "content_hash": "fa1125586683763808d6883e0683e77a12267ec5d0e34db7ceb0faef57e9162d",
+              "evidence_refs": [
+                "/description",
+                "/identity/package_id"
+              ],
+              "kind": "skill",
+              "score": 2,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            }
+          }
+        ],
+        "error": null,
+        "feedback_revision": 0,
+        "host_snapshot_revision": null,
+        "ready_at": "2026-10-30T23:50:52.675642Z",
+        "recommendation_id": "6284d8d9-8701-4003-a5e8-cc04e0584cb7",
+        "result": {
+          "adaptation": null,
+          "admission": {
+            "checked_at": "2026-10-30T23:50:52.671850Z",
+            "outcome": "accepted",
+            "rechecked_catalog_revision": 1
+          },
+          "attempts": [
+            {
+              "attempt": 1,
+              "cost_observations": [
+                {
+                  "provenance": "observed",
+                  "value": {
+                    "cached_tokens": 0,
+                    "calls": 0,
+                    "cpu_ms": null,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "peak_bytes": null,
+                    "reasoning_tokens": 0
+                  }
+                }
+              ],
+              "index_revision": "db926bd070590a08d196ffee62ef39e225ab2e9d09a8da45c93903af53019473",
+              "mechanism": "lexical_overlap",
+              "observed_ms": 2.6019850047305226,
+              "outcome": "ranked",
+              "reason": null,
+              "reported_ms": 0.12070196680724621,
+              "result": {
+                "candidates": [
+                  {
+                    "asset_id": "skill:d23c0068f9e3987977536893604cf2275c2c8fd25e6858afa8fdc16489e201b0",
+                    "content_hash": "a7bbc4aa9dd18435d1299882576452bf55a0b150503013c5506a2665bbae8c0e",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 6,
+                    "score_kind": "token_overlap_count",
+                    "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+                  },
+                  {
+                    "asset_id": "skill:43ce25d2b1ccd2549012a52698ab29d760470d412c554c9c23a3a878891ac7d1",
+                    "content_hash": "6c674428306fae0ecfb32a0ef23514f9140e0c5b5c3d43f093e5be9703078b9a",
+                    "evidence_refs": [
+                      "/description"
+                    ],
+                    "kind": "skill",
+                    "score": 3,
+                    "score_kind": "token_overlap_count",
+                    "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+                  },
+                  {
+                    "asset_id": "skill:1fc914493ab2656bd9b2cd6de47eb3216dbf9b4a34fb2bd8e2256cc653821646",
+                    "content_hash": "fa1125586683763808d6883e0683e77a12267ec5d0e34db7ceb0faef57e9162d",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+                  },
+                  {
+                    "asset_id": "skill:65961644961100c898e0bb355f1f107ea04f649bdd8730c37b29adb8ff565f5e",
+                    "content_hash": "dbb5d8ae163f928c60bb61707807080b68a4a3ec4f77574beede2b390f8e46bb",
+                    "evidence_refs": [
+                      "/description"
+                    ],
+                    "kind": "skill",
+                    "score": 1,
+                    "score_kind": "token_overlap_count",
+                    "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+                  },
+                  {
+                    "asset_id": "skill:fac012365e748888c640877a1e4b72a73c50a9ef8abddba3e01d3734b7c2d4fc",
+                    "content_hash": "ff966b6441c0dcc36fa6e1c4013504cb4bd4b4c999b173bed7455dceffdf5fe6",
+                    "evidence_refs": [
+                      "/description"
+                    ],
+                    "kind": "skill",
+                    "score": 1,
+                    "score_kind": "token_overlap_count",
+                    "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+                  }
+                ],
+                "catalog_revision": 1,
+                "decision": "choice_required",
+                "elapsed_ms": 0.12070196680724621,
+                "host_snapshot_revision": null,
+                "index_revision": "db926bd070590a08d196ffee62ef39e225ab2e9d09a8da45c93903af53019473",
+                "mechanism": "lexical_overlap",
+                "outcome": "ranked",
+                "recommendation_id": "6284d8d9-8701-4003-a5e8-cc04e0584cb7",
+                "schema_version": 2,
+                "selector": {
+                  "name": "lexical",
+                  "version": "1"
+                },
+                "usage_claims": null
+              },
+              "selector": {
+                "name": "lexical",
+                "version": "1"
+              }
+            }
+          ],
+          "base_candidates": [
+            {
+              "asset_id": "skill:d23c0068f9e3987977536893604cf2275c2c8fd25e6858afa8fdc16489e201b0",
+              "content_hash": "a7bbc4aa9dd18435d1299882576452bf55a0b150503013c5506a2665bbae8c0e",
+              "evidence_refs": [
+                "/description",
+                "/identity/package_id"
+              ],
+              "kind": "skill",
+              "score": 6,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:43ce25d2b1ccd2549012a52698ab29d760470d412c554c9c23a3a878891ac7d1",
+              "content_hash": "6c674428306fae0ecfb32a0ef23514f9140e0c5b5c3d43f093e5be9703078b9a",
+              "evidence_refs": [
+                "/description"
+              ],
+              "kind": "skill",
+              "score": 3,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:1fc914493ab2656bd9b2cd6de47eb3216dbf9b4a34fb2bd8e2256cc653821646",
+              "content_hash": "fa1125586683763808d6883e0683e77a12267ec5d0e34db7ceb0faef57e9162d",
+              "evidence_refs": [
+                "/description",
+                "/identity/package_id"
+              ],
+              "kind": "skill",
+              "score": 2,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:65961644961100c898e0bb355f1f107ea04f649bdd8730c37b29adb8ff565f5e",
+              "content_hash": "dbb5d8ae163f928c60bb61707807080b68a4a3ec4f77574beede2b390f8e46bb",
+              "evidence_refs": [
+                "/description"
+              ],
+              "kind": "skill",
+              "score": 1,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:fac012365e748888c640877a1e4b72a73c50a9ef8abddba3e01d3734b7c2d4fc",
+              "content_hash": "ff966b6441c0dcc36fa6e1c4013504cb4bd4b4c999b173bed7455dceffdf5fe6",
+              "evidence_refs": [
+                "/description"
+              ],
+              "kind": "skill",
+              "score": 1,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            }
+          ],
+          "base_decision": "choice_required",
+          "catalog_revision": 1,
+          "decision": "choice_required",
+          "embeddings": [],
+          "fallback_reason": null,
+          "final_candidates": [
+            {
+              "asset_id": "skill:d23c0068f9e3987977536893604cf2275c2c8fd25e6858afa8fdc16489e201b0",
+              "content_hash": "a7bbc4aa9dd18435d1299882576452bf55a0b150503013c5506a2665bbae8c0e",
+              "evidence_refs": [
+                "/description",
+                "/identity/package_id"
+              ],
+              "kind": "skill",
+              "score": 6,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:43ce25d2b1ccd2549012a52698ab29d760470d412c554c9c23a3a878891ac7d1",
+              "content_hash": "6c674428306fae0ecfb32a0ef23514f9140e0c5b5c3d43f093e5be9703078b9a",
+              "evidence_refs": [
+                "/description"
+              ],
+              "kind": "skill",
+              "score": 3,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:1fc914493ab2656bd9b2cd6de47eb3216dbf9b4a34fb2bd8e2256cc653821646",
+              "content_hash": "fa1125586683763808d6883e0683e77a12267ec5d0e34db7ceb0faef57e9162d",
+              "evidence_refs": [
+                "/description",
+                "/identity/package_id"
+              ],
+              "kind": "skill",
+              "score": 2,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:65961644961100c898e0bb355f1f107ea04f649bdd8730c37b29adb8ff565f5e",
+              "content_hash": "dbb5d8ae163f928c60bb61707807080b68a4a3ec4f77574beede2b390f8e46bb",
+              "evidence_refs": [
+                "/description"
+              ],
+              "kind": "skill",
+              "score": 1,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:fac012365e748888c640877a1e4b72a73c50a9ef8abddba3e01d3734b7c2d4fc",
+              "content_hash": "ff966b6441c0dcc36fa6e1c4013504cb4bd4b4c999b173bed7455dceffdf5fe6",
+              "evidence_refs": [
+                "/description"
+              ],
+              "kind": "skill",
+              "score": 1,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            }
+          ],
+          "final_decision": "choice_required",
+          "host_run_ids": [],
+          "host_snapshot_revision": null,
+          "observed_ms": 11.955255002249032,
+          "primary_attempt": 0,
+          "schema_version": 1
+        },
+        "retain_until": "2026-11-29T23:50:52.661879Z",
+        "schema_version": 1,
+        "selected_action": null,
+        "state": "ready",
+        "state_version": 1,
+        "task_id": "61907e5a7f129de1ff6da337a69ba6a1716f24a93cd746f63c4826a0b76ff744"
+      }
+    },
+    {
+      "observed_elapsed_ms": 308329.63567599654,
+      "job": {
+        "job_id": "assetjob_8838d39f57f3417badfcf569ec8f8ca3",
+        "source_id": "public-demo",
+        "config_digest": "c73da0c6e76848a41f9be39d9c40a20e03c9c1a84367fd6b7549b193de628d0e",
+        "state": "succeeded",
+        "started_at": "2026-10-30T23:55:52.410752Z",
+        "finished_at": "2026-10-30T23:55:56.227518Z",
+        "reason": null,
+        "duration_ms": 3813.7396989623085,
+        "received_bytes": 28264,
+        "overlap_observed": false,
+        "drain_ms": null,
+        "batch_ms": [
+          50.05644547054544,
+          50.00288796145469,
+          50.07734551327303,
+          3785.91202798998,
+          30.90769430855289
+        ]
+      },
+      "events": [
+        {
+          "event_type": "queued",
+          "job_id": "assetjob_8838d39f57f3417badfcf569ec8f8ca3",
+          "payload": {
+            "budgets": {
+              "background_gpu_with_llama": false,
+              "cpu_batch_ms": 50,
+              "exchange_seconds": 10,
+              "job_seconds": 60,
+              "max_asset_bytes": 10485760,
+              "max_metadata_bytes": 4194304,
+              "max_received_bytes": 104857600,
+              "max_records": 1000,
+              "max_requests": 1000,
+              "read_buffer_bytes": 1048576,
+              "workers": 1
+            },
+            "catalog_revision": 1,
+            "config_digest": "c73da0c6e76848a41f9be39d9c40a20e03c9c1a84367fd6b7549b193de628d0e",
+            "job_kind": "refresh",
+            "source_id": "public-demo"
+          },
+          "schema_version": 1,
+          "seq": 1,
+          "timestamp": "2026-10-30T23:55:52.411326Z"
+        },
+        {
+          "event_type": "started",
+          "job_id": "assetjob_8838d39f57f3417badfcf569ec8f8ca3",
+          "payload": {
+            "catalog_revision": 1,
+            "index_revision": null
+          },
+          "schema_version": 1,
+          "seq": 2,
+          "timestamp": "2026-10-30T23:55:52.417655Z"
+        },
+        {
+          "event_type": "batch.finished",
+          "job_id": "assetjob_8838d39f57f3417badfcf569ec8f8ca3",
+          "payload": {
+            "accepted_count": 0,
+            "batch": 1,
+            "duration_ms": 50.05644547054544,
+            "embeddings": [],
+            "received_bytes": 0,
+            "rejected_count": 0
+          },
+          "schema_version": 1,
+          "seq": 3,
+          "timestamp": "2026-10-30T23:55:53.734278Z"
+        },
+        {
+          "event_type": "batch.finished",
+          "job_id": "assetjob_8838d39f57f3417badfcf569ec8f8ca3",
+          "payload": {
+            "accepted_count": 0,
+            "batch": 2,
+            "duration_ms": 50.00288796145469,
+            "embeddings": [],
+            "received_bytes": 0,
+            "rejected_count": 0
+          },
+          "schema_version": 1,
+          "seq": 4,
+          "timestamp": "2026-10-30T23:55:54.557240Z"
+        },
+        {
+          "event_type": "batch.finished",
+          "job_id": "assetjob_8838d39f57f3417badfcf569ec8f8ca3",
+          "payload": {
+            "accepted_count": 0,
+            "batch": 3,
+            "duration_ms": 50.07734551327303,
+            "embeddings": [],
+            "received_bytes": 0,
+            "rejected_count": 0
+          },
+          "schema_version": 1,
+          "seq": 5,
+          "timestamp": "2026-10-30T23:55:55.991146Z"
+        },
+        {
+          "event_type": "batch.finished",
+          "job_id": "assetjob_8838d39f57f3417badfcf569ec8f8ca3",
+          "payload": {
+            "accepted_count": 6,
+            "batch": 4,
+            "duration_ms": 3785.91202798998,
+            "embeddings": [],
+            "received_bytes": 28264,
+            "rejected_count": 0
+          },
+          "schema_version": 1,
+          "seq": 6,
+          "timestamp": "2026-10-30T23:55:56.204532Z"
+        },
+        {
+          "event_type": "batch.finished",
+          "job_id": "assetjob_8838d39f57f3417badfcf569ec8f8ca3",
+          "payload": {
+            "accepted_count": 0,
+            "batch": 5,
+            "duration_ms": 30.90769430855289,
+            "embeddings": [],
+            "received_bytes": 0,
+            "rejected_count": 0
+          },
+          "schema_version": 1,
+          "seq": 7,
+          "timestamp": "2026-10-30T23:55:56.223312Z"
+        },
+        {
+          "event_type": "published",
+          "job_id": "assetjob_8838d39f57f3417badfcf569ec8f8ca3",
+          "payload": {
+            "accepted_count": 6,
+            "catalog_revision": 1,
+            "duration_ms": 3813.7396989623085,
+            "index_revision": "db926bd070590a08d196ffee62ef39e225ab2e9d09a8da45c93903af53019473",
+            "rejected_count": 0
+          },
+          "schema_version": 1,
+          "seq": 8,
+          "timestamp": "2026-10-30T23:55:56.226857Z"
+        }
+      ],
+      "catalog": {
+        "schema_version": 1,
+        "catalog_revision": 1,
+        "published_at": "2026-10-30T23:50:52.405470Z",
+        "sources": [
+          {
+            "source_id": "public-demo",
+            "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+            "content_hash": "2fa69bcc361427e863547ef454041177ead846c7cac2886b23cd082641c510c5",
+            "captured_at": "2026-10-30T23:55:52.418312Z",
+            "last_success_at": "2026-10-30T23:55:56.221999Z",
+            "accepted_count": 6,
+            "rejected_count": 0,
+            "stale": false,
+            "complete": true,
+            "exclusions": []
+          }
+        ],
+        "assets": [
+          {
+            "schema_version": 1,
+            "asset_id": "skill:1fc914493ab2656bd9b2cd6de47eb3216dbf9b4a34fb2bd8e2256cc653821646",
+            "kind": "skill",
+            "source_id": "public-demo",
+            "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/health-and-diagnostic-checklist/SKILL.md",
+            "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+            "captured_at": "2026-10-30T23:50:48.130280Z",
+            "content_hash": "fa1125586683763808d6883e0683e77a12267ec5d0e34db7ceb0faef57e9162d",
+            "description": "Run the fixed parallel demo workflow, where the local branch reads current service health and the external branch drafts a diagnostic checklist, then combine both. 并行演示：本地读取健康状态，外部模型起草诊断检查清单。",
+            "language_tags": [
+              "en",
+              "zh"
+            ],
+            "dependencies": [],
+            "availability": "unknown",
+            "stale": false,
+            "identity": {
+              "package_id": "health-and-diagnostic-checklist",
+              "package_version": "0.1.1"
+            }
+          },
+          {
+            "schema_version": 1,
+            "asset_id": "skill:43ce25d2b1ccd2549012a52698ab29d760470d412c554c9c23a3a878891ac7d1",
+            "kind": "skill",
+            "source_id": "public-demo",
+            "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/lookup-latest-deployment/SKILL.md",
+            "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+            "captured_at": "2026-10-30T23:50:48.130280Z",
+            "content_hash": "6c674428306fae0ecfb32a0ef23514f9140e0c5b5c3d43f093e5be9703078b9a",
+            "description": "Report the latest deployment of one demo service (staging-api or payments-api) with its deployment ID and time, or say that no deployment exists. 查询单个演示服务的最新部署。",
+            "language_tags": [
+              "en",
+              "zh"
+            ],
+            "dependencies": [],
+            "availability": "unknown",
+            "stale": false,
+            "identity": {
+              "package_id": "lookup-latest-deployment",
+              "package_version": "0.2.0"
+            }
+          },
+          {
+            "schema_version": 1,
+            "asset_id": "skill:65961644961100c898e0bb355f1f107ea04f649bdd8730c37b29adb8ff565f5e",
+            "kind": "skill",
+            "source_id": "public-demo",
+            "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/summarize-incident-counts/SKILL.md",
+            "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+            "captured_at": "2026-10-30T23:50:48.130280Z",
+            "content_hash": "dbb5d8ae163f928c60bb61707807080b68a4a3ec4f77574beede2b390f8e46bb",
+            "description": "Summarize incident counts for one demo service over a 15, 60, or 1440 minute window, using only the returned totals by severity. 汇总单个演示服务在指定时间窗口内的事件数量。",
+            "language_tags": [
+              "en",
+              "zh"
+            ],
+            "dependencies": [],
+            "availability": "unknown",
+            "stale": false,
+            "identity": {
+              "package_id": "summarize-incident-counts",
+              "package_version": "0.1.1"
+            }
+          },
+          {
+            "schema_version": 1,
+            "asset_id": "skill:d23c0068f9e3987977536893604cf2275c2c8fd25e6858afa8fdc16489e201b0",
+            "kind": "skill",
+            "source_id": "public-demo",
+            "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/check-service-health/SKILL.md",
+            "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+            "captured_at": "2026-10-30T23:50:48.130280Z",
+            "content_hash": "a7bbc4aa9dd18435d1299882576452bf55a0b150503013c5506a2665bbae8c0e",
+            "description": "Report the current health status of one demo service (staging-api or payments-api) with the exact status and check time the health tool returned. 查询单个演示服务的当前健康状态。",
+            "language_tags": [
+              "en",
+              "zh"
+            ],
+            "dependencies": [],
+            "availability": "unknown",
+            "stale": false,
+            "identity": {
+              "package_id": "check-service-health",
+              "package_version": "0.2.0"
+            }
+          },
+          {
+            "schema_version": 1,
+            "asset_id": "skill:d687ca5d674daddc2daa268522ba843924538435f0855bde1f8349a020711470",
+            "kind": "skill",
+            "source_id": "public-demo",
+            "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/delete-demo-database/SKILL.md",
+            "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+            "captured_at": "2026-10-30T23:50:48.130280Z",
+            "content_hash": "847d307ecb98012cfef73baf8e5dcc154997ee80993041ca3e4a9cd851b0b614",
+            "description": "Delete one disposable sandbox demo database after resolving its exact ID from the database list and getting the user's confirmation. 在确认后删除一个沙箱演示数据库。",
+            "language_tags": [
+              "en",
+              "zh"
+            ],
+            "dependencies": [],
+            "availability": "unknown",
+            "stale": false,
+            "identity": {
+              "package_id": "delete-demo-database",
+              "package_version": "0.1.1"
+            }
+          },
+          {
+            "schema_version": 1,
+            "asset_id": "skill:fac012365e748888c640877a1e4b72a73c50a9ef8abddba3e01d3734b7c2d4fc",
+            "kind": "skill",
+            "source_id": "public-demo",
+            "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/investigate-performance/SKILL.md",
+            "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+            "captured_at": "2026-10-30T23:50:48.130280Z",
+            "content_hash": "ff966b6441c0dcc36fa6e1c4013504cb4bd4b4c999b173bed7455dceffdf5fe6",
+            "description": "Collect deployment, metrics, and log evidence for a slow or failing demo service, then give an evidence-based assessment that keeps observations apart from hypotheses. 收集性能问题的证据，并区分观察与假设。",
+            "language_tags": [
+              "en",
+              "zh"
+            ],
+            "dependencies": [],
+            "availability": "unknown",
+            "stale": false,
+            "identity": {
+              "package_id": "investigate-performance",
+              "package_version": "0.2.0"
+            }
+          }
+        ]
+      },
+      "readiness": {
+        "schema_version": 1,
+        "state": "ready",
+        "reason": "usable_catalog",
+        "catalog_revision": 1,
+        "catalog_size": 6,
+        "lexical_ready": true,
+        "semantic_coverage": {
+          "ready": 0,
+          "total": 6
+        },
+        "pending_jobs": 0,
+        "failed_jobs": 0
+      },
+      "query_status": 200,
+      "query": {
+        "catalog_revision": 1,
+        "choice_expires_at": "2026-10-31T00:05:56.311919Z",
+        "created_at": "2026-10-30T23:55:56.295707Z",
+        "decision": "choice_required",
+        "displayed_candidates": [
+          {
+            "asset": {
+              "asset_id": "skill:d23c0068f9e3987977536893604cf2275c2c8fd25e6858afa8fdc16489e201b0",
+              "availability": "unknown",
+              "captured_at": "2026-10-30T23:50:48.130280Z",
+              "content_hash": "a7bbc4aa9dd18435d1299882576452bf55a0b150503013c5506a2665bbae8c0e",
+              "dependencies": [],
+              "description": "Report the current health status of one demo service (staging-api or payments-api) with the exact status and check time the health tool returned. 查询单个演示服务的当前健康状态。",
+              "identity": {
+                "package_id": "check-service-health",
+                "package_version": "0.2.0"
+              },
+              "kind": "skill",
+              "language_tags": [
+                "en",
+                "zh"
+              ],
+              "schema_version": 1,
+              "source_id": "public-demo",
+              "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/check-service-health/SKILL.md",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+              "stale": false
+            },
+            "candidate": {
+              "asset_id": "skill:d23c0068f9e3987977536893604cf2275c2c8fd25e6858afa8fdc16489e201b0",
+              "content_hash": "a7bbc4aa9dd18435d1299882576452bf55a0b150503013c5506a2665bbae8c0e",
+              "evidence_refs": [
+                "/description",
+                "/identity/package_id"
+              ],
+              "kind": "skill",
+              "score": 6,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            }
+          },
+          {
+            "asset": {
+              "asset_id": "skill:43ce25d2b1ccd2549012a52698ab29d760470d412c554c9c23a3a878891ac7d1",
+              "availability": "unknown",
+              "captured_at": "2026-10-30T23:50:48.130280Z",
+              "content_hash": "6c674428306fae0ecfb32a0ef23514f9140e0c5b5c3d43f093e5be9703078b9a",
+              "dependencies": [],
+              "description": "Report the latest deployment of one demo service (staging-api or payments-api) with its deployment ID and time, or say that no deployment exists. 查询单个演示服务的最新部署。",
+              "identity": {
+                "package_id": "lookup-latest-deployment",
+                "package_version": "0.2.0"
+              },
+              "kind": "skill",
+              "language_tags": [
+                "en",
+                "zh"
+              ],
+              "schema_version": 1,
+              "source_id": "public-demo",
+              "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/lookup-latest-deployment/SKILL.md",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+              "stale": false
+            },
+            "candidate": {
+              "asset_id": "skill:43ce25d2b1ccd2549012a52698ab29d760470d412c554c9c23a3a878891ac7d1",
+              "content_hash": "6c674428306fae0ecfb32a0ef23514f9140e0c5b5c3d43f093e5be9703078b9a",
+              "evidence_refs": [
+                "/description"
+              ],
+              "kind": "skill",
+              "score": 3,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            }
+          },
+          {
+            "asset": {
+              "asset_id": "skill:1fc914493ab2656bd9b2cd6de47eb3216dbf9b4a34fb2bd8e2256cc653821646",
+              "availability": "unknown",
+              "captured_at": "2026-10-30T23:50:48.130280Z",
+              "content_hash": "fa1125586683763808d6883e0683e77a12267ec5d0e34db7ceb0faef57e9162d",
+              "dependencies": [],
+              "description": "Run the fixed parallel demo workflow, where the local branch reads current service health and the external branch drafts a diagnostic checklist, then combine both. 并行演示：本地读取健康状态，外部模型起草诊断检查清单。",
+              "identity": {
+                "package_id": "health-and-diagnostic-checklist",
+                "package_version": "0.1.1"
+              },
+              "kind": "skill",
+              "language_tags": [
+                "en",
+                "zh"
+              ],
+              "schema_version": 1,
+              "source_id": "public-demo",
+              "source_locator": "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind/849c1be66ad9caed985aa0a9e55d439d3bd3a17b/skills/health-and-diagnostic-checklist/SKILL.md",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b",
+              "stale": false
+            },
+            "candidate": {
+              "asset_id": "skill:1fc914493ab2656bd9b2cd6de47eb3216dbf9b4a34fb2bd8e2256cc653821646",
+              "content_hash": "fa1125586683763808d6883e0683e77a12267ec5d0e34db7ceb0faef57e9162d",
+              "evidence_refs": [
+                "/description",
+                "/identity/package_id"
+              ],
+              "kind": "skill",
+              "score": 2,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            }
+          }
+        ],
+        "error": null,
+        "feedback_revision": 0,
+        "host_snapshot_revision": null,
+        "ready_at": "2026-10-30T23:55:56.311919Z",
+        "recommendation_id": "601ccaf0-b9e5-4b92-9421-b359ff587a71",
+        "result": {
+          "adaptation": null,
+          "admission": {
+            "checked_at": "2026-10-30T23:55:56.308083Z",
+            "outcome": "accepted",
+            "rechecked_catalog_revision": 1
+          },
+          "attempts": [
+            {
+              "attempt": 1,
+              "cost_observations": [
+                {
+                  "provenance": "observed",
+                  "value": {
+                    "cached_tokens": 0,
+                    "calls": 0,
+                    "cpu_ms": null,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "peak_bytes": null,
+                    "reasoning_tokens": 0
+                  }
+                }
+              ],
+              "index_revision": "db926bd070590a08d196ffee62ef39e225ab2e9d09a8da45c93903af53019473",
+              "mechanism": "lexical_overlap",
+              "observed_ms": 4.058203950989991,
+              "outcome": "ranked",
+              "reason": null,
+              "reported_ms": 0.168594007845968,
+              "result": {
+                "candidates": [
+                  {
+                    "asset_id": "skill:d23c0068f9e3987977536893604cf2275c2c8fd25e6858afa8fdc16489e201b0",
+                    "content_hash": "a7bbc4aa9dd18435d1299882576452bf55a0b150503013c5506a2665bbae8c0e",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 6,
+                    "score_kind": "token_overlap_count",
+                    "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+                  },
+                  {
+                    "asset_id": "skill:43ce25d2b1ccd2549012a52698ab29d760470d412c554c9c23a3a878891ac7d1",
+                    "content_hash": "6c674428306fae0ecfb32a0ef23514f9140e0c5b5c3d43f093e5be9703078b9a",
+                    "evidence_refs": [
+                      "/description"
+                    ],
+                    "kind": "skill",
+                    "score": 3,
+                    "score_kind": "token_overlap_count",
+                    "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+                  },
+                  {
+                    "asset_id": "skill:1fc914493ab2656bd9b2cd6de47eb3216dbf9b4a34fb2bd8e2256cc653821646",
+                    "content_hash": "fa1125586683763808d6883e0683e77a12267ec5d0e34db7ceb0faef57e9162d",
+                    "evidence_refs": [
+                      "/description",
+                      "/identity/package_id"
+                    ],
+                    "kind": "skill",
+                    "score": 2,
+                    "score_kind": "token_overlap_count",
+                    "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+                  },
+                  {
+                    "asset_id": "skill:65961644961100c898e0bb355f1f107ea04f649bdd8730c37b29adb8ff565f5e",
+                    "content_hash": "dbb5d8ae163f928c60bb61707807080b68a4a3ec4f77574beede2b390f8e46bb",
+                    "evidence_refs": [
+                      "/description"
+                    ],
+                    "kind": "skill",
+                    "score": 1,
+                    "score_kind": "token_overlap_count",
+                    "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+                  },
+                  {
+                    "asset_id": "skill:fac012365e748888c640877a1e4b72a73c50a9ef8abddba3e01d3734b7c2d4fc",
+                    "content_hash": "ff966b6441c0dcc36fa6e1c4013504cb4bd4b4c999b173bed7455dceffdf5fe6",
+                    "evidence_refs": [
+                      "/description"
+                    ],
+                    "kind": "skill",
+                    "score": 1,
+                    "score_kind": "token_overlap_count",
+                    "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+                  }
+                ],
+                "catalog_revision": 1,
+                "decision": "choice_required",
+                "elapsed_ms": 0.168594007845968,
+                "host_snapshot_revision": null,
+                "index_revision": "db926bd070590a08d196ffee62ef39e225ab2e9d09a8da45c93903af53019473",
+                "mechanism": "lexical_overlap",
+                "outcome": "ranked",
+                "recommendation_id": "601ccaf0-b9e5-4b92-9421-b359ff587a71",
+                "schema_version": 2,
+                "selector": {
+                  "name": "lexical",
+                  "version": "1"
+                },
+                "usage_claims": null
+              },
+              "selector": {
+                "name": "lexical",
+                "version": "1"
+              }
+            }
+          ],
+          "base_candidates": [
+            {
+              "asset_id": "skill:d23c0068f9e3987977536893604cf2275c2c8fd25e6858afa8fdc16489e201b0",
+              "content_hash": "a7bbc4aa9dd18435d1299882576452bf55a0b150503013c5506a2665bbae8c0e",
+              "evidence_refs": [
+                "/description",
+                "/identity/package_id"
+              ],
+              "kind": "skill",
+              "score": 6,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:43ce25d2b1ccd2549012a52698ab29d760470d412c554c9c23a3a878891ac7d1",
+              "content_hash": "6c674428306fae0ecfb32a0ef23514f9140e0c5b5c3d43f093e5be9703078b9a",
+              "evidence_refs": [
+                "/description"
+              ],
+              "kind": "skill",
+              "score": 3,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:1fc914493ab2656bd9b2cd6de47eb3216dbf9b4a34fb2bd8e2256cc653821646",
+              "content_hash": "fa1125586683763808d6883e0683e77a12267ec5d0e34db7ceb0faef57e9162d",
+              "evidence_refs": [
+                "/description",
+                "/identity/package_id"
+              ],
+              "kind": "skill",
+              "score": 2,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:65961644961100c898e0bb355f1f107ea04f649bdd8730c37b29adb8ff565f5e",
+              "content_hash": "dbb5d8ae163f928c60bb61707807080b68a4a3ec4f77574beede2b390f8e46bb",
+              "evidence_refs": [
+                "/description"
+              ],
+              "kind": "skill",
+              "score": 1,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:fac012365e748888c640877a1e4b72a73c50a9ef8abddba3e01d3734b7c2d4fc",
+              "content_hash": "ff966b6441c0dcc36fa6e1c4013504cb4bd4b4c999b173bed7455dceffdf5fe6",
+              "evidence_refs": [
+                "/description"
+              ],
+              "kind": "skill",
+              "score": 1,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            }
+          ],
+          "base_decision": "choice_required",
+          "catalog_revision": 1,
+          "decision": "choice_required",
+          "embeddings": [],
+          "fallback_reason": null,
+          "final_candidates": [
+            {
+              "asset_id": "skill:d23c0068f9e3987977536893604cf2275c2c8fd25e6858afa8fdc16489e201b0",
+              "content_hash": "a7bbc4aa9dd18435d1299882576452bf55a0b150503013c5506a2665bbae8c0e",
+              "evidence_refs": [
+                "/description",
+                "/identity/package_id"
+              ],
+              "kind": "skill",
+              "score": 6,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:43ce25d2b1ccd2549012a52698ab29d760470d412c554c9c23a3a878891ac7d1",
+              "content_hash": "6c674428306fae0ecfb32a0ef23514f9140e0c5b5c3d43f093e5be9703078b9a",
+              "evidence_refs": [
+                "/description"
+              ],
+              "kind": "skill",
+              "score": 3,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:1fc914493ab2656bd9b2cd6de47eb3216dbf9b4a34fb2bd8e2256cc653821646",
+              "content_hash": "fa1125586683763808d6883e0683e77a12267ec5d0e34db7ceb0faef57e9162d",
+              "evidence_refs": [
+                "/description",
+                "/identity/package_id"
+              ],
+              "kind": "skill",
+              "score": 2,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:65961644961100c898e0bb355f1f107ea04f649bdd8730c37b29adb8ff565f5e",
+              "content_hash": "dbb5d8ae163f928c60bb61707807080b68a4a3ec4f77574beede2b390f8e46bb",
+              "evidence_refs": [
+                "/description"
+              ],
+              "kind": "skill",
+              "score": 1,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            },
+            {
+              "asset_id": "skill:fac012365e748888c640877a1e4b72a73c50a9ef8abddba3e01d3734b7c2d4fc",
+              "content_hash": "ff966b6441c0dcc36fa6e1c4013504cb4bd4b4c999b173bed7455dceffdf5fe6",
+              "evidence_refs": [
+                "/description"
+              ],
+              "kind": "skill",
+              "score": 1,
+              "score_kind": "token_overlap_count",
+              "source_version": "849c1be66ad9caed985aa0a9e55d439d3bd3a17b"
+            }
+          ],
+          "final_decision": "choice_required",
+          "host_run_ids": [],
+          "host_snapshot_revision": null,
+          "observed_ms": 13.91700201202184,
+          "primary_attempt": 0,
+          "schema_version": 1
+        },
+        "retain_until": "2026-11-29T23:55:56.295707Z",
+        "schema_version": 1,
+        "selected_action": null,
+        "state": "ready",
+        "state_version": 1,
+        "task_id": "61907e5a7f129de1ff6da337a69ba6a1716f24a93cd746f63c4826a0b76ff744"
+      }
+    }
+  ],
+  "limits": [
+    "six_source_skills_not_300_asset_gate",
+    "no_supported_platform_or_resource_pass",
+    "no_real_source_change_or_outage_claim_without_observation"
+  ],
+  "elapsed_ms": 308337.859866966,
+  "actual_job_start_interval_seconds": 304.281944,
+  "source_change_observed": false,
+  "live_add_update_remove": "not_observed"
+}

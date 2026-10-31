@@ -809,7 +809,7 @@ def _job_interval(job: Mapping[str, object], *, kind: str) -> tuple[datetime, da
 
 
 def _overlap(a: tuple[datetime, datetime], b: tuple[datetime, datetime]) -> bool:
-    return max(a[0], b[0]) <= min(a[1], b[1])
+    return max(a[0], b[0]) < min(a[1], b[1])
 
 
 def _contention_observed(workload: WorkloadSamples) -> bool | None:

@@ -213,7 +213,17 @@ mode = "live"
 # remote_seconds = 3600
 # backoff_initial_seconds = 60
 # backoff_max_seconds = 3600
-# No remote adapter is qualified. Hybrid/adaptation artifacts are not yet admitted.
+# The installed public GitHub profile supports bounded periodic discovery:
+# [[assets.sources]]
+# source_id = "public-repository-skills"
+# kind = "qualified_remote"
+# adapter_contract = "github.relaymind-skills.v1"
+# No path or credential is required for this public source. Optional credential
+# references resolve only inside transport; never put a token in this file.
+# remote_seconds remains 3600 by default; values below the source floor 300 fail.
+# Explicit rescans cannot bypass mandatory provider cooldown across restart.
+# Matrix market refresh is not qualified; user libraries retain local/import paths.
+# Hybrid/adaptation artifact admission is separate.
 #
 # [user_actions]
 # registrations_path = "private/action-registrations.json" # relative to this config

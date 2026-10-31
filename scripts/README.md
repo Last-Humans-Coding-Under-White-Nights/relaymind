@@ -811,3 +811,20 @@ unsuccessfully for failed reporting acceptance. A measured missed target is a
 valid finding. Header-before-answer-token is a diagnostic: without a comparable
 client/generation-start clock it does not prove the stronger generation-start
 hypothesis. No default or live capability decision follows from these tests.
+
+## Qualified source probes (#203; RM34/RM38/RM43)
+
+`probes/qualify_github_skill_source.py --output DIR [--prior-capture DIR]` performs
+bounded read-only acquisition for the one fixed public GitHub skills profile,
+verifies complete inventory and original/manifest/rights hashes, and writes
+safe observations. Earlier planning ref evidence must honor the observed polling
+floor. Probe evidence never activates a source or accepts an arbitrary URL.
+
+`probes/run_asset_refresh_demo.py --config FILE --output DIR` uses a new disposable
+production store and the installed profile at an explicit 300-second cadence.
+It starts the existing launcher/worker, waits for two actual scheduled jobs and
+records source/job/readiness plus lexical API results. It does not fake time,
+rescan manually, execute assets or change inference budgets/provider. Keep it
+running in the background for the real interval. See the source section in
+`docs/TESTING.md` and the versioned actual/fixture distinctions in
+`docs/evidence/2026-10-30-github-skill-source/README.md`.

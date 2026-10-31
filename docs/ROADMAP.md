@@ -1161,15 +1161,30 @@ in the table below. Partial PRs must state retained acceptance; incomplete host,
 model and platform deliverables stay open. Development completion of
 #191/#199/#200 does not assert independent corpus or full M10 acceptance.
 
+#201/#202 backend integration checkpoint (spec 0.59): the bounded local artifact
+loader, cooperative hybrid ranking/vector lifecycle and private explicit-correction
+adaptation/reset backend are implemented. Native loading reacquires the same CPU
+owner and retains actual cancellation/drain evidence. The production embedding
+qualification registry remains empty: no ordinary-config activation or portable
+qualified model is claimed. Historical 47-asset/36-case native development results
+remain provisional, distinct from the current 412-asset/128-case source benchmark.
+Real host correction authority, formal chronological episodes and final quality,
+whole-task, supported-platform and resource gates remain open.
+
 #203 source qualification checkpoint (spec 0.59): the reviewed fixed public
 GitHub Git skill profile has an actual complete six-skill/twelve-file acquisition
 plus root MIT evidence, 17 serial GETs and two ref observations separated by
 704.62 seconds. The commit remained 849c1be; change was not observed. Section
-4.6.1.1 defines this installed protocol profile; runtime transport/scheduling
-activation and a real second periodic product job remain pending. Existing
-local/import sources remain supported. No AC29/AC34 full workload/platform pass,
-Matrix market refresh or corpus substitution is inferred. Acquisition evidence
-is in [the source record](evidence/2026-10-30-github-skill-source/README.md).
+4.6.1.1 defines this installed protocol profile. The implementation candidate
+now includes bounded transport, immutable acquisition, profile-persisted cooldown
+and scheduling on the existing worker. Two actual periodic product jobs were
+304.28 seconds apart; both published six assets with lexical readiness/API200,
+and the upstream was unchanged. Controlled source-server tests cover changes,
+outage/recovery, cancellation, atomic restart and foreground I/O boundaries.
+Independent review and integrated functional verification passed; no AC29/AC34 full workload or
+supported-platform pass, Matrix market refresh or corpus substitution is inferred.
+Local/import user libraries remain supported. Actual/fixture distinctions and
+versioned observations are in [the source record](evidence/2026-10-30-github-skill-source/README.md).
 
 The table retains the other issues' direct dependencies and foundations.
 #191/#199/#200 describe the delivered working profile; their separate formal

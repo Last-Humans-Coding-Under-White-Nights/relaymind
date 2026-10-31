@@ -18,6 +18,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Local semantic retrieval and correction backends (#201/#202; RM38/RM41/RM42;
+  AC29/AC32/AC33): pinned local artifacts, deterministic segmented representations,
+  revisioned hybrid vectors/fusion, measured inference and bounded private
+  correction voting/reset share the existing source/derived worker. Native load
+  CPU ownership and cancellation remain explicit. The production embedding
+  qualification registry remains empty; ordinary activation, host correction
+  authority, formal episodes and final quality/platform gates remain open.
+
+- #203 (RM34/RM38/RM43; AC25/AC29/AC34): activate the reviewed installed
+  public GitHub skills profile through bounded immutable acquisition and the
+  existing source worker. Preserve explicit owned removals, stale/recovery
+  evidence, profile-keyed provider cooldown across restart/rescan, isolated
+  credentials and unchanged job budgets. Record two actual scheduled source
+  jobs separately from fixture lifecycle tests and outstanding full-M10 gates.
+
 - Specification 0.58 → 0.59 (#203; RM34/RM38/RM43; AC25/AC29/AC34):
   define the installed public GitHub Git skill-source profile with immutable
   original/manifest/rights verification, complete scoped removal proof, closed

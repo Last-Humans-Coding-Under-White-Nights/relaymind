@@ -132,3 +132,58 @@ owns (`request_cancel`), the same path as the native cancel (section 7.4).
 
 Lower layers must not import higher ones. The store must not depend on
 adapters. Adapters must not depend on SQLite.
+
+## Qualified remote skill refresh (RM34/RM38/RM43)
+
+`assets/remote_contracts.py` owns the reviewed installed
+`github.relaymind-skills.v1` profile. Launch configuration names that contract;
+it cannot supply a URL, import adapter code or self-qualify. Ordinary user
+libraries still use local directories or explicit metadata imports.
+`remote_transport.py` keeps one bounded HTTP exchange at a time inside the
+existing drained capture worker. Native response waits close the CPU window;
+parsing, hashing and publication reacquire its foreground gate. The transport
+refuses a depleted request/byte budget before dispatch, sends optional bearer
+credentials only to the fixed API origin, rejects redirects and records no
+credential/reference or raw exception body in public evidence.
+
+`remote_github.py` pins the branch's commit for a complete root/skills inventory,
+then verifies every selected original, optional manifest and MIT notice against
+Git blob length/ID and independent SHA-256. It shares ordinary skill projection
+with local acquisition. Source versions are immutable commits; declared package
+versions stay separate. Only a fully valid configured scope supplies explicit
+source-owned removals to the existing atomic catalog/lexical publication.
+Errors retain the last good generation and its truthful stale/last-success state.
+
+`store/asset_remote_state.py` persists mandatory not-before UTC by installed
+profile. Atomic poll reservation prevents a concurrent owner, renamed source ID
+or explicit rescan from bypassing it. `AssetCatalogService` uses this state in
+its existing due/delay queue, alongside ordinary source-ID backoff and configured
+cadence. A blocked remote future does not spin or starve another eligible
+source. There is no new worker, execution-slot acquisition or public cooldown
+API. Restart repairs interrupted jobs and rebuilds lexical state from committed
+metadata, preserving both source content and provider cooldown.
+
+### Local semantic backend ownership
+
+The optional section 6.1 artifact loader verifies bounded local originals and
+exact runtime/device identities before a reviewed qualification decision.
+`embedding_bundle.py` binds semantic configurations to effective launch identity;
+the production qualification registry is empty. No supplied config/evidence flag,
+model URL, environment default or arbitrary backend import can activate it.
+
+Hybrid query representations, document vectors and bounded correction similarity
+use the same pinned local backend with separate inference observations. The
+source/lexical worker also owns semantic rebuilds; remote hard cooldown applies
+to its installed source profile and does not delay a derived-only rebuild.
+Catalog/content changes invalidate vectors; deletion prunes them. Source job
+identity binds both effective semantic configuration and refresh/profile/budget
+policy. Native I/O is quiescent; native CPU construction/inference retains owned
+windows and actual drain until completion. Cooperative targets do not imply an
+unmeasured universal cancellation or resource bound.
+
+Enabled adaptation accepts only eligible scoped explicit corrections, with
+bounded history/votes and rank movement. It cannot add a missing candidate,
+promote confidence or grant host authority. Reset/delete fence private buffers
+before acknowledgment. A failed required stage retains known inference evidence
+and refuses success. Ordinary production artifact activation, host correction
+authority and final episode/quality/platform acceptance remain separate gates.
