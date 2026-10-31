@@ -108,9 +108,16 @@ def composed_pass(capture):
         ):
             return False
         correction = receipts["correction"]["receipt"]
-        if correction["feedback"]["kind"] != "correction" or not any(
-            row["feedback_id"] == correction["feedback_id"]
+        inspected = [
+            row
             for row in receipts["inspect"]["receipt"]["records"]
+            if row["feedback_id"] == correction["feedback_id"]
+        ]
+        if (
+            set(correction) != {"schema_version", "feedback_id", "feedback_revision"}
+            or correction["schema_version"] != 1
+            or len(inspected) != 1
+            or inspected[0]["feedback"]["kind"] != "correction"
         ):
             return False
         if (
@@ -240,6 +247,7 @@ class ActionComposition:
         ]
         private_json(self.operator_file, self.config)
         results, checks = {}, {}
+        capture["composed_actions"] = {"checks": checks, "receipts": results}
 
         def call(input, key, index=0, target=None, expect=True):
             observed = rpc(
@@ -317,10 +325,15 @@ class ActionComposition:
             ),
             "correction",
         )
-        checks["correction"] = correction["feedback"]["kind"] == "correction"
         inspected = call(dict(kind="listFeedback", page=dict(limit=10)), "inspect")
-        checks["inspect"] = any(
-            item["feedback_id"] == correction["feedback_id"] for item in inspected["records"]
+        matching = [
+            item
+            for item in inspected["records"]
+            if item["feedback_id"] == correction["feedback_id"]
+        ]
+        checks["inspect"] = len(matching) == 1
+        checks["correction"] = (
+            len(matching) == 1 and matching[0]["feedback"]["kind"] == "correction"
         )
         deleted = call(
             dict(

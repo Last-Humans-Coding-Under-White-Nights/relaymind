@@ -67,13 +67,14 @@ def complete_fixture(api):
     capture = complete_capture(api.person_module())
     account = capture["accounts"][0]
     chosen = dict(state="chosen", selected_action=dict(scope={"user_id": "u", "workspace_id": "w"}))
-    correction = dict(feedback_id="private-1", feedback=dict(kind="correction"))
+    correction = dict(schema_version=1, feedback_id="private-1", feedback_revision=1)
+    inspected_correction = dict(feedback_id="private-1", feedback=dict(kind="correction"))
     values = dict(
         recommend={},
         choice=chosen,
         replay=chosen,
         correction=correction,
-        inspect=dict(records=[correction]),
+        inspect=dict(records=[inspected_correction]),
         delete=dict(deleted=True),
         reset=dict(feedback_revision="3"),
     )
@@ -212,3 +213,30 @@ def test_operator_mapping_uses_host_observed_workspace_not_global_default(tmp_pa
     assert binding["workspaceDir"] == "/actual/current/profile/workspace"
     assert binding["profileId"] == capture["accounts"][0]["profile_id"]
     assert binding["authenticatedUserId"] == capture["accounts"][0]["native_person_email"]
+
+
+def test_closed_correction_receipt_uses_inspected_record_for_correction_semantics():
+    """RM37/RM39: POST receipt is content-free; inspect carries persisted feedback."""
+    api = module()
+    report = complete_fixture(api)
+    receipts = report["composed_actions"]["receipts"]
+    receipts["correction"]["receipt"] = {
+        "schema_version": 1,
+        "feedback_id": "private-1",
+        "feedback_revision": 1,
+    }
+    receipts["inspect"]["receipt"] = {
+        "records": [{"feedback_id": "private-1", "feedback": {"kind": "correction"}}]
+    }
+    assert api.composed_pass(report)
+
+
+@pytest.mark.parametrize("record_kind", ["usefulness", "rejection"])
+def test_inspection_of_another_feedback_kind_does_not_prove_correction(record_kind):
+    """RM37: the content-free POST receipt cannot substitute for persisted semantics."""
+    api = module()
+    report = complete_fixture(api)
+    report["composed_actions"]["receipts"]["inspect"]["receipt"]["records"][0]["feedback"][
+        "kind"
+    ] = record_kind
+    assert not api.composed_pass(report)
