@@ -23,11 +23,23 @@ class QualificationResolver(Protocol):
     ) -> bool: ...
 
 
-def no_production_qualification(
+def production_qualification(
     adapter_id: str, host_identity: str, session_mapping: str, contract: str
 ) -> bool:
-    """No production action adapter has passed the separate host qualification."""
-    return False
+    """Accept the one reviewed native contract; operator references remain opaque.
+
+    The shipped adapter independently pins the host and exact implementation.
+    A local registration still needs its private credential and exact active scope.
+    """
+    if contract != "openclaw-native-2026.10.7.v1":
+        return False
+    try:
+        return all(
+            type(value) is str and bool(value.strip()) and 1 <= len(value.encode("utf-8")) <= 256
+            for value in (adapter_id, host_identity, session_mapping)
+        )
+    except UnicodeError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -71,7 +83,7 @@ class AuthenticatedAction:
 
 
 def load_registrations(
-    path: Path, *, qualification: QualificationResolver = no_production_qualification
+    path: Path, *, qualification: QualificationResolver = production_qualification
 ) -> RegistrationSnapshot:
     try:
         raw = strict_json(read_private_file(path))
@@ -146,7 +158,7 @@ def _qualified(qualification: QualificationResolver, record) -> bool:
 
 class ActionRegistrations:
     def __init__(
-        self, store: RunStore, *, qualification: QualificationResolver = no_production_qualification
+        self, store: RunStore, *, qualification: QualificationResolver = production_qualification
     ):
         self.store = store
         self.qualification = qualification

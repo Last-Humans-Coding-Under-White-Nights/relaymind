@@ -1,7 +1,7 @@
 // RM37/RM39; AC28/AC30: operator configuration never substitutes for qualification.
 import { expect, it } from "vitest";
 import { registerNativeRecommendations } from "../src/recommendation-native.js";
-it("registers no production RPC or credential accessor while the reviewed registry is empty", () => {
+it("registers no production RPC from unbuilt sources or operator configuration alone", () => {
   const calls: unknown[] = [];
   const api: any = {
     runtime: { version: "2026.10.7" },
