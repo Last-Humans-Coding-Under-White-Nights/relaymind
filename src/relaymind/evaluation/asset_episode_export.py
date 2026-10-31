@@ -12,15 +12,25 @@ from collections.abc import Mapping, Sequence
 from relaymind.canonical import canonical_digest, canonical_json
 from relaymind.evaluation.asset_metrics import asset_rate, grade_asset_result
 from relaymind.evaluation.asset_whole_task import (
+    WholeTaskBlocked,
     WholeTaskRejected,
     validate_whole_task,
     verify_evidence,
 )
 
 ACCEPTANCE_EPISODES = 100
-PARAPHRASE_TARGET = 0.90
-CONTROL_LOSS_LIMIT = 0.02
+# Gates as exact fractions: paraphrases >= 9/10, control loss <= 1/50.
+PARAPHRASE_TARGET = (9, 10)
+CONTROL_LOSS_LIMIT = (1, 50)
+PLANNED_OBSERVATIONS = 100_000
 _RESET_FIELDS = {"case_id", "final_candidates", "final_decision"}
+_DECISIONS = {"confident", "choice_required", "no_match", "empty_catalog"}
+
+
+def planned_observations(episode: Mapping) -> int:
+    """Off/on probe pairs, before/after reset probes and three corrections."""
+    probes = len(episode["paraphrase_case_ids"]) + len(episode["control_case_ids"])
+    return 2 * probes + 2 * len(episode["reset_probe_case_ids"]) + 3
 
 
 def _utf8(value: str) -> bytes:
@@ -44,6 +54,8 @@ def verify_episodes(episodes: Mapping, freeze: Mapping) -> str:
     ids = [_utf8(e["id"]) for e in episodes["episodes"]]
     if any(a >= b for a, b in zip(ids, ids[1:], strict=False)):
         raise WholeTaskRejected("episode_order")
+    if sum(planned_observations(e) for e in episodes["episodes"]) > PLANNED_OBSERVATIONS:
+        raise WholeTaskRejected("observation_limit")
     for episode in episodes["episodes"]:
         corrections = [c["case_id"] for c in episode["corrections"]]
         if len(set(corrections)) != 3:
@@ -71,10 +83,27 @@ def reset_preimage_digest(preimage: Sequence[Mapping]) -> str:
 
 
 def _check_reset_preimage(preimage: Sequence[Mapping], case_ids: Sequence[str]) -> None:
-    if [item.get("case_id") for item in preimage] != list(case_ids) or any(
-        set(item) != _RESET_FIELDS for item in preimage
+    """Complete product results: exact candidate records and a published decision."""
+    if (
+        not isinstance(preimage, (list, tuple))
+        or any(not isinstance(item, Mapping) or set(item) != _RESET_FIELDS for item in preimage)
+        or [item["case_id"] for item in preimage] != list(case_ids)
     ):
         raise WholeTaskRejected("reset_preimage")
+    for item in preimage:
+        candidates = item["final_candidates"]
+        if (
+            not isinstance(item["final_decision"], str)
+            or item["final_decision"] not in _DECISIONS
+            or not isinstance(candidates, list)
+            or len(candidates) > 10
+        ):
+            raise WholeTaskRejected("reset_preimage")
+        try:
+            for candidate in candidates:
+                validate_whole_task("CandidateV2", candidate)
+        except WholeTaskRejected:
+            raise WholeTaskRejected("reset_preimage") from None
 
 
 def _top1(row: Mapping, label: Mapping) -> bool:
@@ -122,8 +151,6 @@ def _check_episode(
 ) -> bool | None:
     """Verify one EpisodeResult; return the verified reset equality or None."""
     status = result["status"]
-    if (status == "completed") != (result["reason"] is None):
-        raise WholeTaskRejected("episode_reason")
     corrections = result["corrections"]
     if [(c["ordinal"], c["case_id"]) for c in corrections] != [
         (n, c["case_id"]) for n, c in enumerate(episode["corrections"], start=1)
@@ -162,7 +189,10 @@ def _check_episode(
         raise WholeTaskRejected("reset_equality")
     preimage = None if preimages is None else preimages.get(result["episode_id"])
     if preimage is None:
-        return None  # unverifiable; never an empty-success hash
+        if equal is not None:
+            # A claimed reset needs its evidence preimages; never a pass.
+            raise WholeTaskBlocked("reset_evidence_unresolved")
+        return None
     for digest, items in zip((baseline, after), preimage, strict=True):
         _check_reset_preimage(items, episode["reset_probe_case_ids"])
         if reset_preimage_digest(items) != digest:
@@ -205,11 +235,9 @@ def episode_summary(
         resets = [r["reset_equal"] for r in report["episodes"]]
     paraphrases = asset_rate(*paraphrase)
     off_rate, on_rate = asset_rate(*off_control), asset_rate(*on_control)
-    control_loss = (
-        None
-        if off_rate["value"] is None or on_rate["value"] is None
-        else off_rate["value"] - on_rate["value"]
-    )
+    controls = off_control[1]
+    lost = off_control[0] - on_control[0]
+    control_loss = lost / controls if controls else None
     reset_passed = sum(r is True for r in resets)
     reset_unknown = sum(r is None for r in resets)
     completed = sum(r["status"] == "completed" for r in report["episodes"])
@@ -217,8 +245,12 @@ def episode_summary(
     if report["qualification"] != "qualified":
         gate = "not_applicable"
     elif (
-        (paraphrases["value"] is not None and paraphrases["value"] < PARAPHRASE_TARGET)
-        or (control_loss is not None and control_loss > CONTROL_LOSS_LIMIT)
+        # Exact integer comparisons: the 0.90 and 0.02 boundaries are allowed.
+        (
+            paraphrase[1]
+            and paraphrase[0] * PARAPHRASE_TARGET[1] < PARAPHRASE_TARGET[0] * paraphrase[1]
+        )
+        or (controls and lost * CONTROL_LOSS_LIMIT[1] > CONTROL_LOSS_LIMIT[0] * controls)
         or any(r is False for r in resets)
     ):
         gate = "fail"
@@ -266,10 +298,8 @@ def grade_adaptation_report(
         raise WholeTaskRejected("config_binding")
     resets = _verified(report, episodes, labels, reset_preimages)
     verify_evidence(report["evidence"], set(), registry)
-    # The stored summary must agree with the report's own rows; the returned
-    # summary additionally counts a reset without verified preimages unknown.
-    if canonical_json(report["summary"]) != canonical_json(
-        episode_summary(report, episodes, labels)
-    ):
+    # Recompute from verified rows and resets; the stored summary must agree.
+    summary = episode_summary(report, episodes, labels, resets=resets)
+    if canonical_json(report["summary"]) != canonical_json(summary):
         raise WholeTaskRejected("summary_mismatch")
-    return episode_summary(report, episodes, labels, resets=resets)
+    return summary

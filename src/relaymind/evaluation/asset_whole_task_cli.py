@@ -27,14 +27,21 @@ from relaymind.evaluation.asset_whole_task import (
     WholeTaskRejected,
     grade_host_report,
     plan_host_trial,
+    validate_whole_task,
     verify_host_tasks,
 )
 from relaymind.evaluation.asset_whole_task_inputs import (
+    UNVERIFIED,
     WholeTaskBlocked,
     resolve_whole_task_inputs,
 )
 
 _EXIT = {"pass": 0, "not_applicable": 0, "fail": 1, "blocked": 3}
+_REPORTS = {
+    "grade-host": "AssetHostReportV1",
+    "grade-platform": "AssetPlatformReportV1",
+    "grade-adaptation": "AssetAdaptationReportV1",
+}
 
 
 def _labels(lock: Path, evidence_root: Path, digest: str) -> dict:
@@ -52,6 +59,8 @@ def _labels(lock: Path, evidence_root: Path, digest: str) -> dict:
 
 def _grade(args) -> tuple[str, dict]:
     report, _ = read_json_path(args.report, REPORT_BYTES)
+    # Check the report's own shape before following any of its references.
+    validate_whole_task(_REPORTS[args.command], report)
     resolver = OfflineResolver(args.resolver) if args.resolver else None
     if args.command == "grade-adaptation":
         inputs = resolve_whole_task_inputs("adaptation", report, args.inputs, resolver=resolver)
@@ -98,11 +107,11 @@ def main(argv: list[str] | None = None) -> int:
             atomic_bytes(args.output, json_bytes(dict(planned=plan_host_trial(tasks))))
             return 0
         gate, extra = _grade(args)
-        result = dict(status="graded", gate=gate, reason=None, **extra)
+        result = dict(status="graded", gate=gate, reason=None, unverified=list(UNVERIFIED), **extra)
         code = _EXIT[gate]
     except WholeTaskBlocked as exc:
         result, code = dict(status="blocked", gate="blocked", reason=exc.reason), 3
-    except (WholeTaskRejected, AssetCorpusError, ValueError) as exc:
+    except (WholeTaskRejected, AssetCorpusError, ValueError, KeyError, TypeError) as exc:
         reason = str(exc) if str(exc).isidentifier() else "invalid_input"
         if args.command == "plan-host":
             print(json.dumps(dict(status="rejected", reason=reason)), file=sys.stderr)

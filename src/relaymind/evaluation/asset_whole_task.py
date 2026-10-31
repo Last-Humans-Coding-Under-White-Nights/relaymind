@@ -11,6 +11,7 @@ recomputed from verified rows; a stored summary is compared, never trusted.
 import copy
 import hashlib
 from collections.abc import Callable, Mapping, Sequence
+from datetime import datetime
 from typing import Any
 
 from relaymind.canonical import canonical_digest, canonical_json
@@ -23,6 +24,14 @@ ACCEPTANCE_TASKS = 100
 
 class WholeTaskRejected(ValueError):
     """A structural, binding or digest contradiction; the export is rejected."""
+
+
+class WholeTaskBlocked(Exception):
+    """Required input or evidence is missing: unverifiable, never a pass."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
 
 
 def _schema() -> dict:
@@ -204,6 +213,14 @@ _NOT_RUN_NULLS = (
 )
 
 
+def _instant(value: str) -> datetime:
+    """A UTC RFC3339 time as an instant; text order differs across precisions."""
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        raise WholeTaskRejected("attempt_timing") from None
+
+
 def _check_attempts(row: Mapping, seen: set[str]) -> None:
     for index, attempt in enumerate(row["attempts"], start=1):
         if attempt["ordinal"] != index:
@@ -225,7 +242,7 @@ def _check_attempts(row: Mapping, seen: set[str]) -> None:
         ):
             raise WholeTaskRejected("usage_provenance")
         start, end = attempt["started_at"], attempt["ended_at"]
-        if start is not None and end is not None and end < start:
+        if start is not None and end is not None and _instant(end) < _instant(start):
             raise WholeTaskRejected("attempt_timing")
         normalized_total_tokens(attempt)
 
@@ -239,8 +256,6 @@ def _check_row(row: Mapping, config: Mapping, seen: set[str]) -> None:
             or row["recommendation_ids"]
         ):
             raise WholeTaskRejected("not_run_work")
-    if (status == "completed") != (row["reason"] is None):
-        raise WholeTaskRejected("row_reason")
     if status in ("failed", "timeout", "cancelled") and row["success"] is True:
         raise WholeTaskRejected("row_verdict")
     if row["success"] is True and (row["host_session_id"] is None or not row["evidence_ids"]):
@@ -262,8 +277,9 @@ def _row_cost(row: Mapping) -> tuple[int | None, int | None]:
         return None, None
     external = [a for a in row["attempts"] if a["external"]]
     if not external:
-        # Zero only with no-dispatch evidence bound to the started row.
-        return (0, 0) if row["evidence_ids"] else (None, None)
+        # Zero needs complete no-dispatch evidence, which an offline grader
+        # cannot establish from evidence IDs; the cost stays unknown.
+        return None, None
     totals = [normalized_total_tokens(a) for a in external]
     calls = [a["calls"] for a in external]
     tokens = None if any(t is None for t in totals) else sum(totals)
@@ -272,11 +288,10 @@ def _row_cost(row: Mapping) -> tuple[int | None, int | None]:
 
 
 def _verdict(row: Mapping) -> bool | None:
-    if row["status"] == "completed":
-        return row["success"]
+    """The row's own verdict; counting it failed does not make a null known."""
     if row["status"] == "not_run":
         return None
-    return False
+    return row["success"]
 
 
 # --- summary --------------------------------------------------------------------
@@ -416,6 +431,7 @@ def verify_evidence(
     nested_ids: set[str],
     registry: Mapping[str, Mapping] | None,
     frozen_ids: set[str] = frozenset(),
+    packages: Sequence[Mapping] = (),
 ) -> None:
     """One report-wide evidence namespace bound to the companion registry.
 
@@ -432,6 +448,10 @@ def verify_evidence(
         return
     if not frozen_ids <= set(registry):
         raise WholeTaskRejected("evidence_dangling")
+    for package in packages:
+        entry = registry[package["evidence_id"]]
+        if (entry["sha256"], entry["bytes"]) != (package["sha256"], package["bytes"]):
+            raise WholeTaskRejected("package_binding")
     for item in evidence:
         entry = registry.get(item["id"])
         if entry is None:
@@ -480,7 +500,13 @@ def grade_host_report(
         nested.update(row["evidence_ids"])
         for attempt in row["attempts"]:
             nested.update(attempt["evidence_ids"])
-    verify_evidence(report["evidence"], nested, registry, frozen_evidence_ids(tasks, freeze))
+    verify_evidence(
+        report["evidence"],
+        nested,
+        registry,
+        frozen_evidence_ids(tasks, freeze),
+        freeze["packages"],
+    )
     summary = host_summary(report, tasks, freeze)
     if canonical_json(report["summary"]) != canonical_json(summary):
         raise WholeTaskRejected("summary_mismatch")

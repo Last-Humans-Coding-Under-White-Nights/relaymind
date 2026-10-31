@@ -228,7 +228,7 @@ def test_gains_losses_and_counts_partition_planned():
         if arm == "native" and task_id == "t1":
             return row(task_id, arm, success=False)
         if arm == "recommendations" and task_id == "t2":
-            return row(task_id, arm, status="timeout", success=None)
+            return row(task_id, arm, status="timeout", success=False)
         return row(task_id, arm)
 
     summary = grade_host_report(report_for(freeze, tasks, ordered_rows(tasks, make)), tasks, freeze)
@@ -324,7 +324,6 @@ def test_retries_and_local_attempts_are_counted_separately():
         (lambda r: r.update(freeze_digest=H), "freeze_binding"),
         (lambda r: r.update(kind="acceptance"), "input_binding"),
         (lambda r: r["rows"][0].update(status="failed", success=True, reason="x"), "row_verdict"),
-        (lambda r: r["rows"][0].update(reason="unexpected"), "row_reason"),
         (lambda r: r["rows"][0]["attempts"][0].update(ordinal=2), "attempt_ordinal"),
         (
             lambda r: r["rows"][1]["attempts"][0].update(id=r["rows"][0]["attempts"][0]["id"]),
@@ -382,8 +381,9 @@ def test_registry_mismatch_rejects_and_matching_registry_verifies():
     for task in tasks["tasks"]:
         for i in (*task["setup_evidence_ids"], task["success_rubric_evidence_id"]):
             registry[i] = dict(sha256=h(i), bytes=1, path=None)
-    for i in ("ev-package", "ev-host"):
-        registry[i] = dict(sha256=h(i), bytes=1, path=None)
+    registry["ev-host"] = dict(sha256=h("ev-host"), bytes=1, path=None)
+    package = freeze["packages"][0]
+    registry["ev-package"] = dict(sha256=package["sha256"], bytes=package["bytes"], path=None)
     grade_host_report(report, tasks, freeze, registry=registry)
     first = report["evidence"][0]["id"]
     registry[first] = dict(registry[first], sha256=H)
@@ -486,3 +486,101 @@ def test_driver_passes_the_frozen_arm_configuration():
         interrupted=lambda: False,
     )
     assert seen == {c["arm"]: c for c in freeze["configurations"]}
+
+
+# --- review follow-ups (spec 0.60 section 12.6.5) ------------------------------
+
+
+@pytest.mark.parametrize("status", ["failed", "timeout", "cancelled"])
+def test_a_started_failure_with_a_null_verdict_stays_unknown(status):
+    """Counting a row failed does not establish a known verdict; it blocks."""
+    freeze, tasks = two_task_setup()
+
+    def make(task_id, arm):
+        if arm == "recommendations":
+            return row(task_id, arm, status=status, success=None)
+        return row(task_id, arm)
+
+    summary = grade_host_report(report_for(freeze, tasks, ordered_rows(tasks, make)), tasks, freeze)
+    rec = next(a for a in summary["arms"] if a["arm"] == "recommendations")
+    assert rec["failed"] == 2
+    assert summary["losses"] == 0 and summary["success_gate"] == "blocked"
+
+
+@pytest.mark.parametrize("status", ["failed", "timeout", "cancelled"])
+def test_a_started_failure_with_a_false_verdict_is_a_known_loss(status):
+    freeze, tasks = two_task_setup()
+
+    def make(task_id, arm):
+        if arm == "recommendations":
+            return row(task_id, arm, status=status, success=False)
+        return row(task_id, arm)
+
+    summary = grade_host_report(report_for(freeze, tasks, ordered_rows(tasks, make)), tasks, freeze)
+    assert summary["losses"] == 2 and summary["success_gate"] == "fail"
+
+
+def test_reasons_are_nullable_as_published():
+    freeze, tasks = two_task_setup()
+
+    def make(task_id, arm):
+        if arm == "native":
+            return dict(row(task_id, arm, success=False), reason="rubric_not_met")
+        if arm == "provider_only":
+            return dict(row(task_id, arm, status="failed", success=False), reason=None)
+        return row(task_id, arm)
+
+    grade_host_report(report_for(freeze, tasks, ordered_rows(tasks, make)), tasks, freeze)
+
+
+def test_a_started_row_without_external_attempts_has_unknown_cost():
+    """Complete no-dispatch evidence cannot be verified offline, so zero is unknown."""
+    freeze, tasks = two_task_setup()
+
+    def make(task_id, arm):
+        if arm == "native":
+            local = attempt(f"{task_id}-{arm}-1", external=False)
+            return row(task_id, arm, attempts=[local])
+        return row(task_id, arm)
+
+    summary = grade_host_report(report_for(freeze, tasks, ordered_rows(tasks, make)), tasks, freeze)
+    native = next(a for a in summary["arms"] if a["arm"] == "native")
+    assert native["external_tokens"] is None and native["unknown_cost_rows"] == 2
+    assert summary["cost_gate"] == "blocked"
+
+
+def test_attempt_times_compare_as_instants_not_text():
+    freeze, tasks = two_task_setup()
+
+    def make(start, end):
+        def build(task_id, arm):
+            a = dict(attempt(f"{task_id}-{arm}-1"), started_at=start, ended_at=end)
+            return row(task_id, arm, attempts=[a])
+
+        return build
+
+    forward = make("2026-10-31T00:00:00Z", "2026-10-31T00:00:00.1Z")
+    grade_host_report(report_for(freeze, tasks, ordered_rows(tasks, forward)), tasks, freeze)
+    backward = make("2026-10-31T00:00:00.1Z", "2026-10-31T00:00:00Z")
+    report = report_for(freeze, tasks, ordered_rows(tasks, backward))
+    with pytest.raises(WholeTaskRejected, match="attempt_timing"):
+        grade_host_report(report, tasks, freeze)
+
+
+def test_frozen_package_bytes_must_match_their_registry_evidence():
+    freeze, tasks = two_task_setup()
+    report = report_for(freeze, tasks, ordered_rows(tasks, row))
+    registry = {
+        e["id"]: dict(sha256=e["sha256"], bytes=e["bytes"], path=e["path"])
+        for e in report["evidence"]
+    }
+    for task in tasks["tasks"]:
+        for i in (*task["setup_evidence_ids"], task["success_rubric_evidence_id"]):
+            registry[i] = dict(sha256=h(i), bytes=1, path=None)
+    registry["ev-host"] = dict(sha256=h("ev-host"), bytes=1, path=None)
+    package = freeze["packages"][0]
+    registry["ev-package"] = dict(sha256=package["sha256"], bytes=package["bytes"], path=None)
+    grade_host_report(report, tasks, freeze, registry=registry)
+    registry["ev-package"] = dict(sha256=h("other"), bytes=package["bytes"], path=None)
+    with pytest.raises(WholeTaskRejected, match="package_binding"):
+        grade_host_report(report, tasks, freeze, registry=registry)

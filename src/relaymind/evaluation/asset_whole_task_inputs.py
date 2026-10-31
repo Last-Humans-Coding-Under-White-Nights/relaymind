@@ -27,22 +27,24 @@ from relaymind.evaluation.asset_evidence import (
     semantic_document,
     validate_definition,
 )
-from relaymind.evaluation.asset_whole_task import WholeTaskRejected, validate_whole_task
+from relaymind.evaluation.asset_whole_task import (
+    WholeTaskBlocked,
+    WholeTaskRejected,
+    validate_whole_task,
+)
 
 SINGLETONS = ("environment_lock", "runner_inventory", "protocol_inventory")
 _ROOTS = {
     "host": ("host_tasks", "host_freeze"),
     "adaptation": ("episodes", "episode_freeze"),
 }
+_SHAPES = {
+    "host": ("AssetHostTasksV1", "HostFreezeV1", "corpus_lock_digest", "freeze_digest"),
+    "adaptation": ("AssetEpisodesV1", "EpisodeFreezeV1", "dataset_lock_digest", "config_digest"),
+}
+# What this revision does not verify; always reported next to a grade.
+UNVERIFIED = ("configuration_semantics", "corpus_closure", "qualified_evidence_review")
 _UNRESOLVED = {"input_unresolved", "unsafe_file", "missing_file"}
-
-
-class WholeTaskBlocked(Exception):
-    """Required input or evidence is missing: unverifiable, never a pass."""
-
-    def __init__(self, reason: str):
-        super().__init__(reason)
-        self.reason = reason
 
 
 # Reviewed non-package members of the S3 runner inventory. The command script
@@ -208,12 +210,17 @@ def resolve_whole_task_inputs(
     root_id = root_kind + ":" + report["input_digest"]
     if root_id not in documents:
         raise WholeTaskBlocked("root_input_unresolved")
-    root = documents[root_id]
-    freeze_digest = root["freeze_digest" if kind == "host" else "config_digest"]
+    root_shape, freeze_shape, lock_key, freeze_key = _SHAPES[kind]
+    root = validate_whole_task(root_shape, documents[root_id])
+    # The corpus lock must be present; its transitive closure is not yet
+    # verified here (reported as corpus_closure in UNVERIFIED).
+    if "lock:" + root[lock_key] not in documents:
+        raise WholeTaskBlocked("corpus_unresolved")
+    freeze_digest = root[freeze_key]
     freeze_id = freeze_kind + ":" + freeze_digest
     if freeze_id not in documents:
         raise WholeTaskBlocked("freeze_unresolved")
-    freeze = documents[freeze_id]
+    freeze = validate_whole_task(freeze_shape, documents[freeze_id])
     configs = {}
     for digest in sorted(_config_digests(kind, freeze)):
         key = "referenced_config:" + digest
@@ -233,5 +240,14 @@ def resolve_whole_task_inputs(
             file_id = "file:" + hashlib.sha256(item["path"].encode()).hexdigest()
             if not resolver.contains(file_id, "original", item["sha256"]):
                 raise WholeTaskBlocked("inventory_preimage_unresolved")
-            resolver.read(file_id, "original", item["sha256"], item["bytes"], limit=CONFIG_BYTES)
+            try:
+                resolver.read(
+                    file_id, "original", item["sha256"], item["bytes"], limit=CONFIG_BYTES
+                )
+            except FileNotFoundError:
+                raise WholeTaskBlocked("inventory_preimage_unresolved") from None
+            except AssetCorpusError as exc:
+                if str(exc) in _UNRESOLVED:
+                    raise WholeTaskBlocked("inventory_preimage_unresolved") from None
+                raise WholeTaskRejected(str(exc)) from None
     return WholeTaskInputs(manifest, root, freeze, environment, configs, registry)

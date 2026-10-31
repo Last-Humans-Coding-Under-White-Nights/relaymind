@@ -25,7 +25,7 @@ from relaymind.evaluation.asset_platform_export import (
     grade_platform_report,
     platform_gate,
 )
-from relaymind.evaluation.asset_whole_task import WholeTaskRejected
+from relaymind.evaluation.asset_whole_task import WholeTaskBlocked, WholeTaskRejected
 from whole_task_helpers import ENVIRONMENT, freeze_doc, tasks_doc
 
 H = "a" * 64
@@ -305,15 +305,13 @@ def test_qualified_report_with_too_few_episodes_is_blocked_not_passed():
     assert summary["paraphrases"]["value"] == 1 and summary["gate"] == "blocked"
 
 
-def test_reset_digest_without_its_preimage_is_unknown():
+def test_a_claimed_reset_without_its_preimage_is_blocked_not_passed():
     episodes = episodes_doc()
     labels = labels_for(episodes)
     results = [episode_result(e, labels) for e in episodes["episodes"]]
     report = adaptation_report(episodes, results)
-    summary = grade_adaptation_report(
-        report, episodes, episode_freeze(), labels, reset_preimages={}
-    )
-    assert summary["reset_unknown"] == 2 and summary["reset_passed"] == 0
+    with pytest.raises(WholeTaskBlocked, match="reset_evidence_unresolved"):
+        grade_adaptation_report(report, episodes, episode_freeze(), labels, reset_preimages={})
 
 
 @pytest.mark.parametrize(
@@ -335,7 +333,6 @@ def test_reset_digest_without_its_preimage_is_unknown():
             lambda r: r["episodes"][0].update(reset_result_digest=H, reset_equal=False),
             "reset_preimage",
         ),
-        (lambda r: r["episodes"][0].update(status="failed"), "episode_reason"),
         (lambda r: r["summary"].update(reset_passed=0), "summary_mismatch"),
     ],
 )
@@ -448,7 +445,6 @@ def test_measured_all_passed_without_a_review_path_is_blocked():
     [
         (lambda r: r["steps"].reverse(), "step_order"),
         (lambda r: r["steps"][0].update(evidence_ids=[]), "step_receipt"),
-        (lambda r: r["steps"][1].update(reason="x"), "step_reason"),
         (lambda r: r.update(input_digest=H), "input_binding"),
         (lambda r: r["operations_evidence"].update(sha256=H), "evidence_conflict"),
         (
@@ -463,3 +459,107 @@ def test_platform_contradictions_reject(mutate, reason):
     mutate(report)
     with pytest.raises(WholeTaskRejected, match=reason):
         grade_platform_report(report, tasks, freeze)
+
+
+# --- review follow-ups ----------------------------------------------------------
+
+
+def rated(paraphrase_hits, paraphrases, off_hits, on_hits, controls):
+    """A qualified summary from exact counts (no reset failures)."""
+
+    def probe(kind, case_id, off, on):
+        label = {"class": "positive", "acceptable_asset_ids": ["asset-a"]}
+        return dict(
+            case_id=case_id,
+            kind=kind,
+            off=probe_row(case_id, 1, label, "asset-a" if off else "asset-b"),
+            on=probe_row(case_id, 1, label, "asset-a" if on else "asset-b"),
+        )
+
+    probes = [probe("paraphrase", f"p{i}", False, i < paraphrase_hits) for i in range(paraphrases)]
+    probes += [probe("control", f"k{i}", i < off_hits, i < on_hits) for i in range(controls)]
+    labels = {
+        p["case_id"]: {"class": "positive", "acceptable_asset_ids": ["asset-a"]} for p in probes
+    }
+    report = dict(
+        qualification="qualified",
+        episodes=[dict(status="completed", probes=probes, reset_equal=True)],
+    )
+    return episode_summary(report, None, labels)
+
+
+def test_exactly_two_percent_control_loss_is_allowed():
+    summary = rated(10, 10, 50, 49, 50)
+    assert summary["gate"] == "blocked"  # too few episodes, but not a failure
+    assert summary["control_loss"] == pytest.approx(0.02)
+
+
+def test_more_than_two_percent_control_loss_fails():
+    assert rated(10, 10, 50, 48, 50)["gate"] == "fail"
+
+
+def test_exactly_ninety_percent_paraphrase_is_allowed_and_below_fails():
+    assert rated(9, 10, 1, 1, 1)["gate"] == "blocked"
+    assert rated(89, 100, 1, 1, 1)["gate"] == "fail"
+
+
+def test_planned_observations_are_capped_across_episodes():
+    episodes = episodes_doc(ids=("e1", "e2"))
+    for e in episodes["episodes"]:
+        e["paraphrase_case_ids"] = sorted(f"{e['id']}-p{i:05d}" for i in range(25001))
+    with pytest.raises(WholeTaskRejected, match="observation_limit"):
+        verify_episodes(episodes, episode_freeze())
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"final_candidates": "not product candidates"},
+        {"final_decision": {"not": "a decision"}},
+        {"final_decision": "maybe"},
+        {"final_candidates": [{"asset_id": "asset-a"}]},
+    ],
+)
+def test_reset_preimages_must_carry_product_candidates_and_decisions(change):
+    episodes = episodes_doc()
+    labels = labels_for(episodes)
+    results = [episode_result(e, labels) for e in episodes["episodes"]]
+    bad = preimages(episodes)
+    baseline = [dict(item, **change) for item in bad["e1"][0]]
+    bad["e1"] = (baseline, baseline)
+    results[0]["reset_baseline_digest"] = results[0]["reset_result_digest"] = reset_preimage_digest(
+        baseline
+    )
+    report = adaptation_report(episodes, results)
+    with pytest.raises(WholeTaskRejected, match="reset_preimage"):
+        grade_adaptation_report(report, episodes, episode_freeze(), labels, reset_preimages=bad)
+
+
+def test_a_verified_summary_survives_regrading():
+    episodes = episodes_doc()
+    labels = labels_for(episodes)
+    results = [episode_result(e, labels) for e in episodes["episodes"]]
+    report = adaptation_report(episodes, results)
+    summary = grade_adaptation_report(
+        report, episodes, episode_freeze(), labels, reset_preimages=preimages(episodes)
+    )
+    report["summary"] = summary
+    assert (
+        grade_adaptation_report(
+            report, episodes, episode_freeze(), labels, reset_preimages=preimages(episodes)
+        )
+        == summary
+    )
+
+
+def test_null_reasons_are_allowed_where_published():
+    episodes = episodes_doc()
+    labels = labels_for(episodes)
+    results = [
+        episode_result(episodes["episodes"][0], labels),
+        dict(episode_result(episodes["episodes"][1], labels, status="not_run"), reason=None),
+    ]
+    report = adaptation_report(episodes, results)
+    grade_adaptation_report(
+        report, episodes, episode_freeze(), labels, reset_preimages=preimages(episodes)
+    )

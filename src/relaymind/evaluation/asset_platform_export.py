@@ -13,6 +13,7 @@ from collections.abc import Mapping
 
 from relaymind.evaluation.asset_whole_task import (
     WholeTaskRejected,
+    frozen_evidence_ids,
     validate_whole_task,
     verify_evidence,
     verify_host_tasks,
@@ -62,8 +63,6 @@ def grade_platform_report(
         passed = step["status"] == "passed"
         if passed and not step["evidence_ids"]:
             raise WholeTaskRejected("step_receipt")
-        if passed != (step["reason"] is None):
-            raise WholeTaskRejected("step_reason")
         nested.update(step["evidence_ids"])
     registered = {e["id"]: e for e in report["evidence"]}
     dedicated = list(report["approvals_evidence"])
@@ -75,7 +74,13 @@ def grade_platform_report(
             raise WholeTaskRejected("evidence_dangling")
         if entry != item:
             raise WholeTaskRejected("evidence_conflict")
-    verify_evidence(report["evidence"], nested, registry)
+    verify_evidence(
+        report["evidence"],
+        nested,
+        registry,
+        frozen_evidence_ids(tasks, freeze),
+        freeze["packages"],
+    )
     gate = platform_gate(report)
     if report["gate"] != gate:
         raise WholeTaskRejected("gate_mismatch")

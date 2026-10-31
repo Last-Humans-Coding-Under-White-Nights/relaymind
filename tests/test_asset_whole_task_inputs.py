@@ -12,7 +12,6 @@ import shutil
 from pathlib import Path
 
 import pytest
-from whole_task_helpers import ENVIRONMENT, freeze_doc, ordered_rows, report_for, row, tasks_doc
 
 from relaymind.canonical import canonical_digest, canonical_json
 from relaymind.evaluation.asset_platform_export import PLATFORM_STEPS, platform_gate
@@ -23,6 +22,7 @@ from relaymind.evaluation.asset_whole_task_inputs import (
     resolve_whole_task_inputs,
     verify_whole_task_inventory,
 )
+from whole_task_helpers import ENVIRONMENT, freeze_doc, ordered_rows, report_for, row, tasks_doc
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -67,6 +67,12 @@ class Bundle:
         self.configs = configs
         digest = {k: canonical_digest(v) for k, v in configs.items()}
         freeze = freeze_doc()
+        # The frozen package binds the exact original its evidence holds.
+        freeze["packages"][0].update(
+            sha256=hashlib.sha256(b"ev-package").hexdigest(), bytes=len(b"ev-package")
+        )
+        self.lock = {"fixture_corpus_lock": 1}
+        freeze["corpus_lock_digest"] = canonical_digest(self.lock)
         for config in freeze["configurations"]:
             config.update(
                 provider_config_digest=digest["provider"],
@@ -84,6 +90,7 @@ class Bundle:
         self.evidence = []
         self.add("host_tasks", self.tasks)
         self.add("host_freeze", freeze)
+        self.add("lock", self.lock)
         for value in configs.values():
             self.add("referenced_config", value)
         self.add("environment_lock", ENVIRONMENT)
@@ -361,3 +368,57 @@ def test_plan_command_rejects_an_unsorted_task_document(bundle, capsys):
 
 def test_blocked_error_carries_a_fixed_reason():
     assert WholeTaskBlocked("input_unresolved").reason == "input_unresolved"
+
+
+# --- review follow-ups ----------------------------------------------------------
+
+
+def test_missing_corpus_lock_blocks(bundle):
+    code, result = _grade(bundle, "grade-host", bundle.host_report(drop="lock:"))
+    assert (code, result["reason"]) == (3, "corpus_unresolved")
+
+
+def test_graded_output_names_what_was_not_verified(bundle):
+    code, result = _grade(bundle, "grade-host", bundle.host_report())
+    assert code == 3 and result["status"] == "graded"
+    assert result["unverified"] == [
+        "configuration_semantics",
+        "corpus_closure",
+        "qualified_evidence_review",
+    ]
+
+
+@pytest.mark.parametrize("report", [{}, {"input_manifest": 1}, []])
+def test_malformed_report_is_rejected_with_an_output(bundle, report):
+    bundle.write_manifest()
+    code, result = _grade(bundle, "grade-host", report)
+    assert (code, result["status"]) == (2, "rejected")
+
+
+def test_malformed_root_document_is_rejected(bundle):
+    report = bundle.host_report()
+    entry = next(d for d in bundle.documents if d["kind"] == "host_tasks")
+    broken = {"freeze_digest": 7}
+    payload = _bytes(broken)
+    (bundle.root / entry["path"]).write_bytes(payload)
+    entry.update(
+        digest=canonical_digest(broken),
+        bytes=len(payload),
+        id="host_tasks:" + canonical_digest(broken),
+    )
+    report["input_digest"] = canonical_digest(broken)
+    report["input_manifest"] = bundle.write_manifest()
+    code, result = _grade(bundle, "grade-host", report)
+    assert (code, result["status"]) == (2, "rejected")
+
+
+def test_missing_inventory_preimage_file_blocks(bundle):
+    report = bundle.host_report()
+    entries = json.loads(bundle.resolver.read_text())["entries"]
+    (bundle.root / entries[0]["path"]).unlink()
+    code, result = _grade(bundle, "grade-host", report)
+    assert (code, result["status"], result["reason"]) == (
+        3,
+        "blocked",
+        "inventory_preimage_unresolved",
+    )

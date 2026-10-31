@@ -589,14 +589,19 @@ adaptation report); `1` a known gate failure; `2` the report or an input was
 rejected (a digest, identity, order or arithmetic contradiction); `3` blocked
 (a required document, configuration, inventory preimage or evidence is
 missing). Blocked is never reported as a pass. The output file always records
-`status`, `gate` and a fixed safe `reason`.
+`status`, `gate` and a fixed safe `reason`. A graded result also lists
+`unverified`: `configuration_semantics`, `corpus_closure` and
+`qualified_evidence_review`, the parts this revision does not yet check.
 
 **Inputs.** The manifest is section 12.6.2's `InputManifestV1`, with document
 kinds extended (only here) by `host_tasks`, `host_freeze`, `episodes` and
 `episode_freeze`. It must hold exactly one `environment_lock`,
 `runner_inventory` and `protocol_inventory`; the root input named by the
 report's `input_digest`; its freeze; and every configuration digest the freeze
-names, as `referenced_config:<digest>` (plain strict JSON, 4 MiB). Inventory
+names, as `referenced_config:<digest>` (plain strict JSON, 4 MiB), and the
+corpus lock as `lock:<digest>` (its presence is checked; its closure is not yet
+verified). The report, root and freeze shapes are checked before any reference
+is followed. Inventory
 preimages resolve only through an explicit `--resolver`. The runner inventory
 is the whole `src/relaymind` Python package plus `pyproject.toml` and
 `scripts/asset_whole_task.py`. Its package members must equal the running
@@ -609,14 +614,21 @@ grader, and the other files must match reviewed bytes.
   configuration. Task policies, permissions and budgets digests, asset
   bindings and rubrics bind to the freeze. Rows equal the plan, and `not_run`
   rows carry no work. Success needs a host session and execution evidence.
-  Attempt ordinals are consecutive and attempt IDs unique report-wide.
-  Totals are normalized only from evidenced token relationships. Unknown
-  verdicts or costs block, and a known positive cost difference fails.
+  Attempt ordinals are consecutive and attempt IDs unique report-wide, and
+  attempt times compare as instants. Each frozen package's bytes must equal its
+  registry evidence. Totals are normalized only from evidenced token
+  relationships. A started row with no external attempt has unknown, not zero,
+  cost, because complete no-dispatch evidence cannot be verified offline. A
+  failed, timed-out or cancelled row counts as failed but keeps its own
+  verdict: a null verdict stays unknown. Unknown verdicts or costs block, and
+  a known positive cost difference fails.
 - Adaptation: three chronological corrections, held-out paraphrase/control
   probes in `(kind, case_id)` order, recomputed probe grades, and full planned
-  denominators (paraphrase target 0.90, control loss at most 0.02). Reset
-  digests are verified against their before/after preimages; without a
-  preimage a reset counts as unknown.
+  denominators. The paraphrase target of 0.90 and the control-loss limit of
+  0.02 are compared exactly, so both boundaries are allowed. At most 100,000
+  planned observations are allowed across all episodes. Reset digests are
+  verified against complete before/after preimages (product candidates and a
+  published decision). A claimed reset without its preimages is blocked.
 - Platform: steps `install` … `uninstall` exactly once and in order. A passed
   step needs receipts, and the dedicated operations/approvals references must
   equal registry entries.
