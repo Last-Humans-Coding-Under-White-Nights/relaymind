@@ -232,3 +232,94 @@ def test_relative_release_archive_is_fixed_before_native_cli_changes_working_dir
     )
     assert extension.archive == tmp_path / "release.tgz"
     assert extension.archive.is_absolute()
+
+
+# --- #197 exact Skill Library selection (RM39/AC30; spec 7.6.1) -----------------
+
+SKILL_ID = "0b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a"
+REVISION = "a" * 64
+CONTENT = "---\nname: Hello World\ndescription: Greeting skill\n---\nSay hello."
+
+
+def skill_fixture(api):
+    import hashlib
+
+    capture = fixture(api)
+    digest = hashlib.sha256(CONTENT.encode("utf-8")).hexdigest()
+    capture["ordinary_skill"] = dict(
+        library_save=dict(ok=True, skill_id=SKILL_ID, revision=REVISION),
+        content_sha256=digest,
+        mapping=dict(
+            assetId="example:hello-world",
+            contentHash=digest,
+            sourceVersion=None,
+            skillId=SKILL_ID,
+            revision=REVISION,
+        ),
+        receipt=dict(
+            ok=True,
+            payload=dict(
+                skillId=SKILL_ID,
+                revision=REVISION,
+                sessionActivation="next-turn",
+                instructions="not_observed",
+            ),
+        ),
+        ui_status="selected",
+        negatives=[
+            dict(case="unmapped_skill", ok=False, error_code="INVALID_REQUEST"),
+            dict(case="foreign_person", ok=False, error_code="FORBIDDEN"),
+        ],
+    )
+    return capture
+
+
+def test_exact_skill_selection_evidence_passes():
+    api = module()
+    assert api.ordinary_skill_pass(skill_fixture(api))
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "no_ordinary",
+        "save_failed",
+        "bad_skill_id",
+        "bad_revision",
+        "mapping_other_skill",
+        "hash_mismatch",
+        "receipt_claims_use",
+        "receipt_failed",
+        "ui_unavailable",
+        "negative_admitted",
+        "negative_missing",
+    ],
+)
+def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
+    api = module()
+    capture = skill_fixture(api)
+    value = capture["ordinary_skill"]
+    if change == "no_ordinary":
+        capture["checks"]["person_composition"] = False
+        capture.pop("ordinary_actions")
+    elif change == "save_failed":
+        value["library_save"]["ok"] = False
+    elif change == "bad_skill_id":
+        value["library_save"]["skill_id"] = value["mapping"]["skillId"] = "not-an-id"
+    elif change == "bad_revision":
+        value["library_save"]["revision"] = value["mapping"]["revision"] = "b" * 10
+    elif change == "mapping_other_skill":
+        value["mapping"]["skillId"] = "1b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a"
+    elif change == "hash_mismatch":
+        value["mapping"]["contentHash"] = "0" * 64
+    elif change == "receipt_claims_use":
+        value["receipt"]["payload"]["instructions"] = "observed"
+    elif change == "receipt_failed":
+        value["receipt"]["ok"] = False
+    elif change == "ui_unavailable":
+        value["ui_status"] = "unavailable"
+    elif change == "negative_admitted":
+        value["negatives"][0]["ok"] = True
+    elif change == "negative_missing":
+        value["negatives"].pop()
+    assert not api.ordinary_skill_pass(capture)
