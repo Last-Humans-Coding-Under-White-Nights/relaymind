@@ -1412,3 +1412,46 @@ def test_release_executable_that_differs_from_its_declared_size_is_artifact_expa
     monkeypatch.setattr(tarfile.TarFile, "extractfile", extractfile)
     with pytest.raises(ValueError, match="artifact_expansion"):
         api.install_authcrunch(archive, tmp_path / "bin")
+
+
+# --- #231 review (ArcsinX, 1 Nov) ------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        None,
+        "receipt",
+        {"id": "rpc-1"},
+        {"id": "rpc-1", "frame": None},
+        {"id": "rpc-1", "frame": "bad"},
+        {"frame": {"payload": {}}},
+    ],
+)
+def test_malformed_person_rpc_envelopes_are_identity_binding_failures(result):
+    with pytest.raises(ValueError, match="^native_person_identity_binding$"):
+        module().person_rpc_receipt(result, "fixture@example.test")
+
+
+@pytest.mark.parametrize("frame", [None, "error", [], 7])
+def test_a_non_mapping_frame_has_no_error_code(frame):
+    assert module().native_error_code(frame) is None
+
+
+@pytest.mark.parametrize("interfaces", [None, 7, "eth0", {"flags": []}])
+def test_a_non_list_interface_inventory_is_network_inventory_invalid(interfaces):
+    with pytest.raises(ValueError, match="^network_inventory_invalid$"):
+        module().eligible_private_ipv4(interfaces)
+
+
+@pytest.mark.parametrize("reason", ["native_socket_unavailable", "native_send_failed"])
+def test_observer_refusals_before_sending_keep_their_reason(reason):
+    api = module()
+
+    class Page:
+        def evaluate(self, *args):
+            raise RuntimeError(f"Page.evaluate: Error: {reason}")
+
+    with pytest.raises(ValueError, match=f"^{reason}$"):
+        api.native_rpc(Page(), "m", {})
+    assert reason in api.SAFE_REASONS

@@ -10,7 +10,10 @@ export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMe
     let reason = "admission_refused";
     let removeRetirementObserver = () => {};
     try {
-      requestId = options.req.id;
+      const id = options.req.id;
+      // Only a non-empty string request ID is ever admitted or recorded.
+      if (typeof id !== "string" || !id) throw new Error("refused");
+      requestId = id;
       const { client, params, sessionMutationAuthorization: mutation, sessionAccessAuthority: access } = options;
       const target = access?.target;
       if (!client?.authenticatedUserId || !client.preparedSessionProfile?.profileId ||
