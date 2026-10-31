@@ -8,6 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.61 → 0.62 (RM37/RM39; AC28/AC30): names the pinned
+  authenticated native action channel and explicit profile/workspace registration,
+  preserves direct choice/feedback/privacy and distributed-commit semantics, and
+  specifies exact native Skill Library selection/read separately from loaded-use.
+  Runtime snapshots and native MCP activation retain their existing qualification gates.
+
+
 - Specification 0.55 → 0.56 (RM40/RM44; AC31/AC36; review #219):
   names `Case.conversation` and attempt/embedding `cost_observations` as
   order-preserving arrays for canonical hashing. Types `Rate.value` and Wilson
@@ -25,6 +32,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   All samples, failure denominators and outstanding live qualification gates remain.
 
 ### Added
+
+- Customer recommendation guides (#207; RM34–RM44/AC25–AC37): English and
+  Chinese entry/navigation, v1/v2 migration, current HTTP index preparation,
+  source JSON and formal JSON/Markdown workflows, explicit choice receipts and
+  source/privacy/recovery boundaries. Installed M10 host walkthrough acceptance
+  remains separate; no runtime, qualification or budget change.
+
+- Specification 0.60 → 0.61 (#201/#200; RM16/RM35/RM38/RM40/RM41/RM44;
+  AC26/AC29/AC31/AC32): add explicit cold local native preparation using existing
+  worker events/readiness, actual setup/cleanup timing and unknown-aware costs.
+  Define narrow native-versus-unused runtime applicability, a closed self-contained
+  comparison runtime display, and invariant native build/device/execution controls. Preserve none/HTTP, semantic/artifact/Row,
+  source-proof and 0.60 episode/host/platform contracts and all acceptance gates.
+  This publishes tooling contracts, not model activation or measured acceptance.
+
+- Specification 0.59 → 0.60 (#198/#202/#204/#205/#206; RM16/RM38–RM44;
+  AC29–AC37): define closed adaptation episode, whole-host three-arm and
+  platform exports, exact freeze/companion resolution, conserved observations
+  and deterministic cost/quality/reset arithmetic. Reuse native execution,
+  existing product rows and the operational grader. Tooling implementation is
+  authorized; host activation remains denied until a later qualified
+  person/session/immutable-use contract. No provider or budget change.
 
 - Local semantic retrieval and correction backends (#201/#202; RM38/RM41/RM42;
   AC29/AC32/AC33): pinned local artifacts, deterministic segmented representations,
@@ -50,6 +79,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   separately assessed. No provider, budget or public wire revision. The actual
   six-skill acquisition qualifies this narrow profile; runtime activation and
   repeated scheduled product refresh remain pending.
+
+- Dormant OpenClaw recommendation libraries (#197; RM36, RM37, RM39;
+  AC27/AC28 and partial AC30): bounded single-attempt clients, lossless revision
+  and event decoding, closed protocol checks, inert recorded-evidence rendering
+  and a default-deny controller. Explicit fixtures exercise the actual gateway;
+  production command registration, snapshots, exact skill/MCP use and full host
+  acceptance remain unavailable pending qualification and a normative revision.
 
 - Specification 0.57 → 0.58 (#201/#202; RM37/RM38/RM41/RM42;
   AC28/AC29/AC32/AC33): publish the closed local embedding manifest and
