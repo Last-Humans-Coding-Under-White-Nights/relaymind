@@ -47,12 +47,65 @@ def test_quality_only_recomputes_and_renders_self_contained(saved):
         and p["dimensions"]["retrieval_mode"] == "service"
     )
     assert overall["cases"] == 1 and overall["both_hit"] == 1
+    assert "confident_coverage_difference" in overall
+    assert "coverage_difference" not in overall
+    assert overall["confident_coverage_difference"] == 0
     assert overall["a"]["planned"] == 2 and overall["a"]["positive"] == 1
     assert data["gate_status"] != "pass"
     # Renderer receives only the closed comparison, never source reports.
     markdown = api.render_asset_comparison(copy.deepcopy(data))
     assert "lexical" in markdown and "not comparable" in markdown
     assert "known subtotal" in markdown.lower() and "0" in markdown
+
+
+def test_confident_coverage_difference_uses_b_minus_a(tmp_path, http_example):
+    """RM40/AC31: paired coverage names the exact b-minus-a rate."""
+    api = module("asset_benchmark")
+    url, captured = http_example
+    config = fixture_config(tmp_path, primary="http", url=url, repetitions=1, warmups=0)
+    captured.mode = "confident"
+    a = asyncio.run(api.run_asset_benchmark(config))
+    captured.mode = "no_match"
+    b = asyncio.run(api.run_asset_benchmark(config))
+    result = comparison(a, b, quality_only=True)
+    assert result["status"] == "compatible", result["reasons"]
+    overall = next(
+        pair
+        for pair in result["paired"]
+        if pair["dimensions"]["lane"] == pair["dimensions"]["kind"] == "all"
+        and pair["dimensions"]["retrieval_mode"] == "service"
+    )
+    assert overall["a"]["confident_coverage"]["value"] == 1
+    assert overall["b"]["confident_coverage"]["value"] == 0
+    assert overall["confident_coverage_difference"] == -1
+
+
+def test_confident_coverage_difference_stays_null_without_positive_cases(tmp_path):
+    """RM40/AC31: absent coverage denominator cannot become a zero difference."""
+    from test_asset_corpus import read, relock, write
+
+    api = module("asset_benchmark")
+    config = fixture_config(tmp_path, repetitions=1, warmups=0)
+    root = config.path.parent
+    labels = read(root, "labels")
+    for label in [*labels["judgments"], *labels["adjudications"]]:
+        label.update(**{"class": "negative"}, acceptable_asset_ids=[])
+    write(root, "labels", labels)
+    relock(root)
+    config.path.write_text(
+        config.path.read_text().replace(config.data["lock_digest"], read(root, "lock")["digest"])
+    )
+    report = asyncio.run(api.run_asset_benchmark(api.load_benchmark_config(config.path)))
+    paired = comparison(report, report, quality_only=True)
+    assert paired["status"] == "compatible", paired["reasons"]
+    overall = next(
+        pair
+        for pair in paired["paired"]
+        if pair["dimensions"]["lane"] == pair["dimensions"]["kind"] == "all"
+        and pair["dimensions"]["retrieval_mode"] == "service"
+    )
+    assert overall["a"]["confident_coverage"]["value"] is None
+    assert overall["confident_coverage_difference"] is None
 
 
 @pytest.mark.parametrize(
@@ -99,19 +152,91 @@ def test_missing_required_evidence_refuses_offline_and_quality_only(saved, tmp_p
     assert any(r["reason"] == "input_unresolved" for r in result["reasons"])
 
 
-def test_unknown_machine_does_not_establish_performance_match(disk_bundle):
-    # RM40/AC31: pin an unknown GPU in the complete, recommitted input bundle.
-    # Runner hardware may report a known GPU, including on Windows CI.
-    def unknown_gpu(documents, report, _overrides):
-        documents["environment_lock"]["gpu"] = None
-        report["environment"]["gpu"] = None
+@pytest.mark.parametrize(
+    ("gpu", "unknown"),
+    [
+        (None, True),
+        ([dict(model=None, device=None, cores=None)], True),
+        ([dict(model=None, device="PCI0", cores="24")], True),
+        ([dict(model="Known", device=None, cores="24")], True),
+        ([dict(model="Known", device="PCI0", cores=None)], True),
+        ([], False),
+        ([dict(model="Known", device="PCI0", cores="24")], False),
+    ],
+)
+def test_unknown_machine_does_not_establish_performance_match(disk_bundle, gpu, unknown):
+    """RM40/AC31: recommitted GPU facts keep unknown distinct from absence."""
 
-    unknown = rewrite_fixture_bundle(disk_bundle, unknown_gpu)
-    assert unknown.data["environment"]["gpu"] is None
-    assert unknown.inputs.documents["environment_lock"]["gpu"] is None
-    result = comparison(unknown, unknown)
-    assert result["status"] == "incompatible"
-    assert any(r["field"].endswith("/gpu") for r in result["reasons"])
+    def gpu_fixture(documents, report, _overrides):
+        machine = dict(
+            os="fixture-os",
+            os_version="fixture-version",
+            architecture="fixture-arch",
+            cpu="fixture-cpu",
+            ram_bytes=1024,
+            gpu=gpu,
+        )
+        documents["environment_lock"].update(machine)
+        report["environment"].update(machine)
+        report["implementation"]["dirty"] = False
+
+    fixture = rewrite_fixture_bundle(disk_bundle, gpu_fixture)
+    assert fixture.inputs is not None, fixture.input_error
+    assert fixture.data["environment"]["gpu"] == gpu
+    assert fixture.inputs.documents["environment_lock"]["gpu"] == gpu
+    normal = comparison(fixture, fixture)
+    quality = comparison(fixture, fixture, quality_only=True)
+    assert quality["status"] == "compatible" and quality["performance_comparable"] is False
+    if unknown:
+        assert normal["status"] == "incompatible" and normal["performance_comparable"] is False
+        assert {"field": "/environment/gpu", "reason": "unknown"} in normal["reasons"]
+    else:
+        assert normal["status"] == "compatible" and normal["performance_comparable"] is True
+        assert not any(r["field"] == "/environment/gpu" for r in normal["reasons"])
+
+
+def test_unknown_dirty_cannot_establish_matching_implementation(saved):
+    """RM40/AC31: null dirty remains unknown even on a self comparison."""
+    other = copy.copy(saved)
+    other.data = copy.deepcopy(saved.data)
+    other.data["implementation"]["dirty"] = None
+    benchmark = module("asset_benchmark")
+    for value in (None, True, False):
+        other.data["implementation"]["dirty"] = value
+        benchmark.validate_benchmark_document("report", other.data)
+    other.data["implementation"]["dirty"] = None
+    for quality_only in (False, True):
+        result = comparison(other, other, quality_only=quality_only)
+        assert result["status"] == "incompatible"
+        assert result["performance_comparable"] is False
+        assert {"field": "/implementation/dirty", "reason": "unknown"} in result["reasons"]
+
+
+@pytest.mark.parametrize(
+    "gpu_record",
+    [
+        {"device": None, "cores": None},
+        {"model": "Known", "cores": None},
+        {"model": "Known", "device": None},
+        {"model": "Known", "device": None, "cores": 8},
+        "malformed",
+    ],
+)
+def test_malformed_gpu_triple_has_controlled_schema_error(saved, gpu_record):
+    """RM40/AC31: missing GPU keys fail at the closed validation boundary."""
+    api = module("asset_benchmark")
+    environment = copy.deepcopy(saved.data["environment"])
+    environment["gpu"] = [gpu_record]
+    for kind in ("report", "comparison"):
+        with pytest.raises(ValueError, match=f"^invalid_benchmark_{kind}$"):
+            api.validate_benchmark_document(kind, environment, definition="Environment")
+    malformed = copy.copy(saved)
+    malformed.data = copy.deepcopy(saved.data)
+    malformed.data["environment"] = environment
+    with pytest.raises(ValueError, match="^invalid_benchmark_report$"):
+        api.validate_benchmark_document("report", malformed.data)
+    with pytest.raises(ValueError, match="^invalid_benchmark_report$"):
+        comparison(malformed, malformed)
 
 
 def test_primary_quality_does_not_inherit_floor_success(saved):

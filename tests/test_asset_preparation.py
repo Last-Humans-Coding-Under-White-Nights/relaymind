@@ -371,8 +371,11 @@ def test_published_companion_schemas_enforce_operation_and_state_shapes(mutation
 @pytest.mark.parametrize("mutation", ["reason", "cost", "repeated_prepare", "elapsed"])
 def test_transcript_cannot_fabricate_state_cost_or_extra_dispatch(mutation):
     m, catalog, binding, config = inputs()
+    tick = [100.0]
 
     def handle(req):
+        if mutation == "elapsed":
+            tick[0] += 0.025
         return reply(200, json=response(json.loads(req.content)))
 
     if mutation in ("reason", "cost"):
@@ -386,12 +389,69 @@ def test_transcript_cannot_fabricate_state_cost_or_extra_dispatch(mutation):
     else:
         record = asyncio.run(
             m.prepare_asset_index(
-                config, binding, catalog, transport_factory=lambda: httpx.MockTransport(handle)
+                config,
+                binding,
+                catalog,
+                clock=lambda: tick[0] if mutation == "elapsed" else 100.0,
+                transport_factory=lambda: httpx.MockTransport(handle),
             )
         )
         if mutation == "repeated_prepare":
             record["exchanges"].append(copy.deepcopy(record["exchanges"][0]))
         else:
+            assert record["exchanges"][0]["observed_ms"] > 0
+            assert record["observed_ms"] >= record["exchanges"][0]["observed_ms"]
+            m.validate_preparation_record(record, config=config, binding=binding)
             record["observed_ms"] = 0
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match="invalid_preparation_time" if mutation == "elapsed" else None
+    ):
+        m.validate_preparation_record(record, config=config, binding=binding)
+
+
+def test_zero_clock_ready_preparation_is_valid():
+    """RM35/AC26: coarse clocks may honestly record zero elapsed work."""
+    m, catalog, binding, config = inputs()
+
+    def handle(req):
+        return reply(200, json=response(json.loads(req.content)))
+
+    record = asyncio.run(
+        m.prepare_asset_index(
+            config,
+            binding,
+            catalog,
+            clock=lambda: 100.0,
+            transport_factory=lambda: httpx.MockTransport(handle),
+        )
+    )
+    assert record["status"] == "ready"
+    assert record["observed_ms"] == record["exchanges"][0]["observed_ms"] == 0
+    m.validate_preparation_record(record, config=config, binding=binding)
+
+
+def test_coarse_clock_tolerance_covers_the_cleanup_exchange_and_record():
+    # RM35/AC26: a coarse clock can report just over the request window for an
+    # on-time cleanup; the exchange check and the record allow the same 1 ms.
+    m, catalog, binding, config = inputs()
+    config |= {"max_polls": 1}
+
+    def handle(req):
+        value = json.loads(req.content)
+        if value["operation"] == "cancel":
+            return reply(200, json=response(value, state="cancelled", reason="cancelled"))
+        return reply(200, json=response(value, state="indexing"))
+
+    record = asyncio.run(
+        m.prepare_asset_index(
+            config, binding, catalog, transport_factory=lambda: httpx.MockTransport(handle)
+        )
+    )
+    assert record["status"] == "failed"
+    cleanup = record["exchanges"][-1]
+    assert cleanup["operation"] == "cancel" and cleanup["response"] is not None
+    record["cleanup_ms"] = cleanup["observed_ms"] = 1000.0005
+    m.validate_preparation_record(record, config=config, binding=binding)
+    record["cleanup_ms"] = cleanup["observed_ms"] = 1001
+    with pytest.raises(ValueError, match="invalid_preparation_exchange"):
         m.validate_preparation_record(record, config=config, binding=binding)

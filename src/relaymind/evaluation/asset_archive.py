@@ -195,5 +195,12 @@ def inspect_skill_archive(payload: bytes) -> ArchiveInspection:
             return ArchiveInspection(
                 hashlib.sha256(payload).hexdigest(), len(infos), total, MappingProxyType(selected)
             )
-    except (zipfile.BadZipFile, NotImplementedError, RuntimeError, struct.error, zlib.error):
+    except (
+        zipfile.BadZipFile,
+        NotImplementedError,
+        RuntimeError,
+        struct.error,
+        zlib.error,
+        UnicodeError,
+    ):
         raise AssetCorpusError("malformed_archive") from None

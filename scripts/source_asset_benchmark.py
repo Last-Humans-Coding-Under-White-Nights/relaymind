@@ -120,7 +120,7 @@ def main() -> int:
             candidates = row["evaluated_candidates"][:3]
             catalog_assets = {
                 a["record"]["asset_id"]: a["record"]
-                for a in report.get("catalog_document", {}).get("assets", [])
+                for a in (report.get("catalog_document") or {}).get("assets", [])
                 if "record" in a
             }
             catalog = catalog_assets or {

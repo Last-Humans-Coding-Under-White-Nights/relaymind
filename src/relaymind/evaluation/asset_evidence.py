@@ -165,6 +165,8 @@ _GENERATOR_ANCHORS = {
         {
             # Reviewed normative0.59 semantic and qualified-refresh contracts.
             ("056c4c32119be9385b1c39e617f6b61a59bb48006fbcf4b21d2baf6a37607b95", 526059),
+            # Reviewed master 0.56 and preparation 0.57 union (769cc247).
+            ("b66b775e4d40cd9386689c43c5a7bce98243e08683b81967aa3cec0132beb756", 485852),
             # Reviewed normative0.57 companion preparation contract (d1490fe).
             ("8c2a7c3b64e04ea97f94c09c7a78e041567829f28e04e320cd54860e271036c9", 484605),
             # The unintegrated fixture parent is recorded honestly; the published
@@ -218,7 +220,14 @@ def collect_benchmark_environment() -> dict:
     # Leave that unknown rather than inventing a performance match.
     gpu = facts["gpu"]
     if gpu is not None:
-        gpu = [dict(model=g["model"], device=str(i)) for i, g in enumerate(gpu) if g.get("model")]
+        gpu = sorted(
+            {
+                (g.get("model"), None, None if g.get("cores") is None else str(g["cores"]))
+                for g in gpu
+            },
+            key=lambda item: tuple((part is not None, part or "") for part in item),
+        )
+        gpu = [dict(zip(("model", "device", "cores"), item, strict=True)) for item in gpu]
     value = dict(
         os=facts["os"],
         os_version=facts["os_version"],
@@ -634,7 +643,10 @@ def verify_benchmark_inputs(
     # Materialize only in an authorized private temporary directory and run the
     # existing corpus parser unchanged. No exported/private-label parser fork.
     with tempfile.TemporaryDirectory(prefix="asset-compare-") as temporary:
-        root = Path(temporary)
+        temporary_root = Path(temporary)
+        root = temporary_root.parent.resolve(strict=True) / temporary_root.name
+        if root.is_symlink():
+            raise AssetCorpusError("unsafe_file")
         related_roots = {}
         locks = {doc["digest"]: doc for key, doc in documents.items() if key.startswith("lock:")}
         lock_raw = {
