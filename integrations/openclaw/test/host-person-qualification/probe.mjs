@@ -12,16 +12,14 @@ export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMe
       const { client, params, sessionMutationAuthorization: mutation, sessionAccessAuthority: access } = options;
       const target = access?.target;
       if (!client?.authenticatedUserId || !client.preparedSessionProfile?.profileId ||
-          client.internal?.agentToolCaller || client.browserOrigin?.origin !== origin ||
+          client.internal?.authenticatedControlUi !== true || client.internal?.agentToolCaller ||
+          client.browserOrigin?.origin !== origin ||
           !client.connect?.device?.id || !client.presenceKey || !mutation || !target ||
           Object.keys(params).some(key => !["sessionKey", "agentId", "expectedSessionId", "expectedLifecycleRevision", "hold"].includes(key)) ||
           params.sessionKey !== target.sessionKey || params.expectedSessionId !== target.sessionId ||
           !target.lifecycleRevision || params.expectedLifecycleRevision !== target.lifecycleRevision ||
           params.agentId !== undefined && params.agentId !== target.agentId ||
-          params.hold !== undefined && typeof params.hold !== "boolean" ||
-          mutation.admittedTarget?.sessionKey !== target.sessionKey ||
-          mutation.admittedTarget?.sessionId !== target.sessionId ||
-          mutation.admittedTarget?.agentId !== target.agentId) throw new Error("refused");
+          params.hold !== undefined && typeof params.hold !== "boolean") throw new Error("refused");
       const current = (afterAwait = false) => {
         try {
         if (client.invalidated || client.connectionSignal?.aborted || options.signal?.aborted ||
@@ -43,7 +41,8 @@ export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMe
       if (!tools.ok) throw new Error("inventory_unavailable");
       const receipt = {
         requestId, profileId: client.preparedSessionProfile.profileId,
-        authenticatedUserId: client.authenticatedUserId, sessionKey: target.sessionKey,
+        authenticatedUserId: client.authenticatedUserId, authenticatedControlUi: true,
+        sessionKey: target.sessionKey,
         sessionId: target.sessionId, lifecycleRevision: target.lifecycleRevision,
         connectionId: client.presenceKey, deviceId: client.connect.device.id,
       };

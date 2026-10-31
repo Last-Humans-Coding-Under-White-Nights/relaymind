@@ -6,6 +6,7 @@ synthetic forwarding address, actor row, external account or human claim.
 
 import ipaddress
 import json
+import secrets
 import subprocess
 import time
 from pathlib import Path
@@ -15,6 +16,7 @@ HOST_VERSION = "2026.10.7"
 AUTHCRUNCH_VERSION = "1.5.0"
 AUTHCRUNCH_SHA256 = "86a1ed8446bca803149bdcf1335005b840033a17c41680a067d7de11dfbaeca9"
 AUTHCRUNCH_BYTES = 31627615
+PERSON_SCOPES = ("operator.read", "operator.write", "operator.approvals", "operator.questions")
 AUTHCRUNCH_URL = (
     "https://github.com/authcrunch/authcrunch/releases/download/v1.5.0/"
     "authcrunch_1.5.0_linux_amd64.tar.gz"
@@ -44,6 +46,14 @@ LOGIN_SUBPHASES = frozenset(
         "peer_binding",
     }
 )
+PERSON_RPC_EVENT_REASONS = {
+    "guard_denied": frozenset(
+        {"admission_refused", "initial_authority_retired", "post_await_authority_retired"}
+    ),
+    "probe_failed": frozenset(
+        {"fixture_hold_timeout", "fixture_pause_failed", "inventory_unavailable"}
+    ),
+}
 _PRIVATE = tuple(
     ipaddress.IPv4Network(value) for value in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
 )
@@ -104,6 +114,8 @@ def person_composition_pass(capture: dict) -> bool:
     """Grade correlated fixture mechanics, not caller assertions of authority."""
     try:
         if capture["status"] != "completed" or capture["host_version"] != HOST_VERSION:
+            return False
+        if capture.get("configured_session_policy") != person_role_config(list(PERSON_SCOPES)):
             return False
         if capture["checks"]["production_adapter_qualified"] is not False:
             return False
@@ -197,6 +209,8 @@ def person_composition_pass(capture: dict) -> bool:
                 ):
                     return False
             native = rpc["payload"]
+            if native["authenticatedControlUi"] is not True:
+                return False
             bindings = {
                 "requestId": "rpc_evidence_id",
                 "profileId": "profile_id",
@@ -242,6 +256,16 @@ def person_composition_pass(capture: dict) -> bool:
         return len(profiles) == len(sessions) == len(keys) == len(sockets) == len(create_ids) == 2
     except (KeyError, TypeError):
         return False
+
+
+def person_role_config(scopes: list[str]) -> dict:
+    """Use the host's named role to hide another person's native sessions."""
+    return dict(
+        default="person",
+        definitions=dict(
+            person=dict(sessions=dict(others="none"), agents=["main"], scopes=list(scopes))
+        ),
+    )
 
 
 def session_create_receipt(observed: dict, account_email: str) -> dict:
@@ -309,6 +333,46 @@ def observe_login_subphase(capture: dict, account: str, subphase: str, action, *
                 observed_ms=max((time.monotonic() - started) * 1000, 0.0),
             )
         )
+
+
+def project_person_rpc_failure(path: Path, request_id: str) -> dict:
+    """Project one native request's fixed event classes from a bounded private file."""
+    empty = {"observations": []}
+    if not isinstance(request_id, str) or not 0 < len(request_id) <= 128:
+        return dict(status="event_file_invalid", **empty)
+    try:
+        with path.open("rb") as source:
+            raw = source.read(1024 * 1024 + 1)
+    except OSError:
+        return dict(status="event_file_unavailable", **empty)
+    if len(raw) > 1024 * 1024:
+        return dict(status="event_file_oversize", **empty)
+    observations = []
+    for line in raw.splitlines():
+        try:
+            event = json.loads(line)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return dict(status="event_file_invalid", **empty)
+        if not isinstance(event, dict):
+            return dict(status="event_file_invalid", **empty)
+        if event.get("requestId") != request_id:
+            continue
+        phase, reason = event.get("phase"), event.get("reason")
+        if not isinstance(phase, str) or (reason is not None and not isinstance(reason, str)):
+            return dict(status="event_file_invalid", **empty)
+        if phase in {"prepared", "admitted"} and reason is None:
+            observation = {"phase": phase, "reason": None}
+        elif phase in PERSON_RPC_EVENT_REASONS and reason in PERSON_RPC_EVENT_REASONS[phase]:
+            observation = {"phase": phase, "reason": reason}
+        else:
+            return dict(status="event_file_invalid", **empty)
+        observations.append(observation)
+        if len(observations) > 4:
+            return dict(status="event_file_invalid", **empty)
+    return {
+        "status": "handler_event_present" if observations else "handler_event_absent",
+        "observations": observations,
+    }
 
 
 def read_bound_peer(page, address: str, email: str) -> dict:
@@ -527,7 +591,6 @@ def _wait_listener(process, address: str, port: int) -> None:
 
 
 def _run_private_trial(work: Path, address: str, capture: dict) -> None:
-    import secrets
     import socket
     import sys
     import time
@@ -565,12 +628,13 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
     events_path.write_bytes(b"")
     events_path.chmod(0o600)
     plugin = Path(__file__).resolve().parent
-    scopes = ["operator.read", "operator.write", "operator.approvals", "operator.questions"]
+    scopes = list(PERSON_SCOPES)
     config = dict(
         gateway=dict(
             mode="local",
             bind="loopback",
             port=gateway_port,
+            roles=person_role_config(scopes),
             publicOrigin=origin,
             trustedProxies=["127.0.0.1"],
             controlUi=dict(allowedOrigins=[origin]),
@@ -603,6 +667,7 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
     config_path = work / "openclaw.json"
     config_path.write_bytes((json.dumps(config) + "\n").encode("utf-8"))
     config_path.chmod(0o600)
+    capture["configured_session_policy"] = config["gateway"]["roles"]
     environment = host_environment(work)
     allowed = {
         "PATH",
@@ -890,15 +955,7 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                         time.sleep(0.05)
                     mark(prefix + "_pairing")
                     capture["phase"] = prefix + "_session"
-                    created = rpc(
-                        page,
-                        "sessions.create",
-                        dict(
-                            agentId="main",
-                            key="agent:main:person-" + secrets.token_hex(8),
-                            label="Disposable person qualification",
-                        ),
-                    )
+                    created = rpc(page, "sessions.create", session_create_params())
                     if created["frame"].get("ok") is not True:
                         raise ValueError("native_session_create_denied")
                     session = created["frame"]["payload"]
@@ -913,6 +970,9 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
                     capture["phase"] = prefix + "_person_rpc"
                     result = rpc(page, "rmqualification.person", params)
                     if result["frame"].get("ok") is not True:
+                        capture["person_rpc_failure"] = project_person_rpc_failure(
+                            events_path, result["id"]
+                        )
                         raise ValueError("native_person_rpc_denied")
                     receipt = result["frame"]["payload"]
                     if (
@@ -1042,6 +1102,16 @@ def _run_private_trial(work: Path, address: str, capture: dict) -> None:
             log.close()
         if any(secret in json.dumps(capture) for secret in secrets_to_exclude):
             raise ValueError("credential_export_refused")
+
+
+def session_create_params() -> dict:
+    """One disposable session per account; the host refuses a label another session holds."""
+    token = secrets.token_hex(8)
+    return dict(
+        agentId="main",
+        key="agent:main:person-" + token,
+        label="Disposable person qualification " + token,
+    )
 
 
 def run_qualification(work: Path, output: Path) -> int:

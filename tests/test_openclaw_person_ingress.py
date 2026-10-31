@@ -179,6 +179,133 @@ def test_login_progress_rejects_unclassified_names(account, subphase):
     assert capture["login_progress"] == []
 
 
+def test_person_rpc_failure_projection_correlates_only_fixed_event_classes(tmp_path):
+    """RM12/RM39: native handler diagnostics keep no private event content."""
+    api = module()
+    event_file = tmp_path / "native-events.jsonl"
+    secret = "secret-cookie-RMPERSON_SANDBOX_ID_opaque"
+    event_file.write_text(
+        json.dumps(
+            dict(
+                requestId="other-request",
+                phase="probe_failed",
+                reason="inventory_unavailable",
+                cookie=secret,
+            )
+        )
+        + "\n"
+        + json.dumps(
+            dict(
+                requestId="wanted-request",
+                connectionId="native-connection",
+                phase="guard_denied",
+                reason="initial_authority_retired",
+                url="https://rm-person.test/auth/sandbox/opaque?secret=1",
+                cookie=secret,
+            )
+        )
+        + "\n"
+    )
+    projected = api.project_person_rpc_failure(event_file, "wanted-request")
+    assert projected == {
+        "status": "handler_event_present",
+        "observations": [{"phase": "guard_denied", "reason": "initial_authority_retired"}],
+    }
+    assert secret not in json.dumps(projected)
+    assert "opaque" not in json.dumps(projected)
+    assert api.project_person_rpc_failure(event_file, "missing-request") == {
+        "status": "handler_event_absent",
+        "observations": [],
+    }
+
+
+@pytest.mark.parametrize(
+    ("line", "expected_status"),
+    [
+        (
+            '{"requestId":"wanted","phase":"guard_denied","reason":"private-secret"}',
+            "event_file_invalid",
+        ),
+        ('{"requestId":"wanted","phase":["private-secret"],"reason":null}', "event_file_invalid"),
+        (
+            '{"requestId":"wanted","phase":"guard_denied","reason":["private-secret"]}',
+            "event_file_invalid",
+        ),
+        ("not-json-private-secret", "event_file_invalid"),
+    ],
+)
+def test_person_rpc_failure_projection_refuses_unclassified_event_data(
+    tmp_path, line, expected_status
+):
+    """RM12: unknown reasons and malformed records cannot become capture fields."""
+    api = module()
+    event_file = tmp_path / "native-events.jsonl"
+    event_file.write_text(line + "\n")
+    projected = api.project_person_rpc_failure(event_file, "wanted")
+    assert projected == {"status": expected_status, "observations": []}
+    assert "private-secret" not in json.dumps(projected)
+
+
+def test_person_rpc_failure_projection_bounds_file_and_matching_rows(tmp_path):
+    """RM12: private event diagnostics have fixed byte and row ceilings."""
+    api = module()
+    event_file = tmp_path / "native-events.jsonl"
+    event_file.write_bytes(b"x" * (1024 * 1024 + 1))
+    assert api.project_person_rpc_failure(event_file, "wanted") == {
+        "status": "event_file_oversize",
+        "observations": [],
+    }
+    event_file.write_text((json.dumps(dict(requestId="wanted", phase="prepared")) + "\n") * 5)
+    assert api.project_person_rpc_failure(event_file, "wanted") == {
+        "status": "event_file_invalid",
+        "observations": [],
+    }
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="the opt-in Ubuntu runner owns a deadline")
+def test_failed_person_rpc_keeps_all_steps_false_checks_and_safe_projection(tmp_path, monkeypatch):
+    """RM16/RM39: failure remains incomplete even with correlated handler evidence."""
+    api = module()
+    monkeypatch.setattr(api, "discover_network", lambda: ["10.1.2.3"])
+
+    def fail(work, _address, capture):
+        capture["phase"] = "account_a_person_rpc"
+        for step in capture["steps"][:5]:
+            step["status"] = "passed"
+        event_file = work / "native-events.jsonl"
+        event_file.write_text(
+            json.dumps(
+                dict(
+                    requestId="request-a",
+                    phase="guard_denied",
+                    reason="admission_refused",
+                    private="credential-marker",
+                )
+            )
+            + "\n"
+        )
+        capture["person_rpc_failure"] = api.project_person_rpc_failure(event_file, "request-a")
+        raise ValueError("native_person_rpc_denied")
+
+    monkeypatch.setattr(api, "_run_private_trial", fail)
+    output = tmp_path / "capture.json"
+    assert api.run_qualification(tmp_path / "work", output) == 2
+    raw = output.read_text()
+    assert "credential-marker" not in raw
+    capture = json.loads(raw)
+    assert capture["reason"] == "native_person_rpc_denied"
+    assert capture["checks"] == {
+        "person_composition": False,
+        "production_adapter_qualified": False,
+    }
+    assert len(capture["steps"]) == len(api.STEPS) == 12
+    assert capture["steps"][5]["status"] == "failed"
+    assert capture["person_rpc_failure"] == {
+        "status": "handler_event_present",
+        "observations": [{"phase": "guard_denied", "reason": "admission_refused"}],
+    }
+
+
 def test_capture_cannot_promote_login_without_native_profile_and_scoped_rpc():
     api = module()
     capture = api.unavailable_capture("private_network_unavailable")
@@ -364,6 +491,9 @@ def test_complete_login_claim_still_needs_bound_denial_observations():
 def complete_capture(api):
     """Controlled receipts include actual create response and same-socket RPC identity."""
     capture = mechanical_capture(api)
+    capture["configured_session_policy"] = api.person_role_config(
+        ["operator.read", "operator.write", "operator.approvals", "operator.questions"]
+    )
     capture["events"] = []
     for i, account in enumerate(capture["accounts"], 1):
         account.update(
@@ -417,6 +547,7 @@ def complete_capture(api):
                         requestId=account["rpc_evidence_id"],
                         profileId=account["profile_id"],
                         authenticatedUserId=account["native_person_email"],
+                        authenticatedControlUi=True,
                         sessionKey=account["session_key"],
                         sessionId=account["native_session_id"],
                         lifecycleRevision=account["lifecycle_revision"],
@@ -460,6 +591,34 @@ def complete_capture(api):
 def test_complete_same_socket_create_and_person_receipts_pass_fixture_mechanics_only():
     api = module()
     assert api.person_composition_pass(complete_capture(api)) is True
+
+
+@pytest.mark.parametrize("mutation", ["missing", "shared", "admin"])
+def test_missing_or_broad_host_session_policy_never_qualifies(mutation):
+    """RM39/AC30: a request denial must be backed by the configured person role."""
+    api = module()
+    capture = complete_capture(api)
+    person = capture["configured_session_policy"]["definitions"]["person"]
+    if mutation == "missing":
+        del capture["configured_session_policy"]
+    elif mutation == "shared":
+        person["sessions"]["others"] = "write"
+    else:
+        person["scopes"].append("operator.admin")
+    assert api.person_composition_pass(capture) is False
+
+
+@pytest.mark.parametrize("attestation", [False, None])
+def test_missing_or_false_native_control_ui_attestation_never_qualifies(attestation):
+    """RM39/AC30: browser origin alone cannot attest a native Control UI client."""
+    api = module()
+    capture = complete_capture(api)
+    receipt = next(event for event in capture["events"] if event["kind"] == "person_rpc")["payload"]
+    if attestation is None:
+        del receipt["authenticatedControlUi"]
+    else:
+        receipt["authenticatedControlUi"] = False
+    assert api.person_composition_pass(capture) is False
 
 
 @pytest.mark.parametrize(
@@ -552,3 +711,30 @@ def test_native_create_export_keeps_only_bounded_nonsecret_binding():
     for changed in [dict(id="wrong"), dict(socket_id=""), dict(socket_id="a" * 1025)]:
         with pytest.raises(ValueError, match="native_session_create_binding"):
             api.session_create_receipt(observed | changed, "fixture@example.test")
+
+
+def test_each_account_session_has_its_own_key_and_label():
+    """RM37/AC28: the host refuses a second session that reuses a label."""
+    m = module()
+    first = m.session_create_params()
+    second = m.session_create_params()
+    assert first["agentId"] == second["agentId"] == "main"
+    assert first["key"] != second["key"]
+    assert first["label"] != second["label"]
+    assert first["key"].startswith("agent:main:person-")
+    assert 0 < len(first["label"]) <= 512
+
+
+def test_disposable_host_configures_person_session_boundary():
+    """RM39/AC30: native accounts cannot target another person's session."""
+    scopes = ["operator.read", "operator.write", "operator.approvals", "operator.questions"]
+    assert module().person_role_config(scopes) == {
+        "default": "person",
+        "definitions": {
+            "person": {
+                "sessions": {"others": "none"},
+                "agents": ["main"],
+                "scopes": scopes,
+            }
+        },
+    }
