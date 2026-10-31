@@ -345,7 +345,10 @@ def grade_adaptation_report(
 
     ``labels`` maps each probe case ID to its frozen ``{class,
     acceptable_asset_ids}``. ``reset_preimages`` maps an episode ID to its
-    (baseline, after) reset arrays resolved from evidence. A claimed reset
+    (baseline, after) reset arrays resolved from evidence. ``offers`` (see
+    ``asset_whole_task_corpus.corpus_offers``) recomputes every dispatched
+    probe's offer; library callers that omit it skip that binding, while the
+    command line always supplies it. A claimed reset
     without its preimages is never credited: after all structural checks, a
     known gate failure is returned, otherwise the grade is blocked
     (``reset_evidence_unresolved``).

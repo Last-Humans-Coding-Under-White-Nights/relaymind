@@ -188,7 +188,12 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 #204（宿主 MCP 使用行）、#205（成对整任务）和 #206（平台生命周期）。它们校验冻结输入、
 确定性地规划执行、通过真实推荐生命周期驱动适配回合，并重新评分导出的报告。工具不运行宿主、
 不授予审批，也不执行任何工具：宿主试验的执行器由调用方提供，只有宿主执行工具。
-英文完整说明见 [ASSET_BENCHMARK.md](ASSET_BENCHMARK.md#whole-host-trials-adaptation-episodes-and-platform-exports-spec-060064-section-1265)。
+本节是摘要；各项检查的规范性完整说明以英文版 [ASSET_BENCHMARK.md](ASSET_BENCHMARK.md#whole-host-trials-adaptation-episodes-and-platform-exports-spec-060064-section-1265) 为准。
+所有汇总都从经过验证的行重新计算，存储的汇总与之不符时报告被拒绝。`plan-host` 先依据 `HostFreezeV1` 校验
+`AssetHostTasksV1`，并按 `{seed,task_id,arm}` 的 SHA-256 排列各组；评分命令的输出文件总是记录 `status`、`gate`
+和固定的安全 `reason`，`plan-host` 只写出计划，被拒绝时不写文件并把原因输出到标准错误。引用的配置为严格 JSON 或 TOML
+（不超过 4 MiB）；尚不支持关联锁（related locks），遇到时阻塞。重置证据必须是规范化（canonical）JSON 原始字节，
+非规范字节或重复键会被拒绝。
 
 | 命令 | 作用 |
 | --- | --- |
@@ -199,7 +204,7 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 
 退出码：`0` 通过或不适用于验收（夹具平台报告、未达资格的适配报告）；`1` 已知门槛失败；
 `2` 报告或输入被拒绝（摘要、身份、顺序、绑定或算术矛盾）；`3` 阻塞（缺少必需的文档、配置、
-语料文档、清单原文或证据）。阻塞永远不会被报告为通过。评分结果还会列出 `unverified`：
+语料文档、运行器/协议清单中文件的原文（由 `--resolver` 提供）或证据）。阻塞永远不会被报告为通过。评分结果还会列出 `unverified`：
 宿主与平台报告为 `configuration_semantics` 和 `qualified_evidence_review`；适配报告为
 `qualified_evidence_review`，若两个对照组未引用冻结的 14.5.2 适配配置，还包括 `adaptation_config_semantics`
 （被引用时会与其余引用闭包一同解析和验证）。关闭组与开启组的有效配置除适配开关外必须完全一致

@@ -621,9 +621,10 @@ whole `src/relaymind` Python package plus `pyproject.toml` and
 `scripts/asset_whole_task.py`, whose package members must equal the running
 grader and whose other files must match reviewed bytes.
 
-**Reset evidence (spec 0.64).** The registry entry `reset:<episode_id>` holds
-the closed JSON document `{schema_version:1,episode_id,baseline,after}` with
-the two reset semantic arrays. The grader verifies each claimed reset with it;
+**Reset evidence (spec 0.64).** The registry entry `reset:<episode_id>` holds,
+as its original bytes, the closed canonical JSON object
+`{schema_version:1,episode_id,baseline,after}` with the two reset semantic
+arrays; non-canonical bytes or duplicate keys reject. The grader verifies each claimed reset with it;
 a missing document leaves the reset uncredited and blocks unless a structural
 contradiction or known gate failure is reported first.
 

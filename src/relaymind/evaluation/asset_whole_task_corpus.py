@@ -168,13 +168,17 @@ def bind_episodes(episodes: Mapping, release: VerifiedAssetRelease) -> None:
     A correction target missing from the pool is retained (and graded
     incorrect), never replaced, as section 12.6.5 requires.
     """
-    cases = {case["id"] for case in release.cases["cases"]}
+    cases = {case["id"]: case for case in release.cases["cases"]}
     assets = _assets(release)
     for episode in episodes["episodes"]:
         ids = [c["case_id"] for c in episode["corrections"]]
         ids += episode["paraphrase_case_ids"] + episode["control_case_ids"]
         ids += episode["reset_probe_case_ids"]
-        if not set(ids) <= cases:
+        if not set(ids) <= set(cases):
+            raise WholeTaskRejected("case_binding")
+        # The episode's intent families are frozen facts of its cases.
+        families = {f for case_id in ids for f in cases[case_id]["task_family_ids"]}
+        if not set(episode["intent_family_ids"]) <= families:
             raise WholeTaskRejected("case_binding")
         for correction in episode["corrections"]:
             known = assets.get(correction["target_asset_id"])

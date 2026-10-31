@@ -269,3 +269,11 @@ def test_effective_reference_closure_must_resolve():
         verify_reference_closure(
             missing, {}, {"documents": []}, ENVIRONMENT, adaptation_digest=None
         )
+
+
+def test_episode_intent_families_must_come_from_its_cases(corpus):
+    release = resolve_corpus(*corpus)
+    doc = episodes(release)
+    doc["episodes"][0]["intent_family_ids"] = ["task-unrelated"]
+    with pytest.raises(WholeTaskRejected, match="case_binding"):
+        bind_episodes(doc, release)
