@@ -116,9 +116,23 @@ def test_local_interruption_drains_native_work_and_preserves_known_cost(tmp_path
         runtime = await NativeBenchmarkRuntime.create(production, release, effective)
 
         preparation_task = None
+        # Slow runners can spend a whole 100 ms budget before native work starts.
+        # Hold the budget clock until then, so the deadline always lands inside
+        # native work, which is the case under test.
+        held, shift = time.monotonic(), None
+
+        def clock():
+            nonlocal shift
+            if not started.is_set():
+                return held
+            if shift is None:
+                shift = time.monotonic() - held
+            return time.monotonic() - shift
 
         async def release_later():
             while not started.is_set():
+                if preparation_task is not None and preparation_task.done():
+                    return
                 await asyncio.sleep(0.001)
             if interrupt == "task_cancel":
                 preparation_task.cancel()
@@ -135,6 +149,7 @@ def test_local_interruption_drains_native_work_and_preserves_known_cost(tmp_path
                     local_config(total_ms=100 if interrupt == "deadline" else 2000),
                     requested_kinds=("skill", "mcp_tool"),
                     cancelled=lambda: interrupt == "cancel" and started.is_set(),
+                    clock=clock,
                 )
             )
             record = await preparation_task
