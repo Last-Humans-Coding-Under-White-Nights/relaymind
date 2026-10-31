@@ -671,3 +671,15 @@ def test_episode_summary_rejects_a_probe_without_a_label():
     missing = report["episodes"][0]["probes"][0]["case_id"]
     with pytest.raises(WholeTaskRejected, match="probe_label"):
         episode_summary(report, episodes, {k: v for k, v in labels.items() if k != missing})
+
+
+@pytest.mark.parametrize("pair", [None, 7, "ab"])
+def test_a_non_sequence_reset_preimage_pair_rejects(pair):
+    """#232 review: a malformed pair names reset_evidence, not a TypeError."""
+    episodes = episodes_doc()
+    labels = labels_for(episodes)
+    report = adaptation_report(episodes, [episode_result(e, labels) for e in episodes["episodes"]])
+    with pytest.raises(WholeTaskRejected, match="reset_evidence"):
+        grade_adaptation_report(
+            report, episodes, episode_freeze(), labels, reset_preimages={"e1": pair}
+        )

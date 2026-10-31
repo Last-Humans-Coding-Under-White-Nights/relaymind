@@ -66,16 +66,22 @@ def resolve_corpus(
             reference = lock[kind]
             try:
                 relative_path(reference["path"])
+                if not isinstance(reference.get("digest"), str):
+                    raise ValueError("digest")
             except (ValueError, KeyError, TypeError):
                 raise WholeTaskRejected("invalid_corpus_lock") from None
             _write(root / reference["path"], _document(documents, kind, reference["digest"]))
         catalog = json.loads(_document(documents, "catalog", lock["catalog"]["digest"]))
+        if not isinstance(catalog, dict):
+            raise WholeTaskRejected("invalid_corpus_lock")
         # The release verifier reads redistributable evidence at the path the
         # catalog declares; everything else is resolved by evidence ID.
         declared = {
             item["id"]: item["path"]
             for item in catalog.get("evidence", [])
-            if isinstance(item, dict) and isinstance(item.get("path"), str)
+            if isinstance(item, dict)
+            and isinstance(item.get("id"), str)
+            and isinstance(item.get("path"), str)
         }
         evidence_root = root / "evidence"
         evidence_root.mkdir()

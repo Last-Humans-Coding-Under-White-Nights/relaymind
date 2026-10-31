@@ -228,7 +228,9 @@ async def _reset(arm: EpisodeArm, revision: int) -> None:
 def _not_run_episode(episode: Mapping, labels: Mapping, reason: str) -> dict:
     probes = []
     for ordinal, (kind, case_id) in enumerate(probe_plan(episode), start=1):
-        label = labels[case_id]
+        # A row that never ran needs no label; the grader still checks every
+        # planned probe against the frozen labels.
+        label = labels.get(case_id, _NEGATIVE)
         probes.append(
             dict(
                 case_id=case_id,
@@ -412,9 +414,13 @@ async def run_adaptation_episodes(
     evidence: dict[str, dict] = {}
     results = []
     for episode in episodes["episodes"]:
+        # An interruption ends the whole run, even if the check reports it once.
         if interrupted():
-            results.append(_not_run_episode(episode, labels, "interrupted"))
-            continue
+            results.extend(
+                _not_run_episode(later, labels, "interrupted")
+                for later in episodes["episodes"][len(results) :]
+            )
+            break
         result = await _run_episode(episode, cases, labels, open_arm, evidence, interrupted)
         results.append(result)
         if result["status"] == "cancelled":
