@@ -88,12 +88,13 @@ def rss_bytes(pid: int) -> int | None:
     if sys.platform == "win32":
         # "image","pid","session","#","12,345 K"; no match prints an INFO line.
         try:
-            fields = next(csv.reader([text], strict=True))
-        except (csv.Error, StopIteration):
+            for fields in csv.reader(text.splitlines(), strict=True):
+                if len(fields) >= 5 and fields[1] == str(pid):
+                    text = "".join(c for c in fields[-1] if c in "0123456789")
+                    return int(text) * 1024 if text.isdigit() else None
             return None
-        if len(fields) < 5 or fields[1] != str(pid):
+        except csv.Error:
             return None
-        text = "".join(c for c in fields[-1] if c in "0123456789")
     return int(text) * 1024 if text.isdigit() else None
 
 
@@ -215,7 +216,9 @@ async def _drain(stream: asyncio.StreamReader, log: Path) -> None:
                 target.flush()
 
 
-async def _wait_ready(client: httpx.AsyncClient, deadline: float) -> None:
+async def _wait_ready(
+    client: httpx.AsyncClient, deadline: float, process: asyncio.subprocess.Process
+) -> None:
     while True:
         try:
             response = await client.get("/relay/v1/recommendations/readiness")
@@ -223,6 +226,8 @@ async def _wait_ready(client: httpx.AsyncClient, deadline: float) -> None:
                 return
         except (httpx.TransportError, ValueError):
             pass
+        if process.returncode is not None:
+            raise RuntimeError("gateway_exited")
         if time.monotonic() >= deadline:
             raise TimeoutError("gateway_not_ready")
         await asyncio.sleep(0.02)
@@ -279,7 +284,7 @@ async def serve(
             headers={"Authorization": "Bearer " + token},
             timeout=10,
         ) as client:
-            await _wait_ready(client, deadline)
+            await _wait_ready(client, deadline, process)
             yield process.pid, client
     finally:
         # Cleanup is owned: a cancellation arriving now still kills and reaps.
