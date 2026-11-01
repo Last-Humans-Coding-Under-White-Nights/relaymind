@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from helpers import FakeClock
 from relaymind.canonical import canonical_digest, canonical_json
 from relaymind.evaluation.asset_platform_export import PLATFORM_STEPS, platform_gate
 from relaymind.evaluation.asset_whole_task import ARMS, WholeTaskRejected, host_summary
@@ -535,6 +536,7 @@ def adaptation_case(bundle, *, with_reset_evidence=True):
         dict(off=off, on=on),
         fixture_production().recommendations,
         bundle.root / "work",
+        clock=FakeClock(),
         adaptation_stage=lambda feedback: AdaptationStage(
             feedback, semantic, EmbeddingEngine(semantic.manifest, NativeDouble())
         ),

@@ -8,7 +8,7 @@ import pytest
 
 from helpers import ScriptedAdapter
 from launcher_helpers import write_config
-from recommendation_helpers import BODY
+from recommendation_helpers import BODY, build_app
 from relaymind import launcher
 from relaymind.adapters import Completed, GenerationFailed, TextDelta
 from relaymind.adapters.chat_completions import ChatCompletionsConfig
@@ -77,7 +77,7 @@ def test_loopback_lexical_answer_while_warmup_is_blocked(tmp_path):
     async def go():
         adapter = WarmupBarrier()
         config = configured_catalog(tmp_path)
-        launched = launcher.build_app(config, local_adapter=adapter)
+        launched = build_app(config, local_adapter=adapter)
         owner = launched.app.state.startup_warmup
         assert not adapter.requests
         server = build_server(launched.app, port=0, on_started=owner.start)
@@ -125,7 +125,7 @@ def test_serving_warmup_owns_adapter_and_shutdown_fence(tmp_path, fail):
     async def go():
         adapter = WarmupBarrier(fail=fail)
         config = configured_catalog(tmp_path)
-        launched = launcher.build_app(config, local_adapter=ScriptedAdapter())
+        launched = build_app(config, local_adapter=ScriptedAdapter())
         owner = launched.app.state.startup_warmup
         owner.launched = replace(launched, new_local_adapter=lambda: adapter)
         async with launched.app.router.lifespan_context(launched.app):
@@ -147,7 +147,7 @@ def test_serving_warmup_owns_adapter_and_shutdown_fence(tmp_path, fail):
 def test_enabled_main_defers_warmup_to_started_hook(tmp_path, monkeypatch):
     """RM38/AC29: enabled main never performs synchronous pre-listener inference."""
     config = configured_catalog(tmp_path)
-    launched = launcher.build_app(config, local_adapter=ScriptedAdapter())
+    launched = build_app(config, local_adapter=ScriptedAdapter())
     monkeypatch.setattr(launcher, "load_config", lambda path: config)
     monkeypatch.setattr(launcher, "build_app", lambda *args, **kwargs: launched)
     calls = []
@@ -174,7 +174,7 @@ def test_enabled_startup_without_warmup_or_detection_adds_no_fence(tmp_path):
     """RM38/AC29: explicitly disabled startup work cannot invent a model check."""
     config = configured_catalog(tmp_path, warmup=False, detect=False)
     adapter = ScriptedAdapter()
-    launched = launcher.build_app(config, local_adapter=adapter)
+    launched = build_app(config, local_adapter=adapter)
     try:
         assert launched.app.state.startup_warmup is None
         assert launched.orchestrator.local_status.usable
@@ -201,6 +201,7 @@ def test_pending_startup_pauses_idle_probe_but_external_requests_still_run(tmp_p
             ),
             placement=PlacementSettings(policy="device_aware", probe_after_seconds=0.01),
         )
+        # RM38/AC29: this test deliberately waits for real idle-probe time.
         launched = launcher.build_app(config, local_adapter=adapter, external_adapter=external)
         owner = launched.app.state.startup_warmup
         async with launched.app.router.lifespan_context(launched.app):
@@ -237,7 +238,7 @@ def test_repeated_shutdown_cancellation_still_drains_owned_adapter_close(tmp_pat
 
     async def go():
         adapter = SlowClose()
-        launched = launcher.build_app(configured_catalog(tmp_path), local_adapter=ScriptedAdapter())
+        launched = build_app(configured_catalog(tmp_path), local_adapter=ScriptedAdapter())
         owner = launched.app.state.startup_warmup
         owner.launched = replace(launched, new_local_adapter=lambda: adapter)
         owner.start()
@@ -266,7 +267,7 @@ def test_concurrent_stop_callers_share_one_owned_adapter_drain(tmp_path):
 
     async def go():
         adapter = SlowClose()
-        launched = launcher.build_app(configured_catalog(tmp_path), local_adapter=ScriptedAdapter())
+        launched = build_app(configured_catalog(tmp_path), local_adapter=ScriptedAdapter())
         owner = launched.app.state.startup_warmup
         owner.launched = replace(launched, new_local_adapter=lambda: adapter)
         owner.start()
@@ -294,7 +295,7 @@ def test_stop_before_warmup_entry_closes_the_lifetime_and_clears_pending(tmp_pat
 
     async def go():
         adapter = WarmupBarrier()
-        launched = launcher.build_app(configured_catalog(tmp_path), local_adapter=adapter)
+        launched = build_app(configured_catalog(tmp_path), local_adapter=adapter)
         owner = launched.app.state.startup_warmup
         if started:
             owner.start()
@@ -318,7 +319,7 @@ def test_second_lifespan_rearms_cancelled_startup_before_other_components(tmp_pa
     """RM38/AC29 I2: a new lifespan owns a fresh check, without duplicate same-lifetime work."""
 
     async def go():
-        launched = launcher.build_app(configured_catalog(tmp_path), local_adapter=ScriptedAdapter())
+        launched = build_app(configured_catalog(tmp_path), local_adapter=ScriptedAdapter())
         owner = launched.app.state.startup_warmup
         adapters = [WarmupBarrier(), WarmupBarrier()]
         pending = iter(adapters)
@@ -351,7 +352,7 @@ def test_old_stop_waiter_cannot_clear_new_lifespan_startup_fence(tmp_path, monke
     """RM38/AC29: cleanup from an older task may not mutate a rearmed lifetime."""
 
     async def go():
-        launched = launcher.build_app(configured_catalog(tmp_path), local_adapter=ScriptedAdapter())
+        launched = build_app(configured_catalog(tmp_path), local_adapter=ScriptedAdapter())
         owner = launched.app.state.startup_warmup
         first_adapter, next_adapter = SlowClose(), WarmupBarrier()
         adapters = iter((first_adapter, next_adapter))
@@ -415,7 +416,7 @@ def test_enabled_startup_respects_independent_warmup_and_detection_switches(
     async def go():
         adapter = WarmupBarrier()
         adapter.release.set()
-        launched = launcher.build_app(
+        launched = build_app(
             configured_catalog(tmp_path, warmup=warmup, detect=detect), local_adapter=adapter
         )
         owner = launched.app.state.startup_warmup
@@ -442,7 +443,7 @@ def test_enabled_lexical_with_no_local_model_needs_no_warmup_owner(tmp_path):
             recommendations=base.recommendations,
         )
         external = ScriptedAdapter(locality="external")
-        launched = launcher.build_app(config, external_adapter=external)
+        launched = build_app(config, external_adapter=external)
         assert launched.app.state.startup_warmup is None
         async with launched.app.router.lifespan_context(launched.app):
             assert launched.app.state.recommendations.readiness()["state"] == "ready"

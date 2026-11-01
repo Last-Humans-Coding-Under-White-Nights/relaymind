@@ -2,9 +2,11 @@
 
 import uuid
 from datetime import UTC, datetime
+from unittest.mock import patch
 
 import httpx
 
+from helpers import FakeClock
 from relaymind.assets.settings import AssetSettings, RecommendationSettings, SourceConfig
 from relaymind.store import RunStore
 from relaymind.store.asset_catalog import AssetCatalogStore
@@ -19,6 +21,14 @@ BODY = dict(
 )
 
 
+def build_app(config, **options):
+    """RM36/RM38: exercise launcher wiring with a deterministic store clock."""
+    from relaymind import launcher
+
+    with patch.object(launcher, "RunStore", lambda *a, **kw: RunStore(*a, clock=FakeClock(), **kw)):
+        return launcher.build_app(config, **options)
+
+
 def setup(tmp_path, *, populate=True, settings=None, primary=None, clock=None):
     from fastapi import FastAPI
 
@@ -26,11 +36,15 @@ def setup(tmp_path, *, populate=True, settings=None, primary=None, clock=None):
     from relaymind.recommendations.service import CatalogProvider, RecommendationService
     from relaymind.store.recommendations import RecommendationStore
 
+    # RM36/AC27: lifecycle assertions must not consume budgets while CI is descheduled.
+    # Tests of real deadline expiry explicitly supply TraceClock instead.
+    if clock is None:
+        clock = FakeClock()
     source = tmp_path / "source"
     source.mkdir(exist_ok=True)
     if populate:
         skill(source)
-    runs = RunStore(tmp_path / "db", **({"clock": clock} if clock else {}))
+    runs = RunStore(tmp_path / "db", clock=clock)
     catalog = AssetCatalogStore(runs)
     configured = SourceConfig("example", "local_directory", source)
     if populate:

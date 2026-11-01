@@ -64,7 +64,7 @@ from relaymind.selection.asset_preparation import (
     validate_preparation_record,
 )
 from relaymind.store.recommendations import RecommendationClaim
-from relaymind.store.run_store import RunStore
+from relaymind.store.run_store import RunStore, TraceClock
 
 
 class _ObservedPrimary:
@@ -144,6 +144,7 @@ async def run_source_benchmark(
     seed: int = 0,
     user_choices: Mapping[str, str] | None = None,
     preparation: Mapping | None = None,
+    clock: TraceClock | None = None,
 ) -> dict:
     """Run all source-grounded references; no independent-human qualification is inferred."""
     if not isinstance(inputs, VerifiedDiagnostic) or track not in ("primary_only", "service"):
@@ -182,7 +183,7 @@ async def run_source_benchmark(
     try:
         if production.asset_semantics is not None:
             runtime = await NativeBenchmarkRuntime.create(
-                production, inputs, effective, requested_kinds=kinds
+                production, inputs, effective, requested_kinds=kinds, clock=clock
             )
             provider = runtime.provider
             if setup_config["mode"] != "local":
@@ -218,7 +219,7 @@ async def run_source_benchmark(
             runs = (
                 runtime.runs
                 if runtime is not None
-                else RunStore(Path(directory) / "disposable.sqlite3")
+                else RunStore(Path(directory) / "disposable.sqlite3", clock=clock)
             )
             service = (
                 runtime.service
