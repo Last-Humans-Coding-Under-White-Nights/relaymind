@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { RecommendationClientError } from "../src/recommendation-transport.js";
 import { createFileUseLedger } from "../src/recommendation-native-ledger.js";
 import { fixture } from "./recommendation-native-fixture.js";
@@ -12,6 +12,18 @@ import {
   createSkillLoadedUseFence,
   NativeUseRefusal,
 } from "../src/recommendation-native-use.js";
+
+// A passthrough that only exposes the last prepared authority, so a case can
+// move its deadline the way an excluded wait does.
+const prepared = vi.hoisted(() => ({ last: undefined as any }));
+vi.mock("../src/recommendation-native-authority.js", async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    prepareNativeAuthority: (...args: unknown[]) =>
+      (prepared.last = actual.prepareNativeAuthority(...args)),
+  };
+});
 
 const content = "# Pinned fixture\r\nUse the exact selected bytes. \n";
 const hash = createHash("sha256").update(content, "utf8").digest("hex");
@@ -574,4 +586,35 @@ it("keeps the stop in this process when the block cannot be written", async () =
   expect(await refused(f.fence.deliver(f.options, f.use, content))).toBe(
     "binding_changed",
   );
+});
+
+it("reads the operation deadline through the authority's live getter, not a frozen copy", async () => {
+  const f = setup();
+  let now = 1;
+  f.deps.monotonicNow = () => now;
+  const deadlines: number[] = [];
+  const actionClient = f.deps.actionClient;
+  let moved = false;
+  f.deps.actionClient = async (binding: unknown, read: any) => {
+    deadlines.push(read.deadlineMs);
+    if (!moved) {
+      // An excluded wait: suspend, let 9.5 seconds pass, resume.
+      moved = true;
+      prepared.last.suspendDeadline();
+      now += 9499;
+      prepared.last.resumeDeadline();
+    }
+    return actionClient(binding, read);
+  };
+  const timeouts: number[] = [];
+  const dispatch = f.deps.dispatch;
+  f.deps.dispatch = async (method: string, params: unknown, control: any) => {
+    timeouts.push(control.timeoutMs);
+    return dispatch(method, params);
+  };
+  await f.fence.load(f.options, f.use);
+  // Prepared at 1 with a 10-second bound, extended by the 9499 ms wait.
+  expect(deadlines[0]).toBe(10001);
+  expect(deadlines[deadlines.length - 1]).toBe(19500);
+  expect(timeouts).toEqual([3000]);
 });

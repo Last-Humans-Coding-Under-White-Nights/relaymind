@@ -65,7 +65,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   short writes before it is acknowledged; the shipped entry is re-pinned to
   adapter revision `b49d94d8267076516430fb2e4fb64d41fad2961fc8009c84e60921cf43e9e98e`,
   whose evidence revision names its fresh capture (CI run 41322540111, SHA-256
-  `6b8947df711e…`).
+  `6b8947df711e…`). A fourth review rejects malformed request text and
+  non-string session fields as `invalid_request`, drops a duplicate
+  registration check and keeps the native deadline live; the entry is
+  re-pinned to adapter revision
+  `5e55dce88251eecbeb0d08380fca1d921614027de8bf9153310744b6a7199ed1`, whose
+  capture is taken from CI before merge.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,

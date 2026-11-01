@@ -1424,7 +1424,16 @@ ordinary-skill-pass predicates with all 15 harness sources matching the #247
 harness; its unmodified capture replaces
 `openclaw-native-actions-20261101-adapter.json` (SHA-256
 `6b8947df711e70c0d87f1f50d8a43e1ffb57b2a68699ff69d6457249f4b828b2`), which
-the registry's evidence revision now names. As before, this is Linux
+the registry's evidence revision named for that revision. A fourth review
+made the MCP use request fail as `invalid_request` before identity resolution
+when it has no canonical text (an explicit undefined property or an unpaired
+surrogate) or a non-string session field, checks registration once on the
+in-flight duplicate path, and reads the loaded-use fence deadline live. These
+changed bytes are re-pinned to adapter revision
+`5e55dce88251eecbeb0d08380fca1d921614027de8bf9153310744b6a7199ed1`; the
+evidence revision still names the earlier capture, so the evidence must be
+recaptured from CI for this new revision before the entry is qualified evidence
+for it. As before, this is Linux
 functional evidence with disposable accounts. `tests/test_openclaw_install.py` fails when the registry and
 the built adapter digest of the release artifact drift.
 
