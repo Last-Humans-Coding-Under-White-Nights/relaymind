@@ -176,6 +176,23 @@ def test_a_silent_child_cannot_outlast_the_token_deadline(tmp_path, monkeypatch)
     assert time.monotonic() - began < 10
 
 
+def test_a_gateway_that_exits_after_the_token_fails_before_the_deadline(tmp_path, monkeypatch):
+    """RM38/AC29: a crashed child is reported at once, not after the full timeout."""
+    script = _fake_python(tmp_path, "print('Application token: t', flush=True)\n")
+    _patch_child(monkeypatch, script)
+    base = tmp_path / "base.toml"
+    base.write_text("")
+
+    async def go():
+        async with serve(tmp_path / "w", tmp_path, base_config=base, timeout=60):
+            pass
+
+    began = time.monotonic()
+    with pytest.raises(RuntimeError, match="gateway_exited"):
+        asyncio.run(go())
+    assert time.monotonic() - began < 10
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM handling is POSIX only")
 def test_cancellation_during_shutdown_still_kills_and_reaps(tmp_path, monkeypatch):
     import relaymind.evaluation.asset_operations_run as kit
@@ -192,7 +209,7 @@ def test_cancellation_during_shutdown_still_kills_and_reaps(tmp_path, monkeypatc
     _patch_child(monkeypatch, script)
     monkeypatch.setattr(kit, "_GRACE_SECONDS", 1.0)
 
-    async def ready(client, deadline):
+    async def ready(client, deadline, process):
         return None
 
     monkeypatch.setattr(kit, "_wait_ready", ready)
@@ -387,7 +404,92 @@ def test_the_platform_command_refuses_an_unregistered_record(tmp_path):
     assert code == 2 and not (tmp_path / "out.json").exists()
 
 
+def test_the_platform_command_refuses_a_non_object_platform_document(tmp_path, capsys):
+    """RM39/AC37: a JSON array is not a platform mapping and exits 2, not a traceback."""
+    bundle = _platform_bundle(tmp_path)
+    (tmp_path / "environment.json").write_text(json.dumps([]))
+    code = _script().main(
+        [
+            "platform",
+            "--install-check", str(tmp_path / "install.json"),
+            "--inputs", str(bundle.root / "inputs.json"),
+            "--platform", str(tmp_path / "environment.json"),
+            "--output", str(tmp_path / "out.json"),
+        ]
+    )  # fmt: skip
+    assert code == 2 and not (tmp_path / "out.json").exists()
+    assert "platform_invalid" in capsys.readouterr().err
+
+
+def test_the_platform_command_creates_the_output_directory(tmp_path):
+    """RM39/AC37: an output path in a new directory is written, not crashed on."""
+    bundle = _platform_bundle(tmp_path)
+    out = tmp_path / "reports" / "platform.json"
+    code = _script().main(
+        [
+            "platform",
+            "--install-check", str(tmp_path / "install.json"),
+            "--inputs", str(bundle.root / "inputs.json"),
+            "--platform", str(tmp_path / "environment.json"),
+            "--output", str(out),
+        ]
+    )  # fmt: skip
+    assert code == 0 and out.is_file()
+
+
+def test_a_failed_output_write_exits_two(tmp_path, capsys):
+    """RM39/AC37: an unwritable report path is reported with exit code 2."""
+    bundle = _platform_bundle(tmp_path)
+    out = tmp_path / "out"
+    out.mkdir()
+    code = _script().main(
+        [
+            "platform",
+            "--install-check", str(tmp_path / "install.json"),
+            "--inputs", str(bundle.root / "inputs.json"),
+            "--platform", str(tmp_path / "environment.json"),
+            "--output", str(out),
+        ]
+    )  # fmt: skip
+    assert code == 2
+    assert "asset_operations_run" in capsys.readouterr().err
+
+
 # --- startup command --------------------------------------------------------------
+
+
+def test_startup_refuses_a_missing_base_config_before_any_work(tmp_path, monkeypatch, capsys):
+    """RM38/AC29: a missing base config fails before catalog generation and launches."""
+    import contextlib
+
+    module = _script()
+    generated = []
+    launched = []
+
+    @contextlib.asynccontextmanager
+    async def launch(*args, **kwargs):
+        launched.append(args)
+        raise AssertionError("launch must not run")
+        yield
+
+    monkeypatch.setattr(module, "generate_catalog", lambda *a, **k: generated.append(a))
+    monkeypatch.setattr(module, "serve", launch)
+    out = tmp_path / "startup.json"
+    code = module.main(
+        [
+            "startup",
+            "--base-config",
+            str(tmp_path / "missing.toml"),
+            "--work",
+            str(tmp_path / "work"),
+            "--assets",
+            "5",
+            "--output",
+            str(out),
+        ]
+    )
+    assert code == 2 and not generated and not launched and not out.exists()
+    assert "base_config_not_found" in capsys.readouterr().err
 
 
 def test_startup_command_records_ten_real_startups(tmp_path, monkeypatch):
@@ -413,7 +515,9 @@ def test_startup_command_records_ten_real_startups(tmp_path, monkeypatch):
             assert sample["error"]
     useful = sum(s["outcome"] == "useful" for s in report["samples"])
     assert report["useful_startups"] == useful
-    assert report["complete"] == (useful == 10 and None not in report["memory_bytes"])
+    assert report["complete"] == (
+        useful == 10 and len(report["memory_bytes"]) == 10 and None not in report["memory_bytes"]
+    )
 
 
 def test_startup_report_is_incomplete_without_useful_startups():
@@ -423,6 +527,30 @@ def test_startup_report_is_incomplete_without_useful_startups():
     samples = [StartupSample(i, 0.0, None, 100 + i, (), "timeout", "timeout") for i in range(10)]
     report = module.startup_report(samples, [1] * 10, assets=300, base_digest="d", counter="x")
     assert report["useful_startups"] == 0 and report["complete"] is False
+
+
+@pytest.mark.parametrize(
+    "count,memory",
+    [(10, []), (10, [1] * 9), (9, [1] * 9)],
+    ids=["no-memory", "short-memory", "short-run"],
+)
+def test_startup_report_is_incomplete_without_every_memory_sample(count, memory):
+    """RM38/AC29: an empty or partial memory list never completes the report."""
+    from relaymind.evaluation.asset_operations import StartupSample
+
+    samples = [StartupSample(i, 0.0, 0.5, 100 + i, (), "useful", None) for i in range(count)]
+    report = _script().startup_report(samples, memory, assets=300, base_digest="d", counter="x")
+    assert report["useful_startups"] == count
+    assert report["complete"] is False
+
+
+def test_startup_report_is_complete_with_ten_useful_startups_and_memory_samples():
+    """RM38/AC29: completeness needs ten useful startups and ten known samples."""
+    from relaymind.evaluation.asset_operations import StartupSample
+
+    samples = [StartupSample(i, 0.0, 0.5, 100 + i, (), "useful", None) for i in range(10)]
+    report = _script().startup_report(samples, [1] * 10, assets=300, base_digest="d", counter="x")
+    assert report["complete"] is True
 
 
 @pytest.mark.parametrize("first_useful_at", [None, 1.5])
@@ -534,6 +662,42 @@ def test_windows_memory_parses_csv_and_localized_units(monkeypatch, memory, imag
     assert rss_bytes(123) == 12641280
 
 
+def test_windows_memory_finds_the_matching_row_in_multiline_output(monkeypatch):
+    """RM38/AC29: a banner or several rows must not hide the process's own sample."""
+    from types import SimpleNamespace
+
+    import relaymind.evaluation.asset_operations_run as kit
+
+    monkeypatch.setattr(kit.sys, "platform", "win32")
+    monkeypatch.setattr(
+        kit.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout='INFO: tasks listed below\n"python","124","Console","1","1,024 K"\n'
+            '"python","123","Console","1","12,345 K"\n',
+        ),
+    )
+    assert rss_bytes(123) == 12345 * 1024
+
+
+def test_windows_memory_that_is_malformed_stays_unknown(monkeypatch):
+    """RM38/AC29: an unterminated CSV quote drops the sample instead of crashing."""
+    from types import SimpleNamespace
+
+    import relaymind.evaluation.asset_operations_run as kit
+
+    monkeypatch.setattr(kit.sys, "platform", "win32")
+    monkeypatch.setattr(
+        kit.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0, stdout='"python","123","Console","1","12,345 K'
+        ),
+    )
+    assert rss_bytes(123) is None
+
+
 @pytest.mark.parametrize(
     "row",
     [
@@ -618,7 +782,7 @@ def test_stdout_before_token_is_preserved_even_if_startup_fails(tmp_path, monkey
         body += "print('Application token: secret-value', flush=True)\n"
     _patch_child(monkeypatch, _fake_python(tmp_path, body))
 
-    async def ready(client, deadline):
+    async def ready(client, deadline, process):
         return None
 
     monkeypatch.setattr(kit, "_wait_ready", ready)

@@ -38,6 +38,7 @@ ORDINARY_UI_ACTIONS = frozenset(
 
 
 HOST_EVENT_WAIT_SECONDS = BASE.person_module().HOST_EVENT_WAIT_SECONDS
+read_native_events = BASE.person_module().read_native_events
 ORDINARY_FAILURE_STEPS = frozenset(
     {
         "configure",
@@ -55,6 +56,14 @@ ORDINARY_FAILURE_STEPS = frozenset(
         "finalize",
     }
 )
+
+
+def wait_for_backend_release(release: threading.Event) -> None:
+    # Cover the base connection and UI/fetch observation windows, plus setup.
+    # Expiry is failure, never permission to complete the held HTTP response.
+    # The enclosing harness retains its 570-second deadline.
+    if not release.wait(3 * HOST_EVENT_WAIT_SECONDS):
+        raise TimeoutError("ordinary_abort_unobserved")
 
 
 def ordinary_error_class(error):
@@ -303,9 +312,11 @@ def ordinary_skill_pass(capture):
             or len(chosen) != 1
             or chosen[0]["selected_action"]["choice"]
             != dict(kind="asset", asset_id=asset_id, content_hash=mapping["contentHash"])
+            or "sourceVersion" not in mapping
             or not any(
                 item["asset"]["asset_id"] == asset_id
                 and item["asset"]["content_hash"] == mapping["contentHash"]
+                and item["asset"].get("source_version") == mapping["sourceVersion"]
                 for item in chosen[0]["displayed_candidates"]
             )
         ):
@@ -1450,7 +1461,7 @@ class OrdinaryComposition(BASE.ActionComposition):
                     created, capture["accounts"][0]["native_person_email"]
                 )
                 selected_session = BASE.person_module().session_params(receipt)
-                skill = self.save_library_skill(rpc, page, selected_session)
+                skill = self.save_library_skill(rpc, page)
                 activated = rpc(
                     page,
                     "skills.library.activate",
@@ -1593,7 +1604,9 @@ class OrdinaryComposition(BASE.ActionComposition):
 
     @ordinary_step("retirement_abort")
     def after_retirement(self, capture):
-        self.release.set()
+        # The base probe and the ordinary UI use different sockets. Keep the
+        # response held until this UI's retirement AND its fetch abort arrive;
+        # releasing on the base probe's retirement races a successful response.
         deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
         while time.monotonic() < deadline:
             events = read_observer_events(self.event_file, self.retirement_start)
@@ -1627,6 +1640,7 @@ class OrdinaryComposition(BASE.ActionComposition):
                     ui_retired=ui_retired,
                     after_window=events,
                 )
+                self.release.set()
                 return
             time.sleep(0.01)
         raise ValueError("ordinary_abort_unobserved")
@@ -1759,7 +1773,7 @@ def main(argv=None):
     async def hold_private_read(request, call_next):
         if hold.is_set() and request.method == "GET" and request.url.path == "/relay/v1/feedback":
             entered.set()
-            await asyncio.to_thread(release.wait, HOST_EVENT_WAIT_SECONDS)
+            await asyncio.to_thread(wait_for_backend_release, release)
         return await call_next(request)
 
     asyncio.run(service.refresh_catalog())
