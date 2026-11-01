@@ -187,6 +187,14 @@ def _by_case(judgments: Sequence[Mapping]) -> dict[str, list]:
     return rows
 
 
+def _require_double_annotation(case_map: Mapping, rows: Mapping) -> None:
+    """Two distinct annotators per case, exactly as the release validator requires."""
+    if set(rows) != set(case_map) or any(
+        len(r) != 2 or r[0]["annotator_id"] == r[1]["annotator_id"] for r in rows.values()
+    ):
+        raise AssetCorpusError("raw_judgment_coverage")
+
+
 def _groups(case_map: Mapping, rows: Mapping, labelling: str) -> dict:
     groups = agreement(case_map, rows)
     ordered = sorted(groups, key=lambda lane: (lane != "all", lane.encode()))
@@ -203,11 +211,7 @@ def adjudication_worksheet(
     """The adjudicator's view: both raw judgments, their agreement, one final per case."""
     _, case_map = _documents(catalog, cases)
     rows = _by_case(judgments)
-    # Two distinct annotators per case, exactly as the release validator requires.
-    if set(rows) != set(case_map) or any(
-        len(r) != 2 or r[0]["annotator_id"] == r[1]["annotator_id"] for r in rows.values()
-    ):
-        raise AssetCorpusError("raw_judgment_coverage")
+    _require_double_annotation(case_map, rows)
     items = []
     for case_id in case_map:
         left, right = rows[case_id]
@@ -255,6 +259,7 @@ def freeze_labels(
     ):
         raise AssetCorpusError("worksheet_binding")
     rows = _by_case(judgments)
+    _require_double_annotation(case_map, rows)
     if [i.get("case_id") for i in worksheet["items"]] != list(case_map):
         raise AssetCorpusError("adjudication_coverage")
     adjudications = []
