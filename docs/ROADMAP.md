@@ -1060,20 +1060,27 @@ pinned 2026.10.7 host: `m10-negative-skill-loaded-use-openclaw-2026.10.7`
 (`exact_route_absent`). Both operations stay disabled. See
 `docs/evidence/m10/host-use-settlement-20261101.md`. The host has hooks, tool-result
 middleware and the provider stream that can stop a read or a request, but none
-carries the fresh person authority that the 7.6.1 fence needs. The only
+can re-verify fresh person authority, the session incarnation and the pinned
+bytes, so none can fence the next model request as 7.6.1 requires. The only
 delegation candidate, `GatewaySessionAccessAuthority.retain()`, has no defined
-qualification. The MCP routes are name-only (`tools.invoke`), App-view-bound
-(`mcp.app.callTool`) or documented private. The records lift nothing until a
+qualification. No supported route invokes an independent, non-App MCP tool by
+its exact native identity: `tools.invoke` is name-only, the harness runtimes
+are documented private, and the App-scoped `mcp.app.callTool` does not count. The records lift nothing until a
 pull request review by an org member other than the owner is written into
 them, which will make these host limitations. The first VPS run could not
 start a person tier (no private interface, missing Chromium libraries), so the
 first substantive captures came from CI run 41286397320. A second VPS run at
 62c4dcd, after the owner's setup, also binds its captures. Person ingress
 passes there. MCP use is `blocked` (`exact_route_unqualified`). The reset case
-is now `control_refused` on the real host. The loaded-use observation still
-exits 2: its predicate expects one pin in the session's selection listing, but
-the host lists every pin of the owner profile. That harness check needs a
-reviewed change and a CI run. The finding is unchanged. #259, #260 and #261 remain open and
+is now `control_refused` on the real host. That run exited 2 because the
+62c4dcd predicate expected one pin in the session's selection listing while
+the host lists every pin of the owner profile; the selected-skill pin check
+(5d92b64) is already in this branch, and the current predicate accepts the
+committed capture. A CI run of the current harness is still missing. The CI and
+VPS2 MCP captures show an empty `tools.effective` list only because the old
+probe read `payload.tools` instead of the host's `groups[].tools`; a third VPS
+run at bba0cf1 with the #249 fix lists both colliding tools and is still
+`blocked`, and the MCP record binds it. The findings are unchanged. #259, #260 and #261 remain open and
 need the real runs, captures, labels and reviews. Host configuration semantics
 (#250/#240) still keep host reports below `qualified`. Spec-only decisions
 awaiting implementation: the rank 4–10 choice receipt returning the offered
@@ -1418,8 +1425,10 @@ inventory; its fixture discovery check requires both colliding fixture tools in
 the session inventory, so an empty or malformed inventory fails the run. Earlier
 captures recorded an empty list because of the old flat projection. The person
 probe first starts the session MCP runtime with public `mcp.app.discover`. One
-uncommitted Linux x86-64 VPS run listed both colliding tools; it is discovery
-evidence only, and exact MCP use remains blocked.
+Linux x86-64 VPS run at bba0cf1 listed both colliding tools; it is now committed
+as `docs/evidence/m10/openclaw-mcp-use-20261101-vps3.json` and bound by the
+#255 MCP record. It is discovery evidence only, exact MCP use remains blocked,
+and no CI run of the corrected harness exists yet.
 
 #250 implements bounded native configuration preflight with the installed
 OpenClaw 2026.10.7 validator under Node, including strict/plugin checks and

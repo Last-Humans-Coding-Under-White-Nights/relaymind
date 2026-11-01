@@ -12,17 +12,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   7.6.1, 7.6.2, 12.6.6) adds two pending negative `host_operation` records for
   OpenClaw 2026.10.7, with the VPS host surface inventory and the CI/VPS
   captures they bind (`docs/evidence/m10/`):
-  - `skill_loaded_use` is `stop_point_absent`. No hook, middleware or provider
-    point carries fresh person authority for the turn.
-  - `mcp_use` is `exact_route_absent`. `tools.invoke` is name-only,
-    `mcp.app.callTool` needs an App view, and the harness runtimes are private.
+  - `skill_loaded_use` is `stop_point_absent`. Hooks, middleware and the
+    provider can stop a read or a request, but none can re-verify fresh person
+    authority, the session incarnation and the pinned bytes, so none can fence
+    the next model request.
+  - `mcp_use` is `exact_route_absent`. No supported route invokes an
+    independent, non-App MCP tool by its exact native identity: `tools.invoke`
+    is name-only and the harness runtimes are private; the App-scoped
+    `mcp.app.callTool` does not count.
 
   Both operations stay disabled. The records lift nothing until they are
   approved. `tests/test_m10_host_use_records.py` loads them with the checker.
   The records also bind the second VPS run's captures (`*-20261101-vps2.json`,
   checkout 62c4dcd), with the user name and hostname rewritten. Person ingress
-  passed there, and MCP use was `blocked`. The loaded-use observation still
-  fails its single-pin check, because the host lists the whole profile's pins.
+  passed there, and MCP use was `blocked`. That loaded-use run exited 2 on the
+  62c4dcd single-pin check, because the host lists the whole profile's pins;
+  the selected-skill pin check (5d92b64) is already in this branch and accepts
+  the committed capture, which a test now checks. The MCP record also binds a
+  third VPS run at bba0cf1 (`openclaw-mcp-use-20261101-vps3.json`) with the
+  #249 discovery fix: `tools.effective` lists both colliding tools, and the
+  result is still `blocked`. The earlier "empty list" was the old harness
+  projection (`payload.tools` instead of `groups[].tools`), not a host result;
+  the settlement document records the correction. The inventory text now states
+  the spec 0.66 finding definitions, and the test checks every cited host file
+  hash against the inventory's file table.
 
 ### Fixed
 
@@ -210,8 +223,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `tools.effective` lists came from the projection, not the host. The person
   probe now starts the session's MCP runtime with public `mcp.app.discover`
   before the read (MCP Apps enabled, the shipped RelayMind model selected, zero
-  heartbeat). A Linux x86-64 VPS run of the CI command (not committed) listed
-  both colliding tools; exact use stays blocked.
+  heartbeat). A Linux x86-64 VPS run of the CI command at bba0cf1 listed both
+  colliding tools; exact use stays blocked. That capture is now committed as
+  `docs/evidence/m10/openclaw-mcp-use-20261101-vps3.json` (#255).
   A refused `chat.send` retains its request window, correlated provider records
   and native hooks; any such activity fails the case closed
   (`ordinary_skill_refusal_contradicted`) instead of an activity-free refusal.
