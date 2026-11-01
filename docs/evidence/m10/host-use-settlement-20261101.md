@@ -1,20 +1,24 @@
 # #255 host use settlement on OpenClaw 2026.10.7 (1 November 2026)
 
 RM16, RM37, RM39; AC30, AC35; spec 0.66 sections 7.6.1, 7.6.2 and 12.6.6.
-Both questions end in a **negative** `host_operation` record. Each operation
-stays disabled in every environment. The records are **pending**: they lift
-nothing until a pull request review by an org member other than the owner is
-written into them.
+MCP use ends in a **negative** `host_operation` record. Loaded skill use does
+**not**: the search found a supported native delegation that may carry the
+section 7.6.1 fence, so `stop_point_absent` is not established and no negative
+record is made for it (see "Loaded use" below). Both operations stay disabled
+in every environment. The MCP record is **pending**: it lifts nothing until a
+pull request review by an org member other than the owner is written into it.
 
 | Operation | Record | Finding |
 | --- | --- | --- |
-| `skill_loaded_use` | `m10-negative-skill-loaded-use-openclaw-2026.10.7.json` | `stop_point_absent` |
+| `skill_loaded_use` | none | not established; stays disabled as unqualified |
 | `mcp_use` | `m10-negative-mcp-use-openclaw-2026.10.7.json` | `exact_route_absent` |
 
-Both records bind the host surface inventory
-`openclaw-host-use-search-20261101-vps.json` and their captures by SHA-256.
-They load with `relaymind.evaluation.asset_qualification_record.load_record`
-(`tests/test_m10_host_use_records.py`).
+The MCP record binds the host surface inventory
+`openclaw-host-use-search-20261101-vps.json` and its captures by SHA-256. It
+loads with `relaymind.evaluation.asset_qualification_record.load_record`
+(`tests/test_m10_host_use_records.py`). The inventory also lists the attempted
+routes and controls of every capture (`attempted_routes`) and the candidate
+routes that were not called (`attempted_routes.not_attempted`).
 
 ## Where the evidence comes from
 
@@ -60,13 +64,12 @@ They load with `relaymind.evaluation.asset_qualification_record.load_record`
     stale case. The selected-skill pin check (5d92b64, "scope loaded-use pins
     to selected skill") is already in this branch, and the current
     `ordinary_skill_loaded_use_pass` accepts this committed capture
-    (`tests/test_m10_host_use_records.py`). A passing observation does not
-    change the negative finding: no point fences the next turn.
+    (`tests/test_m10_host_use_records.py`). These cases observe the host's own
+    pin behaviour; no RelayMind fence was in place.
 
   Before commit, `/home/<user>/` was rewritten to `/home/vps-user/` (same
   length) and the hostname to `sha256:<hostname_sha256>` in all three
   `*-vps2.json` captures. Their predicates give the same results after this.
-  The skill record's revisions name 62c4dcd and the harness at that commit.
 - **VPS third run, MCP tier only (same machine and private interface,
   checkout bba0cf1, Node 24.22.1).** `openclaw-mcp-use-20261101-vps3.json`
   (SHA-256 `a618b253…c1f`): `blocked`, `exact_route_unqualified`. The
@@ -89,7 +92,12 @@ They load with `relaymind.evaluation.asset_qualification_record.load_record`
   captures do. It was committed unmodified. The MCP record's revisions now
   name bba0cf1, that adapter revision and the MCP harness at that commit.
 - **GitHub Actions ubuntu (run 41286397320, head 548588a; harness bytes
-  identical at acc4041).**
+  identical at acc4041).** The runner's hostname in the loaded-use capture's
+  model requests (`host=` in the runtime line) was rewritten to
+  `sha256:<SHA-256 of the hostname>` after review; no digest inside the capture
+  covers those request bodies, and its predicates give the same results. The
+  `/home/runner/` paths are the standard GitHub runner home, as in the other CI
+  captures.
   - `openclaw-loaded-use-observation-20261101-ci.json`: the positive, stale and
     deleted cases observed `loaded_pinned_revision`. The host still delivers the
     pinned bytes after the library head changes or the entry is removed. The
@@ -120,7 +128,7 @@ the result is still `blocked`. Discovery lists names and the host's
 server/original mapping; it does not invoke a tool, so `exact_route_absent`
 stands.
 
-## Loaded use: why `stop_point_absent`
+## Loaded use: why `stop_point_absent` is not established
 
 Spec 0.66 section 12.6.6 defines `stop_point_absent` as: no host point can
 fence the next model request as section 7.6.1 requires; a point that can stop
@@ -129,25 +137,61 @@ and the pinned bytes does not count.
 
 The pinned host has points that can *stop* something:
 
-- `before_tool_call` can block the `skills_read` call.
-- Agent tool-result middleware can replace the tool result.
+- `before_tool_call` can block the `skills_read` call. Its context holds
+  agentId, sessionKey, sessionId, runId, toolCallId and requester facts.
+- Agent tool-result middleware can replace the tool result. Its context holds
+  agentId, sessionId, sessionKey and runId.
 - RelayMind's own provider (`wrapStreamFn`/`onPayload`) can fail the next
-  request before it is sent.
+  request before it is sent. It sees the outgoing messages, so it can compare
+  the delivered instruction bytes with the pinned revision, and
+  `options.sessionId`, but no sessionKey, lifecycle revision or person
+  authority.
 - `before_agent_run` can block a run once, before its first model submission.
+  It sees the prompt, messages and system prompt.
 
-None of them can re-verify fresh person authority, the session incarnation and
-the pinned bytes, so each is a stop-only point and does not count. Their contexts
-hold only agentId, sessionKey, sessionId, runId, toolCallId and requester facts.
-There is no session access authority, no `assertCurrent` and no lifecycle
-revision, and spec 7.6.2(2) excludes hook contexts as authority.
-`dispatchGatewayMethod` works only inside the original authenticated request,
-so the fence cannot re-read the pinned revision at use time. No point can
-therefore *fence* the next model request as section 7.6.1 requires.
+`before_prompt_build` cannot stop anything: a thrown error or timeout is logged
+and the handler is skipped. With `requiresToolAuthority` it receives
+`ctx.toolAuthority`, which checks the finalized tool surface of the active turn
+and fails closed after the hook dispatch; its fingerprint is not an
+authorization proof. Spec 7.6.1 says the same of this hook.
 
-The one host object that could carry person currentness into a later turn is
-`GatewaySessionAccessAuthority.retain()`. It is a native delegation whose
-acquisition, scope, lifetime and revocation must be qualified separately, and
-spec 0.66 defines no such qualification. It was recorded, not used.
+On its own, none of these points carries session access authority or person
+authority, so none of them is a fence. But the host also offers a supported
+native delegation. A `sessionAccess` gateway method handler, such as
+RelayMind's `relaymind.skill`, receives `sessionAccessAuthority`, and its
+`retain()` returns a borrow `{signal, assertCurrent, release}` that outlives
+the handler (the host documents it for interactive viewers). In the pinned
+`request-authorization` code, each `assertCurrent()` of that borrow re-runs at
+call time the person's grant and operator run authority checks, the profile's
+currentness, the role's agent scope, the tool policy and sharing, and the
+session check: the same store path, store generation, `sessionId` and
+`lifecycleRevision` as the admitted target. Reset, deletion, store replacement
+and profile, role or grant changes abort its signal. This is not an earlier
+RPC's closed scope or a JSON copy of its identity.
+
+So RelayMind's provider could hold such a borrow and, in `onPayload`, call its
+`assertCurrent()` and compare the outgoing instruction bytes with the pinned
+revision before dispatch. Spec 7.6.1 admits "a supported native delegation
+whose scope, expiry and revocation are separately qualified". This search did
+not show that this composition fails. The open questions are in the
+inventory's `skill_loaded_use.open_questions`: whether the provider runs where
+it can hold the borrow, whose authority the borrow is for the turn that reaches
+the provider and how long it lives, whether an `onPayload` throw actually stops
+dispatch on this host, how the library-entry and operator-mapping checks of
+7.6.1 are made at that boundary (the host itself keeps delivering a removed
+entry's pinned bytes), and the revocation, reset and removal stops while a turn
+waits.
+
+The earlier version of this document called `retain()` an "unqualified
+delegation (spec gap, not used)" and asserted `stop_point_absent`. That was
+wrong: an unqualified delegation is a RelayMind qualification gap, not proof
+that the host cannot fence. The negative `skill_loaded_use` record was
+therefore withdrawn before review. `skill_loaded_use` stays disabled because it
+is unqualified, not as a host limitation, and its AC30 evidence is still
+required on this host version. A later qualification attempt of the
+`retain()` composition decides it either way: a positive record if every
+section 7.6.1 control passes, or a negative record whose captures show where it
+fails.
 
 ## MCP use: why `exact_route_absent`
 
@@ -174,8 +218,14 @@ lists neither operation.
 
 ## What remains
 
-- Approval of both records in the pull request, then the follow-up commit that
-  fills `pull_request`, `reviewer_logins` and `approved_at`.
+- Approval of the MCP record in the pull request, then the follow-up commit
+  that fills `pull_request`, `reviewer_logins` and `approved_at`. The record
+  closes the `mcp_use` gate only once that approval is written into it.
+- A qualification attempt of the `retain()` fence candidate for
+  `skill_loaded_use` (see "Loaded use" above).
+- The MCP search did not call `tools.invoke`, `mcp.app.callTool` or the
+  harness tool runtimes; their verdicts rest on the pinned host source. A
+  reviewer may ask for bounded attempts of them before approval.
 - A CI run of the current loaded-use harness. The current predicate already
   accepts the committed VPS2 capture, whose embedded check predates the
   selected-skill pin fix; no capture made by the current harness exists yet.

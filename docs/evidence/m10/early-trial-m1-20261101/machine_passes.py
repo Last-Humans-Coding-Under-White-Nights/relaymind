@@ -383,10 +383,16 @@ def judge(args) -> None:
     finals, disagree = check_judges(blind_ids, answers["judge_a"], answers["judge_b"])
     raw = {role: {v["blind_id"]: v for v in answers[role]} for role in answers}
     if disagree:
+        # The adjudicator sees and answers only the disagreements (spec 12.6.6).
+        disputed = [t for t in packet["transcripts"] if t["blind_id"] in disagree]
         result = call(
             "success_adjudicator",
             "success-adjudication",
-            dict(payload, raw={b: [raw["judge_a"][b], raw["judge_b"][b]] for b in disagree}),
+            dict(
+                payload,
+                transcripts=disputed,
+                raw={b: [raw["judge_a"][b], raw["judge_b"][b]] for b in disagree},
+            ),
         )
         finals = adjudicated(finals, disagree, result["value"].get("verdicts"))
     # Only now is the blind map opened.

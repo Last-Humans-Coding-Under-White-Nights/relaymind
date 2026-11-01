@@ -390,6 +390,61 @@ def test_a_drafted_release_is_drafted_throughout(tmp_path):
         _dual_round_trip(catalog, cases, labels)
 
 
+# --- spec 0.66 section 12.6.6 release-wide drafter and machine_dual invariants -------
+
+
+def _person(roles, competencies=()):
+    return dict(roles=list(roles), competencies=list(competencies))
+
+
+DUAL_PEOPLE = {
+    "drafter-1": _person(["author"]),
+    "drafter-2": _person(["author"]),
+    "machine-a": _person(["annotator"]),
+    "machine-b": _person(["annotator"]),
+    "machine-c": _person(["annotator"]),
+    "adjudicator-1": _person(["adjudicator"]),
+    "adjudicator-2": _person(["adjudicator"]),
+}
+
+
+def _drafted_case(case_id, author):
+    return dict(id=case_id, authorship="machine_drafted_owner_approved", author_ids=[author])
+
+
+def test_a_drafted_release_names_one_drafter_across_its_cases():
+    """Spec 12.6.6 (RM40/AC31; review of #276): one recorded drafting model writes
+    every prompt of the release, so two cases with two different single drafters
+    reject even though each case alone names one author-only drafter."""
+    from relaymind.evaluation.asset_judgments import check_drafted_cases
+
+    one = [_drafted_case("case-1", "drafter-1"), _drafted_case("case-2", "drafter-1")]
+    check_drafted_cases(one, DUAL_PEOPLE)
+    two = [_drafted_case("case-1", "drafter-1"), _drafted_case("case-2", "drafter-2")]
+    with pytest.raises(AssetCorpusError, match="drafter_role"):
+        check_drafted_cases(two, DUAL_PEOPLE)
+
+
+def test_machine_dual_needs_exactly_two_annotators_across_the_release():
+    """Spec 12.6.6: exactly two annotator IDs occur across the release."""
+    from relaymind.evaluation.asset_judgments import check_machine_dual
+
+    check_machine_dual(["machine-a", "machine-b", "machine-a"], ["adjudicator-1"], DUAL_PEOPLE)
+    for annotators in (["machine-a"], ["machine-a", "machine-b", "machine-c"]):
+        with pytest.raises(AssetCorpusError, match="raw_judgment_coverage"):
+            check_machine_dual(annotators, ["adjudicator-1"], DUAL_PEOPLE)
+
+
+def test_machine_dual_has_one_adjudicator_across_the_release():
+    """Spec 12.6.6: one distinct adjudicator ID writes every Adjudication."""
+    from relaymind.evaluation.asset_judgments import check_machine_dual
+
+    with pytest.raises(AssetCorpusError, match="role_conflict"):
+        check_machine_dual(
+            ["machine-a", "machine-b"], ["adjudicator-1", "adjudicator-2"], DUAL_PEOPLE
+        )
+
+
 def _owner_labels(tmp_path, *, disagree=False):
     catalog, cases, labels = _owner_machine(tmp_path)
     templates = _owner_templates(catalog, cases, labels)
@@ -543,3 +598,25 @@ def test_release_validation_rejects_a_machine_dual_disagreement_without_a_reason
     relock()
     with pytest.raises(AssetCorpusError, match="adjudication_reason_missing"):
         load()
+
+
+@pytest.mark.parametrize("annotators", [("judge-a",), ("judge-a", "judge-a")])
+def test_freezing_needs_two_distinct_annotators_per_case(tmp_path, annotators):
+    """Review 4436631728: freeze_labels applies the worksheet's coverage rule."""
+    catalog, cases, labels = corpus(tmp_path)
+    templates = [
+        filled(label_template(catalog, cases, a), labels, a) for a in ("judge-a", "judge-b")
+    ]
+    judgments = raw_judgments(catalog, cases, templates)
+    worksheet = adjudicated(adjudication_worksheet(catalog, cases, judgments), labels)
+    if len(annotators) == 1:
+        kept = [j for j in judgments if j["annotator_id"] == "judge-a"]
+    else:
+        kept = [dict(j, annotator_id="judge-a") for j in judgments]
+    by_case = {}
+    for j in kept:
+        by_case.setdefault(j["case_id"], []).append(j)
+    for item in worksheet["items"]:
+        item["judgments"] = by_case[item["case_id"]]
+    with pytest.raises(AssetCorpusError, match="raw_judgment_coverage"):
+        freeze_labels(catalog, cases, kept, worksheet)

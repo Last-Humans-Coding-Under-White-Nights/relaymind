@@ -6,7 +6,14 @@
 // blocked. One live owner per path (exclusive per-owner lock files). History is never
 // evicted: a full or unreadable ledger refuses (fail closed); blocks use
 // reserved capacity, and managed use refuses once no block could be recorded.
-// It stores digests and closed receipts only, never arguments, tool output,
+// It stores, in plain text: each use key (the user, workspace, session key,
+// session ID, lifecycle revision and Idempotency-Key it is scoped to), the
+// SHA-256 digest of the admitted request, the use base (operation,
+// recommendation and asset IDs and the content hash), dispatch markers,
+// closed receipts (that base, outcome, code, native run and call IDs),
+// consumed approval IDs, and blocked session incarnations (session key,
+// session ID and lifecycle revision). These are identifiers, not secrets; the
+// file is created owner-only (0600). It never stores arguments, tool output,
 // instructions or credentials.
 import * as fs from "node:fs";
 import { randomUUID } from "node:crypto";

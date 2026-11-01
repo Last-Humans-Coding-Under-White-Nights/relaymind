@@ -70,7 +70,8 @@ class RunJournal:
         self.finished: dict[str, dict] = {}
         self._lock = self.path.parent / (self.path.name + ".lock")
         if not self.path.parent.exists():
-            self.path.parent.mkdir(parents=True, mode=0o700)
+            # Another runner may create it between the check and here.
+            self.path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
         try:
             fd = os.open(self._lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         except FileExistsError:
@@ -80,7 +81,7 @@ class RunJournal:
         try:
             self._open()
         except BaseException:
-            self._lock.unlink(missing_ok=True)
+            self.close()  # Closes a file already opened, then removes the lock.
             raise
 
     def _open(self) -> None:
@@ -144,12 +145,16 @@ class RunJournal:
         self._sync()
 
     def start(self, key: str) -> None:
+        if not isinstance(key, str):
+            raise JournalError("journal_corrupt")  # It could never be read back.
         if key in self.started or key in self.finished:
             raise JournalError("journal_order")
         self._append(dict(type="started", key=key))
         self.started.add(key)
 
     def finish(self, key: str, value: Mapping) -> None:
+        if not isinstance(key, str):
+            raise JournalError("journal_corrupt")  # It could never be read back.
         if key not in self.started:
             raise JournalError("journal_order")
         value = dict(value)

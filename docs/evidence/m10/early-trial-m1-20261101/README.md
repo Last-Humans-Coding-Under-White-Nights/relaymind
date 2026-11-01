@@ -1,8 +1,9 @@
 # #259 owner-run early installed-skill trial on the Apple M1 8 GiB MacBook
 
-**Status: provisional early-trial bundle, graded `blocked`; record pending
-approval.** One frozen task, three planned rows, run on the owner's MacBook on
-1 November 2026 by the operator tooling on the owner's instruction, with no
+**Status: provisional early-trial bundle, graded `blocked`; record pending,
+not preregistered under section 12.6.6 and not approvable.** One frozen task,
+three planned rows, run on the owner's MacBook on 1 November 2026 by the
+operator tooling on the owner's instruction, with no
 person in the loop. Spec 0.66 sections 12.6, 12.6.5, 12.6.6; RM16, RM39, RM40,
 RM44; AC30, AC31, AC36. An early trial never asserts the final gate, and this
 one-task, one-sample result says nothing general about the arms.
@@ -13,9 +14,9 @@ one-task, one-sample result says nothing general about the arms.
 | Host | pinned OpenClaw 2026.10.7 (`npm ci` of `integrations/openclaw/package-lock.json`), isolated home under the operator root `/private/var/tmp/relaymind-trial-259` |
 | Plugin | `relaymind-openclaw-provider-0.1.0.tgz`, SHA-256 `b066ae27…f35d` (`release/`, and in the bundle) |
 | External model | the owner's OpenAI-compatible endpoint (base URL and key never written), `glm-5.3-flash` for all three arms |
-| Frozen inputs | `frozen/inputs.json`, committed in `21e93e3` before the first row (09:41:39Z). The record's `runs_started_at` 09:46:02.976Z is the end of the native row's first model turn, the earliest recorded attempt time: the host transcript has no dispatch time, so it is an upper bound on the first dispatch. The native row began no earlier than 09:45:21.5Z (its last turn ended 09:46:38.717Z after 77.2 s elapsed), still after the commit |
-| Bundle | `bundle/` (`report.json`, `grade.json`, `inputs.json`, `SHA256SUMS`); regrade with `grade-host --inputs bundle/inputs.json` and a resolver of the inventory preimages |
-| Record | `../m10-early-trial-m1-openclaw-2026.10.7-20261101.json`, scope `host_trial`, pending (no review yet) |
+| Frozen inputs | `frozen/inputs.json`, committed in `21e93e3` before the first row (09:41:39Z). This is not a section 12.6.6 preregistration (see "Preregistration gap" below), so the record's `preregistration` is null. The record's `runs_started_at` 09:46:02.976Z is the end of the native row's first model turn, the earliest recorded attempt time: the host transcript has no dispatch time, so it is an upper bound on the first dispatch. The native row began no earlier than 09:45:21.5Z (its last turn ended 09:46:38.717Z after 77.2 s elapsed), still after the commit |
+| Bundle | `bundle/` (`report.json`, `grade.json`, `inputs.json`, `SHA256SUMS`); `grade.json` was graded without the record (see "Grade and record" below) |
+| Record | `../m10-early-trial-m1-openclaw-2026.10.7-20261101.json`, scope `host_trial`, pending, not preregistered; it cannot be approved (the verifier rejects an approved copy with `preregistration_missing`) |
 
 ## Profile (spec 0.66 section 12.6.6)
 
@@ -39,8 +40,9 @@ one-task, one-sample result says nothing general about the arms.
   date of use (2026-11-01) and the provider listing `machine/models-listing.json`
   (SHA-256 `2c3b6fe54616a7e666f2bbbeaea2358e9dcecd6980fdda89f8c0b82225719c3c`).
 - **Owner:** recorded as `reviewer` only (approver), not author or annotator.
-  The owner approves the cases, labels, rubric and success judgments in the
-  pull request; until then the record is pending and lifts nothing.
+  Spec 12.6.6 needs the owner's approval of the cases and labels before
+  preregistration; this trial had none before its rows, so the record stays
+  pending and lifts nothing (see "Preregistration gap").
 - **Success judging:** both machine annotators judged the anonymized transcripts
   blind (arm markers replaced, order by SHA-256 of `{seed,task_id,blind_id}`);
   the blind-map digest was committed in `b5ef7a9` before judging and the map
@@ -147,9 +149,9 @@ beyond this cap.
   files and calls for the existing kit and checker.
 
 **`machine_passes.py` after the run.** The success judging ran with the script
-as committed in `b5ef7a9` (the record's `repository_commit`; the script is not
-in `bundle/SHA256SUMS` or the record subjects, and `harness_sha256` binds
-`build_trial_inputs.py`). A later review of #276 hardened `judge`: each judge
+as committed in `b5ef7a9` (unchanged in `2b4e439`, the record's
+`repository_commit`; the script is not in `bundle/SHA256SUMS` or the record
+subjects, and `harness_sha256` binds `build_trial_inputs.py`). A later review of #276 hardened `judge`: each judge
 must give exactly one verdict per blind ID with a JSON boolean `success`, every
 disagreement needs exactly one adjudication with a nonempty reason, and the
 opened blind map must cover the judged IDs; otherwise it stops with a closed
@@ -174,12 +176,80 @@ committed in `2b4e439` (unchanged through `d14ba19`), which wrote the committed
 record before `os_version` was added; the current script has other bytes and
 wrote nothing committed.
 
+A second review of #276 found that `machine/success-adjudicator.md` asked for a
+verdict on every blind ID while `judge` accepts adjudications of the
+disagreements only. Spec 12.6.6 has the adjudicator settle disagreements, so
+the template now asks only for the blind IDs in `raw`, and `judge` sends it only
+the disagreeing transcripts. The template was never called in this trial (the
+judges agreed), so no recorded call or output changed.
+
+## Preregistration gap (spec 0.66 section 12.6.6)
+
+This trial does not meet the section 12.6.6 sequence, and the record does not
+claim it. The section requires the held-out cases and labels to be frozen in a
+committed lock **before** the preregistration commit, and the owner to approve
+the drafted cases and the `machine_dual` labels in the pull request that
+commits that lock, **before** preregistration. Here the cases, labels, lock and
+run freeze were committed together in `21e93e3`, and no owner approval
+happened before the rows ran (the review is still pending; any approval now
+comes after the run). `21e93e3` still shows that the inputs were frozen before
+the first row, but it is not a preregistration, so the record's
+`preregistration` is null. The verifier rejects an approved record of the
+`machine_dual_owner_approved` labelling or `machine_drafted_owner_approved`
+prompt profile without a preregistration (`preregistration_missing`), so this
+record stays pending and lifts nothing. A qualifying trial needs a new freeze:
+commit the lock, have the owner approve it in that pull request, then commit
+the preregistration before the first dispatch.
+
+## Grade and record
+
+Spec 0.66 section 12.6.6 requires every report graded under the record to carry
+the record's `labelling` and `prompt_authorship` in its qualification output.
+The committed `bundle/grade.json` was made by the trial command without
+`--qualification-record`, so both fields are null. It is bound by
+`bundle/SHA256SUMS` and is kept as it was graded; it is **not** a grade under
+the record, and `QualificationRecord.check_grade` rejects it
+(`record_grade_mismatch`). It also cannot be regraded at the current checkout:
+grading requires the installed `src/relaymind` tree to match the frozen runner
+inventory, which it no longer does (`inventory_membership`), and the trial
+revision's record checker predates the record's `machine.os_version`. A grade
+under the record therefore does not exist for this trial. A regrade at a
+matching revision would be:
+`grade-host --report bundle/report.json --inputs bundle/inputs.json --resolver
+<resolver> --qualification-record
+../m10-early-trial-m1-openclaw-2026.10.7-20261101.json --output <new file>`.
+
+## Record revisions
+
+The rows and the record were made from a working tree at `b5ef7a9` with
+uncommitted changes to `observe_row.py` (machine-name redaction, `--not-run`)
+and `build_trial_inputs.py` (`--preregistration`). Those changes were committed
+in `2b4e439`, which changes no product code against `b5ef7a9` (only these two
+helpers, evidence and docs). The record first named `b5ef7a9`, whose
+`build_trial_inputs.py` hashes to `b3ad745b…5ce46`, not to the recorded
+`harness_sha256` `533273ac…d6b3`. The record now names `2b4e439`, the first
+commit that holds those exact harness bytes and the same product code
+(`tests/test_m1_trial_machine_passes.py` checks the pair when the commit is in
+the checkout). The `record` command now stops before writing when the harness
+or `src/` differ from `HEAD` (`harness_uncommitted`).
+
+## Loaded skill use (later correction)
+
+At the time of the run, `inputs/setup.md` (and its digest-bound copies under
+`bundle/evidence/` and `frozen/evidence/`) cited the then-pending negative
+record `m10-negative-skill-loaded-use-openclaw-2026.10.7`. That record was
+later withdrawn (#267): the pinned host may offer a section 7.6.1 fence (the
+`GatewaySessionAccessAuthority.retain()` borrow with the provider's
+`onPayload`), so `stop_point_absent` is not established. The frozen inputs are
+digest-bound and stay unchanged. Read any step that recorded loaded use as a
+"host limitation" as "unqualified, disabled"; its qualification attempt is #280.
+
 ## What remains
 
-1. Owner approval: a pull request review by one org member other than the
-   owner approves the cases, labels, rubric, success judgments and the record.
-   Afterwards fill `pull_request`, `reviewer_logins` and `approved_at` in the
-   record.
+1. A preregistered rerun. This record cannot be approved (see "Preregistration
+   gap"); a qualifying trial needs a new freeze with the owner's approval of the
+   case and label lock before a separate preregistration commit, and a grade
+   made with `--qualification-record`.
 2. The recommendations arm, which needs a person sign-in (above).
 3. Walkthroughs (#238 recorder), which need the Linux person-ingress harness;
    the VPS lacks `libgbm`/`libasound` and a private interface.

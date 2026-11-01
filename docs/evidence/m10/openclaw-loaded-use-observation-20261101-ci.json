@@ -4123,7 +4123,7 @@
                 },
                 {
                   "role": "user",
-                  "content": "[Sun 2026-11-01 08:01 UTC] Conversation info: \u27e6openclaw:ctx\u27e7\n```json\n{\"sender\":{\"id\":\"0c9e7032-5f00-48e0-ada0-6dcc16e58cc6\",\"name\":\"accounta5395bf2540ba\"}}\n```\n\nRelayMind native skill observation 54541c0640c0f511ce009644a899c89a\n\nRuntime: agent=main | session=agent:main:person-d7b0c3a58f3519b3 | sessionUrl=https://rm-person.test:42615/chat/main/~key/person-d7b0c3a58f3519b3 | host=runnervmnwato | repo=/home/runner/work/_temp/relaymind-loaded-use-observation/sandbox | os=Linux 7.0.0-1017-azure (x64) | node=v24.22.1 | active_node=unknown | active_node_identity=requester | model=relaymind/relaymind-client-tools | default_model=relaymind/relaymind-client-tools | channel=webchat | capabilities=markdowndetails"
+                  "content": "[Sun 2026-11-01 08:01 UTC] Conversation info: \u27e6openclaw:ctx\u27e7\n```json\n{\"sender\":{\"id\":\"0c9e7032-5f00-48e0-ada0-6dcc16e58cc6\",\"name\":\"accounta5395bf2540ba\"}}\n```\n\nRelayMind native skill observation 54541c0640c0f511ce009644a899c89a\n\nRuntime: agent=main | session=agent:main:person-d7b0c3a58f3519b3 | sessionUrl=https://rm-person.test:42615/chat/main/~key/person-d7b0c3a58f3519b3 | host=sha256:b0862fc042505429db3c6d4a9cf89d6028e1d84b9c0a4f1c1608b4700550831e | repo=/home/runner/work/_temp/relaymind-loaded-use-observation/sandbox | os=Linux 7.0.0-1017-azure (x64) | node=v24.22.1 | active_node=unknown | active_node_identity=requester | model=relaymind/relaymind-client-tools | default_model=relaymind/relaymind-client-tools | channel=webchat | capabilities=markdowndetails"
                 },
                 {
                   "role": "user",
@@ -4170,7 +4170,7 @@
                 },
                 {
                   "role": "user",
-                  "content": "[Sun 2026-11-01 08:01 UTC] Conversation info: \u27e6openclaw:ctx\u27e7\n```json\n{\"sender\":{\"id\":\"0c9e7032-5f00-48e0-ada0-6dcc16e58cc6\",\"name\":\"accounta5395bf2540ba\"}}\n```\n\nRelayMind native skill observation 54541c0640c0f511ce009644a899c89a\n\nRuntime: agent=main | session=agent:main:person-d7b0c3a58f3519b3 | sessionUrl=https://rm-person.test:42615/chat/main/~key/person-d7b0c3a58f3519b3 | host=runnervmnwato | repo=/home/runner/work/_temp/relaymind-loaded-use-observation/sandbox | os=Linux 7.0.0-1017-azure (x64) | node=v24.22.1 | active_node=unknown | active_node_identity=requester | model=relaymind/relaymind-client-tools | default_model=relaymind/relaymind-client-tools | channel=webchat | capabilities=markdowndetails"
+                  "content": "[Sun 2026-11-01 08:01 UTC] Conversation info: \u27e6openclaw:ctx\u27e7\n```json\n{\"sender\":{\"id\":\"0c9e7032-5f00-48e0-ada0-6dcc16e58cc6\",\"name\":\"accounta5395bf2540ba\"}}\n```\n\nRelayMind native skill observation 54541c0640c0f511ce009644a899c89a\n\nRuntime: agent=main | session=agent:main:person-d7b0c3a58f3519b3 | sessionUrl=https://rm-person.test:42615/chat/main/~key/person-d7b0c3a58f3519b3 | host=sha256:b0862fc042505429db3c6d4a9cf89d6028e1d84b9c0a4f1c1608b4700550831e | repo=/home/runner/work/_temp/relaymind-loaded-use-observation/sandbox | os=Linux 7.0.0-1017-azure (x64) | node=v24.22.1 | active_node=unknown | active_node_identity=requester | model=relaymind/relaymind-client-tools | default_model=relaymind/relaymind-client-tools | channel=webchat | capabilities=markdowndetails"
                 },
                 {
                   "role": "assistant",
@@ -4462,7 +4462,7 @@
                 },
                 {
                   "role": "user",
-                  "content": "[Sun 2026-11-01 08:01 UTC] Conversation info: \u27e6openclaw:ctx\u27e7\n```json\n{\"sender\":{\"id\":\"0c9e7032-5f00-48e0-ada0-6dcc16e58cc6\",\"name\":\"accounta5395bf2540ba\"}}\n```\n\nRelayMind native skill observation 8c5e34f838a9c126e073a275c6a9bb1e\n\nRuntime: agent=main | session=agent:main:person-fbbad162713bc4a4 | sessionUrl=https://rm-person.test:42615/chat/main/~key/person-fbbad162713bc4a4 | host=runnervmnwato | repo=/home/runner/work/_temp/relaymind-loaded-use-observation/sandbox | os=Linux 7.0.0-1017-azure (x64) | node=v24.22.1 | active_node=unknown | active_node_identity=requester | model=relaymind/relaymind-client-tools | default_model=relaymind/relaymind-client-tools | channel=webchat | capabilities=markdowndetails"
+                  "content": "[Sun 2026-11-01 08:01 UTC] Conversation info: \u27e6openclaw:ctx\u27e7\n```json\n{\"sender\":{\"id\":\"0c9e7032-5f00-48e0-ada0-6dcc16e58cc6\",\"name\":\"accounta5395bf2540ba\"}}\n```\n\nRelayMind native skill observation 8c5e34f838a9c126e073a275c6a9bb1e\n\nRuntime: agent=main | session=agent:main:person-fbbad162713bc4a4 | sessionUrl=https://rm-person.test:42615/chat/main/~key/person-fbbad162713bc4a4 | host=sha256:b0862fc042505429db3c6d4a9cf89d6028e1d84b9c0a4f1c1608b4700550831e | repo=/home/runner/work/_temp/relaymind-loaded-use-observation/sandbox | os=Linux 7.0.0-1017-azure (x64) | node=v24.22.1 | active_node=unknown | active_node_identity=requester | model=relaymind/relaymind-client-tools | default_model=relaymind/relaymind-client-tools | channel=webchat | capabilities=markdowndetails"
                 },
                 {
                   "role": "user",
@@ -4509,7 +4509,7 @@
                 },
                 {
                   "role": "user",
-                  "content": "[Sun 2026-11-01 08:01 UTC] Conversation info: \u27e6openclaw:ctx\u27e7\n```json\n{\"sender\":{\"id\":\"0c9e7032-5f00-48e0-ada0-6dcc16e58cc6\",\"name\":\"accounta5395bf2540ba\"}}\n```\n\nRelayMind native skill observation 8c5e34f838a9c126e073a275c6a9bb1e\n\nRuntime: agent=main | session=agent:main:person-fbbad162713bc4a4 | sessionUrl=https://rm-person.test:42615/chat/main/~key/person-fbbad162713bc4a4 | host=runnervmnwato | repo=/home/runner/work/_temp/relaymind-loaded-use-observation/sandbox | os=Linux 7.0.0-1017-azure (x64) | node=v24.22.1 | active_node=unknown | active_node_identity=requester | model=relaymind/relaymind-client-tools | default_model=relaymind/relaymind-client-tools | channel=webchat | capabilities=markdowndetails"
+                  "content": "[Sun 2026-11-01 08:01 UTC] Conversation info: \u27e6openclaw:ctx\u27e7\n```json\n{\"sender\":{\"id\":\"0c9e7032-5f00-48e0-ada0-6dcc16e58cc6\",\"name\":\"accounta5395bf2540ba\"}}\n```\n\nRelayMind native skill observation 8c5e34f838a9c126e073a275c6a9bb1e\n\nRuntime: agent=main | session=agent:main:person-fbbad162713bc4a4 | sessionUrl=https://rm-person.test:42615/chat/main/~key/person-fbbad162713bc4a4 | host=sha256:b0862fc042505429db3c6d4a9cf89d6028e1d84b9c0a4f1c1608b4700550831e | repo=/home/runner/work/_temp/relaymind-loaded-use-observation/sandbox | os=Linux 7.0.0-1017-azure (x64) | node=v24.22.1 | active_node=unknown | active_node_identity=requester | model=relaymind/relaymind-client-tools | default_model=relaymind/relaymind-client-tools | channel=webchat | capabilities=markdowndetails"
                 },
                 {
                   "role": "assistant",
@@ -4806,7 +4806,7 @@
                 },
                 {
                   "role": "user",
-                  "content": "[Sun 2026-11-01 08:01 UTC] Conversation info: \u27e6openclaw:ctx\u27e7\n```json\n{\"sender\":{\"id\":\"0c9e7032-5f00-48e0-ada0-6dcc16e58cc6\",\"name\":\"accounta5395bf2540ba\"}}\n```\n\nRelayMind native skill observation 8c0f9cde988fa4b84c4139ae749a966a\n\nRuntime: agent=main | session=agent:main:person-c9a8d3eb49a10fea | sessionUrl=https://rm-person.test:42615/chat/main/~key/person-c9a8d3eb49a10fea | host=runnervmnwato | repo=/home/runner/work/_temp/relaymind-loaded-use-observation/sandbox | os=Linux 7.0.0-1017-azure (x64) | node=v24.22.1 | active_node=unknown | active_node_identity=requester | model=relaymind/relaymind-client-tools | default_model=relaymind/relaymind-client-tools | channel=webchat | capabilities=markdowndetails"
+                  "content": "[Sun 2026-11-01 08:01 UTC] Conversation info: \u27e6openclaw:ctx\u27e7\n```json\n{\"sender\":{\"id\":\"0c9e7032-5f00-48e0-ada0-6dcc16e58cc6\",\"name\":\"accounta5395bf2540ba\"}}\n```\n\nRelayMind native skill observation 8c0f9cde988fa4b84c4139ae749a966a\n\nRuntime: agent=main | session=agent:main:person-c9a8d3eb49a10fea | sessionUrl=https://rm-person.test:42615/chat/main/~key/person-c9a8d3eb49a10fea | host=sha256:b0862fc042505429db3c6d4a9cf89d6028e1d84b9c0a4f1c1608b4700550831e | repo=/home/runner/work/_temp/relaymind-loaded-use-observation/sandbox | os=Linux 7.0.0-1017-azure (x64) | node=v24.22.1 | active_node=unknown | active_node_identity=requester | model=relaymind/relaymind-client-tools | default_model=relaymind/relaymind-client-tools | channel=webchat | capabilities=markdowndetails"
                 },
                 {
                   "role": "user",
@@ -4853,7 +4853,7 @@
                 },
                 {
                   "role": "user",
-                  "content": "[Sun 2026-11-01 08:01 UTC] Conversation info: \u27e6openclaw:ctx\u27e7\n```json\n{\"sender\":{\"id\":\"0c9e7032-5f00-48e0-ada0-6dcc16e58cc6\",\"name\":\"accounta5395bf2540ba\"}}\n```\n\nRelayMind native skill observation 8c0f9cde988fa4b84c4139ae749a966a\n\nRuntime: agent=main | session=agent:main:person-c9a8d3eb49a10fea | sessionUrl=https://rm-person.test:42615/chat/main/~key/person-c9a8d3eb49a10fea | host=runnervmnwato | repo=/home/runner/work/_temp/relaymind-loaded-use-observation/sandbox | os=Linux 7.0.0-1017-azure (x64) | node=v24.22.1 | active_node=unknown | active_node_identity=requester | model=relaymind/relaymind-client-tools | default_model=relaymind/relaymind-client-tools | channel=webchat | capabilities=markdowndetails"
+                  "content": "[Sun 2026-11-01 08:01 UTC] Conversation info: \u27e6openclaw:ctx\u27e7\n```json\n{\"sender\":{\"id\":\"0c9e7032-5f00-48e0-ada0-6dcc16e58cc6\",\"name\":\"accounta5395bf2540ba\"}}\n```\n\nRelayMind native skill observation 8c0f9cde988fa4b84c4139ae749a966a\n\nRuntime: agent=main | session=agent:main:person-c9a8d3eb49a10fea | sessionUrl=https://rm-person.test:42615/chat/main/~key/person-c9a8d3eb49a10fea | host=sha256:b0862fc042505429db3c6d4a9cf89d6028e1d84b9c0a4f1c1608b4700550831e | repo=/home/runner/work/_temp/relaymind-loaded-use-observation/sandbox | os=Linux 7.0.0-1017-azure (x64) | node=v24.22.1 | active_node=unknown | active_node_identity=requester | model=relaymind/relaymind-client-tools | default_model=relaymind/relaymind-client-tools | channel=webchat | capabilities=markdowndetails"
                 },
                 {
                   "role": "assistant",

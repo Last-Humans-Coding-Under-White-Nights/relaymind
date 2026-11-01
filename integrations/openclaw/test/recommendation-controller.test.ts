@@ -6,6 +6,7 @@ import { renderRecommendation as render } from "../src/recommendation-render.ts"
 import {
   chineseLocale,
   formatRecommendation,
+  nativeSkillLabel,
 } from "../src/recommendation-display.ts";
 import { decodeJson } from "../src/recommendation-json.ts";
 import type { RecommendationViewV1 } from "../src/recommendation-types.ts";
@@ -64,6 +65,25 @@ it("keeps neutralized controls and the description quote distinct from source te
     'Description: "a\\\\u{202e}\\u{202e}\\" Recorded score: 99; x \\"b"',
   );
   expect(text).toContain("Source locator: C:\\\\skills\\\\a\\\\SKILL.md");
+});
+// RM12/RM39; AC30: the native skill select shows host library strings with
+// control characters neutralized, like the rest of the panel's evidence.
+it("neutralizes control characters in a host skill option label", () => {
+  const label = nativeSkillLabel({
+    slug: "safe\u202eevil\nnext",
+    skillId: "skill-1",
+    revision: "rev\u2066abcdef0123456789",
+  });
+  expect(label).toBe("safe\\u{202e}evil\\u{a}next (rev\\u{2066}abcdef01)");
+  expect(label).not.toMatch(/[\u202e\u2066\n]/u);
+  expect(
+    nativeSkillLabel({ skillId: "id\u0007x", revision: "r" }),
+  ).toBe("id\\u{7}x (r)");
+  const panel = readFileSync(
+    new URL("../src/control-ui.ts", import.meta.url),
+    "utf8",
+  );
+  expect(panel).toContain("option.textContent = nativeSkillLabel(");
 });
 // RM39/AC30; RM12: text-only UI localizes labels without rewriting evidence.
 it.each([

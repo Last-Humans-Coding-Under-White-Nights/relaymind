@@ -176,6 +176,12 @@ def _check_rules(record: Mapping) -> None:
             _reject("preregistration_missing")
         if _time(prereg["committed_at"]) > _time(started):
             _reject("preregistration_late")
+    # The owner approves drafted cases and machine_dual labels in the pull
+    # request that commits their lock, before preregistration (12.6.6), so an
+    # approved record of those profiles always names its preregistration.
+    owner_approved = labelling == MACHINE_DUAL_PROFILE or record["prompt_authorship"] == DRAFTED
+    if owner_approved and prereg is None and record["review"]["approved_at"] is not None:
+        _reject("preregistration_missing")
     # Machine identity.
     machine = record["machine"]
     if scope in _MACHINE_SCOPES and machine is None:
@@ -370,6 +376,13 @@ class QualificationRecord:
                 row["adjudicator_id"] != adjudicator for row in labels["adjudications"]
             ):
                 _reject("labelling_mismatch")
+            # The catalog Persons hold exactly these roles (12.6.6).
+            roles = {**{i: ["annotator"] for i in expected}, adjudicator: ["adjudicator"]}
+            if any(
+                person not in people or list(people[person]["roles"]) != wanted
+                for person, wanted in roles.items()
+            ):
+                _reject("labelling_roles")
         agreement = self.document["agreement"]
         if agreement is None:
             return
@@ -384,6 +397,20 @@ class QualificationRecord:
             or (kappa is not None and abs(kappa - stored) > _KAPPA_TOLERANCE)
         ):
             _reject("record_agreement_mismatch")
+
+    def check_grade(self, grade: Mapping) -> None:
+        """A grade presented under this record carries its labelling (spec 12.6.6).
+
+        Every report graded under the record says so: the qualification output
+        carries the record's ``labelling`` and ``prompt_authorship``. A grade
+        made without the record (both null) or under another profile rejects.
+        """
+        qualification = grade.get("qualification") if isinstance(grade, Mapping) else None
+        if not isinstance(qualification, Mapping) or (
+            qualification.get("labelling"),
+            qualification.get("prompt_authorship"),
+        ) != (self.labelling, self.prompt_authorship):
+            _reject("record_grade_mismatch")
 
     def check_cases(self, cases: Mapping) -> None:
         """The frozen cases agree with the record's prompt authorship (spec 12.6.6).

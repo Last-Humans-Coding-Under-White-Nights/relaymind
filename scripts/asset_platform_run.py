@@ -89,7 +89,10 @@ def _ordinary(args) -> int:
     try:
         code = subprocess.run(argv, timeout=args.timeout).returncode
     except subprocess.TimeoutExpired:
-        print(f"ordinary qualification ordinary_timeout after {args.timeout} s: step exit 2")
+        print(
+            f"ordinary qualification ordinary_timeout after {args.timeout} s: step exit 2",
+            file=sys.stderr,
+        )
         return 2
     try:
         capture = json.loads(out.read_bytes())
@@ -97,7 +100,10 @@ def _ordinary(args) -> int:
         capture = None
     result = ordinary_exit(code, capture, system=platform.system(), machine=platform.machine())
     reason = capture.get("reason") if isinstance(capture, Mapping) else "capture_missing"
-    print(f"ordinary qualification exit {code}, reason {reason}: step exit {result}")
+    print(
+        f"ordinary qualification exit {code}, reason {reason}: step exit {result}",
+        file=sys.stderr if result else sys.stdout,
+    )
     return result
 
 
@@ -137,20 +143,25 @@ _PLATFORM_HARNESS_DIRECTORIES = (
 )
 
 
+def _tracked(*pathspecs: str) -> list[str]:
+    """The checkout's tracked files under ``pathspecs``, as POSIX paths."""
+    listed = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "-z", "--", *pathspecs],
+        capture_output=True,
+        check=True,
+    ).stdout
+    return [path for path in listed.decode("utf-8").split("\0") if path]
+
+
 def platform_runner_files() -> list[str]:
-    """Every repository file the platform run executes or loads, as sorted paths."""
+    """Every tracked repository file the platform run executes or loads, as sorted paths.
+
+    Only tracked files are bound, so untracked local files (``.DS_Store``,
+    ``.pyo``, editor swap files, scratch modules) never change the inventory.
+    """
     paths = set(_PLATFORM_RUNNER_FILES)
-    paths.update(
-        p.relative_to(ROOT).as_posix()
-        for p in (ROOT / "src/relaymind").rglob("*.py")
-        if "__pycache__" not in p.parts
-    )
-    for directory in _PLATFORM_HARNESS_DIRECTORIES:
-        paths.update(
-            p.relative_to(ROOT).as_posix()
-            for p in (ROOT / directory).rglob("*")
-            if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc"
-        )
+    paths.update(p for p in _tracked("src/relaymind") if p.endswith(".py"))
+    paths.update(_tracked(*_PLATFORM_HARNESS_DIRECTORIES))
     return sorted(paths)
 
 

@@ -733,7 +733,10 @@ def test_an_ordinary_timeout_is_a_closed_harness_error(tmp_path, monkeypatch, ca
         ]
     )  # fmt: skip
     assert code == 2
-    assert "ordinary_timeout" in capsys.readouterr().out
+    # Review 264 (4436728764): failure messages go to stderr like the rest.
+    captured = capsys.readouterr()
+    assert "ordinary_timeout" in captured.err
+    assert "ordinary_timeout" not in captured.out
 
 
 def _ordinary_argv(tmp_path, out):
@@ -757,7 +760,9 @@ def test_a_rerun_never_reads_a_stale_ordinary_capture(tmp_path, monkeypatch, cap
 
     monkeypatch.setattr(module.subprocess, "run", setup_failure)
     assert module.main(_ordinary_argv(tmp_path, out)) == 2
-    assert "capture_missing" in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert "capture_missing" in captured.err
+    assert "capture_missing" not in captured.out
     # The stale capture is gone, so the platform step cannot pick it up.
     assert not out.exists()
 
@@ -1063,4 +1068,104 @@ def test_every_platform_runner_file_checks_out_with_lf_line_endings():
         check=True,
     )
     unset = [line for line in result.stdout.splitlines() if not line.endswith(": eol: lf")]
+    if unset:
+        # A file kept as exact bytes (-text) is never converted either.
+        binary = subprocess.run(
+            ["git", "-C", str(ROOT), "check-attr", "text", "--",
+             *[line.split(": eol: ")[0] for line in unset]],
+            capture_output=True, text=True, check=True,
+        ).stdout.splitlines()  # fmt: skip
+        unset = [line for line in binary if not line.endswith(": text: unset")]
     assert not unset, unset
+
+
+def test_the_platform_runner_inventory_binds_only_tracked_files(tmp_path, monkeypatch):
+    """RM44/AC37 (review 264, 4436728756): untracked junk such as .DS_Store or
+    .pyo next to the harness never enters the inventory, so it matches the checkout."""
+    import shutil
+    import subprocess
+
+    if shutil.which("git") is None:
+        pytest.skip("needs git")
+    module = _script()
+    root = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    tracked = [
+        "src/relaymind/a.py",
+        "integrations/openclaw/test/host-ordinary-qualification/qualify.py",
+        "integrations/openclaw/test/host-person-qualification/data.json",
+    ]
+    junk = [
+        "src/relaymind/scratch.py",
+        "src/relaymind/.DS_Store",
+        "integrations/openclaw/test/host-ordinary-qualification/.DS_Store",
+        "integrations/openclaw/test/host-ordinary-qualification/qualify.pyo",
+        "integrations/openclaw/test/host-action-qualification/.qualify.py.swp",
+    ]
+    for path in [*tracked, *junk]:
+        (root / path).parent.mkdir(parents=True, exist_ok=True)
+        (root / path).write_text("x\n")
+    subprocess.run(["git", "-C", str(root), "add", "--", *tracked], check=True)
+    monkeypatch.setattr(module, "ROOT", root)
+    files = module.platform_runner_files()
+    for path in tracked:
+        assert path in files, path
+    for path in junk:
+        assert path not in files, path
+
+
+def test_every_platform_runner_file_is_tracked():
+    """The explicitly listed runner files are part of the checkout."""
+    import shutil
+    import subprocess
+
+    if shutil.which("git") is None or not (ROOT / ".git").exists():
+        pytest.skip("needs a git checkout")
+    files = _script().platform_runner_files()
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "--error-unmatch", "--", *files],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_a_failed_verify_still_writes_the_step_summary(tmp_path):
+    """RM44/AC37 (review 264, 4436728739): under bash -e -o pipefail a failing
+    verify still appends its output to the job summary, then fails the step."""
+    import os
+    import shutil
+    import subprocess
+
+    bash = shutil.which("bash")
+    if bash is None or sys.platform == "win32":
+        pytest.skip("needs bash")
+    (job,) = _workflow()["jobs"].values()
+    script = _step(job, "Verify")["run"].replace("${{ matrix.os }}", "test-os")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "python"
+    fake.write_text("#!/bin/sh\necho 'run: FAIL (platform_report_missing)'\nexit 1\n")
+    fake.chmod(0o755)
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    summary = tmp_path / "summary.md"
+    env = dict(
+        os.environ,
+        PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        EVIDENCE=str(evidence),
+        GITHUB_STEP_SUMMARY=str(summary),
+    )
+    # GitHub Actions runs a bash step as: bash --noprofile --norc -eo pipefail {0}
+    step = tmp_path / "step.sh"
+    step.write_text(script)
+    result = subprocess.run(
+        [bash, "--noprofile", "--norc", "-eo", "pipefail", str(step)],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    text = summary.read_text()
+    assert "Platform run on test-os" in text
+    assert "FAIL (platform_report_missing)" in text

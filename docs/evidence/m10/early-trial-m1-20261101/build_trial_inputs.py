@@ -20,11 +20,16 @@ Commands (run from the repository root with the project's Python):
     frozen corpus lock, the AssetHostTasksV1 / HostFreezeV1 documents, the
     companion manifest ``frozen/inputs.json`` and a private resolver for the
     inventory preimages under ``R/resolver``.
-``record --bundle B --record-id ID``
+``record --bundle B --record-id ID [--preregistration COMMIT]``
     Write a pending QualificationRecordV1 (scope host_trial,
     machine_dual_owner_approved labelling, machine_drafted_owner_approved prompts)
     binding the bundle's report, freeze, tasks, corpus lock, labels and
-    environment lock, and check it with ``load_record``.
+    environment lock, and check it with ``load_record``, ``check_labels`` (with
+    the catalog people) and ``check_cases``. It stops before writing when the
+    harness or ``src/`` differ from ``HEAD``, so ``harness_sha256`` belongs to
+    ``repository_commit``. Pass ``--preregistration`` only for a section 12.6.6
+    preregistration: a commit after the owner approved the committed case and
+    label lock in its pull request. The #259 trial has none.
 """
 
 import argparse
@@ -619,12 +624,31 @@ def check_written(target: Path, labels: dict, catalog: dict, cases: dict):
     return checked
 
 
+def _check_committed() -> None:
+    """The harness and product code are committed, so ``harness_sha256`` and the
+    product revision belong to ``repository_commit`` (``git rev-parse HEAD``)."""
+    import subprocess
+
+    harness = [str(HERE / name) for name in ("build_trial_inputs.py", "observe_row.py")]
+    harness.append(str(HERE / "machine_passes.py"))
+    dirty = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=no", "--", str(REPO / "src"), *harness],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    if dirty:
+        raise SystemExit("harness_uncommitted: commit the harness and src/ before recording")
+
+
 def record(bundle: Path, record_id: str, preregistration: str | None) -> None:
     import socket
     import subprocess
 
     from relaymind.evaluation.asset_qualification_record import class_kappa
 
+    _check_committed()
     target = REPO / "docs/evidence/m10" / f"{record_id}.json"
     manifest = _read_json(bundle / "inputs.json")
     by_kind = {d["kind"]: d for d in manifest["documents"] if d["kind"] != "referenced_config"}
