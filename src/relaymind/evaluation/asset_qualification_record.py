@@ -66,6 +66,8 @@ _KAPPA_TOLERANCE = 1e-9
 # JSON input documents whose canonical digest must equal the resolved input.
 _INPUT_ROLES = ("freeze", "tasks", "episodes", "labels")
 _HOST_SCOPES = {"early_trial": "host_trial", "acceptance": "host_acceptance"}
+# Labelling profiles that record their annotators and Cohen's kappa agreement.
+_AGREEMENT_PROFILES = frozenset({"owner_machine"})
 
 
 def _time(value: str) -> datetime:
@@ -111,21 +113,26 @@ def _check_rules(record: Mapping) -> None:
         _reject("labelling_profile")
     if scope not in _LABELLED and labelling != "not_applicable":
         _reject("labelling_profile")
+    # Only a profile with recorded annotators carries them and their agreement.
+    if labelling in _AGREEMENT_PROFILES:
+        if annotators is None or agreement is None:
+            _reject("labelling_profile")
+    elif annotators is not None or agreement is not None:
+        _reject("labelling_profile")
     if labelling == "owner_machine" and (
-        annotators is None
-        or agreement is None
-        or annotators["owner_annotator_id"] == annotators["machine"]["annotator_id"]
+        annotators["owner_annotator_id"] == annotators["machine"]["annotator_id"]
     ):
         _reject("labelling_profile")
-    if labelling != "owner_machine" and annotators is not None:
-        _reject("labelling_profile")
-    if labelling == "not_applicable" and (agreement or record["corpus_review"]):
+    if labelling == "not_applicable" and record["corpus_review"]:
         _reject("labelling_profile")
     # Preregistration: a commit and its time before any run.
     prereg, started = record["preregistration"], record["runs_started_at"]
-    if scope in _PREREGISTERED and (prereg is None or started is None):
+    if scope in _PREREGISTERED and prereg is None:
         _reject("preregistration_missing")
-    if prereg is not None and started is not None:
+    # A recorded preregistration is always checked against the first dispatch.
+    if prereg is not None:
+        if started is None:
+            _reject("preregistration_missing")
         if _time(prereg["committed_at"]) > _time(started):
             _reject("preregistration_late")
     # Machine identity.
@@ -148,7 +155,9 @@ def _check_rules(record: Mapping) -> None:
         _reject("record_outcome")
     # Review: a pull request approved by someone other than the owner.
     review = record["review"]
-    if review["owner_login"] in review["reviewer_logins"]:
+    # GitHub logins are case-insensitive.
+    owner_login = review["owner_login"].casefold()
+    if any(login.casefold() == owner_login for login in review["reviewer_logins"]):
         _reject("self_review")
     if review["approved_at"] is not None and (
         review["pull_request"] is None or not review["reviewer_logins"]
@@ -222,6 +231,9 @@ class QualificationRecord:
         The host scope must also match the task document's kind, so a trial
         record cannot review an acceptance report without preregistration.
         """
+        # The scope rejects first, for every report kind.
+        if self.outcome != "positive" or REPORT_SCOPES.get(self.scope) != kind:
+            _reject("qualification_record_scope")
         root = inputs.root
         if kind == "host":
             if _HOST_SCOPES.get(root.get("kind")) != self.scope:
@@ -255,7 +267,8 @@ class QualificationRecord:
             if {row["annotator_id"] for row in labels["judgments"]} != {owner, machine}:
                 _reject("labelling_mismatch")
             if (
-                machine not in people
+                owner not in people
+                or machine not in people
                 or list(people[machine]["roles"]) != ["annotator"]
                 or any(row["adjudicator_id"] != owner for row in labels["adjudications"])
             ):

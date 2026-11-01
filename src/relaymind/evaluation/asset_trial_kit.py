@@ -28,6 +28,7 @@ import re
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from relaymind.canonical import canonical_digest
 from relaymind.evaluation.asset_benchmark_io import (
@@ -267,6 +268,59 @@ def _inspect(output: bytes, version: str | None) -> dict:
     return check
 
 
+def _loopback_host(hostname: str) -> bool:
+    # isLoopbackHostname in integrations/openclaw/src/config.ts: no DNS.
+    if hostname in ("localhost", "::1"):
+        return True
+    octets = hostname.split(".")
+    return (
+        len(octets) == 4
+        and octets[0] == "127"
+        and all(re.fullmatch(r"\d{1,3}", o) and int(o) <= 255 for o in octets)
+    )
+
+
+def check_base_url(value: object) -> str:
+    """The plugin's ``baseUrl`` rules (``integrations/openclaw/src/config.ts``).
+
+    http or https, a loopback host (localhost, 127.0.0.0/8 or [::1]), the /v1
+    root, no credentials, query or fragment. Returns the plugin's own form,
+    origin plus ``/v1``. A refused value raises ``invalid_base_url`` and is
+    never echoed: it can carry a credential (#269 review).
+    """
+    if (
+        not isinstance(value, str)
+        or not value
+        or any(ord(c) <= 0x20 or ord(c) >= 0x7F or c == "\\" for c in value)
+    ):
+        raise ValueError("invalid_base_url")
+    try:
+        url = urlsplit(value)
+        port = url.port
+    except ValueError:
+        raise ValueError("invalid_base_url") from None
+    host = url.hostname or ""
+    if (
+        url.scheme.lower() not in ("http", "https")
+        or "@" in url.netloc
+        or url.username is not None
+        or url.password is not None
+        or url.query
+        or url.fragment
+        or "?" in value
+        or "#" in value
+        or not _loopback_host(host)
+        or url.path.rstrip("/") != "/v1"
+    ):
+        raise ValueError("invalid_base_url")
+    shown = f"[{host}]" if ":" in host else host
+    origin = f"{url.scheme.lower()}://{shown}"
+    default = {"http": 80, "https": 443}[url.scheme.lower()]
+    if port is not None and port != default:
+        origin += f":{port}"
+    return origin + "/v1"
+
+
 def install_plugin(
     host_command: Sequence[str], tarball: Path, work: Path, *, base_url: str = DEFAULT_BASE_URL
 ) -> dict:
@@ -281,8 +335,7 @@ def install_plugin(
     placeholders, exit codes, SHA-256 digests and sizes, and the configured
     loopback ``base_url``. Inspect reads the JSON on standard output only.
     """
-    if not isinstance(base_url, str) or not base_url or any(c.isspace() for c in base_url):
-        raise ValueError("invalid_base_url")
+    base_url = check_base_url(base_url)
     tarball = Path(tarball).absolute()
     work = Path(work).absolute()
     work.mkdir(mode=0o700, parents=True, exist_ok=False)
