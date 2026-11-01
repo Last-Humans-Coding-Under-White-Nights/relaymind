@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
@@ -375,6 +376,77 @@ _CASE_FIELDS = {
 }
 
 
+def closed_native_data(reason: str) -> Callable:
+    """Translate malformed external structure at a named observation boundary."""
+
+    def decorate(function):
+        @wraps(function)
+        def guarded(*args, **kwargs):
+            try:
+                return function(*args, **kwargs)
+            except (
+                KeyError,
+                TypeError,
+                AttributeError,
+                IndexError,
+                UnicodeError,
+                json.JSONDecodeError,
+            ):
+                raise ValueError(reason) from None
+
+        return guarded
+
+    return decorate
+
+
+def native_frame(reply: object, reason: str) -> dict:
+    if not isinstance(reply, dict) or not isinstance(reply.get("frame"), dict):
+        raise ValueError(reason)
+    return reply["frame"]
+
+
+def native_payload(reply: object, reason: str) -> dict:
+    frame = native_frame(reply, reason)
+    if frame.get("ok") is not True or not isinstance(frame.get("payload"), dict):
+        raise ValueError(reason)
+    return frame["payload"]
+
+
+def native_scope(reply: object, reason: str) -> dict[str, str]:
+    payload = native_payload(reply, reason)
+    if not all(isinstance(payload.get(field), str) and payload[field] for field in _SCOPE_FIELDS):
+        raise ValueError(reason)
+    return {field: payload[field] for field in _SCOPE_FIELDS}
+
+
+def native_tools(events: list[dict], run_id: str) -> list[dict]:
+    """Reject malformed hooks before filtering valid hooks by their native run."""
+    tools = []
+    for record in events:
+        if not isinstance(record, dict):
+            raise ValueError("ordinary_skill_native_event_invalid")
+        if record.get("kind") != "native_skill_tool":
+            continue
+        event, context = record.get("event"), record.get("context")
+        if (
+            not isinstance(event, dict)
+            or not isinstance(context, dict)
+            or not all(
+                isinstance(event.get(field), str) and event[field]
+                for field in ("toolName", "toolCallId", "runId")
+            )
+            or not isinstance(event.get("params"), dict)
+            or not all(
+                isinstance(context.get(field), str) and context[field]
+                for field in ("runId", "toolCallId", "sessionKey", "sessionId")
+            )
+        ):
+            raise ValueError("ordinary_skill_native_event_invalid")
+        if context["runId"] == run_id:
+            tools.append(dict(event=event, context=context))
+    return tools
+
+
 def read_observer_events(path, start=0, *, with_offset=False):
     """RM39/AC30: reread a torn tail once; every committed record is strict."""
     for attempt in range(2):
@@ -554,40 +626,55 @@ _RESET_SCOPE_REFUSAL = {
 
 def _reset_refused(case):
     """The exact person-scope sessions.reset refusal, with the session unchanged."""
-    change, before = case["intervention"], case["before"]
-    return (
-        case["case"] == "reset"
-        and isinstance(change, dict)
-        and change["method"] == "sessions.reset"
-        and change["params"]
-        == dict(key=before["sessionKey"], expectedSessionId=before["sessionId"], reason="reset")
-        and change["frame"].get("ok") is False
-        and change["frame"].get("error") == _RESET_SCOPE_REFUSAL
-        and case["current"] == before
-    )
+    try:
+        change, before = case["intervention"], case["before"]
+        return (
+            case["case"] == "reset"
+            and isinstance(change, dict)
+            and change.get("method") == "sessions.reset"
+            and change.get("params")
+            == dict(key=before["sessionKey"], expectedSessionId=before["sessionId"], reason="reset")
+            and isinstance(change.get("frame"), dict)
+            and change["frame"].get("ok") is False
+            and change["frame"].get("error") == _RESET_SCOPE_REFUSAL
+            and case["current"] == before
+        )
+    except (KeyError, TypeError, AttributeError, IndexError):
+        return False
 
 
 def loaded_use_observation(case):
     """Closed observations, with no stale/deleted/reset acceptance rule invented."""
-    if _reset_refused(case):
-        return "control_refused"
-    if case["chat"]["frame"].get("ok") is False or case["terminal"].get("state") in {
-        "error",
-        "aborted",
-    }:
-        return "refused"
-    if _loaded_round_trip(case):
-        return "loaded_pinned_revision"
-    if any(
-        tool["event"].get("result") and not tool["event"].get("error") for tool in case["tools"]
-    ):
-        return "loaded_other_bytes"
-    return "not_loaded"
+    if not isinstance(case, dict):
+        return "incomplete"
+    try:
+        if _reset_refused(case):
+            return "control_refused"
+        if case["chat"]["frame"].get("ok") is False or case["terminal"].get("state") in {
+            "error",
+            "aborted",
+        }:
+            return "refused"
+        if _loaded_round_trip(case):
+            return "loaded_pinned_revision"
+        if any(
+            tool["event"].get("result") and not tool["event"].get("error") for tool in case["tools"]
+        ):
+            return "loaded_other_bytes"
+        return "not_loaded"
+    except (KeyError, TypeError, AttributeError, IndexError):
+        return "incomplete"
 
 
 def _control_observed(case):
     try:
         name, before, current = case["case"], case["before"], case["current"]
+        if not all(
+            isinstance(scope, dict)
+            and all(isinstance(scope.get(field), str) and scope[field] for field in _SCOPE_FIELDS)
+            for scope in (before, current)
+        ):
+            return False
         if name == "positive":
             return case["intervention"] is None and before == current
         if _reset_refused(case):
@@ -878,10 +965,20 @@ class LoadedUseGatewayObservation:
         self.generations = 0
         self.window_start = 0
 
+    @closed_native_data("ordinary_skill_generation_bound")
     def begin(self, selected, task):
+        self.selected = None
+        if not isinstance(selected, dict) or not all(
+            isinstance(selected.get(field), str) and selected[field]
+            for field in ("skillId", "revision", "content")
+        ):
+            raise ValueError("ordinary_skill_generation_bound")
+        if not isinstance(task, str) or not task:
+            raise ValueError("ordinary_skill_task_mismatch")
         self.selected, self.task, self.generations = dict(selected), task, 0
         self.window_start = len(self.requests)
 
+    @closed_native_data("ordinary_skill_task_mismatch")
     def generate(self, request):
         from gateway_helpers import text_turn, tool_turn
 
@@ -1350,6 +1447,7 @@ class OrdinaryComposition(BASE.ActionComposition):
                 raise ValueError("ordinary_zero_http_failed")
 
     @ordinary_step("save_library_skill")
+    @closed_native_data("ordinary_skill_save_failed")
     def save_library_skill(self, rpc, page):
         """Save the gateway's exact fixture SKILL.md into this person's library."""
         saved = rpc(
@@ -1361,7 +1459,7 @@ class OrdinaryComposition(BASE.ActionComposition):
                 content=self.skill_text,
             ),
         )
-        payload = saved["frame"].get("payload") if saved["frame"].get("ok") is True else None
+        payload = native_payload(saved, "ordinary_skill_save_failed")
         entry = None
         if isinstance(payload, dict):
             entry = payload.get("entry") if isinstance(payload.get("entry"), dict) else payload
@@ -1446,6 +1544,7 @@ class OrdinaryComposition(BASE.ActionComposition):
         ):
             raise ValueError("ordinary_skill_selection_failed")
 
+    @closed_native_data("ordinary_skill_turn_timeout")
     def loaded_use_turn(self, rpc, page, session, case, *, timeout=60):
         """Collect a bounded native browser turn; hooks only observe, never dispatch."""
         subscription = rpc(
@@ -1453,17 +1552,20 @@ class OrdinaryComposition(BASE.ActionComposition):
             "sessions.messages.subscribe",
             dict(key=case["current"]["sessionKey"], subscriptionId="relaymind-loaded-observation"),
         )
+        payload = native_payload(subscription, "ordinary_skill_subscription_failed")
+        socket_id = subscription.get("socket_id")
         if (
-            subscription["frame"].get("ok") is not True
-            or subscription["frame"]["payload"].get("subscribed") is not True
-            or subscription["frame"]["payload"].get("key") != case["current"]["sessionKey"]
+            payload.get("subscribed") is not True
+            or payload.get("key") != case["current"]["sessionKey"]
+            or not isinstance(socket_id, str)
+            or not socket_id
         ):
             raise ValueError("ordinary_skill_subscription_failed")
         case["subscription"] = dict(
             ok=True,
             subscribed=True,
-            key=subscription["frame"]["payload"]["key"],
-            socket_id=subscription["socket_id"],
+            key=payload["key"],
+            socket_id=socket_id,
         )
         self.observation.begin(case["selected"], case["task"])
         start = len(self.observation.requests)
@@ -1473,7 +1575,10 @@ class OrdinaryComposition(BASE.ActionComposition):
             idempotencyKey=str(uuid.uuid4()),
         )
         sent = rpc(page, "chat.send", params)
-        case["chat"] = dict(params=params, frame=sent["frame"], socket_id=sent["socket_id"])
+        frame = native_frame(sent, "ordinary_skill_turn_timeout")
+        if not isinstance(sent.get("socket_id"), str) or not sent["socket_id"]:
+            raise ValueError("ordinary_skill_turn_timeout")
+        case["chat"] = dict(params=params, frame=frame, socket_id=sent["socket_id"])
         case.update(
             tools=[],
             requests=[],
@@ -1482,28 +1587,31 @@ class OrdinaryComposition(BASE.ActionComposition):
             terminal={},
             observed="incomplete",
         )
-        if sent["frame"].get("ok") is False:
+        if frame.get("ok") is False:
             case["observed"] = "refused"
             return
+        payload = native_payload(sent, "ordinary_skill_turn_timeout")
+        run_id = payload.get("runId")
+        if not isinstance(run_id, str) or not run_id or run_id != params["idempotencyKey"]:
+            raise ValueError("ordinary_skill_turn_timeout")
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            terminal = page.evaluate(
-                "id => window.__rmPersonWire.turnEvents(id)", sent["frame"]["payload"]["runId"]
-            )
+            terminal = page.evaluate("id => window.__rmPersonWire.turnEvents(id)", run_id)
+            if not isinstance(terminal, list):
+                raise ValueError("ordinary_skill_terminal_ambiguous")
             if terminal:
-                if len(terminal) != 1:
+                if (
+                    len(terminal) != 1
+                    or not isinstance(terminal[0], dict)
+                    or terminal[0].get("state") not in ("final", "error", "aborted")
+                ):
                     raise ValueError("ordinary_skill_terminal_ambiguous")
                 case["terminal"] = terminal[0]
                 break
             page.wait_for_timeout(100)
         else:
             events = read_observer_events(self.event_file)
-            case["tools"] = [
-                dict(event=event["event"], context=event["context"])
-                for event in events
-                if event.get("kind") == "native_skill_tool"
-                and event.get("context", {}).get("runId") == params["idempotencyKey"]
-            ]
+            case["tools"] = native_tools(events, params["idempotencyKey"])
             case["requests"] = self.observation.requests[start:]
             raise ValueError("ordinary_skill_turn_timeout")
         # Tool hooks are asynchronous; allow their bounded delivery to catch up
@@ -1511,12 +1619,7 @@ class OrdinaryComposition(BASE.ActionComposition):
         deadline = time.monotonic() + 3
         while True:
             events = read_observer_events(self.event_file)
-            case["tools"] = [
-                dict(event=event["event"], context=event["context"])
-                for event in events
-                if event.get("kind") == "native_skill_tool"
-                and event.get("context", {}).get("runId") == params["idempotencyKey"]
-            ]
+            case["tools"] = native_tools(events, params["idempotencyKey"])
             case["requests"] = self.observation.requests[start:]
             has_result = any(
                 message.get("role") == "tool"
@@ -1538,14 +1641,11 @@ class OrdinaryComposition(BASE.ActionComposition):
                 raise ValueError("ordinary_skill_turn_timeout")
             page.wait_for_timeout(50)
         after = rpc(page, "rmqualification.person", session)
-        if (
-            after["frame"].get("ok") is not True
-            or {field: after["frame"]["payload"][field] for field in _SCOPE_FIELDS}
-            != case["current"]
-        ):
+        if native_scope(after, "ordinary_skill_scope_changed") != case["current"]:
             raise ValueError("ordinary_skill_scope_changed")
         case["observed"] = loaded_use_observation(case)
 
+    @closed_native_data("ordinary_skill_control_failed")
     def observe_loaded_use(self, rpc, page, session, capture):
         """One bridge-selected positive and three isolated native control sessions."""
         value = dict(tier="deterministic_native_observation", qualification="unavailable", cases=[])
@@ -1572,14 +1672,11 @@ class OrdinaryComposition(BASE.ActionComposition):
                         revision=skill["mapping"]["revision"],
                     ),
                 )
-                selection = dict(
-                    ok=activated["frame"].get("ok"), payload=activated["frame"].get("payload")
-                )
+                frame = native_frame(activated, "ordinary_skill_control_failed")
+                selection = dict(ok=frame.get("ok"), payload=frame.get("payload"))
             mapping = skill["mapping"]
             person = rpc(page, "rmqualification.person", selected_session)
-            if person["frame"].get("ok") is not True:
-                raise ValueError("ordinary_skill_scope_changed")
-            scope = {field: person["frame"]["payload"][field] for field in _SCOPE_FIELDS}
+            scope = native_scope(person, "ordinary_skill_scope_changed")
             read = rpc(
                 page,
                 "skills.library.read",
@@ -1589,15 +1686,14 @@ class OrdinaryComposition(BASE.ActionComposition):
                     revision=mapping["revision"],
                 ),
             )
-            if read["frame"].get("ok") is not True:
-                raise ValueError("ordinary_skill_read_failed")
-            payload = read["frame"]["payload"]
+            payload = native_payload(read, "ordinary_skill_read_failed")
+            content = bounded_skill_content(payload.get("content"))
             listed = rpc(page, "skills.library.list", dict(sessionKey=scope["sessionKey"]))
             pin = selected_pin(listed, mapping)
             selected = dict(
                 skillId=mapping["skillId"],
                 revision=mapping["revision"],
-                content=bounded_skill_content(payload["content"]),
+                content=content,
                 content_sha256=skill["content_sha256"],
                 name=pin["name"],
                 read=dict(ok=True, payload=payload),
@@ -1659,11 +1755,7 @@ class OrdinaryComposition(BASE.ActionComposition):
                             expectedLifecycleRevision=entry["lifecycleRevision"],
                         )
                         current = rpc(page, "rmqualification.person", selected_session)
-                        if current["frame"].get("ok") is not True:
-                            raise ValueError("ordinary_skill_control_failed")
-                        case["current"] = {
-                            field: current["frame"]["payload"][field] for field in _SCOPE_FIELDS
-                        }
+                        case["current"] = native_scope(current, "ordinary_skill_control_failed")
                 except (KeyError, TypeError, AttributeError):
                     raise ValueError("ordinary_skill_control_failed") from None
             if not _control_observed(case):

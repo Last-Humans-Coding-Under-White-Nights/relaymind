@@ -31,20 +31,29 @@ TERMS = (
     "preserved_baseline",
 )
 BINDING = ("server", "original", "exposed", "schema_hash", "session", "requester", "arguments")
-NEGATIVE_CASES = (
+STALE_CASES = (
     "schema_change",
     "server_removal",
     "session_reset",
-    "policy_denied",
-    "disconnected",
-    "foreign_requester",
-    "approval_replay",
-    "cancelled",
-    "timeout",
     "arguments_changed",
-    "choice_expired",
-    "registration_revoked",
 )
+# Each negative control has its own refusal. A stale-schema error is not
+# evidence that a policy, identity, replay, cancellation or timeout control ran.
+CASE_REJECTIONS = {
+    "schema_change": ("STALE_BINDING", "final_io"),
+    "server_removal": ("STALE_BINDING", "final_io"),
+    "session_reset": ("STALE_BINDING", "final_io"),
+    "arguments_changed": ("STALE_BINDING", "final_io"),
+    "policy_denied": ("POLICY_DENIED", "before_dispatch"),
+    "disconnected": ("DISCONNECTED", "before_dispatch"),
+    "foreign_requester": ("UNAUTHORIZED", "before_dispatch"),
+    "approval_replay": ("APPROVAL_REPLAY", "before_dispatch"),
+    "cancelled": ("CANCELLED", "before_dispatch"),
+    "timeout": ("TIMEOUT", "before_dispatch"),
+    "choice_expired": ("CHOICE_EXPIRED", "before_dispatch"),
+    "registration_revoked": ("REGISTRATION_REVOKED", "before_dispatch"),
+}
+NEGATIVE_CASES = tuple(CASE_REJECTIONS)
 FIXTURE_FILES = (
     "qualify.py",
     "grade.py",
@@ -71,7 +80,6 @@ def required_sources() -> set[str]:
         Path(__file__).with_name("approval_ui.py"),
         *sorted(Path(__file__).parent.glob("*.mjs")),
         *sorted(Path(__file__).parent.glob("*.json")),
-        package / "dist/index.js",
         package / "dist/control-ui/control-ui.js",
         package / "dist/control-ui/recommendation-json.js",
     ]
@@ -210,6 +218,17 @@ def schema_observation_matches(observation: dict) -> bool:
         return False
 
 
+def binding_matches(binding: dict, approval: dict) -> bool:
+    """Every field is present and non-null; an empty arguments object is valid."""
+    try:
+        return all(
+            key in binding and binding[key] is not None and approval.get(key) == binding[key]
+            for key in BINDING
+        )
+    except (KeyError, TypeError, AttributeError):
+        return False
+
+
 def effect_matches(trial: dict, decision: str) -> bool:
     """Join server call/effect records; host-only identity comes from host_calls.
 
@@ -220,7 +239,7 @@ def effect_matches(trial: dict, decision: str) -> bool:
             return False
         binding = trial["binding"]
         approval = trial["approval"]
-        if any(not binding[key] or approval[key] != binding[key] for key in BINDING):
+        if not binding_matches(binding, approval):
             return False
         driver = approval["driver"]
         if approval["decision"] != decision or driver not in {"automated_ui", "human"}:
@@ -273,17 +292,27 @@ def effect_matches(trial: dict, decision: str) -> bool:
         return False
 
 
-def stale_case_pass(case: dict) -> bool:
-    """A schema validator refusal does not establish an authorization fence."""
+def negative_control_pass(case: dict) -> bool:
+    """Require each control's own observed refusal and zero new calls."""
     try:
+        code, phase = CASE_REJECTIONS[case["name"]]
+        rejection = case["rejection"]
         return (
-            case["name"] in NEGATIVE_CASES
-            and case["status"] == "observed"
-            and case["rejection"] == {"code": "STALE_BINDING", "phase": "final_io"}
+            case["status"] == "observed"
+            and rejection.get("code") == code
+            and rejection.get("phase") == phase
             and bool(case["before"])
             and case["before"] == case["after"]
             and not any(event["kind"] == "call" for event in case["server_events"])
         )
+    except (KeyError, TypeError, AttributeError):
+        return False
+
+
+def stale_case_pass(case: dict) -> bool:
+    """A schema validator refusal does not establish an authorization fence."""
+    try:
+        return case["name"] in STALE_CASES and negative_control_pass(case)
     except (KeyError, TypeError):
         return False
 

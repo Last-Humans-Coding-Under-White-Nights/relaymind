@@ -36,6 +36,8 @@ export interface NativeUseLedger {
   consumeApproval(approvalId: string): boolean;
   block(incarnation: string): void;
   isBlocked(incarnation: string): boolean;
+  /** Releases the descriptor; every later operation refuses. Idempotent. */
+  close(): void;
 }
 type Record =
   | { t: "claim"; k: string; d: string; b: UseBase }
@@ -89,8 +91,10 @@ export function createFileUseLedger(
     bytes = fstatSync(fd).size;
   } catch {
     usable = false;
+    close();
   }
-  function apply(record: Record): void {
+  /** Throws for a record that recovery would reject; changes nothing. */
+  function validate(record: Record): void {
     switch (record?.t) {
       case "claim":
         if (
@@ -98,29 +102,47 @@ export function createFileUseLedger(
           typeof record.d !== "string" ||
           history.has(record.k)
         )
-          throw Error("ledger_unreadable");
+          throw Error("ledger_claimed");
+        return;
+      case "settle": {
+        const previous = history.get(record.k);
+        if (!previous) throw Error("ledger_unclaimed");
+        if (previous.receipt) throw Error("ledger_settled");
+        return;
+      }
+      case "approval":
+        if (typeof record.a !== "string") throw Error("ledger_invalid");
+        return;
+      case "block":
+        if (typeof record.i !== "string") throw Error("ledger_invalid");
+        return;
+      default:
+        throw Error("ledger_invalid");
+    }
+  }
+  function apply(record: Record): void {
+    try {
+      validate(record);
+    } catch {
+      throw Error("ledger_unreadable");
+    }
+    switch (record.t) {
+      case "claim":
         history.set(record.k, {
           digest: record.d,
           base: record.b,
           receipt: undefined,
         });
         return;
-      case "settle": {
-        const previous = history.get(record.k);
-        if (!previous || previous.receipt) throw Error("ledger_unreadable");
-        history.set(record.k, { ...previous, receipt: record.r });
+      case "settle":
+        history.set(record.k, { ...history.get(record.k)!, receipt: record.r });
         return;
-      }
       case "approval":
-        if (typeof record.a !== "string") throw Error("ledger_unreadable");
         approvals.add(record.a);
         return;
       case "block":
-        if (typeof record.i !== "string") throw Error("ledger_unreadable");
         blocked.add(record.i);
         return;
-      default:
-        throw Error("ledger_unreadable");
     }
   }
   function ready(): number {
@@ -129,6 +151,8 @@ export function createFileUseLedger(
   }
   function append(record: Record): void {
     const handle = ready();
+    // Never write a record that recovery would reject.
+    validate(record);
     const line = JSON.stringify(record) + "\n";
     const size = Buffer.byteLength(line, "utf8");
     if (records + 1 > maxRecords || bytes + size > maxBytes)
@@ -145,14 +169,23 @@ export function createFileUseLedger(
     bytes += size;
     apply(record);
   }
+  function close(): void {
+    usable = false;
+    if (fd === undefined) return;
+    const handle = fd;
+    fd = undefined;
+    try {
+      closeSync(handle);
+    } catch {
+      /* Already released. */
+    }
+  }
   return {
     lookup(key) {
       ready();
       return history.get(key);
     },
     claim(key, digest, base) {
-      ready();
-      if (history.has(key)) throw Error("ledger_claimed");
       append({ t: "claim", k: key, d: digest, b: base });
     },
     settle(key, receipt) {
@@ -173,5 +206,6 @@ export function createFileUseLedger(
       ready();
       return blocked.has(incarnation);
     },
+    close,
   };
 }
