@@ -410,6 +410,13 @@ def _text_content(content):
     raise ValueError("not_text_content")
 
 
+def _contains_observation_task(content, task):
+    # Native webchat surrounds the task with conversation metadata and Runtime
+    # paragraphs. Match the complete nonce-bearing paragraph, never a substring;
+    # this correlates a request only and grants no loading/use authority.
+    return task in _text_content(content).split("\n\n")
+
+
 def _loaded_round_trip(case, *, require_selected=True):
     """Actual native result and receiving HTTP tool message, joined by call ID."""
     selected, current = case["selected"], case["current"]
@@ -681,7 +688,8 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
                 if attempt["status"] != 200 or attempt["body"]["model"] != "relaymind-client-tools":
                     return False
                 if not any(
-                    message["role"] == "user" and case["task"] == _text_content(message["content"])
+                    message["role"] == "user"
+                    and _contains_observation_task(message["content"], case["task"])
                     for message in attempt["body"]["messages"]
                 ):
                     return False
@@ -754,7 +762,8 @@ class LoadedUseGatewayObservation:
             raise ValueError("ordinary_skill_generation_bound")
         messages = request.messages
         if not any(
-            message.role.value == "user" and self.task == (message.content or "")
+            message.role.value == "user"
+            and _contains_observation_task(message.content or "", self.task)
             for message in messages
         ):
             raise ValueError("ordinary_skill_task_mismatch")

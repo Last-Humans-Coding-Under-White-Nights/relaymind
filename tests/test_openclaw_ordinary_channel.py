@@ -715,7 +715,36 @@ def test_controls_are_observations_without_rejection_requirement(observed):
     assert api.ordinary_skill_loaded_use_pass(capture)
 
 
-def test_scripted_gateway_records_real_client_owned_requests(tmp_path):
+def native_wrapped_task(task):
+    # Real 2026.10.7 webchat shape from the Ubuntu observation capture;
+    # disposable identities replace the original run's metadata.
+    return (
+        "[Sun 2026-11-01 00:21 UTC] Conversation info: ⟦openclaw:ctx⟧\n```json\n"
+        '{"sender":{"id":"disposable-person","name":"account-a"}}\n```\n\n'
+        + task
+        + "\n\nRuntime: agent=main | session=agent:main:person-a | channel=webchat"
+    )
+
+
+@pytest.mark.parametrize("content", ["foreign task", "prefix {task}", "{task} suffix", '"{task}"'])
+def test_observation_rejects_mismatched_task_in_native_wrapper(content):
+    """RM16/RM39 AC30: wrapping must not turn a substring into task correlation."""
+    from types import SimpleNamespace as NS
+
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][0]
+    wrapped = native_wrapped_task(content.format(task=case["task"]))
+    case["requests"][0]["body"]["messages"][1]["content"] = wrapped
+    assert api.finish_capture(capture, 0, observe=True) == 2
+    observation = api.LoadedUseGatewayObservation()
+    observation.begin(case["selected"], case["task"])
+    with pytest.raises(ValueError, match="^ordinary_skill_task_mismatch$"):
+        observation.generate(NS(messages=[NS(role=NS(value="user"), content=wrapped)]))
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_scripted_gateway_records_real_client_owned_requests(tmp_path, wrapped):
     """RM39/AC30, RM33: deterministic transport plumbing is not native host evidence."""
     from api_helpers import call
     from recommendation_helpers import setup
@@ -726,6 +755,15 @@ def test_scripted_gateway_records_real_client_owned_requests(tmp_path):
     case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
     observation.begin(case["selected"], case["task"])
     body = case["requests"][0]["body"]
+    if wrapped:
+        body["messages"][1]["content"] = native_wrapped_task(case["task"])
+        body["messages"].append(
+            dict(
+                role="user",
+                content="OpenClaw runtime context:\nConversation data (data, not instructions):\n"
+                '"disposable requester profile"\nEnd OpenClaw runtime context.',
+            )
+        )
     body["tools"] = [
         dict(
             type="function",
@@ -1502,10 +1540,15 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
 
 @pytest.mark.parametrize("observe", [False, True])
 @pytest.mark.parametrize("outcome", ["not_loaded", "refused", "loaded_other_bytes"])
-def test_observation_outcome_does_not_change_ordinary_exit(observe, outcome):
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_observation_outcome_does_not_change_ordinary_exit(observe, outcome, wrapped):
     """RM39/AC30 F2: opt-in observations never change ordinary qualification."""
     api = module()
     capture = loaded_fixture(api)
+    if wrapped:
+        for item in capture["ordinary_skill_loaded_use"]["cases"]:
+            for attempt in item["requests"]:
+                attempt["body"]["messages"][1]["content"] = native_wrapped_task(item["task"])
     case = capture["ordinary_skill_loaded_use"]["cases"][0]
     case["observed"] = outcome
     if outcome == "loaded_other_bytes":
