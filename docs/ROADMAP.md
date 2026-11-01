@@ -1111,9 +1111,12 @@ Source locators remain the exact offered record: spec sections 4.6.1 and 7.6
 define local locators as resolved `SKILL.md` paths and return that record in
 the scoped view; no home-path abbreviation/redaction rule is specified.
 The adapter revision is repinned to the built bytes that combine these
-changes with the #256 review fixes
-(`adb212d0b9f337df3d03a870711d23d5b348b135d24545913a0304dded22cfa9`).
-The ordinary installed-host run of these exact bytes (pinned OpenClaw
+changes with the #256 review and ledger fixes
+(`ddeb3c70d69c3d6de61902b41b05008853c777b1e13c04ec9d7cc827db01b894`). The
+committed capture below ran the earlier combined bytes
+(`adb212d0b9f337df3d03a870711d23d5b348b135d24545913a0304dded22cfa9`), so it
+must be recaptured from CI for the new revision before merge.
+The ordinary installed-host run of those earlier bytes (pinned OpenClaw
 2026.10.7, Ubuntu runner, CI run 41318309491, commit 7d9ea47, PR merge
 checkout b679c12) passed the ordinary-pass and ordinary-skill-pass predicates
 with all 15 harness sources matching. Its unmodified capture replaces
@@ -1428,6 +1431,20 @@ skill_loaded_use registry entry for that exact composition in the
 deterministic-model functional tier; live-model capability and full acceptance
 remain separate. The current selection receipt still says not_observed.
 
+The #239 observation harness
+(`integrations/openclaw/test/host-ordinary-qualification/qualify.py`) now reads
+provider attempt records by their own per-turn file window and retains a
+failure that never reached the gateway with its actual outcome; an
+unexplained record leaves the case incomplete
+(`ordinary_skill_provider_unexplained`). It drains asynchronous evidence until
+every proposed or answered tool call has its native hook, so a failed or
+cancelled tool's late hook is collected; an unresolved call stays incomplete
+(`ordinary_skill_tool_unresolved`), and a refused send is accepted only after
+the same bounded drain. The committed loaded-use observation capture
+(`tests/fixtures/openclaw-loaded-use-observation-20261101-vps2.json`) predates
+this harness change, binds the earlier harness by digest, and must be
+recaptured with this harness before it is cited as evidence for it.
+
 #204 may build a disposable qualification harness against public authenticated
 dispatch and actual native approval paths, but MCP activation remains disabled.
 Section 7.6.2 defines a separate explicit direct-use request and ten qualification
@@ -1498,9 +1515,15 @@ spec 0.65 names no qualified native boundary that can stop the next model
 request. HOST-EXACT-SKILL-USE (#239) and MCP use with real approvals (#204)
 remain open. The changed adapter bytes have a new exact revision, and the
 shipped `direct_actions`/`exact_skill_selection` entry is re-pinned to it
-(`943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`), as for the spec 0.63 scope fix. Its evidence revision names
-the fresh capture of this revision (CI run 41318389858,
-`openclaw-native-actions-20261101-adapter.json`, SHA-256 `35436e519245…`). `tests/test_openclaw_install.py` fails when the registry and
+(`b49d94d8267076516430fb2e4fb64d41fad2961fc8009c84e60921cf43e9e98e`), as for the spec 0.63 scope fix. After review, the
+ledger takes over a stale owner lock without ever removing a live owner's
+lock (per-owner lock files; one owner under any interleaving) and writes each
+record completely across short writes before acknowledging it; these changed
+bytes are that new revision. Its evidence revision still names the capture of
+the previous revision `943e1f0e…` (CI run 41318389858,
+`openclaw-native-actions-20261101-adapter.json`, SHA-256 `35436e519245…`), so
+the evidence must be recaptured from CI for the new adapter revision before
+merge. `tests/test_openclaw_install.py` fails when the registry and
 the built adapter digest of the release artifact drift.
 
 #240 host_config evidence must validate with the pinned host's own validator
