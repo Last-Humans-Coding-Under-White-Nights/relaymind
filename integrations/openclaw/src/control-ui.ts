@@ -8,6 +8,7 @@ import { decodeJson } from "./recommendation-json.ts";
 import {
   chineseLocale,
   formatRecommendation,
+  nativeSkillLabel,
   neutralizeControls,
 } from "./recommendation-display.ts";
 import type { RecommendationViewV1 } from "./recommendation-types.ts";
@@ -461,7 +462,11 @@ function mountPanel(
             skillId: entry.skillId,
             revision: entry.revision,
           });
-          option.textContent = `${String(entry.slug ?? entry.skillId)} (${entry.revision.slice(0, 12)})`;
+          option.textContent = nativeSkillLabel({
+            slug: entry.slug,
+            skillId: entry.skillId,
+            revision: entry.revision,
+          });
           select.append(option);
         }
         native.append(select);

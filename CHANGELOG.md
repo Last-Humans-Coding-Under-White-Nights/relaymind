@@ -18,33 +18,46 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   in a digest-bound release attachment with a compact repository record.
 
 - #255 host use settlement (RM16/RM37/RM39; AC30/AC35; spec 0.66 sections
-  7.6.1, 7.6.2, 12.6.6) adds two pending negative `host_operation` records for
+  7.6.1, 7.6.2, 12.6.6) adds one pending negative `host_operation` record for
   OpenClaw 2026.10.7, with the VPS host surface inventory and the CI/VPS
-  captures they bind (`docs/evidence/m10/`):
-  - `skill_loaded_use` is `stop_point_absent`. Hooks, middleware and the
-    provider can stop a read or a request, but none can re-verify fresh person
-    authority, the session incarnation and the pinned bytes, so none can fence
-    the next model request.
+  captures (`docs/evidence/m10/`):
   - `mcp_use` is `exact_route_absent`. No supported route invokes an
     independent, non-App MCP tool by its exact native identity: `tools.invoke`
     is name-only and the harness runtimes are private; the App-scoped
-    `mcp.app.callTool` does not count.
+    `mcp.app.callTool` does not count. These verdicts rest on the pinned host
+    source; the inventory's `attempted_routes` lists what the captures
+    attempted (`mcp.app.discover`, `tools.effective`, `mcp.app.listTools`) and
+    what was not called.
+  - `skill_loaded_use` has **no** negative record. Hooks, middleware and the
+    provider can stop a read or a request but cannot re-verify fresh person
+    authority, the session incarnation and the pinned bytes on their own. The
+    host's `GatewaySessionAccessAuthority.retain()` borrow, however, re-checks
+    the person's grant and the exact session incarnation at call time and
+    could back a provider `onPayload` fence, which spec 7.6.1 admits once
+    qualified. `stop_point_absent` is therefore not established, and the
+    pending record that asserted it was withdrawn after review. The inventory
+    records the borrow's source, its open questions and the
+    `before_prompt_build`/`ctx.toolAuthority` hook.
 
-  Both operations stay disabled. The records lift nothing until they are
-  approved. `tests/test_m10_host_use_records.py` loads them with the checker.
-  The records also bind the second VPS run's captures (`*-20261101-vps2.json`,
+  Both operations stay disabled. The MCP record lifts nothing until it is
+  approved. `tests/test_m10_host_use_records.py` loads it with the checker,
+  checks every cited host file hash (including the reset policy sources), ties
+  the attempted routes to the captures, ties the record's commit and harness to
+  the VPS3 capture and its tracked sources to that commit's bytes, and checks
+  that no #255 capture publishes a plaintext hostname (the CI loaded-use
+  capture's runner hostname is now its SHA-256). The MCP record also binds the
+  second VPS run's MCP capture (`openclaw-mcp-use-20261101-vps2.json`,
   checkout 62c4dcd), with the user name and hostname rewritten. Person ingress
-  passed there, and MCP use was `blocked`. That loaded-use run exited 2 on the
-  62c4dcd single-pin check, because the host lists the whole profile's pins;
-  the selected-skill pin check (5d92b64) is already in this branch and accepts
-  the committed capture, which a test now checks. The MCP record also binds a
-  third VPS run at bba0cf1 (`openclaw-mcp-use-20261101-vps3.json`) with the
-  #249 discovery fix: `tools.effective` lists both colliding tools, and the
-  result is still `blocked`. The earlier "empty list" was the old harness
-  projection (`payload.tools` instead of `groups[].tools`), not a host result;
-  the settlement document records the correction. The inventory text now states
-  the spec 0.66 finding definitions, and the test checks every cited host file
-  hash against the inventory's file table.
+  passed there, and MCP use was `blocked`. That run's loaded-use capture exited
+  2 on the 62c4dcd single-pin check, because the host lists the whole
+  profile's pins; the selected-skill pin check (5d92b64) is already in this
+  branch and accepts the committed capture, which a test now checks. The MCP
+  record also binds a third VPS run at bba0cf1
+  (`openclaw-mcp-use-20261101-vps3.json`) with the #249 discovery fix:
+  `tools.effective` lists both colliding tools, and the result is still
+  `blocked`. The earlier "empty list" was the old harness projection
+  (`payload.tools` instead of `groups[].tools`), not a host result; the
+  settlement document records the correction.
 
 ### Fixed
 
@@ -176,6 +189,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     after the reply stream ended fails at once with `control_closed`, a job
     reported in two replies is kept once in its latest state, and memory
     phases are listed only when a workload sample is known.
+  - Fourth review fixes: the verify step writes its job summary even when
+    verify fails, then fails with verify's exit code. `platform-runner-files`
+    binds only tracked files, so local files such as `.DS_Store` never change
+    it, and a test checks that every bound file checks out with LF (or as
+    exact bytes). A gateway that exits before its token is `gateway_exited`,
+    not a token timeout; the gateway child ends quietly when the parent has
+    closed its pipe; ordinary-step failure messages go to stderr.
 - Episode and host-task run kit (#236, #237; RM40–RM44; AC31–AC36): blind
   label templates, adjudication worksheet and `AssetLabelsV1` freeze;
   `preregister-host`/`preregister-episodes` checks; a resumable, crash-safe

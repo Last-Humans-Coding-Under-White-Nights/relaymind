@@ -184,7 +184,9 @@ def run_host_plan(
             config = configs[arm]
             if key in journal.finished:
                 value = journal.finished[key]
-                row, refs = _admit(value["row"], value["evidence"], planned, config, seen, evidence)
+                row, refs = _admit(
+                    value.get("row"), value.get("evidence"), planned, config, seen, evidence
+                )
             elif key in journal.started:
                 # Started before a crash and never recorded: kept, not rerun.
                 row, refs = _unknown_row(task_id, arm, "cancelled", "interrupted_unrecorded"), []
@@ -241,12 +243,15 @@ def _start_group(argv: list[str]) -> subprocess.Popen:
 def _kill_group(process: subprocess.Popen) -> None:
     """Kill the executor and every descendant still in its process group."""
     if sys.platform == "win32":
-        subprocess.run(  # noqa: S603, S607 - the system tool, fixed arguments
-            ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
+        try:
+            subprocess.run(  # noqa: S603, S607 - the system tool, fixed arguments
+                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        except OSError:
+            pass  # taskkill cannot start; the direct kill below still runs.
     else:
         try:
             os.killpg(process.pid, signal.SIGKILL)
@@ -449,6 +454,9 @@ def attempts_from_trace(
         raise ValueError("token_relationship")
     if token_relationship != "unknown" and relationship_evidence_id is None:
         raise ValueError("relationship_evidence")
+    if token_relationship == "unknown" and relationship_evidence_id is not None:
+        # Relationship evidence is never recorded under an unknown relationship.
+        raise ValueError("token_relationship")
     checked = []
     last: dict[str, int] = {}
     for item in events:

@@ -1,17 +1,22 @@
 """#255 committed host-operation records (spec 0.66 sections 7.6.1, 7.6.2, 12.6.6).
 
-RM16, RM39; AC30, AC35. The negative records for skill_loaded_use and mcp_use
-on the pinned OpenClaw 2026.10.7 host must load with the packaged checker:
-closed shape, linux_host machine identity, disabled operation, and every bound
-capture and inventory byte. Until the pull request review is written into a
-record it is pending and lists no known host limitation; the shipped adapter
-registry never lists either operation.
+RM16, RM39; AC30, AC35. The negative record for mcp_use on the pinned OpenClaw
+2026.10.7 host must load with the packaged checker: closed shape, linux_host
+machine identity, disabled operation, and every bound capture and inventory
+byte. Until the pull request review is written into it the record is pending and
+lists no known host limitation. No negative skill_loaded_use record is
+committed: the host source shows a native delegation (a retained session access
+borrow) that a provider check might use as the section 7.6.1 fence, so
+`stop_point_absent` is not established. The shipped adapter registry never
+lists either operation.
 """
 
 import copy
+import hashlib
 import importlib.util
 import json
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -19,10 +24,11 @@ import pytest
 from relaymind.evaluation.asset_qualification_record import known_host_limitations, load_record
 
 ROOT = Path(__file__).resolve().parents[1]
+HOST = "integrations/openclaw/node_modules/openclaw/"
 EVIDENCE = ROOT / "docs/evidence/m10"
 INVENTORY = EVIDENCE / "openclaw-host-use-search-20261101-vps.json"
+MCP_RECORD = EVIDENCE / "m10-negative-mcp-use-openclaw-2026.10.7.json"
 RECORDS = {
-    "m10-negative-skill-loaded-use-openclaw-2026.10.7": ("skill_loaded_use", "stop_point_absent"),
     "m10-negative-mcp-use-openclaw-2026.10.7": ("mcp_use", "exact_route_absent"),
 }
 
@@ -77,6 +83,9 @@ def cited_source_mismatches(inventory):
             for source in row["source"]:
                 if files.get(source["path"]) != source["sha256"]:
                     problems.append((row["name"], source["path"]))
+    for source in inventory["skill_loaded_use"]["reset_policy_source"]:
+        if files.get(source["path"]) != source["sha256"]:
+            problems.append(("reset_policy_source", source["path"]))
     return problems
 
 
@@ -84,7 +93,8 @@ def test_inventory_concludes_each_finding_and_binds_host_files():
     """Every cited host file names the exact (path, SHA-256) of the files table (#255)."""
     inventory = json.loads(INVENTORY.read_text())
     assert inventory["host"]["version"] == "2026.10.7"
-    assert "stop_point_absent" in inventory["skill_loaded_use"]["conclusion"]
+    assert inventory["skill_loaded_use"]["finding"] == "not_established"
+    assert inventory["mcp_use"]["finding"] == "exact_route_absent"
     assert "exact_route_absent" in inventory["mcp_use"]["conclusion"]
     assert all(len(row["sha256"]) == 64 for row in inventory["files"])
     assert cited_source_mismatches(inventory) == []
@@ -96,6 +106,11 @@ def test_a_changed_cited_host_hash_is_detected():
     changed["mcp_use"]["routes"][0]["source"][0]["sha256"] = "0" * 64
     assert cited_source_mismatches(changed) == [
         ("tools.invoke", changed["mcp_use"]["routes"][0]["source"][0]["path"])
+    ]
+    reset = copy.deepcopy(inventory)
+    reset["skill_loaded_use"]["reset_policy_source"][0]["sha256"] = "0" * 64
+    assert cited_source_mismatches(reset) == [
+        ("reset_policy_source", reset["skill_loaded_use"]["reset_policy_source"][0]["path"])
     ]
     duplicated = copy.deepcopy(inventory)
     duplicated["files"].append(dict(duplicated["files"][0]))
@@ -109,7 +124,9 @@ def test_inventory_states_the_spec_0_66_finding_scope():
     assert "stop or fence" not in loaded["question"]
     for text in (loaded["question"], loaded["conclusion"]):
         assert "fresh person authority, the session incarnation and the pinned bytes" in text
-    assert "does not count" in loaded["conclusion"]
+    # The conclusion must not claim that no host point can fence.
+    assert "No host point can fence" not in loaded["conclusion"]
+    assert "not established" in loaded["conclusion"]
     for text in (mcp["question"], mcp["conclusion"]):
         assert "independent, non-App MCP tool by its exact native identity" in text
     app = next(row for row in mcp["routes"] if row["name"].startswith("mcp.app.callTool"))
@@ -117,6 +134,85 @@ def test_inventory_states_the_spec_0_66_finding_scope():
     effective = next(row for row in mcp["routes"] if "tools.effective" in row["name"])
     assert "empty tool list for the person session" not in effective["verdict"]
     assert "groups[].tools" in effective["verdict"]
+
+
+def _surface(inventory, name):
+    return next(row for row in inventory["skill_loaded_use"]["surfaces"] if row["name"] == name)
+
+
+def test_inventory_records_the_retained_borrow_as_a_fence_candidate():
+    """Spec 7.6.1: a supported native delegation can carry the use-time fence.
+
+    The pinned host's retain() borrow re-checks the original person's grant, profile,
+    role, sharing and tool policy and the exact session incarnation (sessionId,
+    lifecycleRevision, store path and generation) on every assertCurrent(), and
+    aborts its signal on revocation. The inventory cites that implementation and
+    leaves the finding open instead of claiming stop_point_absent.
+    """
+    inventory = json.loads(INVENTORY.read_text())
+    retained = _surface(inventory, "GatewaySessionAccessAuthority.retain()")
+    paths = {source["path"] for source in retained["source"]}
+    assert HOST + "dist/request-authorization-DsdcZTZi.mjs" in paths
+    assert "fence candidate" in retained["verdict"]
+    for fact in ("lifecycleRevision", "sessionId", "originalGrant", "signal"):
+        assert fact in retained["authority"]
+    assert inventory["skill_loaded_use"]["open_questions"]
+
+
+def test_inventory_lists_before_prompt_build_and_tool_authority():
+    """Spec 7.6.1: before_prompt_build and ctx.toolAuthority are not person authority."""
+    inventory = json.loads(INVENTORY.read_text())
+    row = _surface(inventory, "before_prompt_build (requiresToolAuthority, ctx.toolAuthority)")
+    paths = {source["path"] for source in row["source"]}
+    assert HOST + "docs/plugins/hooks/prompt-and-session.md" in paths
+    assert "logged and skipped" in row["can_stop"]
+    assert "not person authority" in row["authority"]
+
+
+def attempted_route_mismatches(inventory, load=_capture):
+    """Attempted routes whose method and outcome the named capture does not hold."""
+    problems = []
+    for row in inventory["attempted_routes"]["mcp_use"]:
+        events = load(row["capture"])["mcp_use"]["inventories"]
+        if not any(
+            (event["method"], event["status"]) == (row["method"], row["status"]) for event in events
+        ):
+            problems.append((row["capture"], row["method"]))
+    for row in inventory["attempted_routes"]["skill_loaded_use"]:
+        cases = load(row["capture"])["ordinary_skill_loaded_use"]["cases"]
+        if not any(
+            case["case"] == row["case"]
+            and case["observed"] == row["observed"]
+            and (case.get("intervention") or {}).get("method") == row["intervention"]
+            for case in cases
+        ):
+            problems.append((row["capture"], row["case"]))
+    return problems
+
+
+def test_inventory_lists_the_attempted_routes_from_the_captures():
+    """Spec 12.6.6: the search captures name the attempted routes, and what was not tried."""
+    inventory = json.loads(INVENTORY.read_text())
+    assert attempted_route_mismatches(inventory) == []
+    attempted = inventory["attempted_routes"]
+    assert {row["method"] for row in attempted["mcp_use"]} == {
+        "mcp.app.discover",
+        "tools.effective",
+        "mcp.app.listTools",
+    }
+    assert {"tools.invoke", "mcp.app.callTool"} <= set(attempted["not_attempted"]["mcp_use"])
+    assert "none of the candidate gates was exercised" not in inventory["method"]
+    changed = copy.deepcopy(inventory)
+    changed["attempted_routes"]["mcp_use"][0]["status"] = "refused"
+    assert attempted_route_mismatches(changed)
+
+
+def test_no_negative_skill_loaded_use_record_is_committed():
+    """Spec 12.6.6: stop_point_absent is not established on 2026.10.7 (#255 review)."""
+    for path in EVIDENCE.glob("m10-*.json"):
+        document = json.loads(path.read_text())
+        operation = document.get("operation") or {}
+        assert operation.get("name") != "skill_loaded_use", path.name
 
 
 def test_mcp_record_binds_the_corrected_discovery_capture():
@@ -127,7 +223,7 @@ def test_mcp_record_binds_the_corrected_discovery_capture():
     The current grader therefore rejects their discovery, and accepts it only in
     the corrected capture. No capture passes exact use.
     """
-    record = load_record(EVIDENCE / "m10-negative-mcp-use-openclaw-2026.10.7.json")
+    record = load_record(MCP_RECORD)
     paths = {subject["path"] for subject in record.document["subjects"]}
     assert "openclaw-mcp-use-20261101-vps3.json" in paths
     grade = _module(
@@ -157,6 +253,80 @@ def test_mcp_record_binds_the_corrected_discovery_capture():
         assert grade.fixture_discovery_pass(earlier) is False
     for path in paths - {"openclaw-host-use-search-20261101-vps.json"}:
         assert grade.mcp_use_pass(_capture(path)) is False
+
+
+MCP_HARNESS = "integrations/openclaw/test/host-mcp-use-qualification/qualify.py"
+
+
+def capture_revision_mismatches(revisions, capture):
+    """Record revisions that the capture's checkout and source inventory contradict."""
+    problems = []
+    if capture["ordinary_capture"]["environment"]["checkout"] != revisions["repository_commit"]:
+        problems.append("repository_commit")
+    harness = [row["sha256"] for row in capture["source_inventory"] if row["path"] == MCP_HARNESS]
+    if harness != [revisions["harness_sha256"]]:
+        problems.append("harness_sha256")
+    return problems
+
+
+def test_mcp_record_revisions_match_the_vps3_capture():
+    """RM39/AC35: the record's commit and harness are the ones the VPS3 capture ran."""
+    record = load_record(MCP_RECORD)
+    capture = _capture("openclaw-mcp-use-20261101-vps3.json")
+    revisions = record.document["revisions"]
+    assert capture_revision_mismatches(revisions, capture) == []
+    other = dict(revisions, repository_commit="0" * 40)
+    assert capture_revision_mismatches(other, capture) == ["repository_commit"]
+    other = dict(revisions, harness_sha256="0" * 64)
+    assert capture_revision_mismatches(other, capture) == ["harness_sha256"]
+
+
+def _git_blob_sha256(commit, path):
+    result = subprocess.run(
+        ["git", "show", f"{commit}:{path}"], cwd=ROOT, capture_output=True, check=False
+    )
+    if result.returncode != 0:
+        return None
+    return hashlib.sha256(result.stdout).hexdigest()
+
+
+def test_vps3_tracked_sources_match_the_record_commit():
+    """RM39/AC35: each tracked source and fixture row of VPS3 is that commit's bytes."""
+    record = load_record(MCP_RECORD)
+    commit = record.document["revisions"]["repository_commit"]
+    present = subprocess.run(
+        ["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=ROOT, capture_output=True
+    )
+    if present.returncode != 0:
+        pytest.skip(f"commit {commit} is not in this clone")
+    tracked = set(
+        subprocess.run(
+            ["git", "ls-tree", "-r", "--name-only", commit],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.splitlines()
+    )
+    capture = _capture("openclaw-mcp-use-20261101-vps3.json")
+    rows = (
+        capture["source_inventory"]
+        + capture["ordinary_capture"]["environment"]["fixture_plugin_sources"]
+    )
+    checked = [row for row in rows if row["path"] in tracked]
+    assert len(checked) == 58 + 22
+    changed = [
+        row["path"] for row in checked if _git_blob_sha256(commit, row["path"]) != row["sha256"]
+    ]
+    assert changed == []
+
+
+def test_the_255_captures_publish_no_plaintext_host_name():
+    """Spec 12.6.6: only the SHA-256 of a machine's hostname is published."""
+    for path in sorted(EVIDENCE.glob("openclaw-*-20261101-*.json")):
+        text = path.read_text()
+        assert "runnervm" not in text, path.name
+        assert re.findall(r"host=(?!sha256:[0-9a-f]{64})[^ |\\\"]+", text) == [], path.name
 
 
 def test_current_loaded_use_predicate_accepts_the_vps2_capture():

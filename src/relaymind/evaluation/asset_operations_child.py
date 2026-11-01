@@ -26,6 +26,7 @@ parent process that owns the pipes can use it.
 """
 
 import asyncio
+import contextlib
 import json
 import sys
 import threading
@@ -111,8 +112,10 @@ async def handle(app, command: Mapping) -> dict:
 
 
 def _write(reply: Mapping) -> None:
-    sys.stdout.write(CONTROL_PREFIX + json.dumps(reply, ensure_ascii=True, default=str) + "\n")
-    sys.stdout.flush()
+    """Send one reply; end quietly when the parent has already closed the pipe."""
+    with contextlib.suppress(OSError):  # BrokenPipeError is an OSError
+        sys.stdout.write(CONTROL_PREFIX + json.dumps(reply, ensure_ascii=True, default=str) + "\n")
+        sys.stdout.flush()
 
 
 def forward_lines(stream, loop: asyncio.AbstractEventLoop, lines: asyncio.Queue) -> None:

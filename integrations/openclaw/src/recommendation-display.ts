@@ -13,6 +13,16 @@ export function neutralizeControls(value: unknown): string {
     (ch) => "\\u{" + ch.codePointAt(0)!.toString(16) + "}",
   );
 }
+/** The text of a native skill option: host library strings, neutralized. */
+export function nativeSkillLabel(entry: {
+  slug?: unknown;
+  skillId: string;
+  revision: string;
+}): string {
+  return neutralizeControls(
+    `${String(entry.slug ?? entry.skillId)} (${entry.revision.slice(0, 12)})`,
+  );
+}
 function escapeMarkup(value: unknown): string {
   return neutralizeControls(value)
     .replace(
