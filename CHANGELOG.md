@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Operations and platform run kit (#242, toward #241, #235, #234; RM38, RM39, RM44; AC29, AC37):
+  - `scripts/asset_operations_run.py startup` measures ten real `relaymind serve` startups over a generated 300-skill bilingual catalog, using the existing AC29 driver. It waits for recommendations to be ready and samples memory on POSIX and Windows.
+  - `platform` builds an `AssetPlatformReportV1` from install-check and ordinary installed-host records, bound to the companion input manifest. Skill use is never inferred from a selection receipt.
+  - All output is labeled `fixture`.
 - Exact native Skill Library selection through the ordinary installed host
   (#197; RM39, AC30): the qualification saves a skill with
   `skills.library.save`, maps it to the chosen asset, selects it with
@@ -13,7 +17,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   binds skill ID, revision, asset ID, content hash and source version, and
   requires the unmapped-skill, cross-session and own-session foreign-person
   refusals with their exact error codes. Browser failures and the overall
-  deadline remain failures through skill selection.
+  deadline remain failures through skill selection. The listing must show the
+  selection itself: its `session.sessionKey` is the authenticated target
+  session and its `session.selections` are exactly the selected skill at the
+  selected revision, both when the harness captures it and in the predicate,
+  so a no-op or wrong-session activation fails. The committed capture is a
+  recapture with this harness (CI run 41317645014, SHA-256 `3a063ab37411…`),
+  which the registry's evidence revision names.
 
 - CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation or native-preparation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
 - CI: the shared asset benchmark fixture uses a deterministic recommendation
