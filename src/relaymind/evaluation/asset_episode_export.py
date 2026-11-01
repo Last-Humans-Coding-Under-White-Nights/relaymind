@@ -156,6 +156,8 @@ def reset_preimages(evidence: Mapping[str, Mapping]) -> dict[str, tuple]:
     for evidence_id, item in evidence.items():
         if not evidence_id.startswith("reset:"):
             continue
+        if not isinstance(item, Mapping) or not isinstance(item.get("payload"), bytes):
+            raise WholeTaskRejected("reset_evidence")
         try:
             document = parse_json(item["payload"])
         except (ValueError, UnicodeError, AssetCorpusError):

@@ -13,6 +13,7 @@ the real gateway over model doubles, without the checkout's sources or its
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -393,10 +394,56 @@ def _ci_job(ci_text: str) -> dict:
 CI_FILE = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ci.yml"
 
 
+@pytest.mark.parametrize("job_name", ["check", "openclaw-plugin"])
+@pytest.mark.parametrize(
+    "event_name,base_ref,expected",
+    [
+        ("pull_request", "master", ["ubuntu-latest", "macos-latest", "windows-latest"]),
+        ("push", "", ["ubuntu-latest", "macos-latest", "windows-latest"]),
+        ("workflow_dispatch", "", ["ubuntu-latest", "macos-latest", "windows-latest"]),
+        ("pull_request", "feature", ["ubuntu-latest"]),
+    ],
+)
+def test_ci_platform_matrix_for_each_event(job_name, event_name, base_ref, expected):
+    """RM33/AC24: stacked PRs save capacity; master PRs and pushes cover every OS."""
+    import yaml
+
+    job = yaml.safe_load(CI_FILE.read_text("utf-8"))["jobs"][job_name]
+    # Parse the supported expression shape completely, including both JSON arms,
+    # then evaluate its condition with each event's actual context.
+    expression = re.fullmatch(
+        r"\$\{\{\s*fromJSON\(github\.event_name == '([^']+)'\s*"
+        r"&& github\.base_ref != '([^']+)'\s*&& '([^']+)'\s*"
+        r"\|\| '([^']+)'\)\s*\}\}",
+        job["strategy"]["matrix"]["os"],
+    )
+    assert expression is not None
+    event, base, if_true, if_false = expression.groups()
+    stacked, full = json.loads(if_true), json.loads(if_false)
+    actual = stacked if event_name == event and base_ref != base else full
+    assert actual == expected
+
+
+def test_ci_plugin_browser_is_cached_before_install():
+    """RM33/AC24: the serial plugin tiers reuse the versioned Chromium shell."""
+    steps = _ci_job(CI_FILE.read_text("utf-8"))["steps"]
+    version = next(s for s in steps if s.get("id") == "playwright")
+    assert "version('playwright')" in version["run"]
+    assert '>> "$GITHUB_OUTPUT"' in version["run"]
+    assert "PLAYWRIGHT_BROWSERS_PATH=${RUNNER_TEMP}/ms-playwright" in version["run"]
+    assert '>> "$GITHUB_ENV"' in version["run"]
+    cache = next(s for s in steps if s.get("uses") == "actions/cache@v4")
+    assert cache["with"] == {
+        "path": "${{ runner.temp }}/ms-playwright",
+        "key": "playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium-shell",
+    }
+    install = next(s for s in steps if s.get("run", "").startswith("playwright install"))
+    assert steps.index(version) < steps.index(cache) < steps.index(install)
+
+
 def test_ci_builds_tests_and_runs_the_artifact_through_the_pinned_host_on_each_platform():
     """CI checks the declared host range, builds the release, and runs the host lifecycle."""
     job = _ci_job(CI_FILE.read_text("utf-8"))
-    assert job["strategy"]["matrix"]["os"] == ["ubuntu-latest", "macos-latest", "windows-latest"]
     assert job["env"]["RELAYMIND_OPENCLAW_NODE"] == "1"
     (node,) = [s for s in job["steps"] if s.get("uses", "").startswith("actions/setup-node")]
     engines = json.loads((PACKAGE / "package.json").read_text("utf-8"))["engines"]["node"]
