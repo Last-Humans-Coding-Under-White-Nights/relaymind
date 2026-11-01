@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Native host configuration preflight (#250; RM16/RM39/RM40/RM44;
+  AC31/AC35/AC36/AC37): a bounded Node checker uses pinned OpenClaw 2026.10.7
+  validation, including defaults, strict refinements and plugin schemas, and
+  returns a closed verdict with the validator file digest. The Python wrapper
+  enforces a timeout; input resolution rejects invalid native preflights and
+  retains validator identities by config digest. Offline resolution can consume
+  captured verdicts without Node; native fixture tests run in the OpenClaw CI job.
+  Qualified captured-evidence verification remains open in #240.
 - Platform runs on GitHub-hosted runners (#241, #235; RM38, RM39, RM44; AC29,
   AC37): a separate `Platform runs` workflow on `macos-latest`,
   `windows-latest` and `ubuntu-latest`.
