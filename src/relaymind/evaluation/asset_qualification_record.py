@@ -66,6 +66,8 @@ _KAPPA_TOLERANCE = 1e-9
 # JSON input documents whose canonical digest must equal the resolved input.
 _INPUT_ROLES = ("freeze", "tasks", "episodes", "labels")
 _HOST_SCOPES = {"early_trial": "host_trial", "acceptance": "host_acceptance"}
+# Labelling profiles that record their annotators and Cohen's kappa agreement.
+_AGREEMENT_PROFILES = frozenset({"owner_machine"})
 
 
 def _time(value: str) -> datetime:
@@ -111,15 +113,17 @@ def _check_rules(record: Mapping) -> None:
         _reject("labelling_profile")
     if scope not in _LABELLED and labelling != "not_applicable":
         _reject("labelling_profile")
+    # Only a profile with recorded annotators carries them and their agreement.
+    if labelling in _AGREEMENT_PROFILES:
+        if annotators is None or agreement is None:
+            _reject("labelling_profile")
+    elif annotators is not None or agreement is not None:
+        _reject("labelling_profile")
     if labelling == "owner_machine" and (
-        annotators is None
-        or agreement is None
-        or annotators["owner_annotator_id"] == annotators["machine"]["annotator_id"]
+        annotators["owner_annotator_id"] == annotators["machine"]["annotator_id"]
     ):
         _reject("labelling_profile")
-    if labelling != "owner_machine" and annotators is not None:
-        _reject("labelling_profile")
-    if labelling == "not_applicable" and (agreement or record["corpus_review"]):
+    if labelling == "not_applicable" and record["corpus_review"]:
         _reject("labelling_profile")
     # Preregistration: a commit and its time before any run.
     prereg, started = record["preregistration"], record["runs_started_at"]
@@ -227,14 +231,15 @@ class QualificationRecord:
         The host scope must also match the task document's kind, so a trial
         record cannot review an acceptance report without preregistration.
         """
+        # The scope rejects first, for every report kind.
+        if self.outcome != "positive" or REPORT_SCOPES.get(self.scope) != kind:
+            _reject("qualification_record_scope")
         root = inputs.root
         if kind == "host":
             if _HOST_SCOPES.get(root.get("kind")) != self.scope:
                 _reject("qualification_record_scope")
             bound = {"tasks": root, "freeze": inputs.freeze}
         elif kind == "adaptation":
-            if self.scope != "adaptation":
-                _reject("qualification_record_scope")
             bound = {"episodes": root, "freeze": inputs.freeze}
         else:
             return

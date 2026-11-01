@@ -582,3 +582,36 @@ def test_self_review_is_case_insensitive(tmp_path, reviewer):
     record["review"]["reviewer_logins"] = [reviewer]
     with pytest.raises(WholeTaskRejected, match="self_review"):
         load_record(save(tmp_path, record))
+
+
+# --- ArcsinX review of #266, second round -----------------------------------------
+
+
+def test_agreement_is_only_carried_by_a_profile_that_uses_it(tmp_path):
+    """Spec 12.6.6: Cohen's kappa agreement belongs to owner_machine labelling."""
+    record = host_record(tmp_path, labelling="independent", annotators=None)
+    with pytest.raises(WholeTaskRejected, match="labelling_profile"):
+        load_record(save(tmp_path, record))
+    record["agreement"] = None
+    assert load_record(save(tmp_path, record)).labelling == "independent"
+
+
+@pytest.mark.parametrize("make", ["host", "adaptation"])
+def test_a_non_platform_record_cannot_review_a_platform_report(tmp_path, make):
+    """The scope rejects first, before any input or label comparison."""
+    from relaymind.evaluation.asset_whole_task_qualification import assess_inputs
+
+    if make == "host":
+        record = _input_record(tmp_path)
+    else:
+        record = host_record(tmp_path, scope="adaptation")
+        record["subjects"].append(_subject(tmp_path, "episodes", "episodes.json", b"{}"))
+        record["subjects"].sort(key=lambda s: s["path"].encode())
+        record = load_record(save(tmp_path, record))
+    inputs = _inputs()
+    with pytest.raises(WholeTaskRejected, match="qualification_record_scope"):
+        record.check_inputs("platform", inputs)
+    inputs.release = None  # never reached: the scope rejects first
+    report = dict(qualification="measured", evidence=[], artifacts=[], platform=ENVIRONMENT)
+    with pytest.raises(WholeTaskRejected, match="qualification_record_scope"):
+        assess_inputs("platform", report, inputs, record=record)
