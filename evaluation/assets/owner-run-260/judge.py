@@ -148,7 +148,7 @@ def cmd_judge(args) -> None:
             dict(role="user", content=json.dumps(request, ensure_ascii=False)),
         ]
         name = f"{args.name}-{start // args.batch + 1:03d}"
-        answer = harness.chat(ledger, args.name, messages, args.log, name, 30000)
+        answer = harness.chat(ledger, args.name, messages, args.log, name)
         try:
             rows = harness.answer_json(answer)["judgments"]
         except (ValueError, KeyError, TypeError):
@@ -194,7 +194,7 @@ def cmd_adjudicate(args) -> None:
             dict(role="user", content=json.dumps(request, ensure_ascii=False)),
         ]
         name = f"judge-adjudicator-{start // args.batch + 1:03d}"
-        answer = harness.chat(ledger, "judge-adjudicator", messages, args.log, name, 30000)
+        answer = harness.chat(ledger, "judge-adjudicator", messages, args.log, name)
         for row in harness.answer_json(answer)["adjudications"]:
             if row.get("blind_id") in batch and isinstance(row.get("success"), bool):
                 final[row["blind_id"]] = dict(success=row["success"], reason=str(row["reason"]))

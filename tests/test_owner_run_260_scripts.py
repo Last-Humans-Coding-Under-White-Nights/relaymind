@@ -118,10 +118,10 @@ def test_tasks_and_freeze_must_name_the_same_corpus(tmp_path):
 # --- finding 3: the external-token cap bounds spending ---------------------------
 
 
-def budget(tmp_path, spent=0, cap=1_000_000, row=200_000, call=50_000):
+def budget(tmp_path, spent=0, cap=1_000_000, row=200_000, output=8_000):
     ledger = tmp_path / "ledger.json"
     write(ledger, dict(total_input=spent, total_output=0, stages={}))
-    return run_host.Budget(ledger, cap=cap, row_budget=row, call_allowance=call)
+    return run_host.Budget(ledger, cap=cap, row_budget=row, max_output=output)
 
 
 def test_a_row_starts_only_when_its_whole_reservation_fits(tmp_path):
@@ -129,33 +129,28 @@ def test_a_row_starts_only_when_its_whole_reservation_fits(tmp_path):
     assert not budget(tmp_path, spent=800_001).can_start()
 
 
-def test_a_row_stops_before_another_call_could_pass_its_reservation(tmp_path):
+def test_a_settled_row_is_charged_its_gated_consumption(tmp_path):
+    """The gate's charge (reported usage, or the bound of a call without usage) is settled."""
     b = budget(tmp_path)
-    assert not b.row_limit_reached(149_999)
-    assert b.row_limit_reached(150_000)
-
-
-def test_unknown_consumption_is_charged_at_its_worst_case(tmp_path):
-    b = budget(tmp_path)
-    # Known usage plus two calls whose usage was never reported.
-    b.settle("provider_only", prompt=10_000, completion=1_000, unknown_calls=2, evidence=True)
-    assert b.spent() == 11_000 + 2 * 50_000
-    # A started row with no usage evidence at all is charged its whole reservation.
-    b.settle("native", prompt=0, completion=0, unknown_calls=0, evidence=False)
-    assert b.spent() == 111_000 + 200_000
+    assert b.reserve("t1-provider_only") is None
+    b.settle("t1-provider_only", "provider_only", prompt=10_000, completion=1_000, charged=61_000)
+    assert b.spent() == 61_000
     saved = read(tmp_path / "ledger.json")
     assert saved["total_input"] + saved["total_output"] == b.spent()
+    # Reported usage above the gate's charge is never under-recorded.
+    assert b.reserve("t2-native") is None
+    b.settle("t2-native", "native", prompt=5_000, completion=500, charged=0)
+    assert b.spent() == 66_500
 
 
 def test_the_watchdog_stops_a_host_turn_at_the_row_limit(tmp_path):
-    b = budget(tmp_path)
     used = iter([0, 60_000, 120_000, 160_000, 400_000])
     result = run_host.run_bounded(
         [sys.executable, "-c", "import time; time.sleep(30)"],
         env=None,
         timeout=20,
         usage=lambda: next(used),
-        limit_reached=b.row_limit_reached,
+        limit_reached=lambda tokens: tokens >= 150_000,
         poll=0.05,
     )
     assert result["status"] == "budget_stopped"
@@ -164,13 +159,12 @@ def test_the_watchdog_stops_a_host_turn_at_the_row_limit(tmp_path):
 
 
 def test_the_watchdog_keeps_an_ordinary_turn(tmp_path):
-    b = budget(tmp_path)
     result = run_host.run_bounded(
         [sys.executable, "-c", "print('{\"ok\": true}')"],
         env=None,
         timeout=20,
         usage=lambda: 0,
-        limit_reached=b.row_limit_reached,
+        limit_reached=lambda tokens: False,
         poll=0.05,
     )
     assert (result["status"], result["exit_code"]) == ("completed", 0)
@@ -373,9 +367,10 @@ def test_a_truncated_run_directory_path_is_sanitized():
 def test_a_fresh_ledger_path_starts_at_zero(tmp_path):
     """M5: the documented rerun starts on a new ledger."""
     ledger = tmp_path / "new" / "ledger.json"
-    b = run_host.Budget(ledger, cap=1_000_000, row_budget=200_000, call_allowance=50_000)
+    b = run_host.Budget(ledger, cap=1_000_000, row_budget=200_000, max_output=8_000)
     assert b.spent() == 0 and b.can_start()
-    b.settle("native", prompt=10, completion=5, unknown_calls=0, evidence=True)
+    assert b.reserve("t1-native") is None
+    b.settle("t1-native", "native", prompt=10, completion=5, charged=15)
     assert read(ledger)["total_input"] + read(ledger)["total_output"] == 15
 
 
@@ -422,3 +417,282 @@ def test_the_host_turn_is_stopped_when_usage_cannot_be_read(tmp_path):
         import os
 
         os.kill(pid, 0)
+
+
+# --- second review of #278: the token guard holds before dispatch ----------------
+
+harness = _module("harness")
+
+
+class Upstream:
+    """A loopback stand-in for the external provider; it counts what reaches it."""
+
+    def __init__(self, usage=None, stream=False):
+        import http.server
+        import threading
+
+        self.bodies: list[dict] = []
+        owner = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                owner.bodies.append(body)
+                if stream:
+                    chunks = [dict(choices=[dict(delta=dict(content="ok"))])]
+                    if usage:
+                        chunks.append(dict(choices=[], usage=usage))
+                    payload = "".join(f"data: {json.dumps(c)}\n\n" for c in chunks)
+                    payload += "data: [DONE]\n\n"
+                    kind = "text/event-stream"
+                else:
+                    answer = dict(choices=[dict(message=dict(content="ok"))])
+                    if usage:
+                        answer["usage"] = usage
+                    payload, kind = json.dumps(answer), "application/json"
+                data = payload.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", kind)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def log_message(self, *args):
+                pass
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}/v4"
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+
+def post(url: str, body: dict) -> tuple[int, dict | str]:
+    import urllib.error
+    import urllib.request
+
+    request = urllib.request.Request(
+        url + "/chat/completions",
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Authorization": "Bearer test-key"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            raw = response.read().decode("utf-8")
+            status = response.status
+    except urllib.error.HTTPError as error:
+        raw, status = error.read().decode("utf-8"), error.code
+    try:
+        return status, json.loads(raw)
+    except ValueError:
+        return status, raw
+
+
+@pytest.fixture
+def gated():
+    made = []
+
+    def make(usage=None, stream=False, max_output=1_000):
+        upstream = Upstream(usage, stream)
+        gate = run_host.RequestGate(upstream.url, max_output=max_output)
+        gate.start()
+        made.append((upstream, gate))
+        return upstream, gate
+
+    yield make
+    for upstream, gate in made:
+        gate.stop()
+        upstream.close()
+
+
+def test_an_oversized_request_is_refused_before_dispatch(gated):
+    """High 1 (RM03; AC36): a call that could pass the row's remaining reservation
+    never reaches the provider; the refusal has a closed reason and stops the turn."""
+    upstream, gate = gated(usage=dict(prompt_tokens=120, completion_tokens=30))
+    gate.open_row("t1-native", 20_000)
+    big = dict(model="m", messages=[dict(role="user", content="x" * 30_000)])
+    status, answer = post(gate.url, big)
+    assert status == 400
+    assert answer["error"]["code"] == "request_budget_exceeded"
+    assert upstream.bodies == []
+    assert gate.refused
+    row = gate.close_row()
+    assert (row["charged"], row["refused"]) == (0, ["request_budget_exceeded"])
+
+
+def test_a_dispatched_request_has_bounded_output_and_settles_to_its_usage(gated):
+    """High 1: the gate enforces max output tokens and charges the reported usage."""
+    upstream, gate = gated(usage=dict(prompt_tokens=120, completion_tokens=30))
+    gate.open_row("t1-native", 20_000)
+    status, _ = post(gate.url, dict(model="m", messages=[dict(role="user", content="hi")]))
+    assert status == 200
+    # A larger request than the bound allows is clamped to it.
+    post(gate.url, dict(model="m", messages=[], max_tokens=50_000))
+    assert [b["max_tokens"] for b in upstream.bodies] == [1_000, 1_000]
+    row = gate.close_row()
+    assert (row["charged"], row["prompt"], row["completion"]) == (300, 240, 60)
+    assert not row["refused"]
+
+
+def test_a_call_without_reported_usage_stays_charged_at_its_bound(gated):
+    """High 1: unknown consumption keeps the request's whole admitted bound."""
+    upstream, gate = gated(usage=None, stream=True)
+    gate.open_row("t1-provider_only", 20_000)
+    status, text = post(gate.url, dict(model="m", messages=[], stream=True))
+    assert status == 200 and "[DONE]" in text
+    row = gate.close_row()
+    assert row["charged"] == row["calls"][0]["bound"] > 1_000
+    assert row["calls"][0]["usage"] is None
+
+
+def test_streamed_usage_is_read_from_the_event_stream(gated):
+    upstream, gate = gated(usage=dict(prompt_tokens=70, completion_tokens=7), stream=True)
+    gate.open_row("t1-provider_only", 20_000)
+    post(gate.url, dict(model="m", messages=[], stream=True))
+    assert gate.close_row()["charged"] == 77
+
+
+def test_a_request_outside_an_open_row_is_refused(gated):
+    upstream, gate = gated(usage=dict(prompt_tokens=1, completion_tokens=1))
+    status, answer = post(gate.url, dict(model="m", messages=[]))
+    assert (status, answer["error"]["code"]) == (400, "no_reservation")
+    assert upstream.bodies == []
+
+
+def test_the_request_bound_covers_the_body_bytes_and_the_output_bound():
+    body = json.dumps(dict(model="m", messages=[dict(role="user", content="请" * 100)]))
+    bound = harness.request_bound(body.encode("utf-8"), 500)
+    # Each token of a byte-level tokenizer covers at least one byte of the text.
+    assert bound >= len(body.encode("utf-8")) + 500
+
+
+def test_a_failure_before_settlement_keeps_the_row_charged_on_resume(tmp_path):
+    """High 2 (RM03, RM17; AC36): the reservation is durable before dispatch; a crash
+    or an evidence-write failure leaves it charged, and resume cannot overspend."""
+    b = budget(tmp_path, cap=500_000, row=200_000)
+    assert b.reserve("t1-native") is None
+    # The process dies here: a fresh Budget reads the reservation back.
+    resumed = budget_from(tmp_path, cap=500_000, row=200_000)
+    assert resumed.spent() == 200_000
+    assert resumed.reserve("t1-native") == "row_reserved"
+    assert resumed.reserve("t2-native") is None
+    # 400k reserved: a third row would pass the cap.
+    assert resumed.reserve("t3-native") == "budget_cap"
+    # Settlement is idempotent.
+    resumed.settle("t2-native", "native", prompt=100, completion=10, charged=110)
+    resumed.settle("t2-native", "native", prompt=100, completion=10, charged=110)
+    assert budget_from(tmp_path, cap=500_000, row=200_000).spent() == 200_110
+
+
+def budget_from(tmp_path, *, cap, row):
+    return run_host.Budget(tmp_path / "ledger.json", cap=cap, row_budget=row, max_output=8_000)
+
+
+def test_the_executor_reserves_before_dispatch_and_keeps_the_charge_on_failure(
+    tmp_path, monkeypatch
+):
+    """High 2: the row is reserved before the host turn; an evidence-write failure
+    after the turn leaves it charged, and the resumed run cannot start past the cap."""
+    run = object.__new__(run_host.Run)
+    run.frozen = run_host.frozen_arm_configs(FREEZE, CONFIGS, MODEL)
+    run.budget = budget(tmp_path, cap=300_000, row=200_000)
+    run.prompts = {"c1": "prompt"}
+    run.work = tmp_path / "work"
+    run.native = type("Host", (), dict(command=["openclaw"], env={}, config_path="c"))()
+    seen = {}
+
+    class Gate:
+        refused = False
+
+        def open_row(self, key, limit):
+            seen["reserved_at_dispatch"] = budget_from(tmp_path, cap=300_000, row=200_000).spent()
+
+        def charged(self):
+            return 0
+
+        def close_row(self):
+            return dict(charged=0, prompt=0, completion=0, calls=[], refused=[])
+
+    run.gate = Gate()
+
+    def broken(*args, **kwargs):
+        raise OSError("evidence volume full")
+
+    monkeypatch.setattr(run_host, "run_bounded", broken)
+    entry = next(c for c in FREEZE["configurations"] if c["arm"] == "native")
+    with pytest.raises(OSError):
+        run.execute(dict(id="t1", prompt_case_id="c1"), "native", entry)
+    assert seen["reserved_at_dispatch"] == 200_000
+    resumed = budget_from(tmp_path, cap=300_000, row=200_000)
+    assert resumed.spent() == 200_000 and not resumed.can_start()
+
+
+def test_provider_timeouts_across_retries_are_each_charged_and_stop_at_the_cap(
+    tmp_path, monkeypatch
+):
+    """High 3 (RM03): every attempt is reserved durably before it is sent, a timeout
+    keeps its reservation charged, and no retry is sent past the cap."""
+    monkeypatch.setenv("RELAYMIND_EXTERNAL_BASE_URL", "http://127.0.0.1:9/v4")
+    monkeypatch.setenv("RELAYMIND_EXTERNAL_API_KEY", "test-key")
+    monkeypatch.setattr(harness.time, "sleep", lambda seconds: None)
+    sent = []
+
+    def timeout(request, timeout):
+        sent.append(json.loads(request.data))
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(harness.urllib.request, "urlopen", timeout)
+    messages = [dict(role="user", content="hi")]
+    body = json.dumps(dict(model=harness.MODEL, messages=messages, **harness.SAMPLING))
+    bound = harness.request_bound(body.encode("utf-8"), 1_000) + 100
+    ledger = harness.Ledger(tmp_path / "ledger.json", cap=2 * bound + bound // 2)
+    with pytest.raises(SystemExit, match="budget_cap"):
+        harness.chat(ledger, "draft", messages, tmp_path / "log", "n1", max_output=1_000)
+    assert len(sent) == 2
+    assert all(b["max_tokens"] == 1_000 for b in sent)
+    saved = harness.Ledger(tmp_path / "ledger.json", cap=10**9)
+    assert 2 * (bound - 100) <= saved.total <= 2 * bound
+    # With room for all of them, each of the four attempts is charged.
+    sent.clear()
+    ledger = harness.Ledger(tmp_path / "ledger2.json", cap=10**9)
+    with pytest.raises(SystemExit, match="provider_error"):
+        harness.chat(ledger, "draft", messages, tmp_path / "log", "n2", max_output=1_000)
+    assert len(sent) == 4
+    assert harness.Ledger(tmp_path / "ledger2.json", cap=10**9).total >= 4 * (bound - 100)
+
+
+def test_a_answered_call_settles_its_reservation_to_the_reported_usage(tmp_path, monkeypatch):
+    """High 3: a call with reported usage is charged exactly that usage, once."""
+    monkeypatch.setenv("RELAYMIND_EXTERNAL_BASE_URL", "http://127.0.0.1:9/v4")
+    monkeypatch.setenv("RELAYMIND_EXTERNAL_API_KEY", "test-key")
+
+    class Response:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return self.payload
+
+    answer = dict(
+        choices=[dict(message=dict(content="{}"))],
+        usage=dict(prompt_tokens=40, completion_tokens=5),
+    )
+    monkeypatch.setattr(
+        harness.urllib.request,
+        "urlopen",
+        lambda request, timeout: Response(json.dumps(answer).encode("utf-8")),
+    )
+    ledger = harness.Ledger(tmp_path / "ledger.json", cap=10**9)
+    harness.chat(ledger, "draft", [dict(role="user", content="hi")], tmp_path / "log", "n1")
+    saved = harness.Ledger(tmp_path / "ledger.json", cap=10**9)
+    assert saved.total == 45
+    assert saved.data["stages"]["draft"]["calls"] == 1

@@ -14,8 +14,11 @@ labelled release that the owner approves by pull request review:
 Model calls read ``RELAYMIND_EXTERNAL_API_KEY`` and ``RELAYMIND_EXTERNAL_BASE_URL``
 from the environment of this process only. Neither value is printed, logged or
 written; request/response logs keep only the request body (model, messages,
-sampling) and the response body. Every call adds the provider-reported usage to
-a token ledger and refuses to start when the ledger would pass its cap.
+sampling, output bound) and the response body. Every attempt, retries included,
+is reserved durably in a token ledger at its request bound (body bytes plus
+``max_tokens``) before it is sent, and refused when the ledger would pass its
+cap; the reservation is settled to the provider-reported usage, and stays
+charged when the consumption is unknown.
 """
 
 import argparse
@@ -88,7 +91,45 @@ def sha256(payload: bytes) -> str:
 # --- the model client and its token ledger ------------------------------------
 
 
+# The tokens a request can use beyond its body bytes: chat template and role
+# markers. A byte-level tokenizer token covers at least one byte of the body.
+REQUEST_OVERHEAD = 1024
+# The output bound sent with every call (completion and reasoning tokens).
+MAX_OUTPUT = 32_768
+ATTEMPTS = 4
+
+
+def request_bound(body: bytes, max_output: int) -> int:
+    """The most tokens one request can consume: its whole body and its output bound."""
+    return len(body) + REQUEST_OVERHEAD + max_output
+
+
+def durable_write(path, value) -> None:
+    """Replace the file atomically and flush it to disk before returning."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    with open(temporary, "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(value, ensure_ascii=False, indent=1) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
+    directory = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
 class Ledger:
+    """The external-token ledger.
+
+    Every attempt is reserved durably, at its request bound, before it is sent.
+    A reservation is settled to the provider-reported usage once; until then,
+    and for good when the consumption is unknown (a timeout, a lost or
+    unreadable response, a crash), it stays charged at its bound.
+    """
+
     def __init__(self, path: Path, cap: int):
         self.path, self.cap = Path(path), cap
         self.data = (
@@ -96,25 +137,53 @@ class Ledger:
             if self.path.exists()
             else dict(total_input=0, total_output=0, calls=0, stages={})
         )
+        self.data.setdefault("reservations", {})
 
     @property
     def total(self) -> int:
+        held = sum(
+            r["amount"] for r in self.data["reservations"].values() if r["state"] != "settled"
+        )
         return (
             self.data["total_input"]
             + self.data["total_output"]
             + self.data.get("unlogged_estimate", 0)
+            + held
         )
 
     def check(self, estimate: int) -> None:
         if self.total + estimate > self.cap:
             raise SystemExit(f"budget_cap: ledger {self.total} + estimate {estimate} > {self.cap}")
 
-    def add(self, stage: str, usage: dict) -> None:
-        prompt, completion = usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
+    def reserve(self, stage: str, name: str, amount: int) -> str:
+        """Hold ``amount`` before one attempt is sent; refuse it past the cap."""
+        self.check(amount)
+        entry = f"{len(self.data['reservations']) + 1:06d}"
+        self.data["reservations"][entry] = dict(
+            stage=stage, name=name, amount=amount, state="reserved"
+        )
+        durable_write(self.path, self.data)
+        return entry
+
+    def unknown(self, entry: str) -> None:
+        """The attempt's consumption is unknown: it stays charged at its bound."""
+        if self.data["reservations"][entry]["state"] == "reserved":
+            self.data["reservations"][entry]["state"] = "unknown"
+            durable_write(self.path, self.data)
+
+    def settle(self, entry: str, usage: dict) -> None:
+        """Replace the reservation by the reported usage, once."""
+        held = self.data["reservations"][entry]
+        if held["state"] == "settled":
+            return
+        if not isinstance(usage.get("prompt_tokens"), int):
+            self.unknown(entry)
+            return
+        prompt, completion = usage["prompt_tokens"], usage.get("completion_tokens") or 0
         self.data["total_input"] += prompt
         self.data["total_output"] += completion
         self.data["calls"] += 1
-        row = self.data["stages"].setdefault(stage, {})
+        row = self.data["stages"].setdefault(held["stage"], {})
         for key in ("input", "output", "reasoning", "calls"):
             row.setdefault(key, 0)
         row["input"] += prompt
@@ -123,32 +192,54 @@ class Ledger:
             "reasoning_tokens"
         ) or 0
         row["calls"] += 1
-        write(self.path, self.data)
+        held.update(state="settled", charged=prompt + completion)
+        durable_write(self.path, self.data)
 
 
-def chat(ledger: Ledger, stage: str, messages: list, log_dir: Path, name: str, estimate: int):
-    """One temperature-0 call; the request and response bodies are logged, never secrets."""
-    ledger.check(estimate)
-    body = dict(model=MODEL, messages=messages, **SAMPLING)
+def chat(
+    ledger: Ledger,
+    stage: str,
+    messages: list,
+    log_dir: Path,
+    name: str,
+    *,
+    max_output: int = MAX_OUTPUT,
+):
+    """One temperature-0 call; the request and response bodies are logged, never secrets.
+
+    The output is bounded by ``max_tokens``. Each attempt, retries included, is
+    reserved at its request bound before it is sent and refused past the cap;
+    an attempt whose consumption is unknown keeps its reservation charged.
+    """
+    body = dict(model=MODEL, messages=messages, **SAMPLING, max_tokens=max_output)
+    payload = json.dumps(body).encode("utf-8")
+    bound = request_bound(payload, max_output)
     request = urllib.request.Request(
         os.environ["RELAYMIND_EXTERNAL_BASE_URL"].rstrip("/") + "/chat/completions",
-        data=json.dumps(body).encode("utf-8"),
+        data=payload,
         headers={
             "Authorization": "Bearer " + os.environ["RELAYMIND_EXTERNAL_API_KEY"],
             "Content-Type": "application/json",
         },
     )
-    for attempt in range(4):
+    for attempt in range(ATTEMPTS):
+        entry = ledger.reserve(stage, name, bound)
         try:
             with urllib.request.urlopen(request, timeout=600) as response:
                 raw = response.read()
             break
-        except (urllib.error.URLError, TimeoutError) as exc:
+        except (urllib.error.URLError, OSError) as exc:
+            ledger.unknown(entry)
             code = getattr(exc, "code", None)
-            if attempt == 3 or (code is not None and code < 500 and code != 429):
+            if attempt == ATTEMPTS - 1 or (code is not None and code < 500 and code != 429):
                 raise SystemExit(f"provider_error: {type(exc).__name__} {code}") from None
             time.sleep(10 * (attempt + 1))
-    answer = json.loads(raw)
+    try:
+        answer = json.loads(raw)
+    except ValueError:
+        ledger.unknown(entry)
+        raise SystemExit("provider_error: unparsed_response") from None
+    ledger.settle(entry, (answer.get("usage") if isinstance(answer, dict) else None) or {})
     log_dir.mkdir(parents=True, exist_ok=True)
     base, attempt = name, 1
     while (log_dir / f"{name}.response.json").exists():
@@ -158,7 +249,6 @@ def chat(ledger: Ledger, stage: str, messages: list, log_dir: Path, name: str, e
         json.dumps(body, ensure_ascii=False, indent=1).encode("utf-8")
     )
     (log_dir / f"{name}.response.json").write_bytes(raw)
-    ledger.add(stage, answer.get("usage") or {})
     return answer
 
 
@@ -336,7 +426,7 @@ def cmd_draft(args) -> None:
             dict(role="user", content="\n".join(lines)),
         ]
         name = f"draft-{batch[0]['item_id']}-{batch[-1]['item_id']}"
-        answer = chat(ledger, "draft", messages, args.log, name, 4000 * len(batch))
+        answer = chat(ledger, "draft", messages, args.log, name)
         try:
             result = {row["item_id"]: row for row in answer_json(answer)["items"]}
         except (ValueError, KeyError, TypeError):
@@ -500,7 +590,7 @@ def cmd_annotate(args) -> None:
             dict(role="user", content=json.dumps(request, ensure_ascii=False)),
         ]
         name = f"{annotator}-{start // args.batch + 1:03d}"
-        answer = chat(ledger, annotator, messages, args.log, name, 26000 + 300 * len(batch))
+        answer = chat(ledger, annotator, messages, args.log, name)
         try:
             rows = {r["case_id"]: r for r in answer_json(answer)["judgments"]}
         except (ValueError, KeyError, TypeError):
@@ -594,7 +684,7 @@ def cmd_adjudicate(args) -> None:
             dict(role="user", content=json.dumps(request, ensure_ascii=False)),
         ]
         name = f"machine-adjudicator-{start // args.batch + 1:03d}"
-        answer = chat(ledger, "machine-adjudicator", messages, args.log, name, 26000)
+        answer = chat(ledger, "machine-adjudicator", messages, args.log, name)
         try:
             rows = {r["case_id"]: r for r in answer_json(answer)["adjudications"]}
         except (ValueError, KeyError, TypeError):

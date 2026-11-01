@@ -137,12 +137,24 @@ bind.
 - **The run guards added after review.** `run_host.py` takes `--lock` and
   `--release-root` instead of a cases file. It dispatches only prompts of the
   verified release whose lock digest the tasks and freeze name, checked on
-  every start and resume. The external-token cap is enforced per row: a row
-  starts only if its whole `--row-budget` (default 250k) fits. A turn is
-  stopped as `cancelled`/`budget_cap` before another call (`--call-allowance`,
-  default 64k) could pass it. Unknown consumption is charged at its worst case.
-  The first run had none of these guards: it reserved 40k per row and charged
-  usage after the turn, so one row (h010 native) used 245k. `judge.py`
+  every start and resume. The external-token cap is enforced per row and per
+  request: a row starts only if its whole `--row-budget` (default 250k) fits,
+  and that reservation is written to the ledger and fsynced, keyed to the
+  journal row (`<task>-<arm>`), before anything is dispatched. Both arms reach
+  the provider only through a loopback request gate (the native host's
+  `baseUrl` and the gateway's external `base_url` point at it). The gate
+  admits each request before dispatch: it sets `max_tokens` to at most
+  `--max-output` (default 8192), and the request body bytes plus that bound
+  must fit in what is left of the row's reservation; otherwise the request is
+  refused with HTTP 400 and a closed reason (`request_budget_exceeded`,
+  `no_reservation`, `request_invalid`), never reaches the provider, and the
+  turn is stopped as `cancelled`/`budget_cap`. A call without reported usage
+  (an error, a timeout, a stream without usage) stays charged at its bound.
+  The row is settled once from the gate's charge, before any evidence is
+  written; a row that is never settled (a crash, an evidence-write failure)
+  keeps its whole reservation charged, also after a resume. The first run had
+  none of these guards: it reserved 40k per row and charged usage after the
+  turn, so one row (h010 native) used 245k. `judge.py`
   refuses to adjudicate or apply verdicts unless both judges gave a valid
   verdict for every blind item and every final verdict is consistent with
   them; `apply` marks every started row that did not complete (failed,
@@ -181,6 +193,23 @@ credential, and the directory no longer exists. The other paths in the file
 are `<run-dir>`, and the other UUIDs are the host's own session and run IDs.
 `run_host.py` now also replaces any tail of the run directory path of 16 or
 more characters.
+
+## Token guards strengthened after the recorded runs
+
+The drafting, annotation and adjudication calls and the partial host run
+above ran under the earlier guards: one ledger check per call before up to
+four attempts, usage charged after the response, and a host watchdog that
+assumed each call fit a fixed allowance. No committed record binds
+`harness.py`, `run_host.py` or `judge.py` (the adaptation record's
+`revisions.harness_sha256` names `run_episodes.py`), and the committed
+evidence, logs and ledgers are unchanged. The guards are now stricter:
+`harness.py` (drafting, annotation, adjudication) and `judge.py` (success
+judging) send `max_tokens` (32768) with every call and reserve each attempt,
+retries included, durably at its bound (body bytes plus `max_tokens`) before
+it is sent. A retry past the cap is refused (`budget_cap`), and an attempt
+with unknown consumption (a timeout, a lost or unreadable response) stays
+charged. `run_host.py` gates every request and reserves every row as described
+above. A rerun therefore sends `max_tokens`, which the recorded calls did not.
 
 ## Token use
 
