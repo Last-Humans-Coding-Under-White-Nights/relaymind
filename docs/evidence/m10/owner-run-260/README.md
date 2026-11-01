@@ -45,7 +45,7 @@ into a scratch directory (it rewrites the same `inputs.json`), then run
 --inputs inputs.json --resolver PRIVATE/resolver.json --qualification-record
 ../../m10-owner-run-260-adaptation.json --output graded.json`.
 
-## Paired host tasks (`host/`): stopped, evidence lost, not graded
+## Host tasks: blocked
 
 The preregistered plan has 100 tasks × 3 arms on the MacBook
 (`target_macos_m1_8gib`, OpenClaw 2026.10.7, external model `glm-5.3-flash`),
@@ -80,8 +80,40 @@ in `evaluation/assets/owner-run-260/run_host.py`.
   h005 at first, so that row has no attempts (unknown cost); the parser was
   fixed for later rows.
 
+The deletion was caused by a cleanup of the shared scratch area outside this
+run, not by the runner.
+
 No host qualification record is written: there is no gradeable report to
 bind.
+
+### What a rerun needs
+
+- **Budget.** About 13M provider tokens for all 100 tasks in the native and
+  provider_only arms, or about 1.9M to redo h001–h014 alone. Blind success
+  judging adds about 0.3M.
+- **A fresh journal and private run directory** outside any shared cleanup
+  area. The preregistered inputs (`evaluation/assets/owner-run-260/`,
+  commit `6b1c676b918b3308c434ff85c5e04bd00eea4f9d`) are unchanged and can be
+  reused; the journal binds them, so the 14 lost rows are rerun, not restored.
+- **The private catalog and plugin release, rebuilt.** Rebuild the catalog
+  as in the cohort README. Rebuild the plugin tarball with
+  `npm run pack:release` in `integrations/openclaw`; its SHA-256 must equal
+  the frozen package (`b066ae27…`).
+- **The run itself.** Run `run_host.py`, then `judge.py`: blind items, a
+  committed map digest, then both judges, adjudication and apply. Then run
+  `bundle.py host` and `grade-host`. The VPS keeps `~/rm260` (repository copy,
+  Python 3.12 venv, model files, release root) for the episode side; it holds
+  no credentials.
+- **A person-driven recommendations arm.** Without it the final gate stays
+  blocked: it needs a signed-in person in the native Control UI to choose, and
+  qualified skill/MCP use, which is disabled on OpenClaw 2026.10.7 (the two
+  pending negative records).
+- **Gateway budgets bound in the freeze.** The provider_only failures come
+  from the gateway's default 30 s `external_seconds`. A rerun that keeps the
+  default should record it in the host freeze; changing it is a new
+  preregistration.
+- **Qualification.** It stays below `qualified` until there is a 300-asset
+  acceptance catalog, configuration semantics (#240) and a reviewed record.
 
 ## Token use
 
