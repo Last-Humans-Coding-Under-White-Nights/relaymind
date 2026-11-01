@@ -6,10 +6,14 @@ import { dispatchGatewayMethod } from "openclaw/plugin-sdk/gateway-method-runtim
 export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMethod,
   pause = async _hold => {}, resolveWorkspace }) {
   return async options => {
-    const requestId = options.req.id;
+    let requestId = null;
     let reason = "admission_refused";
     let removeRetirementObserver = () => {};
     try {
+      const id = options.req.id;
+      // Only a non-empty string request ID is ever admitted or recorded.
+      if (typeof id !== "string" || !id) throw new Error("refused");
+      requestId = id;
       const { client, params, sessionMutationAuthorization: mutation, sessionAccessAuthority: access } = options;
       const target = access?.target;
       if (!client?.authenticatedUserId || !client.preparedSessionProfile?.profileId ||
@@ -64,6 +68,7 @@ export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMe
         connectionId: client.presenceKey, deviceId: client.connect.device.id,
       };
       if (resolveWorkspace) {
+        reason = "workspace_unavailable";
         const workspaceDir = resolveWorkspace(options, target.agentId);
         current(true);
         if (typeof workspaceDir !== "string" || !workspaceDir) throw new Error("workspace_unavailable");
@@ -72,13 +77,26 @@ export function createPersonProbe({ origin, record, dispatch = dispatchGatewayMe
       record({ phase: "admitted", ...receipt });
       options.respond(true, receipt, undefined);
     } catch {
-      record({ phase: ["admission_refused", "initial_authority_retired", "post_await_authority_retired"].includes(reason) ? "guard_denied" : "probe_failed",
-        requestId, connectionId: options.client?.presenceKey ?? null, reason });
-      options.respond(false, undefined, { code: "INVALID_REQUEST", message: "person/session qualification authority unavailable or changed" });
+      // A failing diagnostic write never prevents the fixed refusal.
+      try { record({ phase: ["admission_refused", "initial_authority_retired", "post_await_authority_retired"].includes(reason) ? "guard_denied" : "probe_failed",
+        requestId, connectionId: options?.client?.presenceKey ?? null, reason }); } catch {}
+      if (typeof options?.respond === "function") options.respond(false, undefined, { code: "INVALID_REQUEST", message: "person/session qualification authority unavailable or changed" });
     } finally {
       removeRetirementObserver();
     }
   };
+}
+
+// Covers the sequential 10-second observation windows and release; the Python
+// harness still owns the 570-second overall deadline. No timeout is proof.
+const FIXTURE_HOLD_TIMEOUT_MS = 60000;
+
+export async function waitForFixtureRelease(released) {
+  const deadline = performance.now() + FIXTURE_HOLD_TIMEOUT_MS;
+  while (!released()) {
+    if (performance.now() >= deadline) throw new Error("fixture_hold_timeout");
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
 }
 
 export default definePluginEntry({
@@ -93,11 +111,7 @@ export default definePluginEntry({
       resolveWorkspace: (options, agentId) => api.runtime.agent.resolveAgentWorkspaceDir(options.context.getRuntimeConfig(), agentId),
       pause: async hold => {
         if (!hold) return;
-        const deadline = performance.now() + 5000;
-        while (!existsSync(api.pluginConfig.releaseFile)) {
-          if (performance.now() >= deadline) throw new Error("fixture_hold_timeout");
-          await new Promise(resolve => setTimeout(resolve, 10));
-        }
+        await waitForFixtureRelease(() => existsSync(api.pluginConfig.releaseFile));
       },
     }), { scope: "operator.write", profileAccess: "required", sessionAccess: { mode: "write" } });
   },

@@ -1024,3 +1024,602 @@ def test_every_browser_context_is_closed_even_if_one_close_fails():
 
     api._close_contexts([Context("a", fail=True), Context("b")])
     assert closed == ["a", "b"]
+
+
+# --- #228 harness hardening (review of #224) -------------------------------------
+
+
+@pytest.mark.parametrize(
+    "frame, code",
+    [
+        ({"error": {"code": "FORBIDDEN"}}, "FORBIDDEN"),
+        ({"error": "FORBIDDEN"}, None),
+        ({"error": ["FORBIDDEN"]}, None),
+        ({"error": None}, None),
+        ({}, None),
+        ({"error": {"code": "not a code!"}}, None),
+        ({"error": {"code": "X" * 65}}, None),
+    ],
+)
+def test_native_error_code_reads_only_a_mapping_error(frame, code):
+    assert module().native_error_code(frame) == code
+
+
+def person_result(payload):
+    return {
+        "id": "rpc-1",
+        "socket_id": "s",
+        "frame": {"id": "rpc-1", "ok": True, "payload": payload},
+    }
+
+
+PERSON = dict(
+    requestId="rpc-1",
+    authenticatedUserId="fixture@example.test",
+    profileId="profile",
+    sessionKey="key",
+    sessionId="id",
+    lifecycleRevision="life",
+    deviceId="device",
+    connectionId="connection",
+)
+
+
+def test_person_rpc_receipt_accepts_the_bound_payload():
+    assert module().person_rpc_receipt(person_result(PERSON), "fixture@example.test") == PERSON
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        None,
+        "receipt",
+        [],
+        {k: v for k, v in PERSON.items() if k != "requestId"},
+        {k: v for k, v in PERSON.items() if k != "deviceId"},
+        dict(PERSON, requestId="other"),
+        dict(PERSON, authenticatedUserId="someone@example.test"),
+        dict(PERSON, sessionId=7),
+    ],
+)
+def test_malformed_person_rpc_receipts_are_identity_binding_failures(payload):
+    with pytest.raises(ValueError, match="native_person_identity_binding"):
+        module().person_rpc_receipt(person_result(payload), "fixture@example.test")
+
+
+@pytest.mark.parametrize("payload", [None, "x", {"key": "k", "sessionId": "i"}, {"entry": None}])
+def test_malformed_session_create_payloads_are_create_binding_failures(payload):
+    observed = dict(id="c", socket_id="s", frame=dict(id="c", ok=True, payload=payload))
+    with pytest.raises(ValueError, match="native_session_create_binding"):
+        module().session_create_receipt(observed, "fixture@example.test")
+
+
+def test_session_params_come_from_the_validated_create_receipt():
+    observed = dict(
+        id="c",
+        socket_id="s",
+        frame=dict(
+            id="c",
+            ok=True,
+            payload=dict(
+                key="native-key", sessionId="native-id", entry=dict(lifecycleRevision="l")
+            ),
+        ),
+    )
+    api = module()
+    receipt = api.session_create_receipt(observed, "fixture@example.test")
+    assert api.session_params(receipt) == dict(
+        sessionKey="native-key", expectedSessionId="native-id", expectedLifecycleRevision="l"
+    )
+
+
+@pytest.mark.parametrize("projection", ["project_person_rpc_failure", "project_held_native_events"])
+def test_event_projections_skip_blank_lines(tmp_path, projection):
+    events = tmp_path / "events.jsonl"
+    line = {"requestId": "wanted", "phase": "prepared", "reason": None, "connectionId": "c1"}
+    events.write_bytes(b"\n" + json.dumps(line).encode() + b"\n\n  \n")
+    projected = getattr(module(), projection)(events, "wanted")
+    assert projected["status"] != "event_file_invalid"
+    assert projected["observations"][0]["phase"] == "prepared"
+
+
+@pytest.mark.parametrize("projection", ["project_person_rpc_failure", "project_held_native_events"])
+@pytest.mark.parametrize("corrupt", [b"\x0b", b"\x0c", b"\x0b\x0c "])
+def test_non_json_whitespace_lines_stay_corrupt(tmp_path, projection, corrupt):
+    events = tmp_path / "events.jsonl"
+    line = {"requestId": "wanted", "phase": "prepared", "reason": None, "connectionId": "c1"}
+    events.write_bytes(json.dumps(line).encode() + b"\n" + corrupt + b"\n")
+    assert getattr(module(), projection)(events, "wanted")["status"] == "event_file_invalid"
+
+
+@pytest.mark.parametrize("field", ["phase", "reason"])
+@pytest.mark.parametrize("value", [["prepared"], {"p": 1}])
+def test_held_event_projection_rejects_non_string_phase_or_reason(tmp_path, field, value):
+    events = tmp_path / "events.jsonl"
+    line = {"requestId": "wanted", "phase": "prepared", "reason": None, "connectionId": "c1"}
+    line[field] = value
+    events.write_bytes(json.dumps(line).encode() + b"\n")
+    assert module().project_held_native_events(events, "wanted")["status"] == "event_file_invalid"
+
+
+@pytest.mark.parametrize("reply", ["peer", ["peer"], None, 7])
+def test_non_mapping_peer_reply_is_a_peer_binding_failure(reply):
+    class Page:
+        def evaluate(self, *args):
+            return reply
+
+    with pytest.raises(ValueError, match="actual_peer_binding"):
+        module().read_bound_peer(Page(), "127.0.0.1", "a@example.test")
+
+
+def test_the_trial_reads_host_replies_only_through_the_checked_helpers():
+    """#228: reverting any guarded call site in the trial must fail a test.
+
+    The trial drives a real browser and host, so its wiring is checked on its
+    source: every reply goes through the validating helpers, never raw indexing.
+    """
+    import inspect
+
+    source = inspect.getsource(module()._run_private_trial)
+    assert "session_params(created_receipt)" in source
+    assert "person_rpc_receipt(result" in source
+    assert source.count("native_error_code(") >= 2
+    assert '["payload"]' not in source
+    assert '.get("error")' not in source
+    assert 'event.get("phase") in {' not in source
+
+
+# --- #224 review (31 Oct 19:00): harness setup failures keep their reasons -------
+
+
+@pytest.mark.parametrize("stdout", [b"not json", b"\xff\xfe", b"\xff", b'{"not": "a list"}'])
+def test_unreadable_network_inventory_is_network_inventory_invalid(monkeypatch, stdout):
+    import subprocess
+
+    api = module()
+    monkeypatch.setattr(
+        subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout, b"")
+    )
+    with pytest.raises(ValueError, match="network_inventory_invalid"):
+        api.discover_network()
+
+
+def test_oversized_network_inventory_is_network_inventory_size(monkeypatch):
+    import subprocess
+
+    api = module()
+    big = b"[" + b" " * (1024 * 1024) + b"]"
+    monkeypatch.setattr(
+        subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, big, b"")
+    )
+    with pytest.raises(ValueError, match="network_inventory_size"):
+        api.discover_network()
+
+
+@pytest.mark.parametrize(
+    "interfaces",
+    [
+        [None],
+        [{"flags": 7}],
+        [{"flags": ["UP"], "addr_info": [None]}],
+        [{"flags": ["UP"], "addr_info": "x"}],
+        ["eth0"],
+    ],
+)
+def test_malformed_interface_records_are_network_inventory_invalid(interfaces):
+    with pytest.raises(ValueError, match="network_inventory_invalid"):
+        module().eligible_private_ipv4(interfaces)
+
+
+@pytest.mark.parametrize(
+    "observed",
+    [
+        None,
+        {"id": "r", "frame": []},
+        {"frame": {}},
+        {"id": None, "socket_id": "s", "frame": {"id": None}},
+        {"id": 1, "socket_id": "s", "frame": {"id": 1}},
+        {"id": "r", "frame": {"id": "r"}},
+        {"id": "", "socket_id": "s", "frame": {"id": ""}},
+        {"id": "r", "socket_id": "s", "frame": {"id": "other"}},
+    ],
+)
+def test_malformed_browser_replies_are_native_response_binding(observed):
+    class Page:
+        def evaluate(self, *args):
+            return observed
+
+    with pytest.raises(ValueError, match="^native_response_binding$"):
+        module().native_rpc(Page(), "m", {})
+
+
+@pytest.mark.parametrize("ok", [True, False])
+def test_bound_browser_replies_are_accepted(ok):
+    frame = {"id": "r", "ok": ok} if ok else {"id": "r", "ok": False, "error": {"code": "X"}}
+    observed = {"id": "r", "socket_id": "s", "frame": frame}
+
+    class Page:
+        def evaluate(self, *args):
+            return observed
+
+    assert module().native_rpc(Page(), "m", {}) is observed
+
+
+@pytest.mark.parametrize(
+    "message, reason",
+    [
+        ("Page.evaluate: Error: native_rpc_timeout", "native_rpc_timeout"),
+        ("Page.evaluate: Error: native_socket_retired", "native_socket_retired"),
+        ("Page.evaluate: Target closed /secret/path", "native_rpc_transport"),
+    ],
+)
+def test_rpc_transport_rejection_keeps_a_fixed_reason(message, reason):
+    api = module()
+
+    class Page:
+        def evaluate(self, *args):
+            raise RuntimeError(message)
+
+    with pytest.raises(ValueError, match=f"^{reason}$"):
+        api.native_rpc(Page(), "m", {})
+    assert reason in api.SAFE_REASONS
+
+
+def test_the_overall_deadline_passes_through_an_rpc():
+    class Page:
+        def evaluate(self, *args):
+            raise TimeoutError("overall_deadline_exceeded")
+
+    with pytest.raises(TimeoutError, match="overall_deadline_exceeded"):
+        module().native_rpc(Page(), "m", {})
+
+
+@pytest.mark.parametrize(
+    "failure, reason",
+    [
+        ("missing", "network_inventory_unavailable"),
+        ("exit", "network_inventory_unavailable"),
+        ("timeout", "network_inventory_deadline"),
+    ],
+)
+def test_network_discovery_command_failures_keep_their_reasons(monkeypatch, failure, reason):
+    import subprocess
+
+    api = module()
+
+    def run(*args, **kwargs):
+        if failure == "missing":
+            raise FileNotFoundError("ip")
+        if failure == "exit":
+            raise subprocess.CalledProcessError(1, ["ip"])
+        raise subprocess.TimeoutExpired(["ip"], 5)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    with pytest.raises(ValueError, match=f"^{reason}$"):
+        api.discover_network()
+    assert reason in api.SAFE_REASONS
+
+
+@pytest.mark.parametrize("failure", ["url_timeout", "socket_timeout"])
+def test_download_network_timeouts_are_artifact_deadline(tmp_path, monkeypatch, failure):
+    import urllib.error
+    import urllib.request
+
+    api = module()
+
+    class Opener:
+        def open(self, *args, **kwargs):
+            if failure == "url_timeout":
+                raise urllib.error.URLError(TimeoutError("timed out"))
+            raise TimeoutError("timed out")
+
+    monkeypatch.setattr(urllib.request, "build_opener", lambda *a: Opener())
+    with pytest.raises(TimeoutError, match="^artifact_deadline$"):
+        api.download_authcrunch(tmp_path / "authcrunch.tgz")
+    assert not (tmp_path / "authcrunch.tgz").exists()
+
+
+def _archive(tmp_path, members):
+    import hashlib
+    import io
+    import tarfile
+
+    path = tmp_path / "authcrunch.tgz"
+    with tarfile.open(path, "w:gz") as package:
+        for name, data, kind in members:
+            info = tarfile.TarInfo(name)
+            if kind == "dir":
+                info.type = tarfile.DIRTYPE
+                package.addfile(info)
+            else:
+                info.size = len(data)
+                package.addfile(info, io.BytesIO(data))
+    raw = path.read_bytes()
+    return path, len(raw), hashlib.sha256(raw).hexdigest()
+
+
+@pytest.mark.parametrize(
+    "members, reason",
+    [
+        ([(f"f{i}", b"x", "file") for i in range(1001)], "artifact_members"),
+        ([("other", b"x", "file")], "artifact_executable"),
+        ([("bin/authcrunch", b"", "dir")], "artifact_executable"),
+    ],
+)
+def test_release_archive_shape_failures_keep_their_reasons(tmp_path, monkeypatch, members, reason):
+    api = module()
+    archive, size, digest = _archive(tmp_path, members)
+    monkeypatch.setattr(api, "AUTHCRUNCH_BYTES", size)
+    monkeypatch.setattr(api, "AUTHCRUNCH_SHA256", digest)
+    with pytest.raises(ValueError, match=reason):
+        api.install_authcrunch(archive, tmp_path / "bin")
+
+
+def test_release_archive_symlinked_destination_is_artifact_path(tmp_path, monkeypatch):
+    api = module()
+    archive, size, digest = _archive(tmp_path, [("bin/authcrunch", b"#!", "file")])
+    monkeypatch.setattr(api, "AUTHCRUNCH_BYTES", size)
+    monkeypatch.setattr(api, "AUTHCRUNCH_SHA256", digest)
+    (tmp_path / "real").mkdir()
+    (tmp_path / "bin").symlink_to(tmp_path / "real")
+    with pytest.raises(ValueError, match="artifact_path"):
+        api.install_authcrunch(archive, tmp_path / "bin")
+
+
+@pytest.mark.parametrize(
+    "ports, accounts, reason",
+    [
+        ((80, 9000), 2, "qualification_port"),
+        ((9000, True), 2, "qualification_port"),
+        ((9000, 9001), 1, "qualification_accounts"),
+        ((9000, 9001), "bad-user", "qualification_accounts"),
+        ((9000, 9001), "bad-email", "qualification_accounts"),
+    ],
+)
+def test_proxy_configuration_bounds(tmp_path, ports, accounts, reason):
+    good = [
+        dict(username="alice", email="alice@example.test", password="p"),
+        dict(username="bob", email="bob@example.test", password="p"),
+    ]
+    if accounts == 1:
+        good = good[:1]
+    elif accounts == "bad-user":
+        good[0]["username"] = "Alice!"
+    elif accounts == "bad-email":
+        good[0]["email"] = "alice@elsewhere.example"
+    with pytest.raises(ValueError, match=reason):
+        module().proxy_configuration("10.0.0.5", *ports, good, "k" * 32, tmp_path)
+
+
+@pytest.mark.parametrize("extra", [-1, 1])
+def test_release_executable_that_differs_from_its_declared_size_is_artifact_expansion(
+    tmp_path, monkeypatch, extra
+):
+    """#224 review: a member shorter or longer than its header never installs."""
+    import io
+    import tarfile
+
+    api = module()
+    archive, size, digest = _archive(tmp_path, [("bin/authcrunch", b"#!binary", "file")])
+    monkeypatch.setattr(api, "AUTHCRUNCH_BYTES", size)
+    monkeypatch.setattr(api, "AUTHCRUNCH_SHA256", digest)
+    real = tarfile.TarFile.extractfile
+
+    def extractfile(self, member):
+        data = real(self, member).read()
+        return io.BytesIO(data[:-1] if extra < 0 else data + b"x")
+
+    monkeypatch.setattr(tarfile.TarFile, "extractfile", extractfile)
+    with pytest.raises(ValueError, match="artifact_expansion"):
+        api.install_authcrunch(archive, tmp_path / "bin")
+
+
+# --- #231 review (ArcsinX, 1 Nov) ------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        None,
+        "receipt",
+        {"id": "rpc-1"},
+        {"id": "rpc-1", "frame": None},
+        {"id": "rpc-1", "frame": "bad"},
+        {"frame": {"payload": {}}},
+    ],
+)
+def test_malformed_person_rpc_envelopes_are_identity_binding_failures(result):
+    with pytest.raises(ValueError, match="^native_person_identity_binding$"):
+        module().person_rpc_receipt(result, "fixture@example.test")
+
+
+@pytest.mark.parametrize("frame", [None, "error", [], 7])
+def test_a_non_mapping_frame_has_no_error_code(frame):
+    assert module().native_error_code(frame) is None
+
+
+@pytest.mark.parametrize("interfaces", [None, 7, "eth0", {"flags": []}])
+def test_a_non_list_interface_inventory_is_network_inventory_invalid(interfaces):
+    with pytest.raises(ValueError, match="^network_inventory_invalid$"):
+        module().eligible_private_ipv4(interfaces)
+
+
+@pytest.mark.parametrize("reason", ["native_socket_unavailable", "native_send_failed"])
+def test_observer_refusals_before_sending_keep_their_reason(reason):
+    api = module()
+
+    class Page:
+        def evaluate(self, *args):
+            raise RuntimeError(f"Page.evaluate: Error: {reason}")
+
+    with pytest.raises(ValueError, match=f"^{reason}$"):
+        api.native_rpc(Page(), "m", {})
+    assert reason in api.SAFE_REASONS
+
+
+# --- #231 re-review (ArcsinX, 1 Nov) ---------------------------------------------
+
+
+@pytest.mark.parametrize("blank", [b"\n", b"  \n", b"\r\n", b"\t\r\n"])
+def test_native_event_reader_skips_whitespace_and_crlf_blank_lines(tmp_path, blank):
+    events = tmp_path / "native-events.jsonl"
+    events.write_bytes(blank + b'{"phase":"prepared"}\n' + blank)
+    assert module().read_native_events(events) == [{"phase": "prepared"}]
+
+
+@pytest.mark.parametrize("field", ["phase", "reason"])
+@pytest.mark.parametrize("value", [["prepared"], {"p": 1}])
+def test_person_rpc_failure_projection_rejects_non_string_phase_or_reason(tmp_path, field, value):
+    events = tmp_path / "events.jsonl"
+    line = {"requestId": "wanted", "phase": "prepared", "reason": None, "connectionId": "c1"}
+    line[field] = value
+    events.write_bytes(json.dumps(line).encode() + b"\n")
+    assert module().project_person_rpc_failure(events, "wanted")["status"] == "event_file_invalid"
+
+
+@pytest.mark.parametrize(
+    "frame",
+    [
+        {"id": "rpc-1", "ok": False, "payload": PERSON},
+        {"id": "rpc-1", "payload": PERSON},
+        {"id": "other", "ok": True, "payload": PERSON},
+    ],
+)
+def test_person_rpc_receipt_needs_an_ok_frame_bound_to_the_request(frame):
+    result = {"id": "rpc-1", "socket_id": "s", "frame": frame}
+    with pytest.raises(ValueError, match="^native_person_identity_binding$"):
+        module().person_rpc_receipt(result, "fixture@example.test")
+
+
+def test_a_playwright_timeout_is_native_rpc_timeout():
+    playwright = pytest.importorskip("playwright.sync_api")
+
+    class Page:
+        def evaluate(self, *args):
+            raise playwright.TimeoutError("Timeout 30000ms exceeded.")
+
+    with pytest.raises(ValueError, match="^native_rpc_timeout$"):
+        module().native_rpc(Page(), "m", {})
+
+
+def test_workspace_resolution_failure_is_its_own_reason():
+    assert "workspace_unavailable" in module().PERSON_RPC_EVENT_REASONS["probe_failed"]
+
+
+def test_ordinary_failure_projection_survives_capture_writer(tmp_path, monkeypatch):
+    """RM12/RM16/RM39 AC30: the exported capture retains fixed extension diagnostics."""
+    import platform
+    import signal
+
+    from playwright.sync_api import Error
+
+    from test_openclaw_ordinary_channel import extension_fixture
+    from test_openclaw_ordinary_channel import module as ordinary_module
+
+    if not hasattr(signal, "setitimer"):
+        pytest.skip("SIGALRM is required")
+    api = module()
+    extension = extension_fixture(ordinary_module(), tmp_path)
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    monkeypatch.setattr(platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(api, "discover_network", lambda: ["10.1.2.3"])
+
+    def trial(work, address, capture, *, extension):
+        capture["phase"] = "account_b_person_rpc"
+        with extension.step("ui_actions"):
+            raise Error("Page.goto: Target page, context or browser has been closed; secret URL")
+
+    monkeypatch.setattr(api, "_run_private_trial", trial)
+    output = tmp_path / "capture.json"
+    assert api.run_qualification(tmp_path / "work", output, extension=extension) == 2
+    capture = json.loads(output.read_bytes())
+    assert capture["reason"] == "ordinary_playwright_target_closed"
+    assert capture["ordinary_failure_step"] == "ui_actions"
+    assert capture["ordinary_error_class"] == "playwright_target_closed"
+    assert "secret URL" not in output.read_text()
+    assert capture["checks"]["person_composition"] is False
+
+
+def test_overall_deadline_interrupts_an_ordinary_extension_wait(tmp_path, monkeypatch):
+    """RM16/RM39 AC30: an ordinary wait remains inside the real SIGALRM budget."""
+    import platform
+    import signal
+    import time
+
+    from test_openclaw_ordinary_channel import extension_fixture
+    from test_openclaw_ordinary_channel import module as ordinary_module
+
+    if not hasattr(signal, "setitimer"):
+        pytest.skip("SIGALRM is required")
+    api = module()
+    extension = extension_fixture(ordinary_module(), tmp_path)
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    monkeypatch.setattr(platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(api, "discover_network", lambda: ["10.1.2.3"])
+    monkeypatch.setattr(api, "TOTAL_SECONDS", 0.01)
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def trial(work, address, capture, *, extension):
+        with extension.step("retirement_prepared"):
+            time.sleep(0.1)
+
+    monkeypatch.setattr(api, "_run_private_trial", trial)
+    output = tmp_path / "capture.json"
+    assert api.run_qualification(tmp_path / "work", output, extension=extension) == 2
+    capture = json.loads(output.read_bytes())
+    assert capture["reason"] == "overall_deadline_exceeded"
+    assert capture["ordinary_failure_step"] == "retirement_prepared"
+    assert capture["checks"]["person_composition"] is False
+    assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)
+    assert signal.getsignal(signal.SIGALRM) == previous_handler
+
+
+# --- readiness after navigation (#231, CI run 41251465501) ------------------------
+
+
+class _WirePage:
+    def __init__(self, raise_with=None):
+        self.calls, self.raise_with = [], raise_with
+
+    def wait_for_function(self, expression, **options):
+        self.calls.append((expression, options))
+        if self.raise_with is not None:
+            raise self.raise_with
+
+    def evaluate(self, *args):  # a navigation destroys this context
+        raise RuntimeError("Execution context was destroyed, most likely because of a navigation")
+
+
+def test_wire_readiness_waits_across_navigations_with_a_bound():
+    page = _WirePage()
+    module().wait_for_wire_ready(page, 20, ValueError("x"))
+    ((expression, options),) = page.calls
+    assert "__rmPersonWire" in expression and "ready === true" in expression
+    assert options["timeout"] == 20000 and options["polling"] == 100
+
+
+def test_wire_readiness_timeout_raises_the_callers_fixed_failure():
+    playwright = pytest.importorskip("playwright.sync_api")
+    page = _WirePage(playwright.TimeoutError("Timeout 20000ms exceeded."))
+    with pytest.raises(ValueError, match="^ordinary_entry_unavailable$"):
+        module().wait_for_wire_ready(page, 20, ValueError("ordinary_entry_unavailable"))
+
+
+def test_wire_readiness_keeps_the_overall_deadline_and_other_errors():
+    page = _WirePage(TimeoutError("overall_deadline_exceeded"))
+    with pytest.raises(TimeoutError, match="overall_deadline_exceeded"):
+        module().wait_for_wire_ready(page, 20, ValueError("x"))
+    page = _WirePage(RuntimeError("Target closed"))
+    with pytest.raises(RuntimeError, match="Target closed"):
+        module().wait_for_wire_ready(page, 20, ValueError("x"))
+
+
+def test_no_harness_polls_wire_readiness_with_raw_evaluate():
+    """A raw evaluate loop fails when the single-page UI navigates."""
+    root = Path(__file__).resolve().parents[1] / "integrations/openclaw/test"
+    for path in (
+        root / "host-person-qualification/qualify.py",
+        root / "host-ordinary-qualification/qualify.py",
+    ):
+        source = path.read_text(encoding="utf-8")
+        assert 'evaluate("() => window.__rmPersonWire?.state().ready' not in source, path

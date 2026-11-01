@@ -97,3 +97,21 @@ it("a send that throws clears its timer and pending entry at once", async () => 
   f.listeners.get("pagehide")!();
   expect(cleared).toEqual(timers);
 });
+
+it("#228 ignores null and non-object frames instead of throwing", async () => {
+  const f = await fixture();
+  const errors: unknown[] = [];
+  const handler = (error: unknown) => errors.push(error);
+  process.on("uncaughtException", handler);
+  try {
+    for (const raw of ["null", "1", "\"text\"", "[]"]) {
+      const event = new MessageEvent("message", { data: raw });
+      f.socket.dispatchEvent(event);
+    }
+    const result = await f.target.__rmPersonWire.rpc("rmqualification.person", { sessionKey: "k" });
+    expect(result.frame.ok).toBe(true);
+  } finally {
+    process.off("uncaughtException", handler);
+  }
+  expect(errors).toEqual([]);
+});

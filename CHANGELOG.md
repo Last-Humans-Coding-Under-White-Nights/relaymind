@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 - CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process.
+- Stabilize installed OpenClaw qualification on loaded runners (RM16/RM39;
+  AC30): use bounded ten-second host-event waits, keep fixture holds alive
+  through retirement observation, and capture only fixed ordinary substeps and
+  error classes. Browser failures and the overall deadline now remain failures
+  through UI actions and finalization; the 570-second harness and 12-minute CI
+  bounds and all evidence predicates remain unchanged. Fresh evidence must bind
+  the changed harness sources.
 - Spec 0.60 section 12.6.5 exports (#198/#202/#204/#205/#206; RM16, RM38–RM44;
   AC29–AC37): closed host freeze, task, report, adaptation episode and platform
   schemas; a deterministic three-arm plan and conserving host driver; offline

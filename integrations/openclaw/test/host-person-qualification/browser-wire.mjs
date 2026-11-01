@@ -28,7 +28,7 @@ export function installNativeSocketObserver(target = window, extraMethods = []) 
         if (retired || target.location.origin !== origin || typeof event.data !== "string") return;
         let frame;
         try { frame = JSON.parse(event.data); } catch { return; }
-        if (frame.type !== "res") return;
+        if (!frame || typeof frame !== "object" || frame.type !== "res") return;
         if (frame.ok === true && frame.payload?.type === "hello-ok") ready = true;
         const item = pending.get(frame.id);
         if (!item) return;

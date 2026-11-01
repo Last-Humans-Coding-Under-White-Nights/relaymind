@@ -203,3 +203,84 @@ it("RM39 captures workspace only from the actual runtime resolver under current 
   expect(resolveWorkspace).toHaveBeenCalledWith(f.options, "main");
   expect(f.respond.mock.calls[0][1].workspaceDir).toBe("/actual/native/workspace");
 });
+
+it("#224 refuses a call without a request object instead of throwing", async () => {
+  const records: unknown[] = [];
+  const replies: unknown[][] = [];
+  const handler = createPersonProbe({
+    origin: "https://fixture.test",
+    record: (value: unknown) => records.push(value),
+    dispatch: async () => ({ ok: true }),
+    resolveWorkspace: () => "/fixture",
+  });
+  await handler({ respond: (...args: unknown[]) => replies.push(args) } as any);
+  expect(replies).toHaveLength(1);
+  expect(replies[0]?.[0]).toBe(false);
+  expect(records).toHaveLength(1);
+});
+
+it("#231 still refuses when the diagnostic write fails", async () => {
+  const replies: unknown[][] = [];
+  const handler = createPersonProbe({
+    origin: "https://fixture.test",
+    record: () => { throw new Error("capture_bound"); },
+    dispatch: async () => ({ ok: true }),
+    resolveWorkspace: () => "/fixture",
+  });
+  await handler({ req: { id: "r" }, respond: (...args: unknown[]) => replies.push(args) } as any);
+  expect(replies).toHaveLength(1);
+  expect(replies[0]?.[0]).toBe(false);
+});
+
+for (const req of [{}, { id: "" }, { id: 123 }]) {
+  it(`#231 refuses a request whose id is ${JSON.stringify(req)} and records a null id`, async () => {
+    const records: any[] = [];
+    const replies: unknown[][] = [];
+    const handler = createPersonProbe({
+      origin: "https://fixture.test",
+      record: (value: unknown) => records.push(JSON.parse(JSON.stringify(value))),
+      dispatch: async () => ({ ok: true }),
+      resolveWorkspace: () => "/fixture",
+    });
+    await handler({ req, respond: (...args: unknown[]) => replies.push(args) } as any);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]?.[0]).toBe(false);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toHaveProperty("requestId", null);
+  });
+}
+
+it("#231 records workspace_unavailable when workspace resolution fails", async () => {
+  const f = fixture();
+  const events: any[] = [];
+  const probe = createPersonProbe({
+    origin: "https://fixture.test:8443",
+    record: (value: unknown) => events.push(value),
+    dispatch: f.dispatch,
+    pause: async () => {},
+    resolveWorkspace: () => { throw new Error("no workspace"); },
+  });
+  await probe(f.options);
+  expect(f.respond.mock.calls[0][0]).toBe(false);
+  expect(events.at(-1)).toMatchObject({ phase: "probe_failed", reason: "workspace_unavailable" });
+});
+
+it("keeps the real fixture hold alive across loaded-runner observation and still expires", async () => {
+  // RM16/RM39 AC30: timeout is never substituted for post-await retirement evidence.
+  // @ts-expect-error plain JS fixture loaded unchanged by the pinned native host
+  const { waitForFixtureRelease } = await import("./probe.mjs");
+  vi.useFakeTimers({ toFake: ["setTimeout", "performance"] });
+  try {
+    let released = false;
+    const pending = waitForFixtureRelease(() => released);
+    await vi.advanceTimersByTimeAsync(10000);
+    released = true;
+    await vi.advanceTimersByTimeAsync(10);
+    await expect(pending).resolves.toBeUndefined();
+    const expired = expect(waitForFixtureRelease(() => false)).rejects.toThrow("fixture_hold_timeout");
+    await vi.advanceTimersByTimeAsync(60000);
+    await expired;
+  } finally {
+    vi.useRealTimers();
+  }
+});
