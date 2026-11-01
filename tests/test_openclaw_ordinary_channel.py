@@ -258,7 +258,7 @@ def skill_fixture(api):
         kind="asset", asset_id="example:hello-world", content_hash=digest
     )
     view["displayed_candidates"] = [
-        dict(asset=dict(asset_id="example:hello-world", content_hash=digest))
+        dict(asset=dict(asset_id="example:hello-world", content_hash=digest, source_version=None))
     ]
     capture["ordinary_skill"] = dict(
         library_save=dict(ok=True, skill_id=SKILL_ID, revision=REVISION),
@@ -335,6 +335,7 @@ def test_exact_skill_selection_evidence_passes():
         "negative_missing",
         "mapping_missing_source_version",
         "mapping_other_source_version",
+        "library_entry_removed",
     ],
 )
 def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
@@ -354,6 +355,8 @@ def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
         value["mapping"].pop("sourceVersion")
     elif change == "mapping_other_source_version":
         value["mapping"]["sourceVersion"] = "v2"
+    elif change == "library_entry_removed":
+        value["library_list"]["payload"]["entries"][0]["removed"] = True
     elif change.startswith("mapping_") and change.endswith("_asset"):
         value["mapping"]["assetId"] = {
             "mapping_empty_asset": "",
@@ -587,7 +590,12 @@ def test_library_selection_wait_cannot_swallow_browser_failure(tmp_path, monkeyp
         def wait_for(self, **kwargs):
             raise errors[error_kind]
 
-    def rpc(*args):
+    pages = [Page(), Page()]
+
+    def rpc(page, method, params):
+        if method == "relaymind.skill" and (page is pages[1] or params.get("skillId") != SKILL_ID):
+            # The refusal cases are refused, as on the real host.
+            return {"frame": {"ok": False, "error": {"code": "INVALID_REQUEST"}}}
         return {"frame": {"ok": True, "payload": {}}}
 
     skill = skill_fixture(api)["ordinary_skill"]
@@ -601,9 +609,7 @@ def test_library_selection_wait_cannot_swallow_browser_failure(tmp_path, monkeyp
         )
     )
     with pytest.raises((ValueError, TimeoutError), match="^" + expected + "$"):
-        extension.select_library_skill(
-            rpc, [Page(), Page()], [{"sessionKey": "s"}, {}], Page(), skill
-        )
+        extension.select_library_skill(rpc, pages, [{"sessionKey": "s"}, {}], Page(), skill)
     assert extension.failure_diagnostics()["ordinary_failure_step"] == "select_library_skill"
 
 
@@ -837,17 +843,23 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
             payload = person
         elif method == "skills.library.list":
             payload = dict(entries=[dict(skillId=SKILL_ID, revision=REVISION)])
+        elif method == "relaymind.skill" and (
+            page is pages[1] or params.get("skillId") != SKILL_ID
+        ):
+            # The refusal cases are refused, as on the real host.
+            return {"frame": {"ok": False, "error": {"code": "INVALID_REQUEST"}}}
         else:
             payload = {}
         return {"frame": {"ok": True, "payload": payload}}
 
     monkeypatch.setattr(api, "run_ui", lambda *args: {})
+    pages = [Page(), Page()]
     sessions = [{"sessionKey": "agent:main:person-a"}, {"sessionKey": "agent:main:person-b"}]
     expected = (
         "overall_deadline_exceeded" if stage == "cleanup_deadline" else "ordinary_playwright_error"
     )
     with pytest.raises((ValueError, TimeoutError), match="^" + expected + "$"):
-        extension.persons_ready(rpc, [Page(), Page()], sessions, capture)
+        extension.persons_ready(rpc, pages, sessions, capture)
     assert extension.failure_diagnostics() == {
         "ordinary_failure_step": "ui_actions" if stage == "cleanup_deadline" else stage,
         "ordinary_error_class": "other" if stage == "cleanup_deadline" else "playwright_error",
@@ -1140,7 +1152,7 @@ def test_library_selection_stops_after_primary_rpc_refusal(tmp_path, monkeypatch
     assert skill["receipt"]["ok"] is False
 
 
-@pytest.mark.parametrize("listing", ["failed", "empty", "other_revision", "saved"])
+@pytest.mark.parametrize("listing", ["failed", "empty", "other_revision", "removed", "saved"])
 def test_library_selection_requires_the_saved_revision_in_listing(tmp_path, monkeypatch, listing):
     """RM16/RM39 AC30: record selection only with a successful exact native listing."""
     api = module()
@@ -1158,11 +1170,14 @@ def test_library_selection_requires_the_saved_revision_in_listing(tmp_path, monk
                             dict(
                                 skillId=SKILL_ID,
                                 revision="b" * 64 if listing == "other_revision" else REVISION,
+                                removed=listing == "removed",
                             )
                         ]
                     ),
                 )
             )
+        if page is pages[1] or params.get("skillId") != SKILL_ID:
+            return dict(frame=dict(ok=False, error=dict(code="INVALID_REQUEST")))
         return dict(frame=dict(ok=True, payload=skill["receipt"]["payload"]))
 
     if listing == "saved":
@@ -1171,6 +1186,32 @@ def test_library_selection_requires_the_saved_revision_in_listing(tmp_path, monk
     else:
         with pytest.raises(ValueError, match="^ordinary_skill_selection_failed$"):
             extension.select_library_skill(rpc, pages, sessions, pages[0], skill)
+
+
+@pytest.mark.parametrize(
+    "admitted", ["unmapped_skill", "foreign_person", "foreign_person_own_session"]
+)
+def test_library_selection_stops_when_a_negative_is_admitted(tmp_path, monkeypatch, admitted):
+    """RM37/RM39 AC28/AC30: an admitted refusal case fails before any UI or listing step."""
+    api = module()
+    extension, skill, pages, sessions = selection_fixture(api, tmp_path, monkeypatch)
+    calls = []
+
+    def rpc(page, method, params):
+        calls.append(method)
+        if method != "relaymind.skill":
+            raise AssertionError(method)
+        index = calls.count("relaymind.skill") - 1
+        case = [None, "unmapped_skill", "foreign_person", "foreign_person_own_session"][index]
+        if case is None or case == admitted:
+            return dict(frame=dict(ok=True, payload=skill["receipt"]["payload"]))
+        return dict(frame=dict(ok=False, error=dict(code="INVALID_REQUEST")))
+
+    clicks = []
+    monkeypatch.setattr(SelectionPage, "click", lambda self: clicks.append(True))
+    with pytest.raises(ValueError, match="^ordinary_skill_selection_failed$"):
+        extension.select_library_skill(rpc, pages, sessions, pages[0], skill)
+    assert "skills.library.list" not in calls and clicks == []
 
 
 def test_library_selection_checks_foreign_person_with_their_own_session(tmp_path, monkeypatch):
