@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import threading
 from datetime import timedelta
 
@@ -843,5 +844,49 @@ def test_one_rejected_skill_publishes_the_others_as_a_partial_generation(tmp_pat
             ]
             assert published[0]["payload"]["rejected_count"] == 1
             assert published[0]["payload"]["accepted_count"] == 2
+
+        asyncio.run(run())
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX read path")
+def test_growth_during_reading_keeps_the_prior_generation(tmp_path, monkeypatch):
+    """RM34/AC25, spec 0.66 section 4.6.1: a change during capture retains the prior generation.
+
+    A file that fits at its size check but grows past the limit while it is
+    read changed during capture. Its sibling's update must not be published.
+    """
+    from test_asset_sources import grow_while_reading
+
+    root = tmp_path / "source"
+    skill(root / "other", description="Other skill")
+    growing = skill(root / "growing")
+    clock = FakeClock()
+    with RunStore(clock=clock) as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(root), catalog, clock=clock)
+
+        async def run():
+            await service.tick()
+            before = catalog.snapshot()
+            assert before.catalog_revision == 1
+            skill(root / "other", description="Updated skill")
+            grown = grow_while_reading(monkeypatch, growing, 10 * 1024 * 1024)
+            with pytest.raises(SourceFailure) as caught:
+                await service.rescan("example")
+            assert grown[0]
+            assert caught.value.reason == "source_unavailable"
+            after = catalog.snapshot()
+            # The failed scan only marks the retained records stale (a stale
+            # change is its own revision, spec section 14.5); no captured
+            # content, including the sibling's update, is published.
+            assert [(a.asset_id, a.content_hash, a.description) for a in after.assets] == [
+                (a.asset_id, a.content_hash, a.description) for a in before.assets
+            ]
+            assert "Updated skill" not in {a.description for a in after.assets}
+            assert all(a.stale for a in after.assets)
+            assert not after.sources[0]["complete"]
+            outcomes = sorted((o["state"], o["reason"]) for o in catalog.job_outcomes())
+            assert outcomes == [("failed", "source_unavailable"), ("succeeded", None)]
+            await service.stop()
 
         asyncio.run(run())

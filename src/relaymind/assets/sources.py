@@ -355,6 +355,9 @@ class _Stage:
             if key == forbidden:
                 raise SourceFailure("invalid_data")
             if initial.size > limit:
+                # stage.verify() still checks a rejected file: a change to it
+                # during capture fails the whole scan (spec 0.66 section 4.6.1).
+                self.observed[relative] = initial.fingerprint
                 raise CandidateRejected("size_limit")
             if key in self.physical:
                 fingerprint, digest, data = self.physical[key]
@@ -376,7 +379,10 @@ class _Stage:
                 total += len(chunk)
                 self.context.add_bytes(len(chunk))
                 if total > limit:
-                    raise CandidateRejected("size_limit")
+                    # The file fit at its size check, so it grew while being
+                    # read: a change during capture fails the whole scan and
+                    # retains the prior generation (spec 0.66 section 4.6.1).
+                    raise SourceFailure("source_unavailable")
                 digest.update(chunk)
                 if retain:
                     chunks.append(chunk)

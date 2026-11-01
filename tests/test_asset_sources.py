@@ -333,6 +333,59 @@ def test_oversized_original_is_a_rejected_candidate_but_job_bytes_stay_whole(tmp
     assert len(got.documents) == len(BUNDLED_SHA256)
 
 
+def grow_while_reading(monkeypatch, target, size):
+    """Extend target past size after its first chunk is read (after the size check)."""
+    actual = os.read
+    inode = target.stat().st_ino
+    grown = [False]
+
+    def read(fd, amount):
+        raw = actual(fd, amount)
+        if raw and not grown[0] and os.fstat(fd).st_ino == inode:
+            grown[0] = True
+            with target.open("r+b") as handle:
+                handle.truncate(size + 1)
+        return raw
+
+    monkeypatch.setattr(os, "read", read)
+    return grown
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX read path")
+def test_growth_past_the_limit_during_reading_fails_the_whole_scan(tmp_path, monkeypatch):
+    """RM34/AC25, spec 0.66 section 4.6.1: a change during capture is not a rejection."""
+    root = tmp_path / "skills"
+    skill(root / "good")
+    growing = skill(root / "growing")
+    grown = grow_while_reading(monkeypatch, growing, 10 * 1024 * 1024)
+    with pytest.raises(sources.SourceFailure) as caught:
+        capture(root)
+    assert grown[0]
+    assert not isinstance(caught.value, sources.CandidateRejected)
+    assert caught.value.reason == "source_unavailable"
+
+
+def test_a_changed_oversized_candidate_fails_the_whole_scan(tmp_path, monkeypatch):
+    """RM34/AC25, spec 0.66 section 4.6.1: a rejected file is still verified as unchanged."""
+    root = tmp_path / "skills"
+    skill(root / "good")
+    (root / "huge").mkdir()
+    huge = root / "huge" / "SKILL.md"
+    with huge.open("wb") as handle:
+        handle.truncate(10 * 1024 * 1024 + 1)
+    real = sources._Stage.verify
+
+    def changed(self):
+        with huge.open("r+b") as handle:
+            handle.truncate(10 * 1024 * 1024 + 2)
+        return real(self)
+
+    monkeypatch.setattr(sources._Stage, "verify", changed)
+    with pytest.raises(sources.SourceFailure) as caught:
+        capture(root)
+    assert caught.value.reason == "source_unavailable"
+
+
 def test_source_secret_values_redacted_but_schema_declarations_untouched(tmp_path):
     skill(tmp_path, description="Use credential-987", metadata="token: credential-987\n")
     got = capture(tmp_path)
