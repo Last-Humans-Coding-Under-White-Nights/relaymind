@@ -72,6 +72,11 @@ into a scratch directory (it rewrites the same `inputs.json`), then run
 `python scripts/asset_whole_task.py grade-adaptation --report report.json
 --inputs inputs.json --resolver PRIVATE/resolver.json --qualification-record
 ../../m10-owner-run-260-adaptation.json --output graded.json`.
+The committed `inputs.json` binds a `runner_inventory` (`1d2a9906…`) that
+`bundle.py` built from its own file list (`scripts/asset_whole_task.py`), so it
+differs from the `runner_digest` (`7d66e3cc…`) of the effective off/on configs,
+which `run_episodes.py` built with `asset_evidence.file_inventory`; the
+committed files are unchanged, and `bundle.py` now uses that same helper.
 
 The record first lacked `machine.os_version`, which the packaged
 `QualificationRecordV1` schema requires, so `load_record` rejected it
@@ -97,7 +102,9 @@ in `evaluation/assets/owner-run-260/run_host.py`.
   `interrupted` because the run stopped.
 - Tasks h001–h014 ran (28 started rows) before the run was stopped:
   native 11 completed, 2 failed, 1 timeout; provider_only 3 completed,
-  11 failed. All 14 failed or timed-out rows have reason `host_failed`; the
+  11 failed. All 14 failed or timed-out rows have reason `host_failed`: the
+  native timeout was a runner timeout recorded under the runner's old reason
+  mapping, which `run_host.py` now records as `timeout`; the
   86 remaining native and 86 provider_only rows are `not_run`/`interrupted`.
   The report records no finer cause for the provider_only failures, and
   their per-row host results were lost, so their cause is not in the

@@ -21,6 +21,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "src"))
+SCHEMA = HERE.parents[2] / "src/relaymind/evaluation/schemas/asset_qualification_record.v1.json"
+# The machine model of the committed #260 records (annotators, adjudicator, drafter).
+MODEL_ID = "glm-5.3"
 
 
 def sha(path: Path) -> str:
@@ -51,11 +54,15 @@ def machine_identity(machine: dict, environment: dict) -> dict:
     return machine
 
 
-def main() -> None:
-    from relaymind.evaluation.asset_qualification_record import class_kappa, load_record
+def _enum(field: str) -> list[str]:
+    return json.loads(SCHEMA.read_text(encoding="utf-8"))["properties"][field]["enum"]
 
+
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--scope", choices=("adaptation", "host_acceptance"), required=True)
+    p.add_argument("--scope", choices=_enum("scope"), required=True)
+    p.add_argument("--outcome", choices=_enum("outcome"), default="positive")
+    p.add_argument("--model-id", default=MODEL_ID, help="the machine annotators' model")
     p.add_argument("--record-id", required=True)
     p.add_argument("--record-dir", type=Path, required=True)
     p.add_argument("--subject", nargs=2, action="append", metavar=("ROLE", "PATH"), required=True)
@@ -70,14 +77,19 @@ def main() -> None:
     p.add_argument("--adapter-revision")
     p.add_argument("--harness", type=Path, required=True)
     p.add_argument("--owner-login", required=True)
-    args = p.parse_args()
+    return p
+
+
+def build_record(args) -> dict:
+    from relaymind.evaluation.asset_qualification_record import class_kappa
+
     labels = json.loads((HERE / "labels.json").read_text(encoding="utf-8"))
     group = next(g for g in labels["agreement"]["groups"] if g["lane"] == "all")
 
     def machine(annotator_id: str, template: str) -> dict:
         return dict(
             annotator_id=annotator_id,
-            model_id="glm-5.3",
+            model_id=args.model_id,
             prompt_sha256=sha(HERE / "prompts" / template),
             temperature=0,
             saw_tuning_results=False,
@@ -95,7 +107,7 @@ def main() -> None:
         schema_version=1,
         record_id=args.record_id,
         profile="owner_run",
-        outcome="positive",
+        outcome=args.outcome,
         scope=args.scope,
         labelling="machine_dual_owner_approved",
         annotators=dict(
@@ -112,7 +124,7 @@ def main() -> None:
         prompt_authorship="machine_drafted_owner_approved",
         drafter=dict(
             author_id="machine-drafter",
-            model_id="glm-5.3",
+            model_id=args.model_id,
             prompt_sha256=sha(HERE / "prompts" / "drafter.txt"),
             temperature=0,
         ),
@@ -135,7 +147,15 @@ def main() -> None:
         ),
         recorded_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
-    out = root / f"{args.record_id}.json"
+    return record
+
+
+def main() -> None:
+    from relaymind.evaluation.asset_qualification_record import load_record
+
+    args = build_parser().parse_args()
+    record = build_record(args)
+    out = args.record_dir.absolute() / f"{args.record_id}.json"
     out.write_text(json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     try:
         load_record(out)

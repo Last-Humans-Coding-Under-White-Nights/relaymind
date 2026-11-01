@@ -258,6 +258,20 @@ def chat(
     return answer
 
 
+def batches(sequence: list, size: int, pending):
+    """Fixed batches over the whole sequence: ``(number, pending items)`` per batch.
+
+    A batch's number is its position in the full sequence, never in what is
+    left, so a resume gives each remaining batch its own name; a batch asked
+    again (an unparsed reply, a partial answer) keeps its number, and ``chat``
+    logs it as a further attempt of that batch.
+    """
+    for start in range(0, len(sequence), size):
+        batch = [item for item in sequence[start : start + size] if pending(item)]
+        if batch:
+            yield start // size + 1, batch
+
+
 def answer_json(answer: dict):
     """The JSON answer; one known slip (a stray quote after an array) is repaired."""
     text = answer["choices"][0]["message"]["content"] or ""
@@ -601,14 +615,17 @@ def cmd_annotate(args) -> None:
     listing = catalog_listing(catalog)
     ledger = Ledger(args.ledger, args.cap)
     out = read(args.output) if args.output.exists() else template
-    todo = [i for i in out["items"] if i["judgment"] is None]
     # Each annotator sees the cases in its own seeded order, never grouped by intent.
-    random.Random(sha256(annotator.encode())).shuffle(todo)
+    # The whole list is shuffled once, then done items are skipped, so a resume
+    # continues the same order.
+    order = list(out["items"])
+    random.Random(sha256(annotator.encode())).shuffle(order)
     evidence = [f"independence:{annotator}-template"]
-    for start in range(0, len(todo), args.batch):
-        if args.max_batches and start // args.batch >= args.max_batches:
+    sent = 0
+    for number, batch in batches(order, args.batch, lambda i: i["judgment"] is None):
+        if args.max_batches and sent >= args.max_batches:
             break
-        batch = todo[start : start + args.batch]
+        sent += 1
         request = [
             dict(
                 case_id=i["case_id"],
@@ -622,7 +639,7 @@ def cmd_annotate(args) -> None:
             dict(role="system", content=prompt + "\n\nCATALOG\n" + listing),
             dict(role="user", content=json.dumps(request, ensure_ascii=False)),
         ]
-        name = f"{annotator}-{start // args.batch + 1:03d}"
+        name = f"{annotator}-{number:03d}"
         answer = chat(ledger, annotator, messages, args.log, name)
         try:
             rows = {r["case_id"]: r for r in answer_json(answer)["judgments"]}
@@ -688,10 +705,10 @@ def cmd_adjudicate(args) -> None:
                 ),
                 "Both raw judgments agree on every answer; the adjudication rule adopts them.",
             )
-    todo = [i for i in out["items"] if i["adjudication"] is None]
+    # Batch numbers are positions among the disputed items, stable across resumes.
+    disputed = [i for i in out["items"] if not i["agrees"]["joint"]]
     cases = {c["id"]: c for c in read(args.root / "cases.json")["cases"]}
-    for start in range(0, len(todo), args.batch):
-        batch = todo[start : start + args.batch]
+    for number, batch in batches(disputed, args.batch, lambda i: i["adjudication"] is None):
         request = []
         for item in batch:
             case = cases[item["case_id"]]
@@ -716,7 +733,7 @@ def cmd_adjudicate(args) -> None:
             dict(role="system", content=prompt + "\n\nCATALOG\n" + listing),
             dict(role="user", content=json.dumps(request, ensure_ascii=False)),
         ]
-        name = f"machine-adjudicator-{start // args.batch + 1:03d}"
+        name = f"machine-adjudicator-{number:03d}"
         answer = chat(ledger, "machine-adjudicator", messages, args.log, name)
         try:
             rows = {r["case_id"]: r for r in answer_json(answer)["adjudications"]}
@@ -787,8 +804,13 @@ def cmd_log(args) -> None:
         payload = response.read_bytes()
         sent = request.read_bytes()
         body = json.loads(payload)
+        # A provider may omit or null ``model``/``created``: those stay unknown.
         served = body.get("model")
-        created = datetime.fromtimestamp(body.get("created", 0), UTC).strftime("%Y-%m-%d")
+        created = body.get("created")
+        if isinstance(created, int | float) and not isinstance(created, bool):
+            created = datetime.fromtimestamp(created, UTC).strftime("%Y-%m-%d")
+        else:
+            created = None
         (args.copy_to / response.name).write_bytes(payload)
         calls.append(
             dict(
@@ -812,8 +834,8 @@ def cmd_log(args) -> None:
             sampling=SAMPLING,
             template=args.template,
             template_sha256=sha256(template),
-            served_models=sorted({c["served_model"] for c in calls}),
-            dates=sorted({c["served_on"] for c in calls}),
+            served_models=sorted({c["served_model"] for c in calls} - {None}),
+            dates=sorted({c["served_on"] for c in calls} - {None}),
             calls=calls,
             rejected=[
                 dict(zip(("item", "reason", "response"), entry.split(":"), strict=True))

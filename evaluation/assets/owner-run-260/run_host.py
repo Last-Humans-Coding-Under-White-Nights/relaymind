@@ -258,6 +258,8 @@ class Budget:
         d = self.data
         d["total_input"] += prompt + extra
         d["total_output"] += completion
+        # The same top-level count as harness.Ledger: one per settled row.
+        d["calls"] = d.get("calls", 0) + 1
         row = d.setdefault("stages", {}).setdefault(f"host_{arm}", {})
         for name in ("input", "output", "conservative", "calls"):
             row.setdefault(name, 0)
@@ -465,9 +467,11 @@ def run_bounded(command, *, env, timeout, usage, limit_reached, poll=1.0) -> dic
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
         try:
             # Own process group: stopping the turn also stops the host's children.
-            process = subprocess.Popen(
-                command, env=env, stdout=out, stderr=err, start_new_session=True
-            )
+            if sys.platform == "win32":
+                group = dict(creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+            else:
+                group = dict(start_new_session=True)
+            process = subprocess.Popen(command, env=env, stdout=out, stderr=err, **group)
         except OSError as error:
             return dict(
                 argv=list(command),
@@ -510,6 +514,22 @@ def run_bounded(command, *, env, timeout, usage, limit_reached, poll=1.0) -> dic
 
 
 def _stop(process) -> None:
+    """End the host turn's whole process tree."""
+    if sys.platform == "win32":
+        # Windows has no POSIX process groups: end the tree, then the process.
+        if process.poll() is None:
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                    capture_output=True,
+                    check=False,
+                )
+            except OSError:
+                pass
+            if process.poll() is None:
+                process.kill()
+        process.wait()
+        return
     try:
         os.killpg(process.pid, signal.SIGTERM)
         process.wait(10)
@@ -685,7 +705,7 @@ class Run:
 
     def transcript_usage(self, state_dir: Path) -> list[dict]:
         found = []
-        for db in state_dir.rglob("openclaw-agent.sqlite"):
+        for db in sorted(state_dir.rglob("openclaw-agent.sqlite")):
             conn = sqlite3.connect(db.resolve().as_uri() + "?mode=ro", uri=True)
             try:
                 rows = conn.execute(
@@ -891,7 +911,10 @@ class Run:
             recommendation_ids=[],
             host_session_id=report.get("sessionId") if isinstance(report, dict) else None,
             evidence_ids=sorted(r["id"] for r in refs),
-            reason={"completed": usage_error, "cancelled": "budget_cap"}.get(status, "host_failed"),
+            # A runner timeout is not a host failure.
+            reason={"completed": usage_error, "cancelled": "budget_cap", "timeout": "timeout"}.get(
+                status, "host_failed"
+            ),
         )
         return row, refs
 
@@ -950,6 +973,7 @@ def main():
         )
     finally:
         run.close()
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, ensure_ascii=False, indent=1) + "\n", "utf-8")
     print(json.dumps(dict(summary=report["summary"]["arms"], spent=run.spent())))
 
