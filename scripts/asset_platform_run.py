@@ -81,7 +81,11 @@ def _ordinary(args) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     argv = [sys.executable, str(QUALIFY), "--tarball", args.tarball]
     argv += ["--work-dir", str(Path(args.work_dir).absolute()), "--out", str(out)]
-    code = subprocess.run(argv, timeout=args.timeout).returncode
+    try:
+        code = subprocess.run(argv, timeout=args.timeout).returncode
+    except subprocess.TimeoutExpired:
+        print(f"ordinary qualification ordinary_timeout after {args.timeout} s: step exit 2")
+        return 2
     try:
         capture = json.loads(out.read_bytes())
     except (OSError, ValueError):
@@ -107,9 +111,23 @@ def _bundle(out: Path, environment: Mapping, evidence: Mapping[str, bytes]):
     return bundle
 
 
+NOT_BUILT = "platform-not-built.json"
+
+
 def _platform(args) -> int:
+    """Exit 2 with a recorded ``not_built`` reason when the lifecycle record is missing.
+
+    An existing bundle directory is refused: the companion bundle is written once.
+    """
     out = Path(args.out_dir).absolute()
+    if (out / "bundle").exists():
+        raise ValueError(f"platform_out_dir_exists: {out}")
     out.mkdir(parents=True, exist_ok=True)
+    if not Path(args.install_check).is_file():
+        record = {"status": "not_built", "reason": "install_check_missing"}
+        (out / NOT_BUILT).write_text(json.dumps(record) + "\n", encoding="utf-8")
+        print("asset_platform_run: install_check_missing", file=sys.stderr)
+        return 2
     environment = collect_benchmark_environment()
     (out / "environment.json").write_text(json.dumps(environment, indent=2) + "\n")
     originals = {"install-check": args.install_check}
@@ -210,7 +228,7 @@ def _describe_operations(path: Path) -> str:
     report = json.loads(path.read_bytes())
     summary = report["summary"]
     startup, scheduled, batches = summary["startup"], summary["scheduled"], summary["batches"]
-    gateway_increment = report.get("memory_samples", {}).get("increment_bytes")
+    gateway_increment = (report.get("memory_samples") or {}).get("increment_bytes")
     return (
         f"startups useful {startup['useful']}/10, scheduled useful "
         f"{scheduled['useful']}/120 (p95 service {scheduled['p95_observed_ms']} ms, "
@@ -241,6 +259,14 @@ def _verify(paths: Sequence[str]) -> int:
             failed += reason is not None
             detail = _describe_operations(path) if reason is None else reason
             _line(root, path, reason, detail)
+        for path in sorted(root.rglob(NOT_BUILT)):
+            found += 1
+            failed += 1
+            try:
+                reason = json.loads(path.read_bytes()).get("reason") or "not_built"
+            except (OSError, ValueError, AttributeError):
+                reason = "not_built"
+            _line(root, path, reason, reason)
         for path in sorted(root.rglob("platform.json")):
             if not (path.parent / "bundle" / "inputs.json").exists():
                 continue
@@ -270,11 +296,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     verify = sub.add_parser("verify")
     verify.add_argument("paths", nargs="+", help="downloaded run directories")
     args = parser.parse_args(argv)
-    if args.command == "ordinary":
-        return _ordinary(args)
-    if args.command == "platform":
-        return _platform(args)
-    return _verify(args.paths)
+    try:
+        if args.command == "ordinary":
+            return _ordinary(args)
+        if args.command == "platform":
+            return _platform(args)
+        return _verify(args.paths)
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+        print(f"asset_platform_run: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

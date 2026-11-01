@@ -77,11 +77,16 @@ def test_preregistration_locks_the_task_freeze_and_plan_digests():
     assert record["missing_lanes"] == ["code_switch", "en_to_zh_hans", "zh_hans_to_en"]
     # An early trial never asserts the full gate through a smaller set.
     assert record["acceptance_eligible"] is False
-    assert record["reasons"] == ["kind_not_acceptance", "below_minimum_tasks"]
+    assert record["reasons"] == [
+        "kind_not_acceptance",
+        "below_minimum_tasks",
+        "missing_required_lanes",
+    ]
 
 
 def test_one_hundred_acceptance_tasks_are_eligible_for_acceptance():
-    freeze, tasks = setup(100, kind="acceptance")
+    lanes = ("en_to_en", "zh_hans_to_zh_hans", "zh_hans_to_en", "en_to_zh_hans", "code_switch")
+    freeze, tasks = setup(100, kind="acceptance", lanes=tuple(lanes[i % 5] for i in range(100)))
     record = host_preregistration(tasks, freeze)
     assert record["acceptance_eligible"] is True and record["reasons"] == []
 
@@ -467,3 +472,130 @@ def test_a_timed_out_row_is_failed_with_unknown_consumption(tmp_path):
     assert {r["status"] for r in report["rows"]} == {"failed"}
     assert {r["reason"] for r in report["rows"]} == {"executor_error"}
     assert all(r["attempts"] == [] and r["success"] is None for r in report["rows"])
+
+
+# --- review of PR #263 ------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        dict(environment=dict(ENVIRONMENT, os="Darwin")),
+        dict(artifacts=[dict(role="gateway", name="relaymind", version="1", digest=H)]),
+        dict(input_manifest=dict(MANIFEST, digest="b" * 64)),
+        dict(qualification="provisional"),
+    ],
+)
+def test_a_changed_execution_identity_cannot_resume_a_journal(tmp_path, change):
+    """A resumed run cannot attribute earlier rows to another environment,
+    artifact set, input manifest or qualification label."""
+    freeze, tasks = setup()
+    journal = tmp_path / "run.jsonl"
+    calls = []
+
+    def execute(task, arm, config):
+        calls.append(1)
+        return captured(row(task["id"], arm))
+
+    run(tasks, freeze, execute, journal, interrupted=lambda: len(calls) >= 2)
+    arguments = dict(
+        environment=ENVIRONMENT,
+        artifacts=[],
+        qualification="fixture",
+        input_manifest=MANIFEST,
+        interrupted=lambda: False,
+    )
+    arguments.update(change)
+    with pytest.raises(JournalError, match="journal_binding"):
+        run_host_plan(tasks, freeze, execute, journal, **arguments)
+    assert len(calls) == 2
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes")
+def test_the_journal_is_private(tmp_path):
+    journal = tmp_path / "new" / "run.jsonl"
+    header = dict(type="header", kind="host", input_digest=H)
+    with RunJournal(journal, header):
+        pass
+    assert journal.stat().st_mode & 0o777 == 0o600
+    assert journal.parent.stat().st_mode & 0o777 == 0o700
+    journal.chmod(0o644)
+    with RunJournal(journal, header):
+        pass
+    assert journal.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize("kind", ["symlink", "directory"])
+def test_an_unsafe_journal_path_rejects(tmp_path, kind):
+    journal = tmp_path / "run.jsonl"
+    if kind == "symlink":
+        (tmp_path / "target").write_text("", encoding="utf-8")
+        journal.symlink_to(tmp_path / "target")
+    else:
+        journal.mkdir()
+    with pytest.raises(JournalError, match="journal_unsafe"):
+        RunJournal(journal, dict(type="header", kind="host", input_digest=H))
+    assert not (tmp_path / "run.jsonl.lock").exists()
+
+
+@pytest.mark.parametrize(
+    "code, outcome, calls",
+    [
+        ("cancelled", "cancelled", None),
+        ("deadline_exceeded", "timeout", None),
+        ("time_budget", "timeout", None),
+        ("interrupted", "failed", None),
+        ("missing_credentials", "failed", None),
+        ("provider_unreachable", "failed", None),
+        ("provider_timeout", "timeout", 1),
+        ("provider_error", "failed", 1),
+        ("invalid_tool_arguments", "failed", 1),
+        ("invalid_output", "failed", 1),
+        ("incomplete_output", "failed", 1),
+    ],
+)
+def test_every_gateway_error_code_keeps_its_own_outcome(code, outcome, calls):
+    """A cancelled or bounded call is not a provider failure, and a gateway-side
+    stop evidences no dispatch unless a token or usage arrived."""
+    events = [started(1, "c1"), finished(2, "c1", None, error=dict(code=code, message="x"))]
+    (attempt,) = attempts_from_trace(events, provider="p", attempt_prefix="a-", evidence_id="t")
+    assert (attempt["outcome"], attempt["calls"]) == (outcome, calls)
+
+
+@pytest.mark.parametrize("code", ["cancelled", "deadline_exceeded", "time_budget", "interrupted"])
+def test_a_gateway_stop_after_a_token_evidences_the_dispatch(code):
+    end = finished(2, "c1", None, error=dict(code=code, message="x"))
+    end["payload"]["first_token_ms"] = 12
+    (attempt,) = attempts_from_trace(
+        [started(1, "c1"), end], provider="p", attempt_prefix="a-", evidence_id="t"
+    )
+    assert attempt["calls"] == 1
+
+
+def test_trace_event_objects_are_accepted():
+    from relaymind.store.trace_event import validate_trace_event
+
+    events = [validate_trace_event(e) for e in (started(1, "c1"), finished(2, "c1", USAGE))]
+    (attempt,) = attempts_from_trace(events, provider="p", attempt_prefix="a-", evidence_id="t")
+    assert attempt["input_tokens"] == 100
+
+
+def test_an_acceptance_set_missing_required_lanes_is_not_eligible():
+    lanes = ("en_to_en", "zh_hans_to_zh_hans", "zh_hans_to_en", "en_to_zh_hans", "code_switch")
+    freeze, tasks = setup(100, kind="acceptance", lanes=tuple(lanes[i % 5] for i in range(100)))
+    assert host_preregistration(tasks, freeze)["acceptance_eligible"] is True
+    freeze, tasks = setup(100, kind="acceptance")
+    record = host_preregistration(tasks, freeze)
+    assert record["acceptance_eligible"] is False
+    assert record["reasons"] == ["missing_required_lanes"]
+
+
+def test_a_flooding_executor_is_stopped_at_the_output_cap(tmp_path, monkeypatch):
+    from relaymind.evaluation import asset_host_runner
+
+    monkeypatch.setattr(asset_host_runner, "EXECUTOR_OUTPUT_BYTES", 1024 * 1024)
+    freeze, tasks = setup(1)
+    argv = write_executor(tmp_path, "import sys\nwhile True:\n    sys.stdout.write('x' * 65536)")
+    execute = command_executor(argv, tasks, timeout=30)
+    with pytest.raises(ExecutorFailed, match="executor_output"):
+        execute(tasks["tasks"][0], "native", freeze["configurations"][0])

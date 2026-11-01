@@ -661,3 +661,144 @@ def test_the_failed_ordinary_action_is_a_failed_platform_step(tmp_path):
     for name in ("recommend", "choose", "delete", "reset"):
         assert steps[name]["status"] == "not_run"
         assert steps[name]["reason"] == "ordinary_capture_unverified"
+
+
+# --- review 264 (error boundaries) ------------------------------------------------------
+
+
+def test_a_missing_install_check_is_recorded_not_built_and_fails_verify(tmp_path, capsys):
+    """Review 4435649815: the always-run report step records the missing input."""
+    out = tmp_path / "run" / "platform"
+    code = _script().main(
+        ["platform", "--install-check", str(tmp_path / "missing.json"), "--out-dir", str(out)]
+    )
+    assert code == 2
+    record = json.loads((out / "platform-not-built.json").read_text(encoding="utf-8"))
+    assert record == {"status": "not_built", "reason": "install_check_missing"}
+    assert not (out / "platform.json").exists()
+    assert _script().main(["verify", str(tmp_path / "run")]) == 1
+    assert "FAIL (install_check_missing)" in capsys.readouterr().out
+
+
+def test_platform_refuses_an_existing_bundle_directory(tmp_path, capsys):
+    """Review 4435649819: a rerun into the same directory is a clear rejection."""
+    out = tmp_path / "platform"
+    check = _write(tmp_path / "install.json", _install_check())
+    argv = ["platform", "--install-check", str(check), "--out-dir", str(out)]
+    assert _script().main(argv) == 0
+    assert _script().main(argv) == 2
+    assert "platform_out_dir_exists" in capsys.readouterr().err
+
+
+def test_an_ordinary_timeout_is_a_closed_harness_error(tmp_path, monkeypatch, capsys):
+    """Review 4435649825: TimeoutExpired exits 2 with a fixed reason."""
+    import subprocess
+
+    module = _script()
+
+    def expire(argv, timeout):
+        raise subprocess.TimeoutExpired(argv, timeout)
+
+    monkeypatch.setattr(module.subprocess, "run", expire)
+    code = module.main(
+        [
+            "ordinary", "--tarball", "t.tgz", "--work-dir", str(tmp_path / "w"),
+            "--out", str(tmp_path / "ordinary.json"), "--timeout", "1",
+        ]
+    )  # fmt: skip
+    assert code == 2
+    assert "ordinary_timeout" in capsys.readouterr().out
+
+
+def test_describe_operations_tolerates_null_memory_samples(tmp_path):
+    """Review 4435649829."""
+    out = _bundle_dir(tmp_path)
+    report = json.loads((out / "operations.json").read_text())
+    report["memory_samples"] = None
+    (out / "operations.json").write_text(json.dumps(report))
+    assert "memory increment None" in _script()._describe_operations(out / "operations.json")
+
+
+def test_platform_input_errors_exit_2_without_a_traceback(tmp_path, capsys):
+    """Review 4435649834: the same boundary as asset_operations_run.py."""
+    check = _write(tmp_path / "install.json", _install_check())
+    code = _script().main(
+        [
+            "platform", "--install-check", str(check),
+            "--operations", str(tmp_path / "missing-operations.json"),
+            "--out-dir", str(tmp_path / "platform"),
+        ]
+    )  # fmt: skip
+    assert code == 2
+    assert capsys.readouterr().err.startswith("asset_platform_run: ")
+
+
+class _Store:
+    def __init__(self, fail_after=None):
+        self.calls = 0
+        self.fail_after = fail_after
+
+    def job_outcomes(self):
+        self.calls += 1
+        if self.fail_after is not None and self.calls > self.fail_after:
+            raise OSError("database is locked")
+        return ()
+
+    def job_events(self, job_id):
+        return ()
+
+
+class _Catalog:
+    def __init__(self, store):
+        self.store = store
+
+    async def rescan(self, source_id):
+        from relaymind.store.asset_catalog import Publication
+
+        return Publication(1, False, (), ())
+
+
+def _app(store):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(state=SimpleNamespace(asset_catalog=_Catalog(store)))
+
+
+@pytest.mark.parametrize("fail_after", [0, 1])
+def test_the_child_answers_even_when_the_job_store_fails(fail_after):
+    """Review 4435649841: every command gets a reply, never a 60-second wait."""
+    from relaymind.evaluation.asset_operations_child import handle
+
+    reply = asyncio.run(
+        handle(_app(_Store(fail_after)), {"id": 7, "op": "rescan", "source_id": "s"})
+    )
+    assert reply == {"id": 7, "ok": False, "error": "OSError", "reason": None}
+
+
+def test_the_stdin_reader_never_calls_a_closed_loop():
+    """Review 4435649852: lines or EOF after shutdown are dropped quietly."""
+    import io
+
+    from relaymind.evaluation.asset_operations_child import forward_lines
+
+    loop = asyncio.new_event_loop()
+    queue = asyncio.Queue()
+    loop.close()
+    forward_lines(io.StringIO("one\ntwo\n"), loop, queue)  # must not raise
+    assert queue.empty()
+
+
+def test_the_stdin_reader_forwards_lines_then_eof():
+    import io
+
+    from relaymind.evaluation.asset_operations_child import forward_lines
+
+    async def go():
+        queue = asyncio.Queue()
+        await asyncio.to_thread(
+            forward_lines, io.StringIO("a\nb\n"), asyncio.get_running_loop(), queue
+        )
+        await asyncio.sleep(0)
+        return [queue.get_nowait() for _ in range(queue.qsize())]
+
+    assert asyncio.run(go()) == ["a\n", "b\n", None]
