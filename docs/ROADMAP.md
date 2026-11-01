@@ -1120,14 +1120,19 @@ feedback values.
 Source locators remain the exact offered record: spec sections 4.6.1 and 7.6
 define local locators as resolved `SKILL.md` paths and return that record in
 the scoped view; no home-path abbreviation/redaction rule is specified.
-In text mode a source backslash is doubled and the quote inside the quoted
-description is escaped, so source text cannot imitate a neutralized control
-or a field; one locale rule (`zh`, `zh-CN`, `zh_CN`, `zh-Hans`) serves the
-panel and its evidence, and a receipt that cannot be displayed leaves the
-shown recommendation and its actions in place.
+In text mode only a backslash introducing literal `\u{` notation is doubled;
+ordinary Windows path and description backslashes stay exact. The quote inside
+the quoted description is escaped, so source text cannot imitate a neutralized
+control or a field; one locale rule (`zh`, `zh-CN`, `zh_CN`, `zh-Hans`) serves the
+panel and its evidence. A recommendation receipt is validated against the
+published contract before updating the shown evidence, actions or feedback
+revision; malformed receipts leave all three in place. Native skill labels
+distinguish literal control notation using the same text helper. The ledger
+comment limits its 0600 owner-only access claim to POSIX; Windows access depends
+on the filesystem ACL.
 The adapter revision is repinned to the built bytes that include these review
 fixes and the #256 ledger and fence fixes
-(`d47d07640a0280a37580ca015a4a83a151d5ac9bdfd0500b69010edbf64e53c8`).
+(`38a65c787be8ddfbed99527c4e3b2c167d4a308bd2b566d2cf18acac975f06b4`).
 The committed capture below ran the earlier bytes
 (`ddeb3c70d69c3d6de61902b41b05008853c777b1e13c04ec9d7cc827db01b894`), so it
 must be recaptured from CI for the new revision before merge.
