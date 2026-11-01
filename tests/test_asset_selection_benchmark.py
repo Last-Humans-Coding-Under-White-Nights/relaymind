@@ -216,8 +216,16 @@ def fixture_config(
     source="fixture",
     repetitions=2,
     warmups=1,
+    total_ms=60_000,
+    primary_ms=60_000,
 ):
-    """Only synthetic locked metadata is injected into a disposable service."""
+    """Only synthetic locked metadata is injected into a disposable service.
+
+    The recommendation budget is a deterministic test value, not the
+    production 500/150 ms pair: these tests measure protocol and evidence, so
+    runner scheduling must not be able to expire a primary attempt. Tests that
+    deliberately exercise a timeout pass their own small budget.
+    """
     from relaymind.canonical import canonical_digest
     from relaymind.launcher import load_config
     from test_asset_corpus import read, stage_fixture
@@ -232,7 +240,7 @@ def fixture_config(
         + primary
         + '"\nfallback='
         + str(fallback).lower()
-        + "\n"
+        + f"\ntotal_ms={total_ms}\nprimary_ms={primary_ms}\n"
         + (f'name="example_lexical"\nversion="1"\nurl="{url}"\n' if url else "")
         + f'[[assets.sources]]\nsource_id="{source}"\nkind="local_directory"\npath="originals"\n'
     )
@@ -372,12 +380,16 @@ def http_example():
 
     class Captures(list):
         mode = "normal"
+        # Explicit modeled latency, never the host schedule (RM40/AC31).
+        delay = 0
 
     captured = Captures()
     original = example.selection
 
     async def record(value):
         captured.append(value)
+        if captured.delay:
+            await asyncio.sleep(captured.delay)
         if captured.mode == "timeout":
             await asyncio.sleep(0.3)
         result = await original(value)
@@ -491,8 +503,17 @@ def test_production_http_rejection_retains_primary_failure_and_distinct_floor(
     api = module("asset_benchmark")
     url, captured = http_example
     captured.mode = mode
+    # Only the timeout case needs a modeled primary deadline; it is explicit
+    # so host scheduling cannot turn the other modes into timeouts.
+    budget = {"total_ms": 500, "primary_ms": 150} if mode == "timeout" else {}
     config = fixture_config(
-        tmp_path, primary="http", url=url, fallback=True, repetitions=1, warmups=0
+        tmp_path,
+        primary="http",
+        url=url,
+        fallback=True,
+        repetitions=1,
+        warmups=0,
+        **budget,
     )
     report = asyncio.run(api.run_asset_benchmark(config))
     row = report.data["results"][0]

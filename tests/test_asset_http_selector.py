@@ -270,7 +270,7 @@ def test_cancel_pending_headers_and_body_closes_owned_transport():
         select_assets,
     )
     from relaymind.selection.asset_http import HttpAssetSelector
-    from test_asset_selection import snapshot
+    from test_asset_selection import FakeClock, snapshot
 
     async def run(body_phase):
         entered = asyncio.Event()
@@ -297,7 +297,9 @@ def test_cancel_pending_headers_and_body_closes_owned_transport():
             async def aclose(self):
                 closed.set()
 
-        budget = SelectionBudget()
+        # The fixed clock keeps the cancellation test about ownership: a
+        # starved worker must not consume the real primary deadline first.
+        budget = SelectionBudget(clock=FakeClock())
         selector = HttpAssetSelector(
             name="custom",
             version="1",
