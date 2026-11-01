@@ -1036,8 +1036,9 @@ revision and can record a different syntactically valid revision as
 A retained old pin is reported as observed even when the library head changed
 or the entry was removed; it is never relabeled a successful rejection control.
 On the pinned 2026.10.7 host `sessions.reset` requires `operator.admin`, which
-the configured person policy does not grant (the native Control UI itself uses
-`sessions.create` without that scope). Only that exact native
+the configured person policy does not grant (the native Control UI declares
+that scope for its own reset call and otherwise uses `sessions.create`). Only
+that exact native
 `FORBIDDEN`/`MISSING_SCOPE` refusal, with the session unchanged, is recorded as
 `control_refused`: no turn runs and any turn evidence fails the predicate. It is
 a host outcome, not a rejection RelayMind performed (#255).
