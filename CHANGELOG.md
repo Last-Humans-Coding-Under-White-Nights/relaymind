@@ -94,7 +94,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   removing a live owner's lock) and made each ledger record complete across
   short writes before it is acknowledged; the shipped entry is re-pinned to
   adapter revision `b49d94d8267076516430fb2e4fb64d41fad2961fc8009c84e60921cf43e9e98e`,
-  whose evidence must be recaptured from CI.
+  whose evidence revision names its fresh capture (CI run 41322540111, SHA-256
+  `6b8947df711e…`). A fourth review rejects malformed request text and
+  non-string session fields as `invalid_request`, drops a duplicate
+  registration check and keeps the native deadline live, and the ledger cuts
+  a torn final record through a separate read-write handle (a Windows append
+  handle cannot truncate); the entry is re-pinned to adapter revision
+  `a29cac121c5e01932b6b3ee75e9bab2214e5e9e72cbc36d8f802f62b917c7cfe`, whose
+  capture is taken from CI before merge.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,

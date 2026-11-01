@@ -590,9 +590,16 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         key !== key.trim() ||
         !/^[\x20-\x7e]{1,255}$/.test(key) ||
         !plainObject(params.arguments) ||
-        canonicalText(params.arguments, false) === undefined
+        typeof params.sessionKey !== "string" ||
+        typeof params.expectedSessionId !== "string" ||
+        typeof params.expectedLifecycleRevision !== "string" ||
+        ("agentId" in params && typeof params.agentId !== "string")
       )
         return closed("invalid_request");
+      // The whole request must have one canonical text: an explicit
+      // undefined property or an unpaired surrogate is malformed.
+      const canonical = canonicalText(params, false);
+      if (canonical === undefined) return closed("invalid_request");
       const args = params.arguments;
       // 9/10. Only a reviewed mcp_use entry naming this exact route qualifies.
       const qualified = dependencies.qualification("mcp_use");
@@ -681,7 +688,7 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         target.lifecycleRevision,
         key,
       ]);
-      const digest = sha256(canonicalText(params, false)!);
+      const digest = sha256(canonical);
       let previous: ReturnType<NativeUseLedger["lookup"]>;
       try {
         previous = history.lookup(scopeKey);
@@ -731,7 +738,7 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
           current();
           if (outcome === ABORTED || outcome === undefined)
             return closed("unavailable");
-          await registered();
+          // Registration was already checked above, before this wait.
           return options.respond(true, outcome, undefined);
         }
         // Bound before a restart and provably never dispatched: that lost
