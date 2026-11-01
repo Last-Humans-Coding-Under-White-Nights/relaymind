@@ -1299,8 +1299,11 @@ python integrations/openclaw/test/host-walkthrough/record.py record \
 The harness starts the browser with `HOME` inside the work directory, so it
 sees only system fonts. On a host without a CJK font, the Chinese labels still
 match but render as empty boxes. `--font-dir` copies the `.otf`, `.ttf` and
-`.ttc` files of a directory into that isolated home before the host is
-installed. The manifest lists their names and digests under `fonts`. Use a
+`.ttc` files of a directory once into the work root (`fonts/`), then installs
+that copy into each isolated home's `$XDG_DATA_HOME/fonts` (Linux fontconfig)
+as part of the install step, before the host is installed. The manifest lists
+the names and digests of that copy under `fonts`, so they are the bytes every
+language installed. Use a
 work root whose path holds no user name, because the source locator and the
 capture show it.
 

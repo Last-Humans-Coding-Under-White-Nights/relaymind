@@ -9,6 +9,7 @@ blocked with a fixed reason, never performed or faked. These fixture tests run
 no browser and no host: the page is a local double.
 """
 
+import contextlib
 import hashlib
 import importlib.util
 import json
@@ -330,35 +331,76 @@ def font_dir(tmp_path):
     return fonts
 
 
+class StepBase:
+    """A stand-in for the ordinary composition: records its named steps (RM39)."""
+
+    def __init__(self):
+        self.steps, self.failed = [], []
+
+    @contextlib.contextmanager
+    def step(self, name):
+        self.steps.append(name)
+        try:
+            yield
+        except Exception:
+            self.failed.append(name)
+            raise
+
+
 def test_fonts_reach_the_isolated_home_before_the_host_is_installed(rec, tmp_path, monkeypatch):
-    """The harness gives the browser HOME=<work>/home; Chinese labels need a CJK font there."""
+    """The harness gives the browser HOME=<work>/home; Chinese labels need a CJK font there.
+
+    RM39; AC30. Fonts go to $XDG_DATA_HOME/fonts, the fontconfig user directory the
+    person harness sets, not the deprecated ~/.fonts.
+    """
     fonts, home = font_dir(tmp_path), tmp_path / "work" / "home"
     home.mkdir(parents=True)
+    data = home / ".local/share"
     seen = {}
 
-    class Base:
+    class Base(StepBase):
         def prepare_host(self, host, environment, work, config_path):
-            seen["fonts"] = sorted(p.name for p in (home / ".fonts").iterdir())
+            seen["fonts"] = sorted(p.name for p in (data / "fonts").iterdir())
 
     monkeypatch.setattr(rec.ORDINARY, "OrdinaryComposition", Base)
     composition = rec.walkthrough_composition("zh-CN", rec.Shooter(tmp_path / "media"), fonts)
-    composition().prepare_host(["node"], dict(HOME=str(home)), tmp_path / "work", None)
+    environment = dict(HOME=str(home), XDG_DATA_HOME=str(data))
+    composition().prepare_host(["node"], environment, tmp_path / "work", None)
     assert seen["fonts"] == ["Extra.ttc", "NotoSansCJKsc-Regular.otf"]
-    assert (home / ".fonts" / "Extra.ttc").read_bytes() == b"ttc-bytes"
+    assert (data / "fonts" / "Extra.ttc").read_bytes() == b"ttc-bytes"
+    assert not (home / ".fonts").exists()
+
+
+def test_a_font_copy_failure_is_an_install_step_failure(rec, tmp_path, monkeypatch):
+    """RM39: a font that cannot be installed fails the named install step, not unclassified."""
+    fonts, home = font_dir(tmp_path), tmp_path / "home"
+    home.mkdir()
+    (home / ".local/share/fonts/Extra.ttc").mkdir(parents=True)  # a colliding directory
+    reached = []
+
+    class Base(StepBase):
+        def prepare_host(self, host, environment, work, config_path):
+            reached.append(True)
+
+    monkeypatch.setattr(rec.ORDINARY, "OrdinaryComposition", Base)
+    composition = rec.walkthrough_composition("zh-CN", rec.Shooter(tmp_path / "media"), fonts)()
+    with pytest.raises(OSError):
+        composition.prepare_host([], dict(HOME=str(home)), tmp_path, None)
+    assert composition.failed == ["install"] and reached == []
 
 
 def test_without_a_font_dir_the_host_preparation_is_unchanged(rec, tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
 
-    class Base:
+    class Base(StepBase):
         def prepare_host(self, host, environment, work, config_path):
             return "installed"
 
     monkeypatch.setattr(rec.ORDINARY, "OrdinaryComposition", Base)
-    composition = rec.walkthrough_composition("en-US", rec.Shooter(tmp_path / "media"))
-    assert composition().prepare_host([], dict(HOME=str(home)), tmp_path, None) == "installed"
-    assert not (home / ".fonts").exists()
+    composition = rec.walkthrough_composition("en-US", rec.Shooter(tmp_path / "media"))()
+    assert composition.prepare_host([], dict(HOME=str(home)), tmp_path, None) == "installed"
+    assert not (home / ".local").exists() and composition.steps == []
 
 
 def test_a_font_dir_without_fonts_is_refused(rec, tmp_path):
@@ -385,17 +427,31 @@ def test_the_manifest_lists_the_installed_font_digests(rec, tmp_path):
     assert build(rec, tmp_path, {"en-US": 0, "zh-CN": 0})["fonts"] == []
 
 
-def test_record_passes_the_font_dir_to_every_language(rec, tmp_path, monkeypatch):
-    fonts, commands = font_dir(tmp_path), []
+def test_record_passes_one_font_snapshot_to_every_language(rec, tmp_path, monkeypatch):
+    """RM39: the manifest digests are the bytes every language installs.
+
+    The recorder copies the fonts once into its private work root and hands that
+    copy to each child, so a change to the operator's directory during a run
+    cannot make the installed fonts differ from the listed ones.
+    """
+    fonts, commands, seen = font_dir(tmp_path), [], []
 
     class Done:
         returncode = 0
 
+    def run(command, timeout):
+        commands.append(command)
+        snapshot = Path(command[command.index("--font-dir") + 1])
+        seen.append({p.name: p.read_bytes() for p in snapshot.iterdir()})
+        (fonts / "Extra.ttc").write_bytes(b"changed during the run")
+        return Done()
+
+    monkeypatch.setattr(rec.subprocess, "run", run)
+    listed = {}
     monkeypatch.setattr(
-        rec.subprocess, "run", lambda command, timeout: commands.append(command) or Done()
-    )
-    monkeypatch.setattr(
-        rec, "build_manifest", lambda out, outcomes, fonts: dict(complete=True, fonts=len(fonts))
+        rec,
+        "build_manifest",
+        lambda out, outcomes, fonts: listed.update(fonts=fonts) or dict(complete=True),
     )
     args = rec.parse_args(
         [
@@ -412,8 +468,35 @@ def test_record_passes_the_font_dir_to_every_language(rec, tmp_path, monkeypatch
     )
     assert rec.record(args) == 0
     assert len(commands) == 2
-    for command in commands:
-        assert command[command.index("--font-dir") + 1] == str(fonts.absolute())
+    snapshots = {command[command.index("--font-dir") + 1] for command in commands}
+    assert snapshots == {str(tmp_path / "w" / "fonts")}
+    original = {"Extra.ttc": b"ttc-bytes", "NotoSansCJKsc-Regular.otf": b"otf-bytes"}
+    assert seen == [original, original]
+    expected = sorted(original.items())
+    assert [(f["name"], f["sha256"], f["bytes"]) for f in listed["fonts"]] == [
+        (name, hashlib.sha256(data).hexdigest(), len(data)) for name, data in expected
+    ]
+
+
+def test_record_refuses_an_empty_font_dir_before_creating_anything(rec, tmp_path):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    args = rec.parse_args(
+        [
+            "record",
+            "--tarball",
+            str(tmp_path / "a.tgz"),
+            "--work-root",
+            str(tmp_path / "w"),
+            "--out-dir",
+            str(tmp_path / "o"),
+            "--font-dir",
+            str(empty),
+        ]
+    )
+    with pytest.raises(ValueError, match="walkthrough_font_dir"):
+        rec.record(args)
+    assert not (tmp_path / "w").exists() and not (tmp_path / "o").exists()
 
 
 # --- review follow-ups (PR #262) ----------------------------------------------

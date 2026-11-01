@@ -33,14 +33,17 @@ Usage (Linux x86-64 with the person-ingress prerequisites)::
 The harness starts the browser with ``HOME`` inside the work directory, so
 system-wide fonts are the only fonts it sees. On a host without a CJK font the
 Chinese labels still match but render as empty boxes. ``--font-dir`` copies
-the ``.otf``, ``.ttf`` and ``.ttc`` files of a directory into that isolated
-home before the host is installed, and the manifest lists their digests.
+the ``.otf``, ``.ttf`` and ``.ttc`` files of a directory once into the private
+work root, installs that copy into each isolated home's ``$XDG_DATA_HOME/fonts``
+(fontconfig on Linux) inside the install step, and the manifest lists the
+digests of that copy.
 """
 
 import hashlib
 import importlib.util
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
@@ -248,32 +251,47 @@ def localized_run_ui(language: str, shooter: Shooter, run_ui=None):
     return run
 
 
+def _font_paths(font_dir: Path) -> list[Path]:
+    """The regular font files of ``font_dir`` (no symlinks), sorted by name."""
+    paths = [
+        path
+        for path in sorted(Path(font_dir).iterdir())
+        if not path.is_symlink() and path.is_file() and path.suffix.lower() in FONT_SUFFIXES
+    ]
+    if not paths:
+        raise ValueError("walkthrough_font_dir")
+    return paths
+
+
+def _font_entry(path: Path, payload: bytes) -> dict:
+    return dict(
+        name=path.name, sha256=hashlib.sha256(payload).hexdigest(), bytes=len(payload), path=path
+    )
+
+
 def font_files(font_dir: Path) -> list[dict]:
     """The regular font files of ``font_dir`` (no symlinks), with their digests."""
+    return [_font_entry(path, path.read_bytes()) for path in _font_paths(font_dir)]
+
+
+def snapshot_fonts(font_dir: Path, target: Path) -> list[dict]:
+    """Copy the fonts once into the new private ``target``; digests are of the copied bytes."""
+    target.mkdir(mode=0o700)
     fonts = []
-    for path in sorted(Path(font_dir).iterdir()):
-        if path.is_symlink() or not path.is_file() or path.suffix.lower() not in FONT_SUFFIXES:
-            continue
+    for path in _font_paths(font_dir):
         payload = path.read_bytes()
-        fonts.append(
-            dict(
-                name=path.name,
-                sha256=hashlib.sha256(payload).hexdigest(),
-                bytes=len(payload),
-                path=path,
-            )
-        )
-    if not fonts:
-        raise ValueError("walkthrough_font_dir")
+        (target / path.name).write_bytes(payload)
+        fonts.append(_font_entry(target / path.name, payload))
     return fonts
 
 
-def install_fonts(font_dir: Path, home: Path) -> None:
-    """Copy the fonts into the browser's isolated ``HOME/.fonts`` (read by fontconfig)."""
-    target = Path(home) / ".fonts"
-    target.mkdir(mode=0o700, exist_ok=True)
-    for font in font_files(font_dir):
-        (target / font["name"]).write_bytes(font["path"].read_bytes())
+def install_fonts(font_dir: Path, environment: dict) -> None:
+    """Copy the fonts into the browser's isolated ``$XDG_DATA_HOME/fonts`` (read by fontconfig)."""
+    data = environment.get("XDG_DATA_HOME") or Path(environment["HOME"]) / ".local/share"
+    target = Path(data) / "fonts"
+    target.mkdir(mode=0o700, parents=True, exist_ok=True)
+    for path in _font_paths(font_dir):
+        shutil.copyfile(path, target / path.name)
 
 
 def walkthrough_composition(language: str, shooter: Shooter, font_dir: Path | None = None):
@@ -281,9 +299,11 @@ def walkthrough_composition(language: str, shooter: Shooter, font_dir: Path | No
 
     class WalkthroughComposition(ORDINARY.OrdinaryComposition):
         def prepare_host(self, host, environment, work, config_path):
-            # Runs after the harness created the isolated home, before any browser starts.
+            # Runs after the harness created the isolated home, before any browser starts;
+            # a font that cannot be installed fails the named install step.
             if font_dir is not None:
-                install_fonts(font_dir, Path(environment["HOME"]))
+                with self.step("install"):
+                    install_fonts(font_dir, environment)
             return super().prepare_host(host, environment, work, config_path)
 
         def source_paths(self):
@@ -570,12 +590,15 @@ def child(args) -> int:
 
 def record(args) -> int:
     work_root, out = args.work_root.absolute(), args.out_dir.absolute()
-    fonts = None
+    fonts = font_snapshot = None
     if args.font_dir is not None:
-        args.font_dir = args.font_dir.absolute()
-        fonts = font_files(args.font_dir)
+        _font_paths(args.font_dir)  # refuse a directory without fonts before creating anything
     work_root.mkdir(mode=0o700, parents=True, exist_ok=False)
     out.mkdir(mode=0o700, parents=True, exist_ok=False)
+    if args.font_dir is not None:
+        # One private copy: every language installs exactly the bytes the manifest lists.
+        font_snapshot = work_root / "fonts"
+        fonts = snapshot_fonts(args.font_dir.absolute(), font_snapshot)
     outcomes = {}
     for language in args.languages:
         media = out / language
@@ -584,8 +607,8 @@ def record(args) -> int:
         command += ["--tarball", str(args.tarball.absolute()), "--work-dir"]
         command += [str(work_root / language), "--out", str(media / "capture.json")]
         command += ["--media", str(media)]
-        if args.font_dir is not None:
-            command += ["--font-dir", str(args.font_dir)]
+        if font_snapshot is not None:
+            command += ["--font-dir", str(font_snapshot)]
         try:
             code = subprocess.run(command, timeout=CHILD_SECONDS).returncode
             reason = None if code == 0 else "child_failed"
