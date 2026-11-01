@@ -30,6 +30,7 @@ from relaymind.evaluation.asset_benchmark import (
     _not_run,
     execute_asset_slot,
 )
+from relaymind.evaluation.asset_corpus_io import matches_original
 from relaymind.evaluation.asset_episode_export import (
     episode_preregistration,
     episode_summary,
@@ -410,10 +411,8 @@ def _restored(value: Mapping, episode_id: str, evidence: dict) -> dict:
         ):
             raise WholeTaskRejected("journal_evidence")
         payload = item["payload"].encode("utf-8")
-        if (
-            item["id"] != "reset:" + episode_id
-            or hashlib.sha256(payload).hexdigest() != item["sha256"]
-            or len(payload) != item["bytes"]
+        if item["id"] != "reset:" + episode_id or not matches_original(
+            payload, item["sha256"], item["bytes"]
         ):
             raise WholeTaskRejected("journal_evidence")
         evidence[item["id"]] = dict(item, payload=payload)

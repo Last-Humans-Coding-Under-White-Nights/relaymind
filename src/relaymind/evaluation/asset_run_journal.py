@@ -87,10 +87,11 @@ class RunJournal:
     def _open(self) -> None:
         if self.path.is_symlink() or self.path.exists() and not self.path.is_file():
             raise JournalError("journal_unsafe")
+        header = dict(self.header, type="header")
         if not self.path.exists():
             flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_BINARY", 0)
             self._file = os.fdopen(os.open(self.path, flags, 0o600), "wb")
-            self._append(dict(self.header, type="header"))
+            self._append(header)
             _fsync_directory(self.path.parent)
             return
         if os.name != "nt":
@@ -101,7 +102,7 @@ class RunJournal:
             # row can have started. Write the header again.
             self._file = open(self.path, "r+b")  # noqa: SIM115 - held until close()
             self._file.truncate(0)
-            self._append(dict(self.header, type="header"))
+            self._append(header)
             return
         complete, _, torn = payload.rpartition(b"\n")
         lines = complete.split(b"\n") if complete else []
@@ -111,7 +112,7 @@ class RunJournal:
                 records.append(parse_json(line))
             except AssetCorpusError:
                 raise JournalError("journal_corrupt") from None
-        if not records or records[0] != dict(self.header, type="header"):
+        if not records or records[0] != header:
             raise JournalError("journal_binding")
         for record in records[1:]:
             kind, key = record.get("type"), record.get("key")
