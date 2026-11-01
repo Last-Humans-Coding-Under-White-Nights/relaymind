@@ -327,7 +327,10 @@ def font_dir(tmp_path):
     (fonts / "NotoSansCJKsc-Regular.otf").write_bytes(b"otf-bytes")
     (fonts / "Extra.ttc").write_bytes(b"ttc-bytes")
     (fonts / "README.txt").write_bytes(b"not a font")
-    (fonts / "Linked.ttf").symlink_to(fonts / "Extra.ttc")
+    try:
+        (fonts / "Linked.ttf").symlink_to(fonts / "Extra.ttc")
+    except OSError:
+        pytest.skip("symbolic links are not available")
     return fonts
 
 
@@ -470,13 +473,38 @@ def test_record_passes_one_font_snapshot_to_every_language(rec, tmp_path, monkey
     ]
 
 
-def test_record_refuses_an_empty_font_dir_before_creating_anything(rec, tmp_path):
-    empty = tmp_path / "empty"
-    empty.mkdir()
-    args = record_args(rec, tmp_path, empty)
-    with pytest.raises(ValueError, match="walkthrough_font_dir"):
-        rec.record(args)
+@pytest.mark.parametrize("layout", ["empty", "missing", "file"])
+def test_record_refuses_an_unusable_font_dir_before_creating_anything(
+    rec, tmp_path, monkeypatch, capsys, layout
+):
+    """RM39/AC30: an empty, missing or non-directory --font-dir is a structured refusal."""
+    monkeypatch.setattr(rec, "run_child", lambda command, timeout: pytest.fail("ran"))
+    tarball = tmp_path / "plugin.tgz"
+    tarball.write_bytes(b"tgz")
+    fonts = tmp_path / "fonts"
+    if layout == "empty":
+        fonts.mkdir()
+    elif layout == "file":
+        fonts.write_bytes(b"not a directory")
+    argv = ["record", "--tarball", str(tarball), "--work-root", str(tmp_path / "w")]
+    argv += ["--out-dir", str(tmp_path / "o"), "--font-dir", str(fonts)]
+    assert rec.main(argv) == 2
+    outcome = json.loads(capsys.readouterr().out)
+    assert outcome == dict(complete=False, reason="walkthrough_font_dir", manifest=None)
     assert not (tmp_path / "w").exists() and not (tmp_path / "o").exists()
+
+
+def test_fonts_without_a_home_are_refused_not_installed_elsewhere(rec, tmp_path, monkeypatch):
+    """RM39: no HOME and no XDG_DATA_HOME fails the install step with a closed error."""
+    fonts = font_dir(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    before = sorted(p.name for p in tmp_path.iterdir())
+    with pytest.raises(ValueError, match="walkthrough_font_home"):
+        rec.install_fonts(fonts, {})
+    for environment in (dict(HOME=""), dict(XDG_DATA_HOME="", HOME=""), dict(HOME="rel")):
+        with pytest.raises(ValueError, match="walkthrough_font_home"):
+            rec.install_fonts(fonts, environment)
+    assert sorted(p.name for p in tmp_path.iterdir()) == before
 
 
 # --- review follow-ups (PR #262) ----------------------------------------------

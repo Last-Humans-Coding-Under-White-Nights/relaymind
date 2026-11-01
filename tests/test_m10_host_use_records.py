@@ -52,21 +52,37 @@ def test_committed_negative_record_loads_and_disables_the_operation(record_id):
     assert record.machine["role"] == "linux_host"
     roles = {subject["role"] for subject in record.document["subjects"]}
     assert roles == {"capture", "inventory"}
-    # An approved record is a known limitation; a pending one lifts nothing.
-    listed = known_host_limitations([record])
-    assert listed == (
-        []
-        if not record.approved
-        else [
-            dict(
-                operation=operation["name"],
-                host="openclaw",
-                host_version="2026.10.7",
-                finding=operation["finding"],
-                record_id=record_id,
-            )
-        ]
+    # The committed record is pending: it lists no known host limitation yet.
+    assert not record.approved
+    assert known_host_limitations([record]) == []
+
+
+@pytest.mark.parametrize("record_id", sorted(RECORDS))
+def test_an_approved_copy_of_the_record_is_a_known_host_limitation(record_id, tmp_path):
+    """RM39; AC30, AC35: once its review is written in, the record lists the limitation.
+
+    The review is filled in a temporary copy; the committed record is never edited.
+    """
+    source = EVIDENCE / f"{record_id}.json"
+    document = json.loads(source.read_text())
+    for subject in document["subjects"]:
+        shutil.copyfile(EVIDENCE / subject["path"], tmp_path / subject["path"])
+    document["review"].update(
+        pull_request=267, reviewer_logins=["reviewer-one"], approved_at="2026-11-05T00:00:00Z"
     )
+    (tmp_path / source.name).write_text(json.dumps(document, indent=2) + "\n")
+    record = load_record(tmp_path / source.name)
+    operation = document["operation"]
+    assert record.approved
+    assert known_host_limitations([record]) == [
+        dict(
+            operation=operation["name"],
+            host="openclaw",
+            host_version="2026.10.7",
+            finding=RECORDS[record_id][1],
+            record_id=record_id,
+        )
+    ]
 
 
 def _module(name, relative):
@@ -567,7 +583,16 @@ def shipped_operations(source):
     assert declaration, "NATIVE_QUALIFICATIONS declaration not found"
     arrays = re.findall(r"\boperations:\s*(?:Object\.freeze\()?\[([^\]]*)\]", declaration[1])
     assert arrays, "no operations array in NATIVE_QUALIFICATIONS"
-    return [re.findall(r'"([a-z_]+)"', array) for array in arrays]
+    operations = []
+    for array in arrays:
+        # Every element is one quoted operation name; anything else fails the check.
+        elements = [element.strip() for element in array.split(",")]
+        if elements and not elements[-1]:
+            elements.pop()  # a trailing comma
+        names = [re.fullmatch(r"""(["'])([a-z_]+)\1""", element) for element in elements]
+        assert all(names), f"unreadable operations array: [{array}]"
+        operations.append([name[2] for name in names])
+    return operations
 
 
 def test_shipped_registry_lists_neither_operation():
@@ -585,3 +610,23 @@ def test_the_registry_check_reads_the_operations_arrays():
     # Code after the registry that names an operation is not a registry entry.
     later = listed + '\nif (op === "mcp_use") {}'
     assert shipped_operations(later) == [["direct_actions"]]
+
+
+@pytest.mark.parametrize(
+    "array",
+    [
+        "['direct_actions', 'mcp_use']",
+        """["direct_actions", 'mcp_use']""",
+        "Object.freeze(['direct_actions', 'mcp_use',] as const)",
+    ],
+)
+def test_the_registry_check_reads_single_quoted_names(array):
+    """A single-quoted mcp_use is still a listed operation (#255 review)."""
+    listed = f"export const NATIVE_QUALIFICATIONS: X[] = [{{ operations: {array} }}];"
+    assert shipped_operations(listed) == [["direct_actions", "mcp_use"]]
+
+
+def test_the_registry_check_refuses_an_unreadable_operations_array():
+    listed = "export const NATIVE_QUALIFICATIONS: X[] = [{ operations: [MCP_USE] }];"
+    with pytest.raises(AssertionError, match="unreadable operations array"):
+        shipped_operations(listed)
