@@ -1,0 +1,19 @@
+{
+  "os": "Windows",
+  "os_version": "Windows 10.0.26300",
+  "architecture": "AMD64",
+  "cpu": "AMD Ryzen 5 3600 6-Core Processor",
+  "ram_bytes": 68671221760,
+  "gpu": [
+    {
+      "model": "NVIDIA GeForce RTX 5060 Ti",
+      "device": null,
+      "cores": null
+    }
+  ],
+  "python": "3.12.10",
+  "dependencies_digest": "fdc8072a2a447f5b61638caac0c4f3abe319d20c29c5c412f7e7d2273140e5d9",
+  "runtime": null,
+  "runtime_version": null,
+  "runtime_config_digest": null
+}

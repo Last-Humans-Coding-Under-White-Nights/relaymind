@@ -1,0 +1,70 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "relaymind"
+version = "0.1.0"
+description = "Local AI gateway that makes the best use of external language models from a PC with limited resources: simple bounded tasks on a small local model when the machine can, everything else external with few round trips, completed work preserved, every decision traced."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+
+# Runtime dependencies are added together with the code that needs them
+# (TDD: no dependency without a test that uses it). Planned stack:
+# fastapi, uvicorn, pydantic, sse-starlette — see docs/SPECIFICATION.md.
+dependencies = [
+    # The compatible HTTP API and its loopback server (RM19, issue #22).
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "httpx>=0.27",
+    # Tool argument, tool output, and skill manifest validation (RM06, RM09).
+    "jsonschema>=4.18",
+    # Client-supplied parameter schemas resolve $ref locally, never
+    # remotely (RM01, RM19, issue #24); jsonschema already installs these.
+    "referencing>=0.28.4",
+    "jsonschema-specifications>=2023.03.6",
+    # SKILL.md frontmatter is YAML (Agent Skills, spec section 4.2).
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+relaymind = "relaymind.launcher:cli"
+
+[project.optional-dependencies]
+# On-demand ToolRet parquet derivation; never needed by the gateway.
+bench = ["pyarrow>=17"]
+# Explicit local embedding backend; never installed or downloaded at gateway startup.
+embeddings = ["onnxruntime>=1.20", "tokenizers>=0.20", "numpy>=2"]
+dev = [
+    # The standard SDK client of the AC09 round trip.
+    "openai>=1.50",
+    # The browser test of the demo UI page script (#89); CI installs Chromium.
+    "playwright>=1.49",
+    "pytest>=8.0",
+    # Parallel test workers; CI runs the suite with -n auto (docs/TESTING.md).
+    "pytest-xdist>=3.6",
+    "ruff>=0.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/relaymind"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Live tests need a local llama-server and model artifact; run them
+# explicitly with: pytest -m live
+addopts = "-q -m \"not live\""
+markers = [
+    "live: needs a local llama-server process and the pinned model artifact",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+# Recorded evidence (scratch scripts kept as run) is data, not repo code.
+extend-exclude = ["docs/evidence"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]

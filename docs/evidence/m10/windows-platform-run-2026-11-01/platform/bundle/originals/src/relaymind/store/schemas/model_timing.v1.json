@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaymind.local/schemas/model_timing.v1.json",
+  "title": "ModelTiming v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "model", "actor", "purpose", "kind", "input_tokens", "cached_tokens", "first_token_ms", "duration_ms", "output_tokens", "succeeded", "run_id", "recorded_at"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "model": {"type": "string", "pattern": "\\S"},
+    "actor": {"enum": ["local", "external"]},
+    "purpose": {"type": "string", "pattern": "\\S"},
+    "kind": {"enum": ["run", "warm_up", "probe"]},
+    "input_tokens": {"type": ["integer", "null"], "minimum": 0},
+    "cached_tokens": {"type": ["integer", "null"], "minimum": 0},
+    "first_token_ms": {"type": ["integer", "null"], "minimum": 0},
+    "duration_ms": {"type": "integer", "minimum": 0},
+    "output_tokens": {"type": ["integer", "null"], "minimum": 0},
+    "succeeded": {"type": "boolean"},
+    "run_id": {"type": ["string", "null"], "pattern": "\\S"},
+    "recorded_at": {"type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,6})?Z$"}
+  },
+  "allOf": [{"if": {"properties": {"kind": {"enum": ["warm_up", "probe"]}}}, "then": {"properties": {"run_id": {"type": "null"}}}}]
+}

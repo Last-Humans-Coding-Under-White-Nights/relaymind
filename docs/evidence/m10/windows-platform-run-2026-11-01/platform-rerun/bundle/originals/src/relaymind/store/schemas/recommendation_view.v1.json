@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaymind.local/schemas/recommendation_view.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "recommendation_id",
+    "task_id",
+    "state",
+    "state_version",
+    "created_at",
+    "ready_at",
+    "choice_expires_at",
+    "retain_until",
+    "catalog_revision",
+    "host_snapshot_revision",
+    "decision",
+    "displayed_candidates",
+    "result",
+    "selected_action",
+    "feedback_revision",
+    "error"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "recommendation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "state": {
+      "enum": [
+        "computing",
+        "ready",
+        "failed",
+        "cancelled",
+        "expired",
+        "chosen"
+      ]
+    },
+    "state_version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ready_at": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "format": "date-time"
+        }
+      ]
+    },
+    "choice_expires_at": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "format": "date-time"
+        }
+      ]
+    },
+    "retain_until": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "catalog_revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "host_snapshot_revision": {
+      "type": "null"
+    },
+    "decision": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "enum": [
+            "confident",
+            "choice_required",
+            "no_match",
+            "empty_catalog"
+          ]
+        }
+      ]
+    },
+    "displayed_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "candidate",
+          "asset"
+        ],
+        "properties": {
+          "candidate": {
+            "$ref": "recommendation_result.v1.json#/properties/final_candidates/items"
+          },
+          "asset": {
+            "$ref": "asset_record.v1.json"
+          }
+        }
+      },
+      "maxItems": 3
+    },
+    "result": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "recommendation_result.v1.json"
+        }
+      ]
+    },
+    "selected_action": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "action_evidence.v1.json"
+        }
+      ]
+    },
+    "feedback_revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code",
+            "message",
+            "run_id",
+            "recommendation_id"
+          ],
+          "properties": {
+            "code": {
+              "enum": [
+                "unauthenticated",
+                "internal_error",
+                "invalid_request",
+                "user_action_required",
+                "recommendation_not_found",
+                "feedback_not_found",
+                "stale_version",
+                "idempotency_conflict",
+                "recommendation_in_progress",
+                "recommendation_expired",
+                "asset_changed",
+                "invalid_state",
+                "overloaded",
+                "recommendation_unavailable",
+                "deadline_exceeded"
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "run_id": {
+              "type": "null"
+            },
+            "recommendation_id": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

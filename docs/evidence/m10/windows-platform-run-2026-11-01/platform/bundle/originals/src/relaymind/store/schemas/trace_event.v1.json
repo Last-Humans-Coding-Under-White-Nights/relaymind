@@ -1,0 +1,1107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaymind.local/schemas/trace_event.v1.json",
+  "title": "TraceEvent",
+  "description": "One ordered run trace event (spec section 8, RM22). Unknown fields are rejected. Text fields (run_id, actor, IDs, models, codes) must contain a non-space character. run.accepted is the first event (seq 1) and carries the section 8 run.accepted payload. Timestamps are UTC; elapsed_ms comes from a monotonic clock (RM25).",
+  "type": "object",
+  "properties": {
+    "schema_version": {"const": 1},
+    "run_id": {"type": "string", "pattern": "\\S"},
+    "seq": {"type": "integer", "minimum": 1},
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,6})?Z$"
+    },
+    "elapsed_ms": {"type": "integer", "minimum": 0},
+    "event_type": {
+      "enum": [
+        "run.accepted",
+        "route.selected",
+        "skill.loaded",
+        "model.started",
+        "model.finished",
+        "tool.proposed",
+        "tool.started",
+        "tool.finished",
+        "clarification.required",
+        "clarification.answered",
+        "confirmation.required",
+        "handoff.started",
+        "answer.delta",
+        "run.completed",
+        "run.failed",
+        "run.cancelled",
+        "cache.hit"
+      ]
+    },
+    "actor": {"type": "string", "pattern": "\\S"},
+    "payload": {"type": "object"}
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "seq",
+    "timestamp",
+    "elapsed_ms",
+    "event_type",
+    "actor",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "selector_summary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "\\S"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "\\S"
+        },
+        "mechanism": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "\\S"
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "attempts": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "outcome": {
+                    "enum": [
+                      "selected",
+                      "none",
+                      "timeout",
+                      "error",
+                      "inadmissible",
+                      "not_placed",
+                      "cancelled"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "outcome"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "outcome": {
+                    "enum": [
+                      "selected",
+                      "none",
+                      "timeout",
+                      "error",
+                      "inadmissible",
+                      "not_placed",
+                      "cancelled"
+                    ]
+                  },
+                  "version": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "transport": {
+                    "enum": [
+                      "http",
+                      "in_process"
+                    ]
+                  },
+                  "elapsed_ms": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "model_calls_claim": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "model": {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        "call_id": {
+                          "type": "string",
+                          "pattern": "\\S"
+                        }
+                      },
+                      "required": [
+                        "model"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "name",
+                  "outcome",
+                  "version",
+                  "transport",
+                  "elapsed_ms",
+                  "model_calls_claim"
+                ],
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "transport": {
+                          "const": "in_process"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "model_calls_claim": {
+                          "type": "null"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "mechanism",
+        "elapsed_ms",
+        "attempts"
+      ],
+      "additionalProperties": false
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "reason",
+        "predicted_ms",
+        "deadline_ms",
+        "inputs"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "local",
+            "external",
+            "none"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "local_first",
+            "local_only",
+            "no_external_path",
+            "prediction_unavailable",
+            "within_budget",
+            "local_slow",
+            "expected_wait",
+            "external_path",
+            "no_generation"
+          ]
+        },
+        "predicted_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "deadline_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "purpose",
+            "input_tokens",
+            "input_source",
+            "expected_output_tokens",
+            "output_source",
+            "cache_class",
+            "sample_count",
+            "sample_recorded_at",
+            "prefill_tokens_per_ms",
+            "decode_tokens_per_ms",
+            "local_success_rate",
+            "expected_external_ms"
+          ],
+          "properties": {
+            "model": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "\\S"
+            },
+            "purpose": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "\\S"
+            },
+            "input_tokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "input_source": {
+              "enum": [
+                "tokenizer",
+                "none"
+              ]
+            },
+            "expected_output_tokens": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "output_source": {
+              "enum": [
+                "run_samples",
+                "purpose_cap",
+                "unavailable"
+              ]
+            },
+            "cache_class": {
+              "enum": [
+                "warm",
+                "cold",
+                "unknown"
+              ]
+            },
+            "sample_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sample_recorded_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,6})?Z$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "prefill_tokens_per_ms": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0
+            },
+            "decode_tokens_per_ms": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0
+            },
+            "local_success_rate": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "expected_external_ms": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "role": {
+              "const": "external"
+            },
+            "reason": {
+              "const": "external_path"
+            },
+            "predicted_ms": {
+              "type": "null"
+            },
+            "deadline_ms": {
+              "type": "null"
+            },
+            "inputs": {
+              "const": {
+                "model": null,
+                "purpose": null,
+                "input_tokens": null,
+                "input_source": "none",
+                "expected_output_tokens": null,
+                "output_source": "unavailable",
+                "cache_class": "unknown",
+                "sample_count": 0,
+                "sample_recorded_at": null,
+                "prefill_tokens_per_ms": null,
+                "decode_tokens_per_ms": null,
+                "local_success_rate": null,
+                "expected_external_ms": null
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "none"
+            },
+            "reason": {
+              "const": "no_generation"
+            },
+            "predicted_ms": {
+              "type": "null"
+            },
+            "deadline_ms": {
+              "type": "null"
+            },
+            "inputs": {
+              "const": {
+                "model": null,
+                "purpose": null,
+                "input_tokens": null,
+                "input_source": "none",
+                "expected_output_tokens": null,
+                "output_source": "unavailable",
+                "cache_class": "unknown",
+                "sample_count": 0,
+                "sample_recorded_at": null,
+                "prefill_tokens_per_ms": null,
+                "decode_tokens_per_ms": null,
+                "local_success_rate": null,
+                "expected_external_ms": null
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "none"
+            },
+            "reason": {
+              "enum": [
+                "local_slow",
+                "expected_wait"
+              ]
+            },
+            "predicted_ms": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "deadline_ms": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "local"
+            },
+            "reason": {
+              "enum": [
+                "local_first",
+                "local_only",
+                "no_external_path"
+              ]
+            },
+            "deadline_ms": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "local"
+            },
+            "reason": {
+              "const": "prediction_unavailable"
+            },
+            "predicted_ms": {
+              "type": "null"
+            },
+            "deadline_ms": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "local"
+            },
+            "reason": {
+              "const": "within_budget"
+            },
+            "predicted_ms": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "deadline_ms": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      ]
+    },
+    "model_call": {
+      "type": "object",
+      "properties": {
+        "call_id": {"type": "string", "pattern": "\\S"},
+        "model": {"type": "string", "pattern": "\\S"},
+        "actor": {"type": "string", "pattern": "\\S"},
+        "purpose": {"type": "string", "pattern": "\\S"}
+      },
+      "required": ["call_id", "model", "actor", "purpose"]
+    },
+    "workflow_summary": {
+      "type": "object",
+      "properties": {
+        "workflow_id": {"type": "string", "pattern": "\\S"},
+        "branch_wall_ms": {"type": "integer", "minimum": 0},
+        "local_health_ms": {"type": "integer", "minimum": 0},
+        "external_checklist_ms": {"type": "integer", "minimum": 0},
+        "extra_call_ms": {"type": ["integer", "null"], "minimum": 0},
+        "abandoned_calls": {"type": "array", "items": {"type": "string", "pattern": "\\S"}}
+      },
+      "required": [
+        "workflow_id",
+        "branch_wall_ms",
+        "local_health_ms",
+        "external_checklist_ms",
+        "extra_call_ms",
+        "abandoned_calls"
+      ],
+      "additionalProperties": false
+    },
+    "settled_operation": {
+      "type": "object",
+      "properties": {
+        "operation_id": {"type": "string", "pattern": "\\S"},
+        "status": {"enum": ["unknown_outcome", "failed"]}
+      },
+      "required": ["operation_id", "status"],
+      "additionalProperties": false
+    },
+    "artifact_ref": {
+      "type": "object",
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "\\S"},
+        "uri": {"type": "string", "pattern": "\\S"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "truncated": {"type": "boolean"}
+      },
+      "required": ["artifact_id", "uri", "size_bytes", "truncated"],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"event_type": {"const": "answer.delta"}, "payload": {"required": ["call_id"]}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"required": ["text", "model"], "properties": {"text": {"type": "string"}, "model": {"type": "string", "pattern": "\\S"}, "call_id": {"type": "string", "pattern": "\\S"}}}}}},
+    {"if": {"properties": {"event_type": {"const": "model.started"}, "actor": {"const": "external"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": {"properties": {"role": {"const": "external"}}}}}}}},
+    {"if": {"properties": {"event_type": {"const": "model.started"}, "actor": {"const": "local"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": {"properties": {"role": {"const": "local"}}}}}}}},
+    {"if": {"properties": {"event_type": {"not": {"enum": ["model.started", "route.selected", "handoff.started", "run.failed"]}}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": false}}}}},
+    {"if": {"properties": {"event_type": {"const": "run.accepted"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"budgets": {"properties": {"placement": false}}}}}}},
+    {"if": {"properties": {"event_type": {"const": "run.accepted"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement_policy": {"enum": ["local_first", "device_aware", "expected_wait"]}, "budgets": {"type": "object", "properties": {"placement.margin": {"type": "number", "exclusiveMinimum": 0}, "placement.probe_after_seconds": {"type": "number", "exclusiveMinimum": 0}}}}}}}},
+    {"if": {"properties": {"event_type": {"const": "model.started"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": {"$ref": "#/$defs/placement"}}}}}},
+    {"if": {"properties": {"event_type": {"const": "model.finished"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"predicted_ms": {"type": ["integer", "null"], "minimum": 1}, "deadline_ms": {"type": ["integer", "null"], "minimum": 1}, "deadline_missed": {"type": "boolean"}}}}}},
+    {"if": {"properties": {"event_type": {"const": "route.selected"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": {"$ref": "#/$defs/placement"}}}}}},
+    {"if": {"properties": {"event_type": {"const": "handoff.started"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": {"$ref": "#/$defs/placement"}}}}}},
+    {"if": {"properties": {"event_type": {"const": "run.failed"}}, "required": ["event_type"]}, "then": {"properties": {"payload": {"properties": {"placement": {"$ref": "#/$defs/placement"}}}}}},
+    {
+      "if": {"properties": {"event_type": {"enum": ["run.cancelled"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "active_ms": {"type": "integer", "minimum": 0},
+              "waiting_ms": {"type": "integer", "minimum": 0},
+              "external_calls": {"type": "integer", "minimum": 0},
+              "model_calls": {"type": "array", "items": {"$ref": "#/$defs/model_call"}},
+              "reason": {"enum": ["user_denied", "cancel_requested"]},
+              "approval_id": {"type": "string", "pattern": "\\S"}
+            },
+            "required": ["reason", "active_ms", "waiting_ms"]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"seq": {"const": 1}}, "required": ["seq"]},
+      "then": {"properties": {"event_type": {"const": "run.accepted"}}}
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["run.accepted"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "seq": {"const": 1},
+          "payload": {
+            "properties": {
+              "requested_execution_mode": {
+                "enum": ["auto", "local_only", "external_only", "parallel_demo", null]
+              },
+              "effective_execution_mode": {
+                "enum": ["auto", "local_only", "external_only", "parallel_demo"]
+              },
+              "model_alias": {"enum": ["relaymind", "relaymind-client-tools", null]},
+              "budgets": {"type": "object"},
+              "skill_roots": {"type": "array", "items": {"type": "string", "pattern": "\\S"}},
+              "skills_offered": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {"type": "string", "pattern": "\\S"},
+                    "version": {"type": "string", "pattern": "\\S"},
+                    "content_hash": {"type": "string", "pattern": "\\S"}
+                  },
+                  "required": ["name", "version", "content_hash"]
+                }
+              },
+              "original_messages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "role": {"enum": ["system", "developer", "user", "assistant"]},
+                    "content": {"type": "string"}
+                  },
+                  "required": ["role", "content"],
+                  "additionalProperties": false
+                }
+              },
+              "routing_cache": {"type": "boolean"},
+              "answer_pass": {"enum": ["final", "draft"]},
+              "answer_stream": {"enum": ["buffered", "live"]},
+              "answer_stream_effective": {"enum": ["buffered", "live"]},
+              "calls_per_generation": {"enum": ["one", "many"]},
+              "prefetch": {"type": "boolean"},
+              "prefetch_declarations": {
+                "type": "object",
+                "propertyNames": {"pattern": "\\S"},
+                "additionalProperties": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "tool": {"type": "string", "pattern": "\\S"},
+                      "arguments": {"type": "object"}
+                    },
+                    "required": ["tool", "arguments"],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "early_headers": {"type": "boolean"},
+              "selection": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string", "pattern": "\\S"}
+              },
+              "example_match_score": {"type": "number", "minimum": 0, "maximum": 1},
+              "example_match_margin": {"type": "number", "minimum": 0, "maximum": 1},
+              "local_model": {"type": ["string", "null"], "pattern": "\\S"},
+              "local_model_status": {"enum": ["ready", "unavailable", "unsuitable", "absent"]},
+              "local_model_reason": {"type": ["string", "null"], "pattern": "\\S"},
+              "answer_options": {
+                "type": "object",
+                "properties": {
+                  "max_completion_tokens": {"type": "integer", "minimum": 1},
+                  "temperature": {"type": "number", "minimum": 0, "maximum": 2},
+                  "top_p": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "requested_execution_mode",
+              "effective_execution_mode",
+              "model_alias",
+              "budgets",
+              "skill_roots",
+              "skills_offered",
+              "original_messages"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "description": "Spec 0.31 section 8 (RM28): the selector that chose, or nulls when the chain chose nothing, every selector tried, and the admitted narrowing; RM26: the class of the local model that made the route managed external execution.",
+      "if": {"properties": {"event_type": {"const": "route.selected"}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "selector": {"$ref": "#/$defs/selector_summary"},
+              "tools_narrowed": {"type": "array", "items": {"type": "string", "pattern": "\\S"}},
+              "local_model_status": {"enum": ["unavailable", "unsuitable", "absent"]}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["tool.proposed", "tool.started", "tool.finished"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "model": {"type": ["string", "null"], "pattern": "\\S"},
+              "operation_id": {"type": "string", "pattern": "\\S"},
+              "proposal_id": {"type": "string", "pattern": "\\S"},
+              "result_ref": {"$ref": "#/$defs/artifact_ref"},
+              "result": {
+                "type": "object",
+                "properties": {"truncated": {"type": "boolean"}},
+                "required": ["truncated"]
+              }
+            },
+            "required": ["model"],
+            "not": {"required": ["result", "result_ref"]},
+            "anyOf": [{"required": ["operation_id"]}, {"required": ["proposal_id"]}]
+          }
+        }
+      }
+    },
+    {
+      "description": "Only a gateway-made call (a prefetch or workflow call, marked by its mechanism) has no originating model (RM22).",
+      "if": {
+        "properties": {"event_type": {"enum": ["tool.proposed", "tool.started", "tool.finished"]}},
+        "required": ["event_type"],
+        "not": {
+          "properties": {
+            "actor": {"const": "gateway"},
+            "payload": {
+              "properties": {"mechanism": {"enum": ["prefetch", "workflow"]}},
+              "required": ["mechanism"]
+            }
+          },
+          "required": ["actor", "payload"]
+        }
+      },
+      "then": {"properties": {"payload": {"properties": {"model": {"type": "string"}}}}}
+    },
+    {
+      "if": {
+        "properties": {"event_type": {"enum": ["tool.started", "tool.finished"]}},
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {"properties": {"mechanism": {"enum": ["model", "prefetch", "workflow"]}}}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["tool.proposed"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "mechanism": {"enum": ["model", "prefetch", "workflow"]},
+              "step": {"type": "string", "pattern": "\\S"}
+            },
+            "if": {"properties": {"mechanism": {"const": "workflow"}}, "required": ["mechanism"]},
+            "then": {"required": ["step"]},
+            "else": {"not": {"required": ["step"]}}
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["tool.finished"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {"recovered": {"type": "boolean"}},
+            "if": {"properties": {"recovered": {"const": true}}, "required": ["recovered"]},
+            "then": {"properties": {"replayed": {"const": false}}, "required": ["replayed"]}
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["model.started", "model.finished"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "call_id": {"type": "string", "pattern": "\\S"},
+              "model": {"type": "string", "pattern": "\\S"}
+            },
+            "required": ["call_id", "model"]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["model.started"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {"request_options": {"type": "object"}}
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["model.finished"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "first_token_ms": {"type": ["integer", "null"], "minimum": 0},
+              "usage": {
+                "type": ["object", "null"],
+                "properties": {
+                  "input_tokens": {"type": ["integer", "null"], "minimum": 0},
+                  "output_tokens": {"type": ["integer", "null"], "minimum": 0},
+                  "cached_tokens": {"type": ["integer", "null"], "minimum": 0},
+                  "reasoning_tokens": {"type": ["integer", "null"], "minimum": 0}
+                },
+                "required": ["input_tokens", "output_tokens"],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["run.completed"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "final_answer_model": {"type": "string", "pattern": "\\S"},
+              "answer_pass_applied": {"enum": ["draft", "final"]},
+              "model_calls": {"type": "array", "items": {"$ref": "#/$defs/model_call"}},
+              "external_calls": {"type": "integer", "minimum": 0},
+              "active_ms": {"type": "integer", "minimum": 0},
+              "waiting_ms": {"type": "integer", "minimum": 0}
+            },
+            "required": ["final_answer_model", "model_calls", "external_calls", "active_ms", "waiting_ms"]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["run.failed"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "error_code": {"type": "string", "pattern": "\\S"},
+              "model_calls": {"type": "array", "items": {"$ref": "#/$defs/model_call"}},
+              "external_calls": {"type": "integer", "minimum": 0},
+              "active_ms": {"type": "integer", "minimum": 0},
+              "waiting_ms": {"type": "integer", "minimum": 0},
+              "interrupted_state": {
+                "enum": [
+                  "accepted",
+                  "routing",
+                  "local_running",
+                  "external_running",
+                  "parallel_running",
+                  "waiting_input",
+                  "waiting_confirmation"
+                ]
+              },
+              "settled_operations": {"type": "array", "items": {"$ref": "#/$defs/settled_operation"}}
+            },
+            "required": ["error_code", "model_calls", "external_calls", "active_ms", "waiting_ms"],
+            "if": {"properties": {"error_code": {"const": "interrupted"}}, "required": ["error_code"]},
+            "then": {"required": ["interrupted_state", "settled_operations"]},
+            "dependentSchemas": {
+              "interrupted_state": {"properties": {"error_code": {"const": "interrupted"}}},
+              "settled_operations": {"properties": {"error_code": {"const": "interrupted"}}}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["skill.loaded"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "name": {"type": "string", "pattern": "\\S"},
+              "version": {"type": "string", "pattern": "\\S"},
+              "content_hash": {"type": "string", "pattern": "\\S"}
+            },
+            "required": ["name", "version", "content_hash"]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["clarification.required"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "question": {"type": "string", "pattern": "\\S"},
+              "language": {"type": "string", "pattern": "\\S"},
+              "reason_code": {"type": "string", "pattern": "\\S"},
+              "skill_id": {"type": ["string", "null"], "pattern": "\\S"},
+              "missing": {"type": "string", "pattern": "\\S"},
+              "waiting_seconds": {"type": "number", "exclusiveMinimum": 0}
+            },
+            "required": [
+              "question",
+              "language",
+              "reason_code",
+              "skill_id",
+              "missing",
+              "waiting_seconds"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["clarification.answered"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "input": {"type": "string", "pattern": "\\S"},
+              "missing": {"type": "string", "pattern": "\\S"},
+              "waited_ms": {"type": "integer", "minimum": 0}
+            },
+            "required": ["input", "missing", "waited_ms"]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["confirmation.required"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "approval_id": {"type": "string", "pattern": "\\S"},
+              "tool_name": {"type": "string", "pattern": "\\S"},
+              "proposal_id": {"type": "string", "pattern": "\\S"},
+              "arguments": {"type": "object"},
+              "target": {"type": "string", "pattern": "\\S"},
+              "state_version": {"type": "integer", "minimum": 1},
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,6})?Z$"
+              },
+              "model": {"type": "string", "pattern": "\\S"}
+            },
+            "required": [
+              "approval_id",
+              "tool_name",
+              "proposal_id",
+              "arguments",
+              "target",
+              "state_version",
+              "expires_at",
+              "model"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["handoff.started"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "reason_code": {"type": "string", "pattern": "\\S"},
+              "model": {"type": "string", "pattern": "\\S"},
+              "skill": {
+                "type": ["object", "null"],
+                "properties": {
+                  "name": {"type": "string", "pattern": "\\S"},
+                  "version": {"type": "string", "pattern": "\\S"},
+                  "content_hash": {"type": "string", "pattern": "\\S"}
+                },
+                "required": ["name", "version", "content_hash"],
+                "additionalProperties": false
+              },
+              "operation_ids": {"type": "array", "items": {"type": "string", "pattern": "\\S"}},
+              "allowed_tools": {"type": "array", "items": {"type": "string", "pattern": "\\S"}},
+              "request": {
+                "type": "object",
+                "properties": {
+                  "size": {"type": "integer", "minimum": 0},
+                  "limit": {"type": "integer", "minimum": 1},
+                  "method": {"enum": ["tokenizer", "utf8_bytes"]}
+                },
+                "required": ["size", "limit", "method"],
+                "additionalProperties": false
+              },
+              "degraded_mode": {"const": true},
+              "local_failure": {"type": "string", "pattern": "\\S"},
+              "workflow": {"type": "string", "pattern": "\\S"},
+              "budget": {"type": "string", "pattern": "\\S"}
+            },
+            "required": [
+              "reason_code",
+              "model",
+              "skill",
+              "operation_ids",
+              "allowed_tools",
+              "request"
+            ],
+            "dependentRequired": {
+              "degraded_mode": ["local_failure"],
+              "local_failure": ["degraded_mode"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": ["model.started", "model.finished", "tool.proposed", "tool.started", "tool.finished"]
+          }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {"branch": {"enum": ["local_health", "external_checklist", "synthesis"]}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"event_type": {"enum": ["run.completed", "run.failed", "run.cancelled"]}},
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {"payload": {"properties": {"workflow": {"$ref": "#/$defs/workflow_summary"}}}}
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["cache.hit"]}}, "required": ["event_type"]},
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "originating_version": {"type": "string", "pattern": "\\S"},
+              "originating_run_id": {"type": "string", "pattern": "\\S"},
+              "skill": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string", "pattern": "\\S"},
+                  "version": {"type": "string", "pattern": "\\S"},
+                  "content_hash": {"type": "string", "pattern": "\\S"}
+                },
+                "required": ["name", "version", "content_hash"],
+                "additionalProperties": false
+              },
+              "age_ms": {"type": "integer", "minimum": 0},
+              "key": {"type": "string", "pattern": "\\S"}
+            },
+            "required": ["originating_version"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": [
+              "handoff.started",
+              "run.failed",
+              "run.cancelled"
+            ]
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "selector": {
+                "$ref": "#/$defs/selector_summary"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event_type": {"enum": ["handoff.started", "run.completed", "run.failed", "run.cancelled"]}}, "required": ["event_type"]},
+      "then": {"properties": {"payload": {"properties": {"local_active_ms": {"type": ["integer", "null"], "minimum": 0}}}}}
+    }
+  ]
+}

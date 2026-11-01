@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaymind.local/schemas/demo/get_latest_deployment.v1.json",
+  "title": "get_latest_deployment",
+  "description": "Read the latest deployment of one demo service.",
+  "input_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "service": {
+        "title": "service",
+        "x-relaymind-label": {
+          "en": "service",
+          "zh": "服务"
+        },
+        "enum": [
+          "staging-api",
+          "payments-api"
+        ]
+      }
+    },
+    "required": [
+      "service"
+    ],
+    "additionalProperties": false
+  },
+  "output_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "service": {
+        "enum": [
+          "staging-api",
+          "payments-api"
+        ]
+      },
+      "deployment_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "deployed_at": {
+        "oneOf": [
+          {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "revision": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "fixture": {
+        "type": "object",
+        "description": "Sandbox fixture scenario and observation metadata (spec section 9).",
+        "properties": {
+          "scenario": {
+            "type": "string",
+            "minLength": 1
+          },
+          "observed_at": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          }
+        },
+        "required": [
+          "scenario",
+          "observed_at"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "service",
+      "deployment_id",
+      "deployed_at",
+      "revision",
+      "fixture"
+    ],
+    "additionalProperties": false,
+    "oneOf": [
+      {
+        "properties": {
+          "deployment_id": {
+            "type": "string"
+          },
+          "deployed_at": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          }
+        }
+      },
+      {
+        "properties": {
+          "deployment_id": {
+            "type": "null"
+          },
+          "deployed_at": {
+            "type": "null"
+          },
+          "revision": {
+            "type": "null"
+          }
+        }
+      }
+    ]
+  }
+}

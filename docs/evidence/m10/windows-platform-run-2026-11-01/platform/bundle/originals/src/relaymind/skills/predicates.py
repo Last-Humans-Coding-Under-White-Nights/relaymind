@@ -1,0 +1,874 @@
+"""Completion predicates: registered gateway validators (RM06, section 9).
+
+A skill manifest names one of these IDs. Each predicate takes the final
+answer text and the run's tool results and returns whether the answer
+meets the skill's completion criteria. They check grounding, not style:
+values the answer must preserve come from the latest successful tool
+result, never from the model (RM05, RM16).
+
+The diagnostic predicates also check that the answer keeps observations
+apart from hypotheses or checklist items, using the section labels the
+skill instructions require in English or Chinese. A label counts only
+where it starts its own line as a section heading. A label check cannot
+judge whether a hypothesis is sound; that stays with evaluation
+(section 12).
+
+Beside each predicate sit its failed checks and its criteria (spec 0.31
+section 4.4): the predicate is true when no check fails, so the text the
+external model reads and the check the gateway runs cannot drift apart.
+The criteria values come only from schema-typed result fields, never from
+free text (RM12).
+"""
+
+import re
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from copy import deepcopy
+from dataclasses import dataclass
+from typing import Any
+
+from relaymind.tools.registry import ToolResult, ToolStatus
+
+Predicate = Callable[[str, Sequence[ToolResult]], bool]
+
+OBSERVATION_LABELS = ("Observations", "Observation", "观察")
+HYPOTHESIS_LABELS = ("Hypotheses", "Hypothesis", "假设")
+
+# A section label starts its own line after optional spaces and Markdown
+# heading, list, or emphasis marks; a heading label ends with a colon.
+_HEADING_PREFIX = r"^[ \t#*>_-]*"
+_COLON = r"[ \t*_]*[:：]"
+
+# The draft label the checklist skill's completion criteria require
+# (RM16): the checklist label followed directly by its draft marker. It
+# must start its own line, like the other section labels.
+_DRAFT_CHECKLIST_LABEL = re.compile(
+    _HEADING_PREFIX + r"(?:Diagnostic checklist\s*\(\s*draft,\s*not log-backed\s*\)"
+    r"|诊断检查清单\s*[（(]\s*草稿\s*[，,]\s*未基于日志\s*[）)])",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+_STATUS_WORD = re.compile(r"(?<![A-Za-z])(healthy|degraded|unavailable)(?![A-Za-z])", re.IGNORECASE)
+# A negator right before a status word reverses it: "not healthy",
+# "no longer healthy", "不 healthy" (RM16).
+_NEGATED = re.compile(
+    r"(?:(?<![A-Za-z])(?:not|no longer)|n't)\s+$|(?:不是|不再|[不非未])\s*$", re.IGNORECASE
+)
+# The Chinese gloss a status word may carry, such as unavailable（不可用）.
+_GLOSS = re.compile(r"\s*[（(]\s*(健康|降级|不可用)\s*[）)]")
+_GLOSS_STATUS = {"健康": "healthy", "降级": "degraded", "不可用": "unavailable"}
+# A statement about a service ends at a sentence or line break, or where
+# another resource ID (such as ledger-db or web-1) starts a new subject.
+# An ID-shaped token is a new subject only when followed by a predicate.
+# Procedural prose such as "in step-1 and is healthy" keeps the service
+# as its subject; an infrastructure suffix alone is not enough.
+_STATEMENT_END = re.compile(r"[.!?](?=\s|$)|[。！？；;\n]")
+_RESOURCE_ID = re.compile(
+    r"(?<![A-Za-z0-9-])[a-z][a-z0-9]*(?:-[a-z0-9]+)*"
+    r"-(?:api|db|service|svc|cache|queue|worker|web|server|gateway|proxy|[a-z]*\d[a-z0-9]*)"
+    r"(?![A-Za-z0-9-])"
+    r"(?=(?:[ \t]+|[ \t]*[,：:][ \t]*)(?:(?:which|that)[ \t]+)?"
+    r"(?:is|are|was|were|seems?|remains?|healthy|degraded|unavailable)"
+    r"(?![A-Za-z])|[ \t]*(?:的状态|状态|是))",
+    re.IGNORECASE,
+)
+
+# Incident count labels as the summarize-incident-counts examples phrase
+# them, in English and Chinese.
+_COUNT_LABELS: Mapping[str, tuple[str, ...]] = {
+    "total": ("total", "incidents", "incident", "共有", "共", "总计", "事件"),
+    "critical": ("critical", "严重"),
+    "warning": ("warnings", "warning", "警告"),
+    "info": ("info", "信息"),
+}
+_INCIDENT_LABELS: Mapping[str, tuple[str, ...]] = {
+    "window_minutes": ("minutes", "minute", "分钟"),
+    **_COUNT_LABELS,
+}
+# Section 9: the incident summary reports counts without inferred causes.
+_CAUSE_WORDS = re.compile(
+    r"(?<![A-Za-z])(?:caused by|because|due to|root cause)(?![A-Za-z])|原因|由于|导致",
+    re.IGNORECASE,
+)
+_COUNT_NUMBER = re.compile(r"(?<![A-Za-z0-9_.-])-?\d+(?![A-Za-z0-9_]|\.\d)")
+
+_EVIDENCE_TOOLS = ("get_latest_deployment", "get_metrics", "get_recent_logs")
+
+
+def _latest(
+    results: Sequence[ToolResult], tool_name: str, *, require_complete: bool = True
+) -> dict[str, Any] | None:
+    """Use the latest outcome; complete-result skills cannot fall back to stale data (RM22)."""
+    for result in reversed(results):
+        if result.tool_name == tool_name:
+            if (
+                result.status is ToolStatus.SUCCEEDED
+                and result.data is not None
+                and (not require_complete or not result.truncated)
+            ):
+                return result.data
+            return None
+    return None
+
+
+def _alternation(items: Sequence[str]) -> str:
+    return "|".join(re.escape(item) for item in items)
+
+
+# A number followed by a label ("3 warning", "7 个事件") belongs to that
+# label; otherwise a label right before it ("total 7", "警告 3 个")
+# names it.
+_LABEL_AFTER = {
+    key: re.compile(
+        rf"[ \t]*(?:[个起次]|-)?[ \t]*(?:{_alternation(items)})(?![A-Za-z])", re.IGNORECASE
+    )
+    for key, items in _INCIDENT_LABELS.items()
+}
+_LABEL_BEFORE = {
+    key: re.compile(
+        rf"(?<![A-Za-z])(?:{_alternation(items)})(?![A-Za-z])"
+        r"[ \t]*(?:incidents?(?![A-Za-z])|事件)?[ \t]*(?:[:：]|of)?[ \t]*$",
+        re.IGNORECASE,
+    )
+    for key, items in _INCIDENT_LABELS.items()
+}
+
+
+def _labeled_numbers(answer: str) -> dict[str, list[int]]:
+    """Each number written right next to an incident label, by label key.
+
+    So in "7 incidents: 1 critical" the 1 is critical.
+    """
+    found: dict[str, list[int]] = {key: [] for key in _INCIDENT_LABELS}
+    for number in _COUNT_NUMBER.finditer(answer):
+        # A severity label is more specific than the unit noun "incident".
+        # Prefer labels after the number for "7 incidents: 1 critical",
+        # but use the preceding severity in "Critical: 1 incident".
+        after = [k for k, p in _LABEL_AFTER.items() if p.match(answer, number.end())]
+        before = [k for k, p in _LABEL_BEFORE.items() if p.search(answer, 0, number.start())]
+        key = next((k for k in [*after, *before] if k != "total"), None)
+        if key is None and (after or before):
+            key = (after or before)[0]
+        if key is not None:
+            found[key].append(int(number.group()))
+    return found
+
+
+def _section_pattern(labels: Sequence[str], *, prefix: str = _HEADING_PREFIX) -> re.Pattern[str]:
+    """A label that starts its own line, as a section heading (section 9).
+
+    The label must be followed by ':' or '：'. A label word inside a
+    sentence never counts.
+    """
+    return re.compile(rf"{prefix}(?:{_alternation(labels)}){_COLON}", re.IGNORECASE | re.MULTILINE)
+
+
+# Insufficient-evidence labels accept colons, standalone lines, and
+# sentence endings in both languages, plus "Insufficient evidence to ...".
+# Other sentences that
+# start with the words, such as "Insufficient evidence is not an issue:
+# the cause is ...", are assertions, not the label.
+_LABEL_END = rf"(?:{_COLON}|[ \t*_]*(?:[.。](?=[ \t]*(?:\r?$))|(?=\r?$)))"
+_INSUFFICIENT_SECTION = re.compile(
+    rf"{_HEADING_PREFIX}(?:Insufficient evidence(?:{_LABEL_END}|[ \t]+to(?![A-Za-z]))"
+    rf"|证据不足{_LABEL_END})",
+    re.IGNORECASE | re.MULTILINE,
+)
+_SECTIONS = {
+    "observation": _section_pattern(OBSERVATION_LABELS),
+    "hypothesis": _section_pattern(HYPOTHESIS_LABELS),
+    "insufficient": _INSUFFICIENT_SECTION,
+}
+# A section heading that is not a list item, so "- Observation: ..."
+# inside the checklist never starts the observation section (RM16).
+# Emphasis such as **Observation:** is still a heading.
+_OBSERVATION_HEADING = _section_pattern(
+    OBSERVATION_LABELS, prefix=r"^[ \t>]*(?:#+[ \t]*)?(?:[*_]{1,3}(?![ \t]))?"
+)
+# Section content: at least one letter, digit, or CJK character.
+_CONTENT = re.compile(r"[A-Za-z0-9\u4e00-\u9fff]")
+
+
+def _filled_sections(answer: str) -> set[str]:
+    """The labelled sections that have content before the next label."""
+    labels = sorted(
+        (found.start(), found.end(), kind)
+        for kind, pattern in _SECTIONS.items()
+        for found in pattern.finditer(answer)
+    )
+    filled = set()
+    for index, (_, end, kind) in enumerate(labels):
+        stop = labels[index + 1][0] if index + 1 < len(labels) else len(answer)
+        if _CONTENT.search(answer, end, stop):
+            filled.add(kind)
+    return filled
+
+
+# RM05: a deployment-like ID in any case and with any separator, such as
+# dep-staging-0142, DEP-9, dep_0142, Deploy-77, or dep9. A token counts
+# when dep, deploy, or deployment is followed by a separator and a
+# digit-bearing token, or directly by digits. Words that only start with
+# dep, such as depth2, deposit-1, or departure3, do not count.
+_DEPLOYMENT_LIKE_ID = re.compile(
+    r"(?<![A-Za-z0-9])dep(?:loy(?:ment)?)?"
+    r"(?:[-_#:]+[A-Za-z0-9_-]*\d|\d)[A-Za-z0-9_-]*(?![A-Za-z0-9_-])",
+    re.IGNORECASE,
+)
+# RM05: a revision-like hex token must come from the tool result.
+# A number assigned directly to the Chinese deployment-ID label is an ID;
+# nearby query counts and durations are not.
+_REVISION_LIKE = re.compile(
+    r"(?<![A-Za-z0-9])(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,40}(?![A-Za-z0-9])",
+    re.IGNORECASE,
+)
+_ZH_DEPLOYMENT_NUMBER = re.compile(r"部署编号[ \t]*(?:为|是)?[ \t]*[:：#]?[ \t]*[（(]?[ \t]*\d+")
+
+# A deletion answer states the deletion and does not negate it.
+_DELETION_VERB = re.compile(r"(?<![A-Za-z])deleted(?![A-Za-z])|已删除|删除了", re.IGNORECASE)
+_DELETION_NEGATED = re.compile(
+    r"(?<![A-Za-z])(?:not|never|cannot|\w+n't)[ \t]+"
+    r"(?:(?:actually|successfully|been|be|yet)[ \t]+)*deleted(?![A-Za-z])"
+    r"|(?<![A-Za-z])(?:failed|unable)[ \t]+to[ \t]+delete(?![A-Za-z])"
+    r"|(?<![A-Za-z])deletion[ \t]+failed(?![A-Za-z])"
+    r"|(?:未能|没有|无法|未|不能|不曾|不)[ \t]*(?:成功[ \t]*)?删除"
+    r"|删除(?:操作)?[ \t]*(?:失败|未成功)",
+    re.IGNORECASE,
+)
+_DEMO_DATABASE_ID = re.compile(
+    r"(?<![A-Za-z0-9-])demo-[a-z0-9-]*-db(?![A-Za-z0-9-])", re.IGNORECASE
+)
+
+
+def _id_mention(resource_id: str) -> re.Pattern[str]:
+    """A mention of a lowercase resource ID, in any case (RM05, section 9).
+
+    Service and database IDs are lowercase identifiers by schema (an enum
+    or a ``^[a-z0-9]`` pattern), so case folding never joins two IDs and
+    "Staging-api" at the start of a sentence still names staging-api.
+    The mention must end at an ID boundary: a longer ID such as
+    staging-api-v2 is another resource. IDs with no case rule, such as
+    deployment IDs, are matched exactly instead.
+    """
+    return re.compile(rf"(?<![A-Za-z0-9-]){re.escape(resource_id)}(?![A-Za-z0-9-])", re.IGNORECASE)
+
+
+def _stated_statuses(answer: str, service: str) -> list[str]:
+    """Every status stated for service, in lowercase.
+
+    A status is stated by each status word after a mention of the
+    service in the same statement, so "unavailable or healthy" states
+    two. A negated status word ("not healthy") is stated as "not ..."
+    and a Chinese gloss ("unavailable（健康）") as the status it names,
+    so neither matches a returned status by accident (RM16). The
+    service name and status word may be written in any case.
+    """
+    stated = []
+    for found in _id_mention(service).finditer(answer):
+        start = found.end()
+        stop = _STATEMENT_END.search(answer, start)
+        end = stop.start() if stop is not None else len(answer)
+        stop = _RESOURCE_ID.search(answer, start, end)
+        if stop is not None:
+            end = stop.start()
+        for word in _STATUS_WORD.finditer(answer, start, end):
+            status = word.group(1).lower()
+            if _NEGATED.search(answer, start, word.start()):
+                status = f"not {status}"
+            stated.append(status)
+            gloss = _GLOSS.match(answer, word.end(), end)
+            if gloss is not None:
+                stated.append(_GLOSS_STATUS[gloss.group(1)])
+    return stated
+
+
+def _no_result(tool_name: str) -> str:
+    return f"the gateway has no successful {tool_name} result to check the answer against"
+
+
+def health_status_preserved_failed_checks(
+    answer: str, results: Sequence[ToolResult]
+) -> tuple[str, ...]:
+    """The checks of health_status_preserved that the answer fails (RM16, section 9)."""
+    data = _latest(results, "get_service_health")
+    if data is None:
+        return (_no_result("get_service_health"),)
+    failed = []
+    stated = _stated_statuses(answer, data["service"])
+    if not stated:
+        failed.append("name the service and state its status in the same statement")
+    elif any(status != data["status"] for status in stated):
+        failed.append(
+            "state exactly the status the health tool returned for the service, "
+            "and no other status for it"
+        )
+    if data["checked_at"] not in answer:
+        failed.append("repeat the checked_at time exactly as returned")
+    return tuple(failed)
+
+
+def health_status_preserved(answer: str, results: Sequence[ToolResult]) -> bool:
+    """The answer names the returned service, states exactly the returned
+    status for it, and repeats the check time (RM16, section 9).
+
+    Status words about other resources, such as a dependency to check,
+    do not count against the answer.
+    """
+    return not health_status_preserved_failed_checks(answer, results)
+
+
+def deployment_reported_failed_checks(
+    answer: str, results: Sequence[ToolResult]
+) -> tuple[str, ...]:
+    """The checks of deployment_reported that the answer fails (RM05, section 9)."""
+    data = _latest(results, "get_latest_deployment")
+    if data is None:
+        return (_no_result("get_latest_deployment"),)
+    failed = []
+    if _id_mention(data["service"]).search(answer) is None:
+        failed.append("name the service")
+    if data["deployment_id"] is None:
+        if not (
+            _DEPLOYMENT_LIKE_ID.search(answer) is None
+            and _ZH_DEPLOYMENT_NUMBER.search(answer) is None
+            and all(
+                found.group() == data.get("revision") for found in _REVISION_LIKE.finditer(answer)
+            )
+        ):
+            failed.append(
+                "say that no deployment is recorded, and write no deployment ID or revision"
+            )
+        return tuple(failed)
+    # The deployment ID has no case rule in the output schema, so it must
+    # be quoted exactly, and no other deployment-like ID may appear (RM05).
+    if any(
+        found.group() != data["deployment_id"] for found in _DEPLOYMENT_LIKE_ID.finditer(answer)
+    ):
+        failed.append("write no deployment ID other than the returned one")
+    if data["deployment_id"] not in answer:
+        failed.append("write the returned deployment_id exactly")
+    if data["deployed_at"] not in answer:
+        failed.append("write the returned deployed_at time exactly")
+    return tuple(failed)
+
+
+def deployment_reported(answer: str, results: Sequence[ToolResult]) -> bool:
+    """The answer names the service, and its deployment ID and time appear,
+    or no ID is claimed when none exists.
+
+    The service is matched in any case, like the other predicates. With
+    no recorded deployment, any deployment-like ID in the answer is
+    invented (RM05), whatever its case or separator.
+    """
+    return not deployment_reported_failed_checks(answer, results)
+
+
+_COUNT_CHECKS = {
+    "window_minutes": "write the window in minutes exactly as returned, next to its own label",
+    "total": "write the total count exactly as returned, next to its own label",
+    "critical": "write the critical count exactly as returned, next to its own label",
+    "warning": "write the warning count exactly as returned, next to its own label",
+    "info": "write the info count exactly as returned, next to its own label",
+}
+
+
+def incident_counts_reported_failed_checks(
+    answer: str, results: Sequence[ToolResult]
+) -> tuple[str, ...]:
+    """The checks of incident_counts_reported that the answer fails (section 9)."""
+    data = _latest(results, "get_incident_counts")
+    if data is None:
+        return (_no_result("get_incident_counts"),)
+    failed = []
+    if _id_mention(data["service"]).search(answer) is None:
+        failed.append("name the service")
+    if _CAUSE_WORDS.search(answer):
+        failed.append("report counts only, with no cause (no because, due to, or root cause)")
+    for key, numbers in _labeled_numbers(answer).items():
+        if not numbers or set(numbers) != {data[key]}:
+            failed.append(_COUNT_CHECKS[key])
+    return tuple(failed)
+
+
+def incident_counts_reported(answer: str, results: Sequence[ToolResult]) -> bool:
+    """The answer names the service, and the window and every returned
+    count appear as exact numbers, each next to its own label (section 9).
+
+    No other number may sit next to a count label, so a corrected or
+    swapped count fails, and the answer states no inferred cause.
+    """
+    return not incident_counts_reported_failed_checks(answer, results)
+
+
+def performance_evidence_separated_failed_checks(
+    answer: str, results: Sequence[ToolResult]
+) -> tuple[str, ...]:
+    """The checks of performance_evidence_separated that the answer fails (section 9)."""
+    # This skill explicitly accepts partial observations, including truncated logs.
+    if not any(
+        _latest(results, tool, require_complete=False) is not None for tool in _EVIDENCE_TOOLS
+    ):
+        return ("the gateway has no successful evidence tool result to check the answer against",)
+    filled = _filled_sections(answer)
+    failed = []
+    if "observation" not in filled:
+        failed.append("write an Observations section that starts its own line and has content")
+    if not filled & {"hypothesis", "insufficient"}:
+        failed.append(
+            "write a Hypotheses section, or an Insufficient evidence statement, "
+            "that starts its own line and has content"
+        )
+    return tuple(failed)
+
+
+def performance_evidence_separated(answer: str, results: Sequence[ToolResult]) -> bool:
+    """Evidence was collected and observations are kept apart from hypotheses.
+
+    Section 9: the answer has a labelled observations section and a
+    labelled hypotheses or insufficient-evidence section, each starting
+    its own line and each with content. Label words inside prose do not
+    count.
+    """
+    return not performance_evidence_separated_failed_checks(answer, results)
+
+
+def deletion_outcome_reported_failed_checks(
+    answer: str, results: Sequence[ToolResult]
+) -> tuple[str, ...]:
+    """The checks of deletion_outcome_reported that the answer fails (RM16)."""
+    data = _latest(results, "delete_demo_database")
+    if data is None or data["deleted"] is not True:
+        return ("the gateway has no successful delete_demo_database result with deleted true",)
+    failed = []
+    if _id_mention(data["database_id"]).search(answer) is None:
+        failed.append("name the deleted database ID")
+    if any(
+        found.group().lower() != data["database_id"] for found in _DEMO_DATABASE_ID.finditer(answer)
+    ):
+        failed.append("name no other demo database")
+    if _DELETION_VERB.search(answer) is None:
+        failed.append("say that the database was deleted")
+    if _DELETION_NEGATED.search(answer) is not None:
+        failed.append("do not negate the deletion")
+    return tuple(failed)
+
+
+def deletion_outcome_reported(answer: str, results: Sequence[ToolResult]) -> bool:
+    """A sandbox delete succeeded and the answer reports it (RM16).
+
+    The answer names the database, in any case, says it was deleted,
+    does not negate the deletion, and names no other demo database.
+    """
+    return not deletion_outcome_reported_failed_checks(answer, results)
+
+
+def health_checklist_separated_failed_checks(
+    answer: str, results: Sequence[ToolResult]
+) -> tuple[str, ...]:
+    """The checks of health_checklist_separated that the answer fails (RM16)."""
+    label = _DRAFT_CHECKLIST_LABEL.search(answer)
+    if label is None:
+        return (
+            "start a line with the checklist draft label",
+            *health_status_preserved_failed_checks(answer, results),
+        )
+    rest = answer[label.end() :]
+    resume = _OBSERVATION_HEADING.search(rest)
+    outside = answer[: label.start()] + (rest[resume.start() :] if resume else "")
+    return health_status_preserved_failed_checks(outside, results)
+
+
+def health_checklist_separated(answer: str, results: Sequence[ToolResult]) -> bool:
+    """Observed health is preserved and the checklist carries its draft label (RM16).
+
+    The health check runs on the answer outside the checklist section,
+    which runs from the draft label to the next observation heading or
+    the end. The draft label must start its own line, and a list item
+    such as "- Observation: ..." is a draft item, never the observation.
+    """
+    return not health_checklist_separated_failed_checks(answer, results)
+
+
+COMPLETION_PREDICATES: Mapping[str, Predicate] = {
+    "health_status_preserved": health_status_preserved,
+    "deployment_reported": deployment_reported,
+    "incident_counts_reported": incident_counts_reported,
+    "performance_evidence_separated": performance_evidence_separated,
+    "deletion_outcome_reported": deletion_outcome_reported,
+    "health_checklist_separated": health_checklist_separated,
+}
+
+
+# -- the criteria stated to the external model (spec 0.31 section 4.4, RM06, RM12) --------
+#
+# Each predicate has a fixed part (labels, forbidden patterns, what to keep
+# exactly) that is the same for every run, and a value part built from the
+# latest successful tool result. Values come only from schema-typed fields:
+# an enum, a timestamp, an identifier that matches a plain token, a count, or
+# a boolean. Free text of a tool result (a log message, a source) is never
+# read here, so tool output cannot reach a gateway rules message (RM12).
+
+_SERVICE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
+_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+# The deployment ID and the revision have no pattern in their schema, so a plain
+# token is the only shape stated; anything else is left out.
+_PLAIN_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+_STATUSES = frozenset(_GLOSS_STATUS.values())
+_ZH_KEEP = " Keep it unchanged in the Chinese answer."
+# The label words of the incident counts in each answer language (section 9).
+_COUNT_WORDS = {
+    "en": {
+        "window_minutes": "minutes",
+        "total": "total",
+        "critical": "critical",
+        "warning": "warning",
+        "info": "info",
+    },
+    "zh": {
+        "window_minutes": "分钟",
+        "total": "总计",
+        "critical": "严重",
+        "warning": "警告",
+        "info": "信息",
+    },
+}
+
+
+def _plain(value: object, shape: re.Pattern[str]) -> str | None:
+    """The value when it is text of exactly this shape, else None."""
+    return value if isinstance(value, str) and shape.fullmatch(value) else None
+
+
+def _service_lines(data: Mapping[str, Any]) -> list[str]:
+    """The service line, when the service is a plain service ID."""
+    service = _plain(data.get("service"), _SERVICE_ID)
+    return [] if service is None else [f"Service: {service}"]
+
+
+def _count(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _health_lines(data: Mapping[str, Any], language: str) -> tuple[str, ...]:
+    keep = _ZH_KEEP if language == "zh" else ""
+    lines = _service_lines(data)
+    if data.get("status") in _STATUSES:
+        lines.append(f'Status: write exactly "{data["status"]}".{keep}')
+    if (checked_at := _plain(data.get("checked_at"), _TIMESTAMP)) is not None:
+        lines.append(f"checked_at: write exactly {checked_at}.{keep}")
+    return tuple(lines)
+
+
+def health_status_preserved_criteria(
+    results: Sequence[ToolResult], language: str
+) -> tuple[str, ...]:
+    """The values the answer must keep, from the latest health result (RM16)."""
+    data = _latest(results, "get_service_health")
+    return () if data is None else _health_lines(data, language)
+
+
+def deployment_reported_criteria(results: Sequence[ToolResult], language: str) -> tuple[str, ...]:
+    """The values the answer must keep, from the latest deployment result (RM05)."""
+    data = _latest(results, "get_latest_deployment")
+    if data is None:
+        return ()
+    lines = _service_lines(data)
+    if data.get("deployment_id") is None:
+        lines.append(
+            "No deployment is recorded for this service: say so, and write no deployment ID."
+        )
+        return tuple(lines)
+    if (deployment_id := _plain(data.get("deployment_id"), _PLAIN_TOKEN)) is not None:
+        lines.append(f"deployment_id: write exactly {deployment_id}.")
+    if (deployed_at := _plain(data.get("deployed_at"), _TIMESTAMP)) is not None:
+        lines.append(f"deployed_at: write exactly {deployed_at}.")
+    if (revision := _plain(data.get("revision"), _PLAIN_TOKEN)) is not None:
+        lines.append(f"revision: {revision} (you may add it).")
+    return tuple(lines)
+
+
+def incident_counts_reported_criteria(
+    results: Sequence[ToolResult], language: str
+) -> tuple[str, ...]:
+    """The window and counts the answer must keep, from the latest counts result."""
+    data = _latest(results, "get_incident_counts")
+    if data is None:
+        return ()
+    words = _COUNT_WORDS.get(language, _COUNT_WORDS["en"])
+    lines = _service_lines(data)
+    for key, name in (
+        ("window_minutes", "Window"),
+        ("total", "Total"),
+        ("critical", "Critical"),
+        ("warning", "Warning"),
+        ("info", "Info"),
+    ):
+        if (number := _count(data.get(key))) is not None:
+            lines.append(f'{name}: {number} (write it next to the word "{words[key]}").')
+    return tuple(lines)
+
+
+def performance_evidence_separated_criteria(
+    results: Sequence[ToolResult], language: str
+) -> tuple[str, ...]:
+    """Which evidence tools returned, and two typed facts about them (section 9)."""
+    lines = []
+    for tool in _EVIDENCE_TOOLS:
+        data = _latest(results, tool, require_complete=False)
+        if data is None:
+            continue
+        lines.append(f"{tool}: returned a result.")
+        if tool == "get_recent_logs" and data.get("truncated") is True:
+            lines.append("get_recent_logs: the list was truncated (state it as an observation).")
+        if tool == "get_latest_deployment" and data.get("deployment_id") is None:
+            lines.append("get_latest_deployment: no deployment is recorded (state it).")
+    return tuple(lines)
+
+
+def deletion_outcome_reported_criteria(
+    results: Sequence[ToolResult], language: str
+) -> tuple[str, ...]:
+    """The deleted database the answer must name, from the latest delete result."""
+    data = _latest(results, "delete_demo_database")
+    if data is None or data.get("deleted") is not True:
+        return ()
+    database = _plain(data.get("database_id"), _SERVICE_ID)
+    if database is None:
+        return ()
+    return (f"Database: {database} (write it exactly, and say it was deleted).",)
+
+
+@dataclass(frozen=True)
+class CompletionCriteria:
+    """What the external model is told about one completion predicate (spec 0.31, section 4.4).
+
+    fixed is the same for every run: the labels, the forbidden patterns, and
+    what to keep exactly. values builds the run-specific part from the tool
+    results and the answer language ("en" or "zh"), and is empty when no
+    successful result exists. failed_checks names what an answer misses, in
+    gateway text that never quotes the answer.
+    """
+
+    fixed: tuple[str, ...]
+    values: Callable[[Sequence[ToolResult], str], tuple[str, ...]]
+    failed_checks: Callable[[str, Sequence[ToolResult]], tuple[str, ...]]
+
+
+COMPLETION_CRITERIA: Mapping[str, CompletionCriteria] = {
+    "health_status_preserved": CompletionCriteria(
+        fixed=(
+            "Name the service and state exactly the status the health tool returned for it. "
+            "State no other status for that service, and do not negate it (not 'not healthy').",
+            "Write the status word exactly as returned: healthy, degraded, or unavailable. "
+            "Keep it in English in a Chinese answer.",
+            "Repeat the checked_at time exactly, in UTC.",
+        ),
+        values=health_status_preserved_criteria,
+        failed_checks=health_status_preserved_failed_checks,
+    ),
+    "deployment_reported": CompletionCriteria(
+        fixed=(
+            "Name the service, and write the returned deployment_id and deployed_at exactly.",
+            "Write no other deployment-like ID. When no deployment is recorded, say so and "
+            "write no deployment ID, no revision, and no deployment number.",
+        ),
+        values=deployment_reported_criteria,
+        failed_checks=deployment_reported_failed_checks,
+    ),
+    "incident_counts_reported": CompletionCriteria(
+        fixed=(
+            "Name the service. Write the window in minutes and the total, critical, warning, "
+            "and info counts exactly as returned, each number next to its own label word "
+            "(minutes, total, critical, warning, info; in Chinese 分钟, 总计, 严重, 警告, 信息).",
+            "Write no other number next to a count label. State counts only: no cause, "
+            "trend, or blame (no because, due to, caused by, or root cause; 原因, 由于, 导致).",
+        ),
+        values=incident_counts_reported_criteria,
+        failed_checks=incident_counts_reported_failed_checks,
+    ),
+    "performance_evidence_separated": CompletionCriteria(
+        fixed=(
+            "Write an 'Observations:' section (Chinese: '观察：') on its own line, with only "
+            "values the tools returned.",
+            "Then write a 'Hypotheses:' section (Chinese: '假设：') on its own line, or an "
+            "'Insufficient evidence' line (Chinese: '证据不足'), each with content.",
+            "A label word inside a sentence is not a section label.",
+        ),
+        values=performance_evidence_separated_criteria,
+        failed_checks=performance_evidence_separated_failed_checks,
+    ),
+    "deletion_outcome_reported": CompletionCriteria(
+        fixed=(
+            "Say that the database was deleted, and name the deleted database ID exactly.",
+            "Do not negate the deletion, and name no other demo database.",
+        ),
+        values=deletion_outcome_reported_criteria,
+        failed_checks=deletion_outcome_reported_failed_checks,
+    ),
+    "health_checklist_separated": CompletionCriteria(
+        fixed=(
+            "Start the health line with 'Observation:' (Chinese: '观察：') and keep the exact "
+            "returned status word and checked_at time, as for a health check.",
+            "Start a line with the checklist label 'Diagnostic checklist (draft, not "
+            "log-backed)' (Chinese: '诊断检查清单（草稿，未基于日志）'); the checklist is a "
+            "draft, not a diagnosis.",
+        ),
+        # The health observation keeps the same values, apart from the checklist (RM16).
+        values=health_status_preserved_criteria,
+        failed_checks=health_checklist_separated_failed_checks,
+    ),
+}
+
+
+# RM32: explicit safety/completeness factorization. The original predicates stay
+# authoritative and unchanged; neither failures nor decisions depend on prose.
+def completion_parts(
+    predicate_id: str, answer: str, results: Sequence[ToolResult]
+) -> tuple[bool, bool]:
+    """Cumulative safety and final completeness under the existing syntax (AC19)."""
+    if predicate_id == "health_checklist_separated":
+        label = _DRAFT_CHECKLIST_LABEL.search(answer)
+        if label is None:
+            safe, _ = completion_parts("health_status_preserved", answer, results)
+            return safe, False
+        rest = answer[label.end() :]
+        resume = _OBSERVATION_HEADING.search(rest)
+        outside = answer[: label.start()] + (rest[resume.start() :] if resume else "")
+        return completion_parts("health_status_preserved", outside, results)
+    if predicate_id == "health_status_preserved":
+        data = _latest(results, "get_service_health")
+        if data is None:
+            return False, False
+        stated = _stated_statuses(answer, data["service"])
+        return all(s == data["status"] for s in stated), bool(stated) and data[
+            "checked_at"
+        ] in answer
+    if predicate_id == "deployment_reported":
+        data = _latest(results, "get_latest_deployment")
+        if data is None:
+            return False, False
+        complete = _id_mention(data["service"]).search(answer) is not None
+        if data["deployment_id"] is None:
+            safe = (
+                _DEPLOYMENT_LIKE_ID.search(answer) is None
+                and _ZH_DEPLOYMENT_NUMBER.search(answer) is None
+                and all(m.group() == data.get("revision") for m in _REVISION_LIKE.finditer(answer))
+            )
+        else:
+            safe = all(
+                m.group() == data["deployment_id"] for m in _DEPLOYMENT_LIKE_ID.finditer(answer)
+            )
+            complete = (
+                complete and data["deployment_id"] in answer and data["deployed_at"] in answer
+            )
+        return safe, complete
+    if predicate_id == "incident_counts_reported":
+        data = _latest(results, "get_incident_counts")
+        if data is None:
+            return False, False
+        numbers = _labeled_numbers(answer)
+        return (
+            not _CAUSE_WORDS.search(answer)
+            and all(all(n == data[k] for n in ns) for k, ns in numbers.items()),
+            _id_mention(data["service"]).search(answer) is not None and all(numbers.values()),
+        )
+    if predicate_id == "deletion_outcome_reported":
+        data = _latest(results, "delete_demo_database")
+        if data is None or data["deleted"] is not True:
+            return False, False
+        return (
+            all(
+                m.group().lower() == data["database_id"] for m in _DEMO_DATABASE_ID.finditer(answer)
+            )
+            and _DELETION_NEGATED.search(answer) is None,
+            _id_mention(data["database_id"]).search(answer) is not None
+            and _DELETION_VERB.search(answer) is not None,
+        )
+    if predicate_id == "performance_evidence_separated":
+        evidence = any(
+            _latest(results, tool, require_complete=False) is not None for tool in _EVIDENCE_TOOLS
+        )
+        filled = _filled_sections(answer)
+        return evidence, evidence and "observation" in filled and bool(
+            filled & {"hypothesis", "insufficient"}
+        )
+    raise KeyError(predicate_id)
+
+
+def pending_evidence_complete(
+    tool_names: Sequence[str], predicate_id: str, results: Sequence[ToolResult]
+) -> bool:
+    """Latest successful outcomes only; performance alone accepts truncated data."""
+    return all(
+        _latest(results, name, require_complete=predicate_id != "performance_evidence_separated")
+        is not None
+        for name in tool_names
+    )
+
+
+class StatementRejected(Exception):
+    """A stable prefix is unsafe or the normally ended answer is incomplete."""
+
+
+class StatementGate:
+    """A generation's frozen evidence, raw context and unpublished offset (RM32).
+
+    A delimiter is retained verbatim. ASCII punctuation needs real lookahead.
+    Checklist labels can span arbitrary whitespace/newlines, so publication waits
+    for its first complete draft label and then uses complete lines. With known
+    secrets the run conservatively buffers to EOF for exact full-text redaction.
+    """
+
+    def __init__(
+        self, predicate_id: str, results: Sequence[ToolResult], *, hold: bool = False
+    ) -> None:
+        self.predicate_id = predicate_id
+        self.results = deepcopy(tuple(results))
+        self.raw = ""
+        self.offset = 0
+        self.hold = hold
+        self.rejected = False
+
+    def push(self, text: str) -> Iterator[str]:
+        """Yield stable verified units in order, even within one provider delta."""
+        if self.rejected:
+            raise StatementRejected
+        self.raw += text
+        if self.hold:
+            return
+        label = None
+        if self.predicate_id == "health_checklist_separated":
+            label = _DRAFT_CHECKLIST_LABEL.search(self.raw)
+            if label is None:
+                return
+        for end in _STATEMENT_END.finditer(self.raw, self.offset):
+            stop = end.end()
+            if end.group() in ".!?" and stop == len(self.raw):
+                continue
+            if label is not None and (stop <= label.end() or end.group() != "\n"):
+                continue
+            safe, _ = completion_parts(self.predicate_id, self.raw[:stop], self.results)
+            if not safe:
+                self.rejected = True
+                raise StatementRejected
+            piece = self.raw[self.offset : stop]
+            if piece.strip():
+                self.offset = stop
+                yield piece
+
+    def feed(self, text: str) -> str:
+        """Collect the units of push; publication uses push to preserve ordering."""
+        return "".join(self.push(text))
+
+    def finish(self) -> str:
+        """Resolve the true EOF tail before releasing it, with the old backstop."""
+        safe, complete = completion_parts(self.predicate_id, self.raw, self.results)
+        if (
+            self.rejected
+            or not self.raw.strip()
+            or not (safe and complete)
+            or not COMPLETION_PREDICATES[self.predicate_id](self.raw, self.results)
+        ):
+            self.rejected = True
+            raise StatementRejected
+        tail = self.raw[self.offset :]
+        self.offset = len(self.raw)
+        return tail

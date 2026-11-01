@@ -1,0 +1,268 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "dataset_id",
+    "profile",
+    "catalog_digest",
+    "evidence",
+    "cases",
+    "digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "dataset_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "x-maxBytes": 256
+    },
+    "profile": {
+      "const": "source_grounded_development"
+    },
+    "catalog_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "access",
+          "path",
+          "sha256",
+          "bytes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-maxBytes": 256
+          },
+          "kind": {
+            "enum": [
+              "original",
+              "license",
+              "notice",
+              "permission",
+              "source_provenance",
+              "language_review",
+              "authorship",
+              "independence",
+              "adjudication",
+              "split_review",
+              "access_control",
+              "derivation",
+              "qualification"
+            ]
+          },
+          "access": {
+            "enum": [
+              "redistributable",
+              "restricted"
+            ]
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048,
+                "x-maxBytes": 2048
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "maxItems": 10000
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "task_text",
+          "conversation",
+          "lane",
+          "requested_kinds",
+          "query_language",
+          "authorship",
+          "reference_kind",
+          "reference_class",
+          "notes",
+          "source_asset_ids",
+          "source_evidence_ids",
+          "acceptable_asset_ids",
+          "reference_evidence_ids"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-maxBytes": 256
+          },
+          "task_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192,
+            "x-maxBytes": 8192
+          },
+          "conversation": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "role",
+                "text"
+              ],
+              "properties": {
+                "role": {
+                  "enum": [
+                    "system",
+                    "developer",
+                    "user",
+                    "assistant"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "maxItems": 32
+          },
+          "lane": {
+            "enum": [
+              "zh_hans_to_zh_hans",
+              "en_to_en",
+              "zh_hans_to_en",
+              "en_to_zh_hans",
+              "code_switch",
+              "zh_hant_diagnostic"
+            ]
+          },
+          "requested_kinds": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "skill",
+                "mcp_tool"
+              ]
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "query_language": {
+            "enum": [
+              "zh",
+              "en",
+              "mixed",
+              "unknown"
+            ]
+          },
+          "authorship": {
+            "enum": [
+              "generated",
+              "source_excerpt",
+              "human_authored"
+            ]
+          },
+          "reference_kind": {
+            "enum": [
+              "source_derived",
+              "author_defined",
+              "human_reviewed"
+            ]
+          },
+          "reference_class": {
+            "enum": [
+              "positive",
+              "negative",
+              "ambiguous"
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 8192,
+            "x-maxBytes": 8192
+          },
+          "source_asset_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          },
+          "source_evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          },
+          "acceptable_asset_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          },
+          "reference_evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          }
+        }
+      },
+      "maxItems": 10000
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

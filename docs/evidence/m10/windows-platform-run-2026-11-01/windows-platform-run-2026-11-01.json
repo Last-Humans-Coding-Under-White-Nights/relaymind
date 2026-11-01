@@ -1,0 +1,3595 @@
+{
+  "schema_version": 1,
+  "record_id": "windows-platform-run-2026-11-01",
+  "profile": "owner_run",
+  "outcome": "positive",
+  "scope": "platform",
+  "labelling": "not_applicable",
+  "annotators": null,
+  "agreement": null,
+  "corpus_review": null,
+  "preregistration": null,
+  "runs_started_at": null,
+  "machine": {
+    "ram_bytes": 68671221760,
+    "architecture": "AMD64",
+    "hostname_sha256": "c48c0692ec414d327d1d04a6b81573a989a6a6315074d3d76ee4756c8fa9125f",
+    "os_build": "10.0.26300",
+    "cpu_model": "AMD Ryzen 5 3600 6-Core Processor              ",
+    "role": "target_windows_x64",
+    "os": "Windows"
+  },
+  "revisions": {
+    "repository_commit": "4c1ce6e4d3f456f1a08955fd781f5adede9e1ce8",
+    "adapter_revision": "m10-control-ui-l10n",
+    "harness_sha256": "0965c4ff8034bc9d573571fdf155b841e69951303f7821aef54aa2c795bac1be"
+  },
+  "operation": null,
+  "subjects": [
+    {
+      "role": "evidence",
+      "path": "README.md",
+      "sha256": "37018b03c53cb1d45f46b138270b9602690d3a548f868fafe6a18dfbe49800c7",
+      "bytes": 2264
+    },
+    {
+      "role": "evidence",
+      "path": "SHA256SUMS",
+      "sha256": "03bdc02d5050787c735dac777dc740a6eea23ed7729b79ca42f6abede6d354f7",
+      "bytes": 104
+    },
+    {
+      "role": "evidence",
+      "path": "install-check.json",
+      "sha256": "46b1d42861894256db67c27f65e486beae3b79798657c55815849edbae94a7a6",
+      "bytes": 129872
+    },
+    {
+      "role": "environment",
+      "path": "machine.json",
+      "sha256": "0fc45c1ce75a09d6563ae8fe254a01ef3f796bab80cd786868adad4949d326d2",
+      "bytes": 322
+    },
+    {
+      "role": "evidence",
+      "path": "operations-initial.json",
+      "sha256": "9323588e833e1548d4b320a1731578a59c05e3202653f31a5d81f561cc8f3237",
+      "bytes": 8102
+    },
+    {
+      "role": "evidence",
+      "path": "operations.json",
+      "sha256": "b99886d4c5db40419720956b00b45615e9a3a7fa150369d9f76b1bbef4b541f9",
+      "bytes": 7053699
+    },
+    {
+      "role": "evidence",
+      "path": "ordinary.json",
+      "sha256": "a58056945dfd3f17b6c5d21ed54d0f58119806b99e85b1fc29f585250c647598",
+      "bytes": 1394
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/1b0b0019505463c35dba138847fb19c9015fbc2ba1b5e9150e2098e7a9552607.json",
+      "sha256": "5405d8373cb352d723fd2719e62e0af937940462e8ca02290eabd52f7dca2d23",
+      "bytes": 29
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/1dcafdabc84a484cc5ecb4441cc24a7df0bc946739b977af8973d5f833f9d55e.json",
+      "sha256": "7cbbdd261467996cff1620431fcd8f67fb4a1af4aea91b6cdb743daaadc23b9f",
+      "bytes": 30
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/246306138d2bc42284c1a2eaa6939750e4e7992052f1679c5fd2b9c39131e9c4.json",
+      "sha256": "a050ef06ea542b8fd8781f1e945f9adcd03c7ae5190719e66ba826e2059fce12",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/33e0ec95c6219f496ef08527f029e96b603156c1f85a7300485788096124e2f1.json",
+      "sha256": "c72d47e2f294bca546449d357e8f35c3cffec05b9c76324086e7b9c79004f0c4",
+      "bytes": 23738
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/4df6cdc75f5a44f366d2cd51787fb953bcd6d9b58fc7eca3d3c7cfd1199d1771.json",
+      "sha256": "49f18338abe37a2d19f04db6bf440ad32495a206e34a638cb2a59ab4a067369f",
+      "bytes": 30
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/6934fc7af3a3182c8e0f3e210434be4196d7a7dc2755900933c6517338811a61.json",
+      "sha256": "2845b7c428d7c62a3097409b8f70d96283183ab8ffc9b29e2ef4aa050ab14e87",
+      "bytes": 25
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/917b340071fa1a750ddfa4ccb79102365ea73cd4c7e9592281feb890ba515234.json",
+      "sha256": "0f69311b3c48666c6ce182742e7bf16435b93e786d0add1c735023dddd67abbf",
+      "bytes": 2158
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/929fbd1a27d095924032fd319024c7caa5f3adda7e86d37d0284c53a48bbcf9c.json",
+      "sha256": "be1d5d13f50127f166459231fe473b87c1476f6f7308135f4afb32fb44a47f4e",
+      "bytes": 12266
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/9757043340e81c4dabcfc7f98f6b59647825a67a3915b83071d0d851ebe93a91.json",
+      "sha256": "ac732e2e872fe755751b05565ccf310293d8b15781bf4645da74a8950914c353",
+      "bytes": 20
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/9c8c000875d648a9a45044b3a588e3a45093da20f718628c84c7c1e5a276b5ba.json",
+      "sha256": "ed4cb1f7055de6f19bb12d429082abae7cb35bf825a30d60107e2ed7a8df1dd3",
+      "bytes": 1224
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/a84f6cc0c838eae849dcfaf191177fd20f671223f68b35e00fb5647f98e56500.json",
+      "sha256": "2758bab8e270d2833c7c5d252524f95ec23d44fdd83afe068a88656d97002ccb",
+      "bytes": 27
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/b09cf492b048e62872233a3e5a603e3c0a9d620f387e765875ab5dc48f67b411.json",
+      "sha256": "98ef89e4877bf2fbb5b73970263a7c48afdaa66f9ca9ec82e8bf3c942e1d509d",
+      "bytes": 6940
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/b1ec23ceb5c82b2f70ea4b0af7bb0906a3d5938e20c3114c800726080a556c8f.json",
+      "sha256": "b5cfdba25d81ff9a0def09e8180a832076527013c2006b00529b73027505c749",
+      "bytes": 2730
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/b4d97dc5f4a0ce5f7f874d7a79e84e811176d983a8e151b4ca865449b35eeebd.json",
+      "sha256": "0d1fe2e30626897d043942703aaf8703101066e0bd71f7e4a10a5c8138d54af0",
+      "bytes": 29
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/c165b3817f22ef00f469e1933482340679311bb4fcca580dac0d26c8c3fe00c7.json",
+      "sha256": "57647af3bb5e16c25f00023cc416afb91dc7c1d1fc9fb92ca49513d8e159024e",
+      "bytes": 5312
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/d64a621072f687dd3802d5135803d7b65d294bda3501eaf318a35bfb188ac33d.json",
+      "sha256": "a987f8be16aded32f9c5c71952c069e80285e6045a9818889539834686dce6a6",
+      "bytes": 5662
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/f261d7bad6c29e33a4aeafe0b7079e92c11ee7312c690ef9a59898bff1c19d57.json",
+      "sha256": "e6e34eafe05d04ee7e2e4fc0a5dc36b3a51cc957b8beff5c04ae309af3bd6190",
+      "bytes": 18
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/docs/f6f2fb3a71b105f3bb14fcca6751664b36322291db5673a57eb96b4a2fa749c6.json",
+      "sha256": "4a5107a7b84584ae012584dc8605961da461178e9473317c462bbe9e6d5526e5",
+      "bytes": 389
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/1fa8b7800aa738093608f650c1d5aef296cff49beeff8eef2ef154322c07f2eb",
+      "sha256": "a58056945dfd3f17b6c5d21ed54d0f58119806b99e85b1fc29f585250c647598",
+      "bytes": 1394
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/86355c3b3ba0bc98efa8c3942f9a2325d0ae2932d5a3ae593f3e8171a569f00a",
+      "sha256": "46b1d42861894256db67c27f65e486beae3b79798657c55815849edbae94a7a6",
+      "bytes": 129872
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/approval",
+      "sha256": "9deb65b8788f41ff94a217842017db2f843954fc0eb46110835903908e5a265f",
+      "bytes": 8
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/dbb463780af0692d03112b9308c5a906282d16febb34cad17af6982735506190",
+      "sha256": "b99886d4c5db40419720956b00b45615e9a3a7fa150369d9f76b1bbef4b541f9",
+      "bytes": 7053699
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/ev-host",
+      "sha256": "41b0585afd3813073d6295eb4461b198bf1ff06d7cf174c28b43862bd04a6ca0",
+      "bytes": 7
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/ev-package",
+      "sha256": "80f2fc8f01d10a58b752efa1e83523ce1fb3d42e2e953f8b6989d10915917489",
+      "bytes": 10
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/ev-t1-native-1",
+      "sha256": "10d09c71800d5e73511ecd42cb86bc2084ec0f21bf0bcf9bfc630387ac58094f",
+      "bytes": 14
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/ev-t1-provider_only-1",
+      "sha256": "1c4492a9832c1eb17daf717fd4832d8b40b01424bb590bbece5d979f1316aea6",
+      "bytes": 21
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/ev-t1-recommendations-1",
+      "sha256": "a01503a370dfdb901034636d2346978bb897047e041ee7d8286cf0a0881d026e",
+      "bytes": 23
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/ev-t2-native-1",
+      "sha256": "e4ebd8975ddfb86ca4919d321bf6be401ab470992ed38ed1aa138c96c4cc7428",
+      "bytes": 14
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/ev-t2-provider_only-1",
+      "sha256": "ab9facb7039f28501fe784e1ea5154e948dbe2fd5b85d79530f70f284d932553",
+      "bytes": 21
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/ev-t2-recommendations-1",
+      "sha256": "fed6d53795ff2dd6c686d813c09aa954a4db31354cd0916e3735aca5f3e5a992",
+      "bytes": 23
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/ops",
+      "sha256": "a92c36e66a25ee99ff862faa8e87987be6c7cd13c3ee661c400a45b0f1e3b132",
+      "bytes": 3
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/receipt-choose",
+      "sha256": "e4a4065bd448d4bc934316bcc6e9233190731e21bb5ab78ba236e15fab342165",
+      "bytes": 14
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/receipt-configure",
+      "sha256": "02c3a79d50e198aedfc01f8d36de421bf869b3c2b3520b297e8a7cfac949a13c",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/receipt-delete",
+      "sha256": "51377f54fbec2864ccd0c1930548e083d459a831cdbc3d240077eb2009d97a82",
+      "bytes": 14
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/receipt-feedback",
+      "sha256": "b124794fc044d452f7db0555fb4ac3389701de63b952112f6d3be283470958f9",
+      "bytes": 16
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/receipt-install",
+      "sha256": "c3f201aadf39cd0af834e3e5ed725e3fe973875718727259ef06ca36f19b332d",
+      "bytes": 15
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/receipt-mcp_use",
+      "sha256": "1fd2a98eb143a02fbd156f52a7999711e493f48e40b0792539b16a0416c49630",
+      "bytes": 15
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/receipt-recommend",
+      "sha256": "f07a849de3625191c2880c31874c6db676b92386f014b2c0fd2554e6fd9e8ea5",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/receipt-reset",
+      "sha256": "17034830e224f79c38b79eac0df2bba88481c4ab80bd05f024a2faaa2cd473ca",
+      "bytes": 13
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/receipt-restart",
+      "sha256": "1ef7f052b94da845c321e79c78cd8c4de344ca0a8f018ebf2b1ff33430ebcb0d",
+      "bytes": 15
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/receipt-skill_use",
+      "sha256": "b920e9a2179925853d430ea56da2448262261fcf6d660d11315feb263cc7f3d8",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/receipt-uninstall",
+      "sha256": "b9f4bc8fd29c005ce7d361c2b146648dff0c7358ad07b8b58f9bd219f4ef8cb8",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/rubric-t1",
+      "sha256": "5b0a14ae96541c53022dc6862dbe53907ec91595a9ee3f3439824cd768702225",
+      "bytes": 9
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/rubric-t2",
+      "sha256": "1d27d809ceb380293f0e62768dd16543a96ed727cf1231a06b69fc4cd351cf38",
+      "bytes": 9
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/run-t1-native",
+      "sha256": "5b3c000e8b0d82941a6129abf6df6af5ca585034d1db830eda60ff589e5684b7",
+      "bytes": 13
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/run-t1-provider_only",
+      "sha256": "fb54caa5a2b8530808e0c110d85dc21e31736ba32628711e25ca05982c663ed9",
+      "bytes": 20
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/run-t1-recommendations",
+      "sha256": "17715e64c4149e65f7d5f6a7842360775510687a15b3d00a92af9fd06827abfe",
+      "bytes": 22
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/run-t2-native",
+      "sha256": "6ec90fbacef7f496599b4b3983fe7301712760be0a12af99e59efde986401e51",
+      "bytes": 13
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/run-t2-provider_only",
+      "sha256": "76777038db6c7bdd574f8e62a50b52233c0d41dbc8febdafee078af887bd21ab",
+      "bytes": 20
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/run-t2-recommendations",
+      "sha256": "b4b3d2a80a58a13feb2d334c626f071adf6dbbc2c0b7280eb46d8eac5e24c2e7",
+      "bytes": 22
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/setup-t1",
+      "sha256": "cb925b92a6a2b54e5732ef395914fbe1375330f5419c2744b3ae13385fbadb1c",
+      "bytes": 8
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/evidence/setup-t2",
+      "sha256": "b21b722cb36d4c4b4519c2b5b114772dd75b9f1bdcfe5eac778f646acfae96b5",
+      "bytes": 8
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/inputs.json",
+      "sha256": "a7c092ed76a14bee520ac9486866c1c512cd96dfe610807f647b80d4f2ba6438",
+      "bytes": 14143
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/docs/SPECIFICATION.md",
+      "sha256": "72d3815fe8c304c04ece8f4a3ec2a669c2a4d2a119f882036617f7e3c15749f2",
+      "bytes": 624188
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/pyproject.toml",
+      "sha256": "bce29a33637ef40030f8c4157559c75d55f0c67a242e0b23bbce6f087de4eb13",
+      "bytes": 2501
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/scripts/asset_whole_task.py",
+      "sha256": "c3cfec3349512e5ff331bc6369850f28de5b243605585495faee47140d50d1be",
+      "bytes": 198
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/__init__.py",
+      "sha256": "f78b383bd62b72741fca71a69cd437e500210dfb7f7a0ee5d693e7c38ab7d3bb",
+      "bytes": 224
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/adapters/__init__.py",
+      "sha256": "ce881ad1ed71e8d256bbdc26897b46afb0d736a7150ac1ee60c4bbcc3dfa4437",
+      "bytes": 781
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/adapters/base.py",
+      "sha256": "3e4e5a567283e4a013c9f73426fa33999402e054ac808472ab4bcc77593371c1",
+      "bytes": 12338
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/adapters/chat_completions.py",
+      "sha256": "8c59530dd3bfec604849ebf9b25d7ed0672bfd952ee2beb718a586d13ecbff8a",
+      "bytes": 13594
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/adapters/gguf.py",
+      "sha256": "53a1bb96bca26cc2778fb37b7c9012f63a443884ade71806bc8628f828c7e526",
+      "bytes": 4611
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/adapters/llamacpp.py",
+      "sha256": "0f5c1ec9a574d77912e9387061a94fef7fe5bf932dfb5ed60e07d478b8fed59d",
+      "bytes": 9534
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/adapters/local_http.py",
+      "sha256": "2d758925607849b566ee9bcb0948c41f3e88ed4bd05f90850521d33ce91850e4",
+      "bytes": 854
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/adapters/manifest.py",
+      "sha256": "05da2832f0d3466168c507090fa85285bfb0ffa6746c5472649d016bbf8eb66f",
+      "bytes": 12244
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/adapters/openai_compat.py",
+      "sha256": "717210b0c76cd87bde1a37d641379d32f6ff7b01a33962bb3ec31f9dd1d4e3dc",
+      "bytes": 16090
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/api/__init__.py",
+      "sha256": "db2cbd230e6f541e0b061c0bfec5c9998acd38ad200efcdfd0d7e4036f208388",
+      "bytes": 63
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/api/app.py",
+      "sha256": "ca1075bef64f92e339d61f3b5066b5f9c2ece2a89fdee729dd87ac244368708d",
+      "bytes": 25991
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/api/auth.py",
+      "sha256": "95b53e56915ed33924d053a21c606b9fb286c78d4b8b7a542891378d6545c601",
+      "bytes": 838
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/api/chat.py",
+      "sha256": "262db0a3201ee8e2b3480c6a541138494d78d3b84c49dd3a21a3badb4cf4ac73",
+      "bytes": 24121
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/api/chat_request.py",
+      "sha256": "7afc6c3bff8884698cf01c08d676b3191edaf8e7151a333e38534d82443c1d3b",
+      "bytes": 19296
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/api/errors.py",
+      "sha256": "e1dd0c98fad1363ac5f61a92602b2436049f1255ef5ed09e5baa5c69caf9dfd1",
+      "bytes": 7488
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/api/idempotency.py",
+      "sha256": "28805e9e1ce660ec8f0ee4f008750c2637212a1c7a09bfbabb0448e4585ef06c",
+      "bytes": 6585
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/api/native.py",
+      "sha256": "a08fdb1159e77ab5c01b0c739abbad2d45fb3ea34748ff5d35c27c5ceba2ec86",
+      "bytes": 16166
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/api/recommendations.py",
+      "sha256": "3cbeb8b86c8fe4be001d1f28e46eafbee7b7c715fa236f08b2fae3274b4eacaa",
+      "bytes": 14261
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/api/server.py",
+      "sha256": "7bc7794d69729a412753bf38dd53bfffd429bf1677f0e2645e185f672a6c34be",
+      "bytes": 3219
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/api/user_actions.py",
+      "sha256": "889d2c3465ea49594ab4ece8c0cd4c4d26ce73460413d5b4915f023bff22bdf5",
+      "bytes": 10488
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/__init__.py",
+      "sha256": "60e89462a8b4ac5e9d265ea5c3481286a8ae2967cf3506ebc82e96e5df574ace",
+      "bytes": 464
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/_windows_source_io.py",
+      "sha256": "e0e863054b3cfc22441e18b4851a101ea68f0d1eacbf9a296997693ce5684041",
+      "bytes": 20739
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/catalog.py",
+      "sha256": "1142b46e10924879c10cd15bebdd6930333bdc58e83af7567be0f0b7c93ecb24",
+      "bytes": 15388
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/embedding_activation.py",
+      "sha256": "ada4e528a75c10fd8fb27fe25ab5b7a9d383a5e626ed5215877ad1b83183b39b",
+      "bytes": 2694
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/embedding_backends.py",
+      "sha256": "60ffa853ea8ff372a598ef1afd5af29f8c7bbcd036ea9e0fbbb40dabec2f94a6",
+      "bytes": 8918
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/embedding_bundle.py",
+      "sha256": "b2fdf6b584f10e6acc1dd70899aca1f51428ee8efa2cfa04ab28f21f9673513f",
+      "bytes": 6885
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/embedding_config.py",
+      "sha256": "03f11e65865252128fe3cb05bdf27e977d03f5f9a9bbc330f672672db17614ea",
+      "bytes": 2552
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/embedding_lifecycle.py",
+      "sha256": "f0938ccdb317b6f1f11450a66f5b5716baf46cac57d7f62e58614e2b69f3b6ae",
+      "bytes": 5447
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/embedding_manifest.py",
+      "sha256": "d9a6e343a31b3449a7577395782111e9515802389da4218c35ac5a2d93e2264b",
+      "bytes": 12446
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/embedding_onnx.py",
+      "sha256": "7aa040c3ff27eab57d57331400008d922ab425e8c4840eca8d62fd7057aaca7d",
+      "bytes": 8258
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/embedding_qualification.py",
+      "sha256": "ccaa970745b4b201682f9344aee13dc4b657de0994a8dc580fe5a2ade72730d5",
+      "bytes": 1768
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/embeddings.py",
+      "sha256": "0ae3f86bdfbf6ba545ffc4cb068e215f6deb86837731f48a168c932ec35c8e09",
+      "bytes": 5130
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/index_lifecycle.py",
+      "sha256": "bcab680d0db743b30cae87713b0835ec838ad2a5dbaaded38c7fe03e042cc67f",
+      "bytes": 6948
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/remote_contracts.py",
+      "sha256": "c4c2e7b36795f0cd7d6a8b3f50230c8b70d1c85ddd2fa66bc091527416bef932",
+      "bytes": 1168
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/remote_github.py",
+      "sha256": "93a8976fe315f1dd439c06f936fbf16289394c498e08a10dfcb641ede7433022",
+      "bytes": 11208
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/remote_transport.py",
+      "sha256": "fcebdfeace904e834f316abd9f67c7599f0824cc88ad02f4c1a41d6c1db3e7eb",
+      "bytes": 12648
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/scheduler.py",
+      "sha256": "7d216a146664860c82e341642d8f6fe0b2191ce97f1125ca1533b0ad7e23ba56",
+      "bytes": 7643
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/schemas/asset_adaptation_config.v1.json",
+      "sha256": "5d9a50d7a637a27532fd15e0a9902152b4bb3755d51445e54fc0a9e334105b38",
+      "bytes": 2048
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/schemas/asset_hybrid_config.v1.json",
+      "sha256": "57d39dfe8be6ff1d6df00c6e17b0bb506ae38a9c5fc9595c0444e8d2327fbcfd",
+      "bytes": 3137
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/schemas/asset_metadata_import.v1.json",
+      "sha256": "59dde4968df06b4f0c4b3936b6c525b9de0bd66139bb31bd5de706504ce8595f",
+      "bytes": 5692
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/schemas/embedding_manifest.v1.json",
+      "sha256": "a4f78fc38a872aef9bdbcb501bcf41d0ce16fada984f884eb05606add0c9b411",
+      "bytes": 3132
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/service.py",
+      "sha256": "139560bb7b23a2b9d5e8e963541400232408dffead1d04aa1e40b89c577141ca",
+      "bytes": 27733
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/settings.py",
+      "sha256": "d3a21f4eb5c70cf0c8ab50d84491ac18bd1186191d5ba42625a14e629ed2b38b",
+      "bytes": 7248
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/source_io.py",
+      "sha256": "99355ad5ebd4ccf35248ced856af547813fb77ff4d5435b8f45ea9df2b3eed81",
+      "bytes": 5051
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/assets/sources.py",
+      "sha256": "de5653d0f3db8028c062e9353a352f622de202bfc933481258f081690e208e13",
+      "bytes": 32707
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/canonical.py",
+      "sha256": "d407972561d564c5b14b02dbe5e73944fbd2c7cc190975d69462502a5245ad5c",
+      "bytes": 1156
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/__init__.py",
+      "sha256": "82d192d34fa0b8230310321b9ff661dc14b0feb4896a81a21f39b1137e9f6b6e",
+      "bytes": 99
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_archive.py",
+      "sha256": "18c0bc8cc8ca3681a12f4ea6d877a9053149497e0e87b01e617de3c957dc4879",
+      "bytes": 8437
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_benchmark.py",
+      "sha256": "79d53f0cde68c663f67ce1b0a02d78b849f33518e71e368ee368e3f127f44e5d",
+      "bytes": 43200
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_benchmark_cli.py",
+      "sha256": "0f6c7561140f42b5db0c1ce3114789bd434ee698521fa6a74fc3001b60b92275",
+      "bytes": 3651
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_benchmark_io.py",
+      "sha256": "83fd9351c3ae6e02b890515b8c9d8a4746c6dd7b16c7bee7621da1d4d70b393a",
+      "bytes": 6207
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_comparison.py",
+      "sha256": "150b3b13b2c35d973ce6ad520ac4a97e09c43057182993371eb1cfdf70fd0b7b",
+      "bytes": 41577
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_corpus.py",
+      "sha256": "32ab4df33a9024a264416a5882379604fb4c6cfb4c96d37f43b0b3724ff2dc78",
+      "bytes": 14444
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_corpus_io.py",
+      "sha256": "b563ffcebdc1ae3d60cab2be0179e106b6d5f0f880c53b471e97afdea72bb523",
+      "bytes": 6502
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_costs.py",
+      "sha256": "c6ca2c8e9645638a42acbca41c31c1e435b34f9a565803d331e867001b92bc2c",
+      "bytes": 4575
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_derivation.py",
+      "sha256": "b5eb82e4348e22920b33a89a5f7efd6af16974c6721ecbc6870624e65e797948",
+      "bytes": 5300
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_diagnostic.py",
+      "sha256": "75e8772e4845755009cc9080eabb44a7b3ac65ef4d2b455950107174a2eba206",
+      "bytes": 4563
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_diagnostic_runner.py",
+      "sha256": "e186a559ecd0e79a2835339e6232e63ea57028408b7d80f75c73858fc3114737",
+      "bytes": 38017
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_episode_driver.py",
+      "sha256": "9ffd3971a69e35cc1505b7dc58a5a1619f343a1793026de16d984defd88b23de",
+      "bytes": 20365
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_episode_export.py",
+      "sha256": "17c55b59ff4ea39311dc3a7f522eef39deb5500431bbf03fa4a6a0986d637138",
+      "bytes": 20354
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_evidence.py",
+      "sha256": "ef3857b35d3cb0eed221e4178d88b4a99ec8612ff3c84b33bc4f7f0b57f874b2",
+      "bytes": 40987
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_host_runner.py",
+      "sha256": "7b4531bf3ff225d1a52a44c56ff4c36870a0a9cc8e09cd0699d4f3548359f803",
+      "bytes": 14307
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_judgments.py",
+      "sha256": "c9784c2998a478aa27bfd4cf9a163059431ead5dd256441dfe0252d67699380a",
+      "bytes": 6074
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_labelling.py",
+      "sha256": "05b37417f6e6bea4b499e719619a07ad1dcc9d6ab62f1822705a497079c0b5aa",
+      "bytes": 10656
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_metrics.py",
+      "sha256": "680daa4b7a96d3c76e3ebd826c7938291f069747af36155d0b23444c18c63862",
+      "bytes": 11047
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_native_runtime.py",
+      "sha256": "38e347032f568dd250e14ba6b4412f8d25d7857cae69a01791bb9501cd3b6759",
+      "bytes": 16043
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_operations.py",
+      "sha256": "fc425034f39761dfd04793397b74a8e2e67974d3f474ffff3e0b47cda02a3ffb",
+      "bytes": 40132
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_operations_child.py",
+      "sha256": "a19a34292ebe800f492061adb60358f520da8ef192241bf664bd33f42417a87f",
+      "bytes": 4472
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_operations_run.py",
+      "sha256": "0965c4ff8034bc9d573571fdf155b841e69951303f7821aef54aa2c795bac1be",
+      "bytes": 37144
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_platform_export.py",
+      "sha256": "44df31b1390181bd9b891400754fe187e888445bac9a2a2212222cad75436db7",
+      "bytes": 2860
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_qualification.py",
+      "sha256": "41e9dbbf073850ef5a1284683a295ea44d45056ca14136d9ae4015c09fa20179",
+      "bytes": 14659
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_qualification_record.py",
+      "sha256": "616bb1cf327a34d4a9496354527ad030702c36c16677a1a170db82310ed9122c",
+      "bytes": 12521
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_run_journal.py",
+      "sha256": "453753914450bc4f66f66acffbfb30b1a7e4bfbdcb893560ec78ec1fc48f7439",
+      "bytes": 5449
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_run_kit_cli.py",
+      "sha256": "989f580d3ed0b7a3cd0f9f0220e9630cf1b521a54264c865cdf789a924c4b621",
+      "bytes": 9526
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_schedule.py",
+      "sha256": "2e03ac3d44f3e682ce3d80f9141dacc50cc1c41fe14aed6168261190911e18e4",
+      "bytes": 1942
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_source_capture.py",
+      "sha256": "d27b25775eeff617578cbb410640244c887ecfa20dd20fa5f4d0ebf7ff352384",
+      "bytes": 10559
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_source_catalog.py",
+      "sha256": "c61d2426d7ce69ff9ed2b67ddbdca2c765d6022cdb8689c30ea96206a084f02a",
+      "bytes": 12500
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_source_recipe.py",
+      "sha256": "6b017b542bc5d3dec158c1ccc8a440f4ae916c129d7c47a12aa5e5cdeaf45e8e",
+      "bytes": 6645
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_splits.py",
+      "sha256": "06de8b528fe5263d96f3d257171376a3d79d9f6f24c90b709ccbf9929f7f1c57",
+      "bytes": 8033
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_trial_kit.py",
+      "sha256": "72bc9ba57b9a4f1473fbe12d05ed473c72a9fdc155058c2706c7bc547850478a",
+      "bytes": 23276
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_whole_task.py",
+      "sha256": "e1bfd967e72cdad47cafebe61eb4cdd3628286a3c08ceb64afec0fc57b0d9267",
+      "bytes": 23123
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_whole_task_cli.py",
+      "sha256": "4d683f3a0801c721df073e1eab37f1dc067012fcc31d1d4d464307fa042d0e01",
+      "bytes": 14559
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_whole_task_corpus.py",
+      "sha256": "1d1c1f5398574458ea4bf4c58dbf9b23363f768c1ce6a52476c40516ae6686c1",
+      "bytes": 13556
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_whole_task_host_config.py",
+      "sha256": "9963838d857235abf69879dcadf51187833ce4a369c461e5b00645accdc431d3",
+      "bytes": 3948
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_whole_task_inputs.py",
+      "sha256": "4353162be79c7e1178067fdad8808732401d3a61b9cae664366192d786dd24d9",
+      "bytes": 14935
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/asset_whole_task_qualification.py",
+      "sha256": "d6a5b1a7ccd77f5b97cf5853a505f7ea5ff28a1d38fbfd08b45b71d745bf7edb",
+      "bytes": 7122
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/checkpoint.py",
+      "sha256": "7f730715570d5be5d5b2e219521197631c4c3986fac35fce1440533d1c535c2e",
+      "bytes": 2885
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/corpus.py",
+      "sha256": "e7fe7556324ae4dfe4cd2bc0b3144460c42a78b924827eed6d2be442b9ccde3f",
+      "bytes": 17420
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/environment.py",
+      "sha256": "05bb7f617c9f97f6076c366c28992a1ff95d40ab62d44fc2d50ef15af17fecc0",
+      "bytes": 7275
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/grading.py",
+      "sha256": "92ecfd412d0a3a1c19d0ca4f412cd06e3e1b161ba7750561e28b7c4c04fed4b4",
+      "bytes": 16423
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/m7_metrics.py",
+      "sha256": "eedc8f343493f7c627ad3ae39b0b3bdae20046b571e10f08d726816f026e0923",
+      "bytes": 13383
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/metrics.py",
+      "sha256": "9deb3079f175bd9f7cca30f22005bd27c4ceb1c11bbeb57a27a578ceea7f6e33",
+      "bytes": 22072
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/openclaw.py",
+      "sha256": "c4f241888b57ad0dda8d24ea2398006f7451dbabe9525483ca09b57ac37230aa",
+      "bytes": 38805
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/placement_metrics.py",
+      "sha256": "e8267e1f38e5c017989d4171953c67a3e678cddf300c17d4d7cc423036e27f9d",
+      "bytes": 9396
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/prior.py",
+      "sha256": "c24bfccb1182d79070f1a16dc1b7bc283050ba12b44e373d0ff96121f9f41256",
+      "bytes": 17119
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/schemas/asset_benchmark_comparison.v1.json",
+      "sha256": "2c28d98d26ef4b04c7ff47d0bcf998bbebe336a309ce8142a0658a220b12affc",
+      "bytes": 127179
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/schemas/asset_benchmark_config.v1.json",
+      "sha256": "3ebe2e7bd435e9ba587e4a46716bc859cc2c09c9cd7bb5336569025e4d3342e6",
+      "bytes": 3744
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/schemas/asset_benchmark_report.v1.json",
+      "sha256": "5ae676739944e2f80501b8e7cde10b41adcd1d51e4e17450e6864db35fbfa00e",
+      "bytes": 124338
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/schemas/asset_cases.v1.json",
+      "sha256": "06ac79ef4276698bf9fe6a15dfb7f625c8529d9d70b56b77fd463f7c4ab51eaa",
+      "bytes": 5434
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/schemas/asset_catalog_set.v1.json",
+      "sha256": "98a8ea1e85b0227da79c2c1fb2bf23898ebebf85e723647e2d26aca81ad196fd",
+      "bytes": 15550
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/schemas/asset_diagnostic.v1.json",
+      "sha256": "787d6397cde2aeb049f507cef024814ceb11ce69c2d77b862fab4c69da039c78",
+      "bytes": 6386
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/schemas/asset_labels.v1.json",
+      "sha256": "e41fada905769b03a8a0e536ebb5fd8e3d22a784d542ab74c7696b8da1a5dc82",
+      "bytes": 6958
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/schemas/asset_lock.v1.json",
+      "sha256": "903bd821dfc4a7969963445a2a8fe0b1e0c01cb660687ac5b55fd0e99793f600",
+      "bytes": 4978
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/schemas/asset_qualification_record.v1.json",
+      "sha256": "d6176d20daca819b59bd8f9433d5d8879373f5a79cb373a4626640bf6f88eb91",
+      "bytes": 12629
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/schemas/asset_whole_task.v1.json",
+      "sha256": "cb5dff2bb2b4fd7493f420fda13a76ad5aa831b079b0bfd42cf6e77abe402aa5",
+      "bytes": 21156
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/evaluation/selection_benchmark.py",
+      "sha256": "7258e78776eda41e0e2488178b4e4ab1d62617f77e44ae6998d75762df082cec",
+      "bytes": 32478
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/launcher.py",
+      "sha256": "751c04996d85463e5874c3eaa17d9cc1baba021d0e46000b11e87122460881a1",
+      "bytes": 41710
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/__init__.py",
+      "sha256": "db2cbd230e6f541e0b061c0bfec5c9998acd38ad200efcdfd0d7e4036f208388",
+      "bytes": 63
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/budgets.py",
+      "sha256": "20faa83bb36e3f94c09325dfbb24733e2b32703ad3b93c6f648a0b220f6a90a5",
+      "bytes": 19127
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/client_loop.py",
+      "sha256": "5d7195f00669735eaccc331309de4a050a120826d2b5057b8cde754842bf8812",
+      "bytes": 20181
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/handoff.py",
+      "sha256": "c05f9f9abc64a44d3911d098c3924a4f2952137a4c7bbd01e099793db51cd023",
+      "bytes": 14515
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/identifiers.py",
+      "sha256": "3834fcff6ca174929d3ac0ed9aba38bcc27a978260d4e9f1ff0316f98c89ebb9",
+      "bytes": 6066
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/local_loop.py",
+      "sha256": "209cb8d7b508b324d9aeec43ec46c705aab04a478e1a4620fe6ca3accdceb03c",
+      "bytes": 202547
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/local_status.py",
+      "sha256": "7ee6844f6e3547e5655c5e59ae6001b94a927a646703c4487f1a14c9248b5b8a",
+      "bytes": 5790
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/performance.py",
+      "sha256": "2b334079d4ca3b6d74f27d06da3360c0eab4aee9c4c4fda9696fc5b3a7c460cd",
+      "bytes": 5675
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/placement.py",
+      "sha256": "2adaf0ace6c5b69b013bb89e2a525f5a6e47b1be65b02c40da8737928191d9c3",
+      "bytes": 9246
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/prefetch.py",
+      "sha256": "ecec3d1baa7f1bdf5896b41378cfa4412b82554bc777b0ef08311556bb939f1b",
+      "bytes": 4288
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/recovery.py",
+      "sha256": "13fb22e8eaa6ad6bdaf5a8fbdcfe8f6637a14696a08fe4c0f53ff3fcfecd6d13",
+      "bytes": 8018
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/route_decision.py",
+      "sha256": "08c3a7a68b570dfc968b4d89b35d10623ae42c86c54462ef3251319fc6e55636",
+      "bytes": 11872
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/router.py",
+      "sha256": "f15a52cd86000d0c8e8bf178c2a9ae95bcb56536fb2cf669d4702c8ab6e31923",
+      "bytes": 21347
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/routing_cache.py",
+      "sha256": "7b68ca5bedee44c7f06253cb8dd21b13ea2e3ed526256e36c890038f368dac74",
+      "bytes": 9138
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/run_state.py",
+      "sha256": "3c6b6bc93aa57180edaede95a876908c0b70103ff0c908abf01b8b394eab0ccc",
+      "bytes": 11888
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/schemas/handoff_envelope.v1.json",
+      "sha256": "45fe98f3c12e3a3757d2f1a5c9572591b39e81ab3b3b73477b786a232fcf8818",
+      "bytes": 4711
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/schemas/route_decision.v1.json",
+      "sha256": "80dfbe9ae3efadec65c850e4929229080bdc2ecd60dc4595c63a88074b09b1d4",
+      "bytes": 2684
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/warmup.py",
+      "sha256": "a918eb71830b2223b55f6f4f56b0b045895e3fcaa31d6e3a6d8e96289ecda970",
+      "bytes": 24518
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/orchestrator/workflows.py",
+      "sha256": "3c59b89c47ae557d74bddda36bf8615aef78aaa7f83fa298540f364a8924ba5a",
+      "bytes": 902
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/recommendations/__init__.py",
+      "sha256": "50f547626bc7f47366af72cab1959c3d8886b36bb11fcc6ff141dd043bff98f7",
+      "bytes": 78
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/recommendations/_windows_private_files.py",
+      "sha256": "56432119b9c11da5e132277b3c7e85c203c4947d8aa7a56a2f40f7ee77ce8cab",
+      "bytes": 18067
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/recommendations/adaptation_buffers.py",
+      "sha256": "dc4aec969b8238877bd9838263264a404d4e82207f576d03e46f0c273c8c55c7",
+      "bytes": 2932
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/recommendations/admission.py",
+      "sha256": "cd6ed7153445dc4c7dab2765e39fdae918763cd5aacddaf566edad06d4e1bf86",
+      "bytes": 1375
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/recommendations/erasure.py",
+      "sha256": "e94f5875c82f1ed55a0829f77a87c72830978f16f52bc67978f020991fdda690",
+      "bytes": 3496
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/recommendations/errors.py",
+      "sha256": "32a469d56cc4a2f6050faf820b818c3720c47b7ab6fdd229a3f4067fb9627efd",
+      "bytes": 2295
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/recommendations/limits.py",
+      "sha256": "0976155e63461ba095fd62e0c94abed1230923b051637864226bff0b386623de",
+      "bytes": 1657
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/recommendations/private_files.py",
+      "sha256": "a2b3038f20a7d3632291a22dfba866a01b3cc6dc17430a1ae82af6f4a183b3c6",
+      "bytes": 7619
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/recommendations/registrations.py",
+      "sha256": "d3534510d302f58c9fb7b24cba45be41d10804f1cb00fb1e936cb66489416601",
+      "bytes": 8699
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/recommendations/service.py",
+      "sha256": "2764cb258fb21b38a42123b4f3a13b867ec19df42d40fdfcec7fe072fa526f3b",
+      "bytes": 32175
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/redaction.py",
+      "sha256": "103b647a62ea68cc8dd1d596edc44ee7cfd7dcd7798c897ce40b32bf0e93a78f",
+      "bytes": 6372
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/schema_util.py",
+      "sha256": "9481bd2c042c2a5d9ca8b94a4f2483cfd379a9f125ea9dd817903d7bc58b6d2f",
+      "bytes": 6751
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/__init__.py",
+      "sha256": "055ca2b0aae8df99e94aa8cd2f50aa0f3f5874e37ffbf6772652fcd78e511497",
+      "bytes": 2218
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/adaptation_stage.py",
+      "sha256": "b4eb3e01fc670ade5dfaed48d9f3375e6c6eaa4c7cc597496fe471dca8461c10",
+      "bytes": 6240
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/admission.py",
+      "sha256": "8777f55eed71f260ff32082e1ea4261dccded7b5608a82c32d1dfda45f5004bf",
+      "bytes": 3184
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/asset_adaptation.py",
+      "sha256": "7f12079ecbf1fa5d710287d98919694100b9978a731c79ac4fb2513b7313a5d9",
+      "bytes": 2765
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/asset_admission.py",
+      "sha256": "62c2cfdbbeef0e2ac1062230f472c98bf8c50762d88f92fecfeef618f4fce67b",
+      "bytes": 3941
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/asset_chain.py",
+      "sha256": "90f60e83a2f13e91b786ca9dcbd8a631b8ee98f09580508cc214cbb8c18ce35c",
+      "bytes": 22218
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/asset_contract.py",
+      "sha256": "b47086560bc527a1cdb2eb7d811ed19b67c37589e8d72431f902390246d76c00",
+      "bytes": 12697
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/asset_factory.py",
+      "sha256": "83c55140d25294671e54866a79c4ba215e49154fcdf621046a461e60f146afa1",
+      "bytes": 948
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/asset_http.py",
+      "sha256": "6f0c7cf08a5288f0de8e5c426dca5bffaccbfa003384291254d8591de53d4b06",
+      "bytes": 6116
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/asset_hybrid.py",
+      "sha256": "b7e2b06e40abc4baf784256b867172cc6124ec8246f9e442229ed0d8bc2f3dcc",
+      "bytes": 13864
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/asset_lexical.py",
+      "sha256": "decdaf42c1de45445c384e711e1b63017c9153f660819adb37aacb55883a9d74",
+      "bytes": 13775
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/asset_preparation.py",
+      "sha256": "45070e123688e8766762e2464696731a530442272ccf9ca6c58caf1b011fc72d",
+      "bytes": 27926
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/catalog.py",
+      "sha256": "fe8d87630aa226d255fb98b97ba4c30faccd5bc2127d3272a335f6d6900c0bf2",
+      "bytes": 1520
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/chain.py",
+      "sha256": "1707421c3c3680f06c7851f9f496f1958da746e83d5b6c2f953b210db3264ead",
+      "bytes": 16363
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/contract.py",
+      "sha256": "6395ae586bbb15dbe5aed84eace51a643080b19cf8da06aeebe9bbd5b97a4af9",
+      "bytes": 8966
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/example_match.py",
+      "sha256": "291e0e295ed0c077ebf1124d15491a11e33d828c4a8a6426d442fc348b1f6482",
+      "bytes": 10894
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/http.py",
+      "sha256": "675f129e167af7a3b2404113314536783ad66e581b8147e945416684b316414a",
+      "bytes": 4720
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/model_router.py",
+      "sha256": "cabbbc10024f2122c25b0feb7b8af0f9a8f2c7a21866afa05e579a07c721d976",
+      "bytes": 2996
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/schemas/asset_preparation_request.v1.json",
+      "sha256": "b28ab259746c8880210636d5f549263a0b06f6d72e154546ccad7bbebba43e3e",
+      "bytes": 14209
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/schemas/asset_preparation_response.v1.json",
+      "sha256": "489612cc77b4e6c5dd041c08697e89485eef06679cda353d1dd17ce7a5a37a99",
+      "bytes": 8192
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/schemas/selection_request.v1.json",
+      "sha256": "7da8af96b7ec78c06c0d4f6d3cc865b0d55b2d75d670e80790f6bf2088135a24",
+      "bytes": 2708
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/schemas/selection_request.v2.json",
+      "sha256": "847a87fb228be4f9c00abda79dba06e2c78ae14f37e1739c1c85483d4010e848",
+      "bytes": 7197
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/schemas/selection_result.v1.json",
+      "sha256": "518c6d60ddbd8dac30d20829c2a51f7512ea895b44e4fce71fd6f6533473a22b",
+      "bytes": 2673
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/schemas/selection_result.v2.json",
+      "sha256": "4b23563d44d3e9fe16d4e6cbce2f761e39d7af4786c016349113d9656b8b0739",
+      "bytes": 7593
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/selection/settings.py",
+      "sha256": "abf9c7d9161d4123c8a834e07a21785f79200e08996ebe36756082b254713b8c",
+      "bytes": 3616
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/skills/__init__.py",
+      "sha256": "485fe95897786c873b08d5c6bfa900ad8705e62ac885684f76fee4b7b922cc42",
+      "bytes": 965
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/skills/cache.py",
+      "sha256": "555b8aee4be4cac7ca23db58211132ac0267dc85e51940db8ac4bc86e9dcfa2e",
+      "bytes": 2244
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/skills/predicates.py",
+      "sha256": "8af6820b0003ceee4a0ab1ef147259d7ab9e855eb0ca7a5e07cfa992d8a73ab2",
+      "bytes": 38099
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/skills/registry.py",
+      "sha256": "eee07aa5d4fb635134b89e8c3a9dcbe06c5254d55db061875376e74fd40a0e2f",
+      "bytes": 27004
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/skills/schemas/skill_manifest.v1.json",
+      "sha256": "88ba11c99d4aad8d83c0520aef04dc4edaa345b018bb6e4669b59c4dc4f8d37a",
+      "bytes": 3344
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/stats.py",
+      "sha256": "22d66cc4046f042f1a522b368f6076ee6921d23a027ff0652ef9d9ef6e4a4778",
+      "bytes": 12692
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/__init__.py",
+      "sha256": "d069258353bd1b4291f6ed5222ca67638aa91e3e0412d969ef05ad2c3e155b81",
+      "bytes": 1336
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/asset_catalog.py",
+      "sha256": "2844776c63c669e2e7f2d74bfb6e686a9b19c41c7c096ca1bd97af98f670c48b",
+      "bytes": 46808
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/asset_feedback.py",
+      "sha256": "8287d64c7f8dbf6a84a87576314fe4103c61bad6a87ff9782bc259832d89601e",
+      "bytes": 33994
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/asset_remote_state.py",
+      "sha256": "bd22da4d4f85c5d83dbf660a0429625a03a0801ea4952ea58549b04af8def064",
+      "bytes": 1913
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/asset_vectors.py",
+      "sha256": "4c7e3789a1d07eac60edb6459663e0a04d7484040e1ef9718eeed1754ecc01b6",
+      "bytes": 4056
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/index_job_event.py",
+      "sha256": "986aa88b1a0daa25d412b0f700f28df4ad1a894ee9ab9795752e77d87224a567",
+      "bytes": 1355
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/model_timings.py",
+      "sha256": "8190043cacd45ee8bf6348b5a85af4b41752d10fc29fbc3a1540598e294ec94d",
+      "bytes": 7091
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/outcomes.py",
+      "sha256": "77c2cbfea7982d5121e424567402d0ce01e88b4d67bc6d7324d87b482e0e626a",
+      "bytes": 3350
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/recommendation_event.py",
+      "sha256": "4396697acae57eac82522e468cc2b00db36d94ff213ca3db41e0beef0cf21016",
+      "bytes": 3108
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/recommendations.py",
+      "sha256": "882a21333a712c8c7e21e5e7f5261ded949360ec58e58ec2326f571f18d41ba3",
+      "bytes": 30746
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/run_store.py",
+      "sha256": "2f3dca7cc1f5cbc2b74cfffc5a7bce42a7040707bb31090a49d61016a98cf4cc",
+      "bytes": 92345
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/schemas/action_evidence.v1.json",
+      "sha256": "b42dc99143c1d77038265ab996c90bdf429b734f06cad6d86d4b876daf26bcba",
+      "bytes": 2534
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/schemas/asset_catalog_snapshot.v1.json",
+      "sha256": "6917d56be71e9f7abfbe214e823335a9b6279dd4af1d098932a4f0e6a3b5cb68",
+      "bytes": 7106
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/schemas/asset_record.v1.json",
+      "sha256": "a47cf268403525515826a4a6fd32481f9fb4a9939716b3120bc23b5ce4ae0ad4",
+      "bytes": 3428
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/schemas/feedback_audit.v1.json",
+      "sha256": "43118b6fe63835c3a27704e0d88a2c92327e04997f798b491c72d8b78a5f70bb",
+      "bytes": 1122
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/schemas/feedback_record.v1.json",
+      "sha256": "cf27e2612116fc8d4d61f756cc12b31663fb70411c0b9da5944f76d1994a8728",
+      "bytes": 2494
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/schemas/index_job_event.v1.json",
+      "sha256": "4ce867b6f0a69e416e3598f5c68b6d5945948a12393a6620997280ef8c2e87f6",
+      "bytes": 10067
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/schemas/model_timing.v1.json",
+      "sha256": "dd9af6b505904726817d882825f65334df856d452caed08b0aba437b62de0705",
+      "bytes": 1383
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/schemas/recommendation_event.v1.json",
+      "sha256": "6c347cd1047a9608b3ad74da41081387613ed823313e19cb8a8b089d2932ca63",
+      "bytes": 22753
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/schemas/recommendation_readiness.v1.json",
+      "sha256": "fd61fc0cdddd65e4e5075dc280bde4a5238e599a0dbdb9dd1319a8274feeeb37",
+      "bytes": 1742
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/schemas/recommendation_result.v1.json",
+      "sha256": "a4193cf501b034cb991214bcbbb160f03405f5e12846ed6f78340844579b1d24",
+      "bytes": 20448
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/schemas/recommendation_view.v1.json",
+      "sha256": "3c434776aef568be9febf18104e3f92e2a312b60446aa969f687508c603600eb",
+      "bytes": 4357
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/schemas/trace_event.v1.json",
+      "sha256": "8286e614a2617311cb47f8109c1eaa6d9455b504ec9fcfd0cae4dcb392b026e3",
+      "bytes": 38253
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/store/trace_event.py",
+      "sha256": "24f2f701cec429f51cc8d73b697240958fc308ad29b361ccfac23fbd048a5120",
+      "bytes": 49054
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/tools/__init__.py",
+      "sha256": "363a356186bfe64cdc0e6306a299153f195ea34591a68458ad7644341f6ad2ad",
+      "bytes": 871
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/tools/executor.py",
+      "sha256": "85c96339a8405f6d4c6391975240de4073aa8301db5cb0add77ccf534ef5d2a7",
+      "bytes": 17528
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/tools/registry.py",
+      "sha256": "466ae0be56052e07d36c23c4d60fe475da80f3d41a09b6f5536ee0f353d6ab3f",
+      "bytes": 21601
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/tools/sandbox.py",
+      "sha256": "60bd9d98dfe0aa2bd511280c49d3c3487cc362c40b3c144f6d10203a48739cf3",
+      "bytes": 19456
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/tools/schemas/demo/delete_demo_database.v1.json",
+      "sha256": "e6933fabef1a57fe60ff6e3cd20487868902ef832218943b413cc86c05982b3b",
+      "bytes": 2115
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/tools/schemas/demo/get_incident_counts.v1.json",
+      "sha256": "37ff25b09c208c77a6f8208359a24c4c485a03562c688ac3ac8701b1d243b827",
+      "bytes": 2215
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/tools/schemas/demo/get_latest_deployment.v1.json",
+      "sha256": "b2ba32cba434cf69f669e9364218f525a5a464d978633ad462f0dfc91f5cfc4f",
+      "bytes": 2621
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/tools/schemas/demo/get_metrics.v1.json",
+      "sha256": "687cdbf054bc332af2dad506414f6e5d1fec7a07e635dac1fcccdf8b3a842a14",
+      "bytes": 2659
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/tools/schemas/demo/get_recent_logs.v1.json",
+      "sha256": "26c635f87be3e3c5c99051618a659b74f916960ef61b846d37eeaf50ed12e320",
+      "bytes": 2619
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/tools/schemas/demo/get_service_health.v1.json",
+      "sha256": "287dccea88dde59f96ee8ffb6624982ccbf6248b0d5232b905bb73761b7ad602",
+      "bytes": 1833
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/tools/schemas/demo/list_demo_databases.v1.json",
+      "sha256": "ccedc1c65916fcc810e49340b8d3ea22a031190ab4afc4931b7b44f21267fccf",
+      "bytes": 1967
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/tools/schemas/tool_result.v1.json",
+      "sha256": "27b7b0df2a7974dccba0bfcaece25c7367293d72046ad341a1ea01d21fc80b5b",
+      "bytes": 1676
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/ui/__init__.py",
+      "sha256": "5723b07175e9248772d2be1db79ff3b14113778571b6a0cf0e984853ce40e7c2",
+      "bytes": 370
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/ui/comparison.py",
+      "sha256": "d4ad21c9542f3c87721b663a33411dc0eb326aef4c802840825cef0f1858b4c6",
+      "bytes": 3955
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/ui/render.py",
+      "sha256": "f5e58c2080218b0fd7a48e6b988a5c74246f5493af7d64b8ca97150afcec09d4",
+      "bytes": 23553
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/ui/routes.py",
+      "sha256": "878230d3d83ea8fe5fa212d34d483e57e78cfe3ef0d13968d39a5e8663f56de4",
+      "bytes": 4292
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/ui/settings.py",
+      "sha256": "146a3f9250033138861f7f5a06085c5a76b24d68b52cd56bf32a671877b2c9ae",
+      "bytes": 2489
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/originals/src/relaymind/ui/trace_view.py",
+      "sha256": "35c83d38ea9e96f78b511dc99f0954bdc40c0c593ab0110a4bc5be0726285b02",
+      "bytes": 18010
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/builtin-production.toml",
+      "sha256": "48a678e7abc5c9e5e5655e89b57e5ac3abdd1ae6ed697b7f59a8303fc478ad92",
+      "bytes": 403
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/builtin.toml",
+      "sha256": "2d7ad95e9559501b5a10999d7626c90aa6ad663be36eab770211ff54a8391325",
+      "bytes": 479
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/cases.json",
+      "sha256": "a987f8be16aded32f9c5c71952c069e80285e6045a9818889539834686dce6a6",
+      "bytes": 5662
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/catalog.json",
+      "sha256": "57647af3bb5e16c25f00023cc416afb91dc7c1d1fc9fb92ca49513d8e159024e",
+      "bytes": 5312
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/environment.json",
+      "sha256": "2fab8d998c614bb1a1b3595a0e915869005c83ac72fbc4d43a03204d152663d5",
+      "bytes": 353
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/labels.json",
+      "sha256": "be1d5d13f50127f166459231fe473b87c1476f6f7308135f4afb32fb44a47f4e",
+      "bytes": 12266
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/lock.json",
+      "sha256": "b5cfdba25d81ff9a0def09e8180a832076527013c2006b00529b73027505c749",
+      "bytes": 2730
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/originals/access_control.txt",
+      "sha256": "3f77bfdae4e1d6750a058ae8a5f0d0c176db21e2f2dd451ac62e2dd4b099b80f",
+      "bytes": 64
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/originals/adjudication.txt",
+      "sha256": "3cf2a83e374ac91abfe496c5eb7aff0e09ab1c1776f3a28b6f1a2afc82751290",
+      "bytes": 62
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/originals/authorship.txt",
+      "sha256": "0171d4275007485402bc25d6532060ce2a37b62c4d8e17b1e399e256d81c5bea",
+      "bytes": 60
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/originals/calendar.md",
+      "sha256": "1defa6396b1d171810d65e313267b929748324acc7f6b7e0450357e6932e3aa2",
+      "bytes": 62
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/originals/derivation.txt",
+      "sha256": "b097cb90a5a9db7ff10c72c8581c789fad731aaa61c7052bbd0fac245d44c924",
+      "bytes": 60
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/originals/independence.txt",
+      "sha256": "6a5f82e112a72182473cf8245dd1df5e316305d08e7a695dbb516ce4a3747f56",
+      "bytes": 62
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/originals/language_review.txt",
+      "sha256": "f528e23a6d960d2f74fa6dc06a5626ba838b697cdd52a0fff3f9e2daa7b63555",
+      "bytes": 65
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/originals/license.txt",
+      "sha256": "19f3189d2ae35183351e059b5bb44f7c55c8336c4eee2cc1d296a2042ec190a8",
+      "bytes": 57
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/originals/notice.txt",
+      "sha256": "9473b9dc30eec6ba5c80b7d4bf91c8bce4ddcb0f4ad5e5a38ffce9efd1702a21",
+      "bytes": 56
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/originals/permission.txt",
+      "sha256": "7c600be4ea9bee469dab9a457f9d6314c14e209b7a3c35c811d9fd0abf7f4b7b",
+      "bytes": 60
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/originals/source_provenance.txt",
+      "sha256": "c20519845080da78a798fe346e68b80702874934d8e7923d45efa4f016468ef5",
+      "bytes": 67
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/originals/split_review.txt",
+      "sha256": "b87708435de8767e71e70e9cd0db888b05e3d565c77a7507b433ddce29bdf62e",
+      "bytes": 62
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/third-party-production.toml",
+      "sha256": "3a8a730adb67b4a8f564b0f64a925411a94f9083139154f3ed2753be2763459c",
+      "bytes": 491
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/release/third-party.toml",
+      "sha256": "2e2ce60c3c530147ae1b2750706cda25a5fa698f9f7ac5da5cfdc976b496b7a7",
+      "bytes": 483
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/bundle/resolver.json",
+      "sha256": "d354503b3c2bb959e6c2a83dca2b0dfac1bd2338ac51cf4baa9b53e1922e5fe4",
+      "bytes": 53761
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/environment.json",
+      "sha256": "207c5128a474a7c786e98692486a7bc4af148b7a515cdc3d0e1c15322746c112",
+      "bytes": 490
+    },
+    {
+      "role": "evidence",
+      "path": "platform-rerun/platform-grade.json",
+      "sha256": "1de3d71fd4dd7b4eff8b4bad7722dcb10761856e4b52db23372f48b50b27eb74",
+      "bytes": 286
+    },
+    {
+      "role": "report",
+      "path": "platform-rerun/platform.json",
+      "sha256": "66160fcc31f6404022ba929cb6775b42f02593979585539dc6993acf3edff013",
+      "bytes": 3675
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/1b0b0019505463c35dba138847fb19c9015fbc2ba1b5e9150e2098e7a9552607.json",
+      "sha256": "5405d8373cb352d723fd2719e62e0af937940462e8ca02290eabd52f7dca2d23",
+      "bytes": 29
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/1dcafdabc84a484cc5ecb4441cc24a7df0bc946739b977af8973d5f833f9d55e.json",
+      "sha256": "7cbbdd261467996cff1620431fcd8f67fb4a1af4aea91b6cdb743daaadc23b9f",
+      "bytes": 30
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/246306138d2bc42284c1a2eaa6939750e4e7992052f1679c5fd2b9c39131e9c4.json",
+      "sha256": "a050ef06ea542b8fd8781f1e945f9adcd03c7ae5190719e66ba826e2059fce12",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/33e0ec95c6219f496ef08527f029e96b603156c1f85a7300485788096124e2f1.json",
+      "sha256": "c72d47e2f294bca546449d357e8f35c3cffec05b9c76324086e7b9c79004f0c4",
+      "bytes": 23738
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/4df6cdc75f5a44f366d2cd51787fb953bcd6d9b58fc7eca3d3c7cfd1199d1771.json",
+      "sha256": "49f18338abe37a2d19f04db6bf440ad32495a206e34a638cb2a59ab4a067369f",
+      "bytes": 30
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/6934fc7af3a3182c8e0f3e210434be4196d7a7dc2755900933c6517338811a61.json",
+      "sha256": "2845b7c428d7c62a3097409b8f70d96283183ab8ffc9b29e2ef4aa050ab14e87",
+      "bytes": 25
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/917b340071fa1a750ddfa4ccb79102365ea73cd4c7e9592281feb890ba515234.json",
+      "sha256": "0f69311b3c48666c6ce182742e7bf16435b93e786d0add1c735023dddd67abbf",
+      "bytes": 2158
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/929fbd1a27d095924032fd319024c7caa5f3adda7e86d37d0284c53a48bbcf9c.json",
+      "sha256": "be1d5d13f50127f166459231fe473b87c1476f6f7308135f4afb32fb44a47f4e",
+      "bytes": 12266
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/9757043340e81c4dabcfc7f98f6b59647825a67a3915b83071d0d851ebe93a91.json",
+      "sha256": "ac732e2e872fe755751b05565ccf310293d8b15781bf4645da74a8950914c353",
+      "bytes": 20
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/9c8c000875d648a9a45044b3a588e3a45093da20f718628c84c7c1e5a276b5ba.json",
+      "sha256": "ed4cb1f7055de6f19bb12d429082abae7cb35bf825a30d60107e2ed7a8df1dd3",
+      "bytes": 1224
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/a84f6cc0c838eae849dcfaf191177fd20f671223f68b35e00fb5647f98e56500.json",
+      "sha256": "2758bab8e270d2833c7c5d252524f95ec23d44fdd83afe068a88656d97002ccb",
+      "bytes": 27
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/b09cf492b048e62872233a3e5a603e3c0a9d620f387e765875ab5dc48f67b411.json",
+      "sha256": "98ef89e4877bf2fbb5b73970263a7c48afdaa66f9ca9ec82e8bf3c942e1d509d",
+      "bytes": 6940
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/b1ec23ceb5c82b2f70ea4b0af7bb0906a3d5938e20c3114c800726080a556c8f.json",
+      "sha256": "b5cfdba25d81ff9a0def09e8180a832076527013c2006b00529b73027505c749",
+      "bytes": 2730
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/b4d97dc5f4a0ce5f7f874d7a79e84e811176d983a8e151b4ca865449b35eeebd.json",
+      "sha256": "0d1fe2e30626897d043942703aaf8703101066e0bd71f7e4a10a5c8138d54af0",
+      "bytes": 29
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/c165b3817f22ef00f469e1933482340679311bb4fcca580dac0d26c8c3fe00c7.json",
+      "sha256": "57647af3bb5e16c25f00023cc416afb91dc7c1d1fc9fb92ca49513d8e159024e",
+      "bytes": 5312
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/d64a621072f687dd3802d5135803d7b65d294bda3501eaf318a35bfb188ac33d.json",
+      "sha256": "a987f8be16aded32f9c5c71952c069e80285e6045a9818889539834686dce6a6",
+      "bytes": 5662
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/f261d7bad6c29e33a4aeafe0b7079e92c11ee7312c690ef9a59898bff1c19d57.json",
+      "sha256": "e6e34eafe05d04ee7e2e4fc0a5dc36b3a51cc957b8beff5c04ae309af3bd6190",
+      "bytes": 18
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/docs/f6f2fb3a71b105f3bb14fcca6751664b36322291db5673a57eb96b4a2fa749c6.json",
+      "sha256": "4a5107a7b84584ae012584dc8605961da461178e9473317c462bbe9e6d5526e5",
+      "bytes": 389
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/1fa8b7800aa738093608f650c1d5aef296cff49beeff8eef2ef154322c07f2eb",
+      "sha256": "a58056945dfd3f17b6c5d21ed54d0f58119806b99e85b1fc29f585250c647598",
+      "bytes": 1394
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/86355c3b3ba0bc98efa8c3942f9a2325d0ae2932d5a3ae593f3e8171a569f00a",
+      "sha256": "46b1d42861894256db67c27f65e486beae3b79798657c55815849edbae94a7a6",
+      "bytes": 129872
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/approval",
+      "sha256": "9deb65b8788f41ff94a217842017db2f843954fc0eb46110835903908e5a265f",
+      "bytes": 8
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/dbb463780af0692d03112b9308c5a906282d16febb34cad17af6982735506190",
+      "sha256": "9323588e833e1548d4b320a1731578a59c05e3202653f31a5d81f561cc8f3237",
+      "bytes": 8102
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/ev-host",
+      "sha256": "41b0585afd3813073d6295eb4461b198bf1ff06d7cf174c28b43862bd04a6ca0",
+      "bytes": 7
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/ev-package",
+      "sha256": "80f2fc8f01d10a58b752efa1e83523ce1fb3d42e2e953f8b6989d10915917489",
+      "bytes": 10
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/ev-t1-native-1",
+      "sha256": "10d09c71800d5e73511ecd42cb86bc2084ec0f21bf0bcf9bfc630387ac58094f",
+      "bytes": 14
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/ev-t1-provider_only-1",
+      "sha256": "1c4492a9832c1eb17daf717fd4832d8b40b01424bb590bbece5d979f1316aea6",
+      "bytes": 21
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/ev-t1-recommendations-1",
+      "sha256": "a01503a370dfdb901034636d2346978bb897047e041ee7d8286cf0a0881d026e",
+      "bytes": 23
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/ev-t2-native-1",
+      "sha256": "e4ebd8975ddfb86ca4919d321bf6be401ab470992ed38ed1aa138c96c4cc7428",
+      "bytes": 14
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/ev-t2-provider_only-1",
+      "sha256": "ab9facb7039f28501fe784e1ea5154e948dbe2fd5b85d79530f70f284d932553",
+      "bytes": 21
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/ev-t2-recommendations-1",
+      "sha256": "fed6d53795ff2dd6c686d813c09aa954a4db31354cd0916e3735aca5f3e5a992",
+      "bytes": 23
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/ops",
+      "sha256": "a92c36e66a25ee99ff862faa8e87987be6c7cd13c3ee661c400a45b0f1e3b132",
+      "bytes": 3
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/receipt-choose",
+      "sha256": "e4a4065bd448d4bc934316bcc6e9233190731e21bb5ab78ba236e15fab342165",
+      "bytes": 14
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/receipt-configure",
+      "sha256": "02c3a79d50e198aedfc01f8d36de421bf869b3c2b3520b297e8a7cfac949a13c",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/receipt-delete",
+      "sha256": "51377f54fbec2864ccd0c1930548e083d459a831cdbc3d240077eb2009d97a82",
+      "bytes": 14
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/receipt-feedback",
+      "sha256": "b124794fc044d452f7db0555fb4ac3389701de63b952112f6d3be283470958f9",
+      "bytes": 16
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/receipt-install",
+      "sha256": "c3f201aadf39cd0af834e3e5ed725e3fe973875718727259ef06ca36f19b332d",
+      "bytes": 15
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/receipt-mcp_use",
+      "sha256": "1fd2a98eb143a02fbd156f52a7999711e493f48e40b0792539b16a0416c49630",
+      "bytes": 15
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/receipt-recommend",
+      "sha256": "f07a849de3625191c2880c31874c6db676b92386f014b2c0fd2554e6fd9e8ea5",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/receipt-reset",
+      "sha256": "17034830e224f79c38b79eac0df2bba88481c4ab80bd05f024a2faaa2cd473ca",
+      "bytes": 13
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/receipt-restart",
+      "sha256": "1ef7f052b94da845c321e79c78cd8c4de344ca0a8f018ebf2b1ff33430ebcb0d",
+      "bytes": 15
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/receipt-skill_use",
+      "sha256": "b920e9a2179925853d430ea56da2448262261fcf6d660d11315feb263cc7f3d8",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/receipt-uninstall",
+      "sha256": "b9f4bc8fd29c005ce7d361c2b146648dff0c7358ad07b8b58f9bd219f4ef8cb8",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/rubric-t1",
+      "sha256": "5b0a14ae96541c53022dc6862dbe53907ec91595a9ee3f3439824cd768702225",
+      "bytes": 9
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/rubric-t2",
+      "sha256": "1d27d809ceb380293f0e62768dd16543a96ed727cf1231a06b69fc4cd351cf38",
+      "bytes": 9
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/run-t1-native",
+      "sha256": "5b3c000e8b0d82941a6129abf6df6af5ca585034d1db830eda60ff589e5684b7",
+      "bytes": 13
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/run-t1-provider_only",
+      "sha256": "fb54caa5a2b8530808e0c110d85dc21e31736ba32628711e25ca05982c663ed9",
+      "bytes": 20
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/run-t1-recommendations",
+      "sha256": "17715e64c4149e65f7d5f6a7842360775510687a15b3d00a92af9fd06827abfe",
+      "bytes": 22
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/run-t2-native",
+      "sha256": "6ec90fbacef7f496599b4b3983fe7301712760be0a12af99e59efde986401e51",
+      "bytes": 13
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/run-t2-provider_only",
+      "sha256": "76777038db6c7bdd574f8e62a50b52233c0d41dbc8febdafee078af887bd21ab",
+      "bytes": 20
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/run-t2-recommendations",
+      "sha256": "b4b3d2a80a58a13feb2d334c626f071adf6dbbc2c0b7280eb46d8eac5e24c2e7",
+      "bytes": 22
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/setup-t1",
+      "sha256": "cb925b92a6a2b54e5732ef395914fbe1375330f5419c2744b3ae13385fbadb1c",
+      "bytes": 8
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/evidence/setup-t2",
+      "sha256": "b21b722cb36d4c4b4519c2b5b114772dd75b9f1bdcfe5eac778f646acfae96b5",
+      "bytes": 8
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/inputs.json",
+      "sha256": "d78040d25d12892eaa58e0887ce34cb60a708e2cc1f1fbf22173668ac315bb8f",
+      "bytes": 14140
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/docs/SPECIFICATION.md",
+      "sha256": "72d3815fe8c304c04ece8f4a3ec2a669c2a4d2a119f882036617f7e3c15749f2",
+      "bytes": 624188
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/pyproject.toml",
+      "sha256": "bce29a33637ef40030f8c4157559c75d55f0c67a242e0b23bbce6f087de4eb13",
+      "bytes": 2501
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/scripts/asset_whole_task.py",
+      "sha256": "c3cfec3349512e5ff331bc6369850f28de5b243605585495faee47140d50d1be",
+      "bytes": 198
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/__init__.py",
+      "sha256": "f78b383bd62b72741fca71a69cd437e500210dfb7f7a0ee5d693e7c38ab7d3bb",
+      "bytes": 224
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/adapters/__init__.py",
+      "sha256": "ce881ad1ed71e8d256bbdc26897b46afb0d736a7150ac1ee60c4bbcc3dfa4437",
+      "bytes": 781
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/adapters/base.py",
+      "sha256": "3e4e5a567283e4a013c9f73426fa33999402e054ac808472ab4bcc77593371c1",
+      "bytes": 12338
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/adapters/chat_completions.py",
+      "sha256": "8c59530dd3bfec604849ebf9b25d7ed0672bfd952ee2beb718a586d13ecbff8a",
+      "bytes": 13594
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/adapters/gguf.py",
+      "sha256": "53a1bb96bca26cc2778fb37b7c9012f63a443884ade71806bc8628f828c7e526",
+      "bytes": 4611
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/adapters/llamacpp.py",
+      "sha256": "0f5c1ec9a574d77912e9387061a94fef7fe5bf932dfb5ed60e07d478b8fed59d",
+      "bytes": 9534
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/adapters/local_http.py",
+      "sha256": "2d758925607849b566ee9bcb0948c41f3e88ed4bd05f90850521d33ce91850e4",
+      "bytes": 854
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/adapters/manifest.py",
+      "sha256": "05da2832f0d3466168c507090fa85285bfb0ffa6746c5472649d016bbf8eb66f",
+      "bytes": 12244
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/adapters/openai_compat.py",
+      "sha256": "717210b0c76cd87bde1a37d641379d32f6ff7b01a33962bb3ec31f9dd1d4e3dc",
+      "bytes": 16090
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/api/__init__.py",
+      "sha256": "db2cbd230e6f541e0b061c0bfec5c9998acd38ad200efcdfd0d7e4036f208388",
+      "bytes": 63
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/api/app.py",
+      "sha256": "ca1075bef64f92e339d61f3b5066b5f9c2ece2a89fdee729dd87ac244368708d",
+      "bytes": 25991
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/api/auth.py",
+      "sha256": "95b53e56915ed33924d053a21c606b9fb286c78d4b8b7a542891378d6545c601",
+      "bytes": 838
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/api/chat.py",
+      "sha256": "262db0a3201ee8e2b3480c6a541138494d78d3b84c49dd3a21a3badb4cf4ac73",
+      "bytes": 24121
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/api/chat_request.py",
+      "sha256": "7afc6c3bff8884698cf01c08d676b3191edaf8e7151a333e38534d82443c1d3b",
+      "bytes": 19296
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/api/errors.py",
+      "sha256": "e1dd0c98fad1363ac5f61a92602b2436049f1255ef5ed09e5baa5c69caf9dfd1",
+      "bytes": 7488
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/api/idempotency.py",
+      "sha256": "28805e9e1ce660ec8f0ee4f008750c2637212a1c7a09bfbabb0448e4585ef06c",
+      "bytes": 6585
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/api/native.py",
+      "sha256": "a08fdb1159e77ab5c01b0c739abbad2d45fb3ea34748ff5d35c27c5ceba2ec86",
+      "bytes": 16166
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/api/recommendations.py",
+      "sha256": "3cbeb8b86c8fe4be001d1f28e46eafbee7b7c715fa236f08b2fae3274b4eacaa",
+      "bytes": 14261
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/api/server.py",
+      "sha256": "7bc7794d69729a412753bf38dd53bfffd429bf1677f0e2645e185f672a6c34be",
+      "bytes": 3219
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/api/user_actions.py",
+      "sha256": "889d2c3465ea49594ab4ece8c0cd4c4d26ce73460413d5b4915f023bff22bdf5",
+      "bytes": 10488
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/__init__.py",
+      "sha256": "60e89462a8b4ac5e9d265ea5c3481286a8ae2967cf3506ebc82e96e5df574ace",
+      "bytes": 464
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/_windows_source_io.py",
+      "sha256": "e0e863054b3cfc22441e18b4851a101ea68f0d1eacbf9a296997693ce5684041",
+      "bytes": 20739
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/catalog.py",
+      "sha256": "1142b46e10924879c10cd15bebdd6930333bdc58e83af7567be0f0b7c93ecb24",
+      "bytes": 15388
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/embedding_activation.py",
+      "sha256": "ada4e528a75c10fd8fb27fe25ab5b7a9d383a5e626ed5215877ad1b83183b39b",
+      "bytes": 2694
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/embedding_backends.py",
+      "sha256": "60ffa853ea8ff372a598ef1afd5af29f8c7bbcd036ea9e0fbbb40dabec2f94a6",
+      "bytes": 8918
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/embedding_bundle.py",
+      "sha256": "b2fdf6b584f10e6acc1dd70899aca1f51428ee8efa2cfa04ab28f21f9673513f",
+      "bytes": 6885
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/embedding_config.py",
+      "sha256": "03f11e65865252128fe3cb05bdf27e977d03f5f9a9bbc330f672672db17614ea",
+      "bytes": 2552
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/embedding_lifecycle.py",
+      "sha256": "f0938ccdb317b6f1f11450a66f5b5716baf46cac57d7f62e58614e2b69f3b6ae",
+      "bytes": 5447
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/embedding_manifest.py",
+      "sha256": "d9a6e343a31b3449a7577395782111e9515802389da4218c35ac5a2d93e2264b",
+      "bytes": 12446
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/embedding_onnx.py",
+      "sha256": "7aa040c3ff27eab57d57331400008d922ab425e8c4840eca8d62fd7057aaca7d",
+      "bytes": 8258
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/embedding_qualification.py",
+      "sha256": "ccaa970745b4b201682f9344aee13dc4b657de0994a8dc580fe5a2ade72730d5",
+      "bytes": 1768
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/embeddings.py",
+      "sha256": "0ae3f86bdfbf6ba545ffc4cb068e215f6deb86837731f48a168c932ec35c8e09",
+      "bytes": 5130
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/index_lifecycle.py",
+      "sha256": "bcab680d0db743b30cae87713b0835ec838ad2a5dbaaded38c7fe03e042cc67f",
+      "bytes": 6948
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/remote_contracts.py",
+      "sha256": "c4c2e7b36795f0cd7d6a8b3f50230c8b70d1c85ddd2fa66bc091527416bef932",
+      "bytes": 1168
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/remote_github.py",
+      "sha256": "93a8976fe315f1dd439c06f936fbf16289394c498e08a10dfcb641ede7433022",
+      "bytes": 11208
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/remote_transport.py",
+      "sha256": "fcebdfeace904e834f316abd9f67c7599f0824cc88ad02f4c1a41d6c1db3e7eb",
+      "bytes": 12648
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/scheduler.py",
+      "sha256": "7d216a146664860c82e341642d8f6fe0b2191ce97f1125ca1533b0ad7e23ba56",
+      "bytes": 7643
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/schemas/asset_adaptation_config.v1.json",
+      "sha256": "5d9a50d7a637a27532fd15e0a9902152b4bb3755d51445e54fc0a9e334105b38",
+      "bytes": 2048
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/schemas/asset_hybrid_config.v1.json",
+      "sha256": "57d39dfe8be6ff1d6df00c6e17b0bb506ae38a9c5fc9595c0444e8d2327fbcfd",
+      "bytes": 3137
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/schemas/asset_metadata_import.v1.json",
+      "sha256": "59dde4968df06b4f0c4b3936b6c525b9de0bd66139bb31bd5de706504ce8595f",
+      "bytes": 5692
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/schemas/embedding_manifest.v1.json",
+      "sha256": "a4f78fc38a872aef9bdbcb501bcf41d0ce16fada984f884eb05606add0c9b411",
+      "bytes": 3132
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/service.py",
+      "sha256": "139560bb7b23a2b9d5e8e963541400232408dffead1d04aa1e40b89c577141ca",
+      "bytes": 27733
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/settings.py",
+      "sha256": "d3a21f4eb5c70cf0c8ab50d84491ac18bd1186191d5ba42625a14e629ed2b38b",
+      "bytes": 7248
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/source_io.py",
+      "sha256": "99355ad5ebd4ccf35248ced856af547813fb77ff4d5435b8f45ea9df2b3eed81",
+      "bytes": 5051
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/assets/sources.py",
+      "sha256": "de5653d0f3db8028c062e9353a352f622de202bfc933481258f081690e208e13",
+      "bytes": 32707
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/canonical.py",
+      "sha256": "d407972561d564c5b14b02dbe5e73944fbd2c7cc190975d69462502a5245ad5c",
+      "bytes": 1156
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/__init__.py",
+      "sha256": "82d192d34fa0b8230310321b9ff661dc14b0feb4896a81a21f39b1137e9f6b6e",
+      "bytes": 99
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_archive.py",
+      "sha256": "18c0bc8cc8ca3681a12f4ea6d877a9053149497e0e87b01e617de3c957dc4879",
+      "bytes": 8437
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_benchmark.py",
+      "sha256": "79d53f0cde68c663f67ce1b0a02d78b849f33518e71e368ee368e3f127f44e5d",
+      "bytes": 43200
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_benchmark_cli.py",
+      "sha256": "0f6c7561140f42b5db0c1ce3114789bd434ee698521fa6a74fc3001b60b92275",
+      "bytes": 3651
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_benchmark_io.py",
+      "sha256": "83fd9351c3ae6e02b890515b8c9d8a4746c6dd7b16c7bee7621da1d4d70b393a",
+      "bytes": 6207
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_comparison.py",
+      "sha256": "150b3b13b2c35d973ce6ad520ac4a97e09c43057182993371eb1cfdf70fd0b7b",
+      "bytes": 41577
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_corpus.py",
+      "sha256": "32ab4df33a9024a264416a5882379604fb4c6cfb4c96d37f43b0b3724ff2dc78",
+      "bytes": 14444
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_corpus_io.py",
+      "sha256": "b563ffcebdc1ae3d60cab2be0179e106b6d5f0f880c53b471e97afdea72bb523",
+      "bytes": 6502
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_costs.py",
+      "sha256": "c6ca2c8e9645638a42acbca41c31c1e435b34f9a565803d331e867001b92bc2c",
+      "bytes": 4575
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_derivation.py",
+      "sha256": "b5eb82e4348e22920b33a89a5f7efd6af16974c6721ecbc6870624e65e797948",
+      "bytes": 5300
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_diagnostic.py",
+      "sha256": "75e8772e4845755009cc9080eabb44a7b3ac65ef4d2b455950107174a2eba206",
+      "bytes": 4563
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_diagnostic_runner.py",
+      "sha256": "e186a559ecd0e79a2835339e6232e63ea57028408b7d80f75c73858fc3114737",
+      "bytes": 38017
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_episode_driver.py",
+      "sha256": "9ffd3971a69e35cc1505b7dc58a5a1619f343a1793026de16d984defd88b23de",
+      "bytes": 20365
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_episode_export.py",
+      "sha256": "17c55b59ff4ea39311dc3a7f522eef39deb5500431bbf03fa4a6a0986d637138",
+      "bytes": 20354
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_evidence.py",
+      "sha256": "ef3857b35d3cb0eed221e4178d88b4a99ec8612ff3c84b33bc4f7f0b57f874b2",
+      "bytes": 40987
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_host_runner.py",
+      "sha256": "7b4531bf3ff225d1a52a44c56ff4c36870a0a9cc8e09cd0699d4f3548359f803",
+      "bytes": 14307
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_judgments.py",
+      "sha256": "c9784c2998a478aa27bfd4cf9a163059431ead5dd256441dfe0252d67699380a",
+      "bytes": 6074
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_labelling.py",
+      "sha256": "05b37417f6e6bea4b499e719619a07ad1dcc9d6ab62f1822705a497079c0b5aa",
+      "bytes": 10656
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_metrics.py",
+      "sha256": "680daa4b7a96d3c76e3ebd826c7938291f069747af36155d0b23444c18c63862",
+      "bytes": 11047
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_native_runtime.py",
+      "sha256": "38e347032f568dd250e14ba6b4412f8d25d7857cae69a01791bb9501cd3b6759",
+      "bytes": 16043
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_operations.py",
+      "sha256": "fc425034f39761dfd04793397b74a8e2e67974d3f474ffff3e0b47cda02a3ffb",
+      "bytes": 40132
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_operations_child.py",
+      "sha256": "a19a34292ebe800f492061adb60358f520da8ef192241bf664bd33f42417a87f",
+      "bytes": 4472
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_operations_run.py",
+      "sha256": "0965c4ff8034bc9d573571fdf155b841e69951303f7821aef54aa2c795bac1be",
+      "bytes": 37144
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_platform_export.py",
+      "sha256": "44df31b1390181bd9b891400754fe187e888445bac9a2a2212222cad75436db7",
+      "bytes": 2860
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_qualification.py",
+      "sha256": "41e9dbbf073850ef5a1284683a295ea44d45056ca14136d9ae4015c09fa20179",
+      "bytes": 14659
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_qualification_record.py",
+      "sha256": "616bb1cf327a34d4a9496354527ad030702c36c16677a1a170db82310ed9122c",
+      "bytes": 12521
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_run_journal.py",
+      "sha256": "453753914450bc4f66f66acffbfb30b1a7e4bfbdcb893560ec78ec1fc48f7439",
+      "bytes": 5449
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_run_kit_cli.py",
+      "sha256": "989f580d3ed0b7a3cd0f9f0220e9630cf1b521a54264c865cdf789a924c4b621",
+      "bytes": 9526
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_schedule.py",
+      "sha256": "2e03ac3d44f3e682ce3d80f9141dacc50cc1c41fe14aed6168261190911e18e4",
+      "bytes": 1942
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_source_capture.py",
+      "sha256": "d27b25775eeff617578cbb410640244c887ecfa20dd20fa5f4d0ebf7ff352384",
+      "bytes": 10559
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_source_catalog.py",
+      "sha256": "c61d2426d7ce69ff9ed2b67ddbdca2c765d6022cdb8689c30ea96206a084f02a",
+      "bytes": 12500
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_source_recipe.py",
+      "sha256": "6b017b542bc5d3dec158c1ccc8a440f4ae916c129d7c47a12aa5e5cdeaf45e8e",
+      "bytes": 6645
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_splits.py",
+      "sha256": "06de8b528fe5263d96f3d257171376a3d79d9f6f24c90b709ccbf9929f7f1c57",
+      "bytes": 8033
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_trial_kit.py",
+      "sha256": "72bc9ba57b9a4f1473fbe12d05ed473c72a9fdc155058c2706c7bc547850478a",
+      "bytes": 23276
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_whole_task.py",
+      "sha256": "e1bfd967e72cdad47cafebe61eb4cdd3628286a3c08ceb64afec0fc57b0d9267",
+      "bytes": 23123
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_whole_task_cli.py",
+      "sha256": "4d683f3a0801c721df073e1eab37f1dc067012fcc31d1d4d464307fa042d0e01",
+      "bytes": 14559
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_whole_task_corpus.py",
+      "sha256": "1d1c1f5398574458ea4bf4c58dbf9b23363f768c1ce6a52476c40516ae6686c1",
+      "bytes": 13556
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_whole_task_host_config.py",
+      "sha256": "9963838d857235abf69879dcadf51187833ce4a369c461e5b00645accdc431d3",
+      "bytes": 3948
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_whole_task_inputs.py",
+      "sha256": "4353162be79c7e1178067fdad8808732401d3a61b9cae664366192d786dd24d9",
+      "bytes": 14935
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/asset_whole_task_qualification.py",
+      "sha256": "d6a5b1a7ccd77f5b97cf5853a505f7ea5ff28a1d38fbfd08b45b71d745bf7edb",
+      "bytes": 7122
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/checkpoint.py",
+      "sha256": "7f730715570d5be5d5b2e219521197631c4c3986fac35fce1440533d1c535c2e",
+      "bytes": 2885
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/corpus.py",
+      "sha256": "e7fe7556324ae4dfe4cd2bc0b3144460c42a78b924827eed6d2be442b9ccde3f",
+      "bytes": 17420
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/environment.py",
+      "sha256": "05bb7f617c9f97f6076c366c28992a1ff95d40ab62d44fc2d50ef15af17fecc0",
+      "bytes": 7275
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/grading.py",
+      "sha256": "92ecfd412d0a3a1c19d0ca4f412cd06e3e1b161ba7750561e28b7c4c04fed4b4",
+      "bytes": 16423
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/m7_metrics.py",
+      "sha256": "eedc8f343493f7c627ad3ae39b0b3bdae20046b571e10f08d726816f026e0923",
+      "bytes": 13383
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/metrics.py",
+      "sha256": "9deb3079f175bd9f7cca30f22005bd27c4ceb1c11bbeb57a27a578ceea7f6e33",
+      "bytes": 22072
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/openclaw.py",
+      "sha256": "c4f241888b57ad0dda8d24ea2398006f7451dbabe9525483ca09b57ac37230aa",
+      "bytes": 38805
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/placement_metrics.py",
+      "sha256": "e8267e1f38e5c017989d4171953c67a3e678cddf300c17d4d7cc423036e27f9d",
+      "bytes": 9396
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/prior.py",
+      "sha256": "c24bfccb1182d79070f1a16dc1b7bc283050ba12b44e373d0ff96121f9f41256",
+      "bytes": 17119
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/schemas/asset_benchmark_comparison.v1.json",
+      "sha256": "2c28d98d26ef4b04c7ff47d0bcf998bbebe336a309ce8142a0658a220b12affc",
+      "bytes": 127179
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/schemas/asset_benchmark_config.v1.json",
+      "sha256": "3ebe2e7bd435e9ba587e4a46716bc859cc2c09c9cd7bb5336569025e4d3342e6",
+      "bytes": 3744
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/schemas/asset_benchmark_report.v1.json",
+      "sha256": "5ae676739944e2f80501b8e7cde10b41adcd1d51e4e17450e6864db35fbfa00e",
+      "bytes": 124338
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/schemas/asset_cases.v1.json",
+      "sha256": "06ac79ef4276698bf9fe6a15dfb7f625c8529d9d70b56b77fd463f7c4ab51eaa",
+      "bytes": 5434
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/schemas/asset_catalog_set.v1.json",
+      "sha256": "98a8ea1e85b0227da79c2c1fb2bf23898ebebf85e723647e2d26aca81ad196fd",
+      "bytes": 15550
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/schemas/asset_diagnostic.v1.json",
+      "sha256": "787d6397cde2aeb049f507cef024814ceb11ce69c2d77b862fab4c69da039c78",
+      "bytes": 6386
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/schemas/asset_labels.v1.json",
+      "sha256": "e41fada905769b03a8a0e536ebb5fd8e3d22a784d542ab74c7696b8da1a5dc82",
+      "bytes": 6958
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/schemas/asset_lock.v1.json",
+      "sha256": "903bd821dfc4a7969963445a2a8fe0b1e0c01cb660687ac5b55fd0e99793f600",
+      "bytes": 4978
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/schemas/asset_qualification_record.v1.json",
+      "sha256": "d6176d20daca819b59bd8f9433d5d8879373f5a79cb373a4626640bf6f88eb91",
+      "bytes": 12629
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/schemas/asset_whole_task.v1.json",
+      "sha256": "cb5dff2bb2b4fd7493f420fda13a76ad5aa831b079b0bfd42cf6e77abe402aa5",
+      "bytes": 21156
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/evaluation/selection_benchmark.py",
+      "sha256": "7258e78776eda41e0e2488178b4e4ab1d62617f77e44ae6998d75762df082cec",
+      "bytes": 32478
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/launcher.py",
+      "sha256": "751c04996d85463e5874c3eaa17d9cc1baba021d0e46000b11e87122460881a1",
+      "bytes": 41710
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/__init__.py",
+      "sha256": "db2cbd230e6f541e0b061c0bfec5c9998acd38ad200efcdfd0d7e4036f208388",
+      "bytes": 63
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/budgets.py",
+      "sha256": "20faa83bb36e3f94c09325dfbb24733e2b32703ad3b93c6f648a0b220f6a90a5",
+      "bytes": 19127
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/client_loop.py",
+      "sha256": "5d7195f00669735eaccc331309de4a050a120826d2b5057b8cde754842bf8812",
+      "bytes": 20181
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/handoff.py",
+      "sha256": "c05f9f9abc64a44d3911d098c3924a4f2952137a4c7bbd01e099793db51cd023",
+      "bytes": 14515
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/identifiers.py",
+      "sha256": "3834fcff6ca174929d3ac0ed9aba38bcc27a978260d4e9f1ff0316f98c89ebb9",
+      "bytes": 6066
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/local_loop.py",
+      "sha256": "209cb8d7b508b324d9aeec43ec46c705aab04a478e1a4620fe6ca3accdceb03c",
+      "bytes": 202547
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/local_status.py",
+      "sha256": "7ee6844f6e3547e5655c5e59ae6001b94a927a646703c4487f1a14c9248b5b8a",
+      "bytes": 5790
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/performance.py",
+      "sha256": "2b334079d4ca3b6d74f27d06da3360c0eab4aee9c4c4fda9696fc5b3a7c460cd",
+      "bytes": 5675
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/placement.py",
+      "sha256": "2adaf0ace6c5b69b013bb89e2a525f5a6e47b1be65b02c40da8737928191d9c3",
+      "bytes": 9246
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/prefetch.py",
+      "sha256": "ecec3d1baa7f1bdf5896b41378cfa4412b82554bc777b0ef08311556bb939f1b",
+      "bytes": 4288
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/recovery.py",
+      "sha256": "13fb22e8eaa6ad6bdaf5a8fbdcfe8f6637a14696a08fe4c0f53ff3fcfecd6d13",
+      "bytes": 8018
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/route_decision.py",
+      "sha256": "08c3a7a68b570dfc968b4d89b35d10623ae42c86c54462ef3251319fc6e55636",
+      "bytes": 11872
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/router.py",
+      "sha256": "f15a52cd86000d0c8e8bf178c2a9ae95bcb56536fb2cf669d4702c8ab6e31923",
+      "bytes": 21347
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/routing_cache.py",
+      "sha256": "7b68ca5bedee44c7f06253cb8dd21b13ea2e3ed526256e36c890038f368dac74",
+      "bytes": 9138
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/run_state.py",
+      "sha256": "3c6b6bc93aa57180edaede95a876908c0b70103ff0c908abf01b8b394eab0ccc",
+      "bytes": 11888
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/schemas/handoff_envelope.v1.json",
+      "sha256": "45fe98f3c12e3a3757d2f1a5c9572591b39e81ab3b3b73477b786a232fcf8818",
+      "bytes": 4711
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/schemas/route_decision.v1.json",
+      "sha256": "80dfbe9ae3efadec65c850e4929229080bdc2ecd60dc4595c63a88074b09b1d4",
+      "bytes": 2684
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/warmup.py",
+      "sha256": "a918eb71830b2223b55f6f4f56b0b045895e3fcaa31d6e3a6d8e96289ecda970",
+      "bytes": 24518
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/orchestrator/workflows.py",
+      "sha256": "3c59b89c47ae557d74bddda36bf8615aef78aaa7f83fa298540f364a8924ba5a",
+      "bytes": 902
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/recommendations/__init__.py",
+      "sha256": "50f547626bc7f47366af72cab1959c3d8886b36bb11fcc6ff141dd043bff98f7",
+      "bytes": 78
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/recommendations/_windows_private_files.py",
+      "sha256": "56432119b9c11da5e132277b3c7e85c203c4947d8aa7a56a2f40f7ee77ce8cab",
+      "bytes": 18067
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/recommendations/adaptation_buffers.py",
+      "sha256": "dc4aec969b8238877bd9838263264a404d4e82207f576d03e46f0c273c8c55c7",
+      "bytes": 2932
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/recommendations/admission.py",
+      "sha256": "cd6ed7153445dc4c7dab2765e39fdae918763cd5aacddaf566edad06d4e1bf86",
+      "bytes": 1375
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/recommendations/erasure.py",
+      "sha256": "e94f5875c82f1ed55a0829f77a87c72830978f16f52bc67978f020991fdda690",
+      "bytes": 3496
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/recommendations/errors.py",
+      "sha256": "32a469d56cc4a2f6050faf820b818c3720c47b7ab6fdd229a3f4067fb9627efd",
+      "bytes": 2295
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/recommendations/limits.py",
+      "sha256": "0976155e63461ba095fd62e0c94abed1230923b051637864226bff0b386623de",
+      "bytes": 1657
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/recommendations/private_files.py",
+      "sha256": "a2b3038f20a7d3632291a22dfba866a01b3cc6dc17430a1ae82af6f4a183b3c6",
+      "bytes": 7619
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/recommendations/registrations.py",
+      "sha256": "d3534510d302f58c9fb7b24cba45be41d10804f1cb00fb1e936cb66489416601",
+      "bytes": 8699
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/recommendations/service.py",
+      "sha256": "2764cb258fb21b38a42123b4f3a13b867ec19df42d40fdfcec7fe072fa526f3b",
+      "bytes": 32175
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/redaction.py",
+      "sha256": "103b647a62ea68cc8dd1d596edc44ee7cfd7dcd7798c897ce40b32bf0e93a78f",
+      "bytes": 6372
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/schema_util.py",
+      "sha256": "9481bd2c042c2a5d9ca8b94a4f2483cfd379a9f125ea9dd817903d7bc58b6d2f",
+      "bytes": 6751
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/__init__.py",
+      "sha256": "055ca2b0aae8df99e94aa8cd2f50aa0f3f5874e37ffbf6772652fcd78e511497",
+      "bytes": 2218
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/adaptation_stage.py",
+      "sha256": "b4eb3e01fc670ade5dfaed48d9f3375e6c6eaa4c7cc597496fe471dca8461c10",
+      "bytes": 6240
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/admission.py",
+      "sha256": "8777f55eed71f260ff32082e1ea4261dccded7b5608a82c32d1dfda45f5004bf",
+      "bytes": 3184
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/asset_adaptation.py",
+      "sha256": "7f12079ecbf1fa5d710287d98919694100b9978a731c79ac4fb2513b7313a5d9",
+      "bytes": 2765
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/asset_admission.py",
+      "sha256": "62c2cfdbbeef0e2ac1062230f472c98bf8c50762d88f92fecfeef618f4fce67b",
+      "bytes": 3941
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/asset_chain.py",
+      "sha256": "90f60e83a2f13e91b786ca9dcbd8a631b8ee98f09580508cc214cbb8c18ce35c",
+      "bytes": 22218
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/asset_contract.py",
+      "sha256": "b47086560bc527a1cdb2eb7d811ed19b67c37589e8d72431f902390246d76c00",
+      "bytes": 12697
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/asset_factory.py",
+      "sha256": "83c55140d25294671e54866a79c4ba215e49154fcdf621046a461e60f146afa1",
+      "bytes": 948
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/asset_http.py",
+      "sha256": "6f0c7cf08a5288f0de8e5c426dca5bffaccbfa003384291254d8591de53d4b06",
+      "bytes": 6116
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/asset_hybrid.py",
+      "sha256": "b7e2b06e40abc4baf784256b867172cc6124ec8246f9e442229ed0d8bc2f3dcc",
+      "bytes": 13864
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/asset_lexical.py",
+      "sha256": "decdaf42c1de45445c384e711e1b63017c9153f660819adb37aacb55883a9d74",
+      "bytes": 13775
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/asset_preparation.py",
+      "sha256": "45070e123688e8766762e2464696731a530442272ccf9ca6c58caf1b011fc72d",
+      "bytes": 27926
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/catalog.py",
+      "sha256": "fe8d87630aa226d255fb98b97ba4c30faccd5bc2127d3272a335f6d6900c0bf2",
+      "bytes": 1520
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/chain.py",
+      "sha256": "1707421c3c3680f06c7851f9f496f1958da746e83d5b6c2f953b210db3264ead",
+      "bytes": 16363
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/contract.py",
+      "sha256": "6395ae586bbb15dbe5aed84eace51a643080b19cf8da06aeebe9bbd5b97a4af9",
+      "bytes": 8966
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/example_match.py",
+      "sha256": "291e0e295ed0c077ebf1124d15491a11e33d828c4a8a6426d442fc348b1f6482",
+      "bytes": 10894
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/http.py",
+      "sha256": "675f129e167af7a3b2404113314536783ad66e581b8147e945416684b316414a",
+      "bytes": 4720
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/model_router.py",
+      "sha256": "cabbbc10024f2122c25b0feb7b8af0f9a8f2c7a21866afa05e579a07c721d976",
+      "bytes": 2996
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/schemas/asset_preparation_request.v1.json",
+      "sha256": "b28ab259746c8880210636d5f549263a0b06f6d72e154546ccad7bbebba43e3e",
+      "bytes": 14209
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/schemas/asset_preparation_response.v1.json",
+      "sha256": "489612cc77b4e6c5dd041c08697e89485eef06679cda353d1dd17ce7a5a37a99",
+      "bytes": 8192
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/schemas/selection_request.v1.json",
+      "sha256": "7da8af96b7ec78c06c0d4f6d3cc865b0d55b2d75d670e80790f6bf2088135a24",
+      "bytes": 2708
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/schemas/selection_request.v2.json",
+      "sha256": "847a87fb228be4f9c00abda79dba06e2c78ae14f37e1739c1c85483d4010e848",
+      "bytes": 7197
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/schemas/selection_result.v1.json",
+      "sha256": "518c6d60ddbd8dac30d20829c2a51f7512ea895b44e4fce71fd6f6533473a22b",
+      "bytes": 2673
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/schemas/selection_result.v2.json",
+      "sha256": "4b23563d44d3e9fe16d4e6cbce2f761e39d7af4786c016349113d9656b8b0739",
+      "bytes": 7593
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/selection/settings.py",
+      "sha256": "abf9c7d9161d4123c8a834e07a21785f79200e08996ebe36756082b254713b8c",
+      "bytes": 3616
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/skills/__init__.py",
+      "sha256": "485fe95897786c873b08d5c6bfa900ad8705e62ac885684f76fee4b7b922cc42",
+      "bytes": 965
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/skills/cache.py",
+      "sha256": "555b8aee4be4cac7ca23db58211132ac0267dc85e51940db8ac4bc86e9dcfa2e",
+      "bytes": 2244
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/skills/predicates.py",
+      "sha256": "8af6820b0003ceee4a0ab1ef147259d7ab9e855eb0ca7a5e07cfa992d8a73ab2",
+      "bytes": 38099
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/skills/registry.py",
+      "sha256": "eee07aa5d4fb635134b89e8c3a9dcbe06c5254d55db061875376e74fd40a0e2f",
+      "bytes": 27004
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/skills/schemas/skill_manifest.v1.json",
+      "sha256": "88ba11c99d4aad8d83c0520aef04dc4edaa345b018bb6e4669b59c4dc4f8d37a",
+      "bytes": 3344
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/stats.py",
+      "sha256": "22d66cc4046f042f1a522b368f6076ee6921d23a027ff0652ef9d9ef6e4a4778",
+      "bytes": 12692
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/__init__.py",
+      "sha256": "d069258353bd1b4291f6ed5222ca67638aa91e3e0412d969ef05ad2c3e155b81",
+      "bytes": 1336
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/asset_catalog.py",
+      "sha256": "2844776c63c669e2e7f2d74bfb6e686a9b19c41c7c096ca1bd97af98f670c48b",
+      "bytes": 46808
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/asset_feedback.py",
+      "sha256": "8287d64c7f8dbf6a84a87576314fe4103c61bad6a87ff9782bc259832d89601e",
+      "bytes": 33994
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/asset_remote_state.py",
+      "sha256": "bd22da4d4f85c5d83dbf660a0429625a03a0801ea4952ea58549b04af8def064",
+      "bytes": 1913
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/asset_vectors.py",
+      "sha256": "4c7e3789a1d07eac60edb6459663e0a04d7484040e1ef9718eeed1754ecc01b6",
+      "bytes": 4056
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/index_job_event.py",
+      "sha256": "986aa88b1a0daa25d412b0f700f28df4ad1a894ee9ab9795752e77d87224a567",
+      "bytes": 1355
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/model_timings.py",
+      "sha256": "8190043cacd45ee8bf6348b5a85af4b41752d10fc29fbc3a1540598e294ec94d",
+      "bytes": 7091
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/outcomes.py",
+      "sha256": "77c2cbfea7982d5121e424567402d0ce01e88b4d67bc6d7324d87b482e0e626a",
+      "bytes": 3350
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/recommendation_event.py",
+      "sha256": "4396697acae57eac82522e468cc2b00db36d94ff213ca3db41e0beef0cf21016",
+      "bytes": 3108
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/recommendations.py",
+      "sha256": "882a21333a712c8c7e21e5e7f5261ded949360ec58e58ec2326f571f18d41ba3",
+      "bytes": 30746
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/run_store.py",
+      "sha256": "2f3dca7cc1f5cbc2b74cfffc5a7bce42a7040707bb31090a49d61016a98cf4cc",
+      "bytes": 92345
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/schemas/action_evidence.v1.json",
+      "sha256": "b42dc99143c1d77038265ab996c90bdf429b734f06cad6d86d4b876daf26bcba",
+      "bytes": 2534
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/schemas/asset_catalog_snapshot.v1.json",
+      "sha256": "6917d56be71e9f7abfbe214e823335a9b6279dd4af1d098932a4f0e6a3b5cb68",
+      "bytes": 7106
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/schemas/asset_record.v1.json",
+      "sha256": "a47cf268403525515826a4a6fd32481f9fb4a9939716b3120bc23b5ce4ae0ad4",
+      "bytes": 3428
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/schemas/feedback_audit.v1.json",
+      "sha256": "43118b6fe63835c3a27704e0d88a2c92327e04997f798b491c72d8b78a5f70bb",
+      "bytes": 1122
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/schemas/feedback_record.v1.json",
+      "sha256": "cf27e2612116fc8d4d61f756cc12b31663fb70411c0b9da5944f76d1994a8728",
+      "bytes": 2494
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/schemas/index_job_event.v1.json",
+      "sha256": "4ce867b6f0a69e416e3598f5c68b6d5945948a12393a6620997280ef8c2e87f6",
+      "bytes": 10067
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/schemas/model_timing.v1.json",
+      "sha256": "dd9af6b505904726817d882825f65334df856d452caed08b0aba437b62de0705",
+      "bytes": 1383
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/schemas/recommendation_event.v1.json",
+      "sha256": "6c347cd1047a9608b3ad74da41081387613ed823313e19cb8a8b089d2932ca63",
+      "bytes": 22753
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/schemas/recommendation_readiness.v1.json",
+      "sha256": "fd61fc0cdddd65e4e5075dc280bde4a5238e599a0dbdb9dd1319a8274feeeb37",
+      "bytes": 1742
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/schemas/recommendation_result.v1.json",
+      "sha256": "a4193cf501b034cb991214bcbbb160f03405f5e12846ed6f78340844579b1d24",
+      "bytes": 20448
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/schemas/recommendation_view.v1.json",
+      "sha256": "3c434776aef568be9febf18104e3f92e2a312b60446aa969f687508c603600eb",
+      "bytes": 4357
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/schemas/trace_event.v1.json",
+      "sha256": "8286e614a2617311cb47f8109c1eaa6d9455b504ec9fcfd0cae4dcb392b026e3",
+      "bytes": 38253
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/store/trace_event.py",
+      "sha256": "24f2f701cec429f51cc8d73b697240958fc308ad29b361ccfac23fbd048a5120",
+      "bytes": 49054
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/tools/__init__.py",
+      "sha256": "363a356186bfe64cdc0e6306a299153f195ea34591a68458ad7644341f6ad2ad",
+      "bytes": 871
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/tools/executor.py",
+      "sha256": "85c96339a8405f6d4c6391975240de4073aa8301db5cb0add77ccf534ef5d2a7",
+      "bytes": 17528
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/tools/registry.py",
+      "sha256": "466ae0be56052e07d36c23c4d60fe475da80f3d41a09b6f5536ee0f353d6ab3f",
+      "bytes": 21601
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/tools/sandbox.py",
+      "sha256": "60bd9d98dfe0aa2bd511280c49d3c3487cc362c40b3c144f6d10203a48739cf3",
+      "bytes": 19456
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/tools/schemas/demo/delete_demo_database.v1.json",
+      "sha256": "e6933fabef1a57fe60ff6e3cd20487868902ef832218943b413cc86c05982b3b",
+      "bytes": 2115
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/tools/schemas/demo/get_incident_counts.v1.json",
+      "sha256": "37ff25b09c208c77a6f8208359a24c4c485a03562c688ac3ac8701b1d243b827",
+      "bytes": 2215
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/tools/schemas/demo/get_latest_deployment.v1.json",
+      "sha256": "b2ba32cba434cf69f669e9364218f525a5a464d978633ad462f0dfc91f5cfc4f",
+      "bytes": 2621
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/tools/schemas/demo/get_metrics.v1.json",
+      "sha256": "687cdbf054bc332af2dad506414f6e5d1fec7a07e635dac1fcccdf8b3a842a14",
+      "bytes": 2659
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/tools/schemas/demo/get_recent_logs.v1.json",
+      "sha256": "26c635f87be3e3c5c99051618a659b74f916960ef61b846d37eeaf50ed12e320",
+      "bytes": 2619
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/tools/schemas/demo/get_service_health.v1.json",
+      "sha256": "287dccea88dde59f96ee8ffb6624982ccbf6248b0d5232b905bb73761b7ad602",
+      "bytes": 1833
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/tools/schemas/demo/list_demo_databases.v1.json",
+      "sha256": "ccedc1c65916fcc810e49340b8d3ea22a031190ab4afc4931b7b44f21267fccf",
+      "bytes": 1967
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/tools/schemas/tool_result.v1.json",
+      "sha256": "27b7b0df2a7974dccba0bfcaece25c7367293d72046ad341a1ea01d21fc80b5b",
+      "bytes": 1676
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/ui/__init__.py",
+      "sha256": "5723b07175e9248772d2be1db79ff3b14113778571b6a0cf0e984853ce40e7c2",
+      "bytes": 370
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/ui/comparison.py",
+      "sha256": "d4ad21c9542f3c87721b663a33411dc0eb326aef4c802840825cef0f1858b4c6",
+      "bytes": 3955
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/ui/render.py",
+      "sha256": "f5e58c2080218b0fd7a48e6b988a5c74246f5493af7d64b8ca97150afcec09d4",
+      "bytes": 23553
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/ui/routes.py",
+      "sha256": "878230d3d83ea8fe5fa212d34d483e57e78cfe3ef0d13968d39a5e8663f56de4",
+      "bytes": 4292
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/ui/settings.py",
+      "sha256": "146a3f9250033138861f7f5a06085c5a76b24d68b52cd56bf32a671877b2c9ae",
+      "bytes": 2489
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/originals/src/relaymind/ui/trace_view.py",
+      "sha256": "35c83d38ea9e96f78b511dc99f0954bdc40c0c593ab0110a4bc5be0726285b02",
+      "bytes": 18010
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/builtin-production.toml",
+      "sha256": "48a678e7abc5c9e5e5655e89b57e5ac3abdd1ae6ed697b7f59a8303fc478ad92",
+      "bytes": 403
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/builtin.toml",
+      "sha256": "2d7ad95e9559501b5a10999d7626c90aa6ad663be36eab770211ff54a8391325",
+      "bytes": 479
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/cases.json",
+      "sha256": "a987f8be16aded32f9c5c71952c069e80285e6045a9818889539834686dce6a6",
+      "bytes": 5662
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/catalog.json",
+      "sha256": "57647af3bb5e16c25f00023cc416afb91dc7c1d1fc9fb92ca49513d8e159024e",
+      "bytes": 5312
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/environment.json",
+      "sha256": "2fab8d998c614bb1a1b3595a0e915869005c83ac72fbc4d43a03204d152663d5",
+      "bytes": 353
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/labels.json",
+      "sha256": "be1d5d13f50127f166459231fe473b87c1476f6f7308135f4afb32fb44a47f4e",
+      "bytes": 12266
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/lock.json",
+      "sha256": "b5cfdba25d81ff9a0def09e8180a832076527013c2006b00529b73027505c749",
+      "bytes": 2730
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/originals/access_control.txt",
+      "sha256": "3f77bfdae4e1d6750a058ae8a5f0d0c176db21e2f2dd451ac62e2dd4b099b80f",
+      "bytes": 64
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/originals/adjudication.txt",
+      "sha256": "3cf2a83e374ac91abfe496c5eb7aff0e09ab1c1776f3a28b6f1a2afc82751290",
+      "bytes": 62
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/originals/authorship.txt",
+      "sha256": "0171d4275007485402bc25d6532060ce2a37b62c4d8e17b1e399e256d81c5bea",
+      "bytes": 60
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/originals/calendar.md",
+      "sha256": "1defa6396b1d171810d65e313267b929748324acc7f6b7e0450357e6932e3aa2",
+      "bytes": 62
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/originals/derivation.txt",
+      "sha256": "b097cb90a5a9db7ff10c72c8581c789fad731aaa61c7052bbd0fac245d44c924",
+      "bytes": 60
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/originals/independence.txt",
+      "sha256": "6a5f82e112a72182473cf8245dd1df5e316305d08e7a695dbb516ce4a3747f56",
+      "bytes": 62
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/originals/language_review.txt",
+      "sha256": "f528e23a6d960d2f74fa6dc06a5626ba838b697cdd52a0fff3f9e2daa7b63555",
+      "bytes": 65
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/originals/license.txt",
+      "sha256": "19f3189d2ae35183351e059b5bb44f7c55c8336c4eee2cc1d296a2042ec190a8",
+      "bytes": 57
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/originals/notice.txt",
+      "sha256": "9473b9dc30eec6ba5c80b7d4bf91c8bce4ddcb0f4ad5e5a38ffce9efd1702a21",
+      "bytes": 56
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/originals/permission.txt",
+      "sha256": "7c600be4ea9bee469dab9a457f9d6314c14e209b7a3c35c811d9fd0abf7f4b7b",
+      "bytes": 60
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/originals/source_provenance.txt",
+      "sha256": "c20519845080da78a798fe346e68b80702874934d8e7923d45efa4f016468ef5",
+      "bytes": 67
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/originals/split_review.txt",
+      "sha256": "b87708435de8767e71e70e9cd0db888b05e3d565c77a7507b433ddce29bdf62e",
+      "bytes": 62
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/third-party-production.toml",
+      "sha256": "3a8a730adb67b4a8f564b0f64a925411a94f9083139154f3ed2753be2763459c",
+      "bytes": 491
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/release/third-party.toml",
+      "sha256": "2e2ce60c3c530147ae1b2750706cda25a5fa698f9f7ac5da5cfdc976b496b7a7",
+      "bytes": 483
+    },
+    {
+      "role": "evidence",
+      "path": "platform/bundle/resolver.json",
+      "sha256": "d354503b3c2bb959e6c2a83dca2b0dfac1bd2338ac51cf4baa9b53e1922e5fe4",
+      "bytes": 53761
+    },
+    {
+      "role": "evidence",
+      "path": "platform/environment.json",
+      "sha256": "207c5128a474a7c786e98692486a7bc4af148b7a515cdc3d0e1c15322746c112",
+      "bytes": 490
+    },
+    {
+      "role": "evidence",
+      "path": "platform/platform-grade.json",
+      "sha256": "1de3d71fd4dd7b4eff8b4bad7722dcb10761856e4b52db23372f48b50b27eb74",
+      "bytes": 286
+    },
+    {
+      "role": "evidence",
+      "path": "platform/platform.json",
+      "sha256": "ea4db2f070b5428b9409b4eb6f5554da95ad838e047fe1f6ccea4f85824ea67f",
+      "bytes": 3669
+    },
+    {
+      "role": "evidence",
+      "path": "release.json",
+      "sha256": "e369482b34b2d417af839ee047cda5c18259c4e3a06d0e70a1122abdf3d7e4e2",
+      "bytes": 2311
+    },
+    {
+      "role": "evidence",
+      "path": "verify.txt",
+      "sha256": "70710f855fac44118be0d787cd90297d316c34ad02044ae98f30f299ebea7f46",
+      "bytes": 823
+    }
+  ],
+  "review": {
+    "owner_login": "devnullexile",
+    "pull_request": null,
+    "reviewer_logins": [],
+    "approved_at": null
+  },
+  "recorded_at": "2026-11-01T11:27:16.623979Z"
+}
