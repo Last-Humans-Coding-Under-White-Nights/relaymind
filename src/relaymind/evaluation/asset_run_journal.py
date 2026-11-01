@@ -10,7 +10,8 @@ inputs or under another identity: earlier rows are never attributed to it.
 The journal holds row and reset evidence, so it is created owner-only (0600,
 in a new 0700 directory) and restored to 0600 on resume. ``started`` is written before any
 work begins and ``finished`` holds the conserved outcome, so a crash leaves a
-started entry that the driver must account for, never silently rerun.
+started entry that the driver must account for, never silently rerun. A pre-start
+refusal is a single ``skipped`` record and is never marked started.
 
 Only an unterminated trailing record (a torn final write) is dropped; any other
 malformed record rejects the journal. A file with no complete record (a crash
@@ -61,13 +62,14 @@ def _fsync_directory(path: Path) -> None:
 
 
 class RunJournal:
-    """Append-only started/finished records under one bound header."""
+    """Append-only started/finished or pre-start skipped records under one header."""
 
     def __init__(self, path: Path, header: Mapping):
         self.path = Path(path).absolute()
         self.header = dict(header)
         self.started: set[str] = set()
         self.finished: dict[str, dict] = {}
+        self.skipped: set[str] = set()
         self._lock = self.path.parent / (self.path.name + ".lock")
         if not self.path.parent.exists():
             # Another runner may create it between the check and here.
@@ -117,7 +119,20 @@ class RunJournal:
             kind, key = record.get("type"), record.get("key")
             if not isinstance(key, str) or set(record) - {"type", "key", "value"}:
                 raise JournalError("journal_corrupt")
-            if kind == "started" and key not in self.started and set(record) == {"type", "key"}:
+            if (
+                kind == "skipped"
+                and key not in self.started
+                and key not in self.finished
+                and isinstance(record.get("value"), dict)
+            ):
+                self.skipped.add(key)
+                self.finished[key] = record["value"]
+            elif (
+                kind == "started"
+                and key not in self.started
+                and key not in self.finished
+                and set(record) == {"type", "key"}
+            ):
                 self.started.add(key)
             elif kind == "finished" and key in self.started and key not in self.finished:
                 if not isinstance(record.get("value"), dict):
@@ -160,6 +175,17 @@ class RunJournal:
         value = dict(value)
         self._append(dict(type="finished", key=key, value=value))
         self.started.discard(key)
+        self.finished[key] = value
+
+    def skip(self, key: str, value: Mapping) -> None:
+        """Persist a pre-start refusal without claiming execution started."""
+        if not isinstance(key, str):
+            raise JournalError("journal_corrupt")
+        if key in self.started or key in self.finished:
+            raise JournalError("journal_order")
+        value = dict(value)
+        self._append(dict(type="skipped", key=key, value=value))
+        self.skipped.add(key)
         self.finished[key] = value
 
     def close(self) -> None:

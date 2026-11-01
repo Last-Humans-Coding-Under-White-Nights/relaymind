@@ -47,10 +47,12 @@ machines and reviews changes, and every report says so.
   their independence. Cohen's kappa is still reported before adjudication. The
   owner's PR approval of the frozen labels is the human check. None of the
   raters is a tuner, and the label is never `independent`.
-- **Author competence unchanged.** Native Chinese authorship cannot be
-  replaced by machine translation without breaking the originality rule. A lane
-  without a competent author stays uncovered and blocks. This is the main
-  remaining risk for the Chinese lanes.
+- **Author competence by profile.** For `owner_machine` with `original`
+  prompts, section 12.6.1 competence rules are unchanged: a lane without a
+  competent author stays uncovered. Under `machine_drafted_owner_approved`,
+  the recorded drafter replaces that competence rule for cohort counts, as
+  [section 12.6.6](../SPECIFICATION.md#1266-owner-run-acceptance-profile-spec-066-rm16rm38rm44-ac29ac37)
+  specifies. Translation does not satisfy either profile's originality rule.
 - **Qualification record.** One closed, versioned JSON schema covers positive
   and negative records. Byte SHA-256 binding (not canonical JSON) makes the
   record tamper-evident for any file type, including media manifests and

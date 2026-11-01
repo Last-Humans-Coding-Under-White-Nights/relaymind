@@ -64,7 +64,33 @@ it("keeps neutralized controls and the description quote distinct from source te
   expect(text).toContain(
     'Description: "a\\\\u{202e}\\u{202e}\\" Recorded score: 99; x \\"b"',
   );
-  expect(text).toContain("Source locator: C:\\\\skills\\\\a\\\\SKILL.md");
+  expect(text).toContain("Source locator: C:\\skills\\a\\SKILL.md");
+});
+// RM12/RM39; AC30; spec 4.6.1/7.6: ordinary Windows locators stay exact.
+it.each([
+  String.raw`C:\Users\operator\skills\x\SKILL.md`,
+  String.raw`\\server\skills\x\SKILL.md`,
+])(
+  "preserves the offered locator %s and ordinary description backslashes",
+  (locator) => {
+    const view = decodeRecommendationView(fixture);
+    view.displayed_candidates[0].asset.source_locator = locator;
+    view.displayed_candidates[0].asset.description =
+      String.raw`Match \d on \\server\share`;
+    const text = renderRecommendation(view, { format: "text" });
+    expect(text.split("\n")).toContain(`Source locator: ${locator}`);
+    expect(text.split("\n")).toContain(
+      String.raw`Description: "Match \d on \\server\share"`,
+    );
+  },
+);
+// RM12/RM39; AC30: literal source escapes cannot imitate actual controls.
+it("distinguishes literal control notation in native skill labels", () => {
+  const label = (slug: string) =>
+    nativeSkillLabel({ slug, skillId: "id", revision: "r" });
+  expect(label(String.raw`a\u{202e}b`)).toBe(String.raw`a\\u{202e}b (r)`);
+  expect(label("a\u202eb")).toBe(String.raw`a\u{202e}b (r)`);
+  expect(label(String.raw`a\d`)).toBe(String.raw`a\d (r)`);
 });
 // RM12/RM39; AC30: the native skill select shows host library strings with
 // control characters neutralized, like the rest of the panel's evidence.

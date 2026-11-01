@@ -384,26 +384,16 @@ def test_the_record_harness_belongs_to_its_repository_commit():
     assert hashlib.sha256(shown.stdout).hexdigest() == revisions["harness_sha256"]
 
 
-def test_the_m1_record_is_not_preregistered_and_cannot_be_approved(tmp_path):
-    """Spec 12.6.6 (review of #276): the cases and labels were frozen in the same
-    commit used as the run's freeze, with no owner approval before it, so the
-    trial has no section 12.6.6 preregistration. The record says so (null) and an
-    approved copy of it rejects."""
+def test_the_m1_record_stays_pending_and_nonqualifying():
+    """RM16/RM44, AC36: the historical trial claims no approval or acceptance."""
     from relaymind.evaluation.asset_qualification_record import load_record
-    from relaymind.evaluation.asset_whole_task import WholeTaskRejected
 
     document = json.loads(RECORD.read_text())
     assert document["preregistration"] is None
+    assert document["review"]["approved_at"] is None
     assert not load_record(RECORD).approved
-    approved = json.loads(RECORD.read_text())
-    approved["review"].update(
-        pull_request=276, reviewer_logins=["another-member"], approved_at="2026-11-03T00:00:00Z"
-    )
-    bundle = _record_tree(tmp_path)
-    copy_path = bundle.parents[1] / RECORD.name
-    copy_path.write_text(json.dumps(approved), encoding="utf-8")
-    with pytest.raises(WholeTaskRejected, match="preregistration_missing"):
-        load_record(copy_path)
+    grade = json.loads((TRIAL / "bundle/grade.json").read_text())
+    assert grade["qualification"]["assessed"] != "qualified"
 
 
 def test_the_committed_grade_was_made_without_the_record():

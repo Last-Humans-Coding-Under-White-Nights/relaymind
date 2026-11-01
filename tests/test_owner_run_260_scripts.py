@@ -328,7 +328,11 @@ def test_the_effective_host_config_must_be_the_frozen_document():
     assert (provider["apiKey"], provider["baseUrl"]) == ("k", "https://x/v1")
     assert "omitted_secret_fields" not in provider
     # Host-owned state outside the frozen document is allowed.
-    run_host.check_effective(native, dict(effective, meta=dict(lastTouched="t")))
+    run_host.check_effective(
+        native,
+        dict(effective, meta=dict(lastTouched="t")),
+        dict(apiKey="k", baseUrl="https://x/v1"),
+    )
     changed = json.loads(json.dumps(effective))
     changed["models"]["providers"]["external"]["models"][0]["id"] = "other"
     extra = json.loads(json.dumps(effective))
@@ -337,7 +341,7 @@ def test_the_effective_host_config_must_be_the_frozen_document():
     del missing["models"]["providers"]["external"]["apiKey"]
     for document in (changed, extra, missing):
         with pytest.raises(run_host.FreezeMismatch, match="host_config_mismatch"):
-            run_host.check_effective(native, document)
+            run_host.check_effective(native, document, dict(apiKey="k", baseUrl="https://x/v1"))
     plugin = read(CONFIGS / "host-provider_only.json")
     run_host.check_effective(plugin, run_host.realize(plugin, {}))
     diagnostics = run_host.realize(plugin, {})
@@ -768,8 +772,7 @@ def test_a_row_reserved_before_reports_its_own_reason(tmp_path):
     run.budget = budget(tmp_path)
     assert run.budget.reserve("t1-native") is None
     entry = next(c for c in FREEZE["configurations"] if c["arm"] == "native")
-    row, refs = run.execute(dict(id="t1", prompt_case_id="c1"), "native", entry)
-    assert (row["status"], row["reason"], refs) == ("not_run", "row_reserved", [])
+    assert run.skip_reason(dict(id="t1"), "native", entry) == "row_reserved"
 
 
 def write_cases_inputs(tmp_path, prompts):
@@ -806,7 +809,7 @@ def test_a_judgment_with_no_known_handle_is_not_turned_into_a_negative():
         == "negative"
     )
     for label in ("positive", "ambiguous"):
-        for acceptable in (["A2"], [], ["A001", "A9"]):
+        for acceptable in (["A999"], [], ["A001", "A9"]):
             with pytest.raises(ValueError, match="acceptable"):
                 harness._classes(dict(row, **{"class": label, "acceptable": acceptable}), names)
 
@@ -907,3 +910,289 @@ def test_the_episode_run_rejects_production_settings_the_freeze_does_not_bind(mo
     config.budget = 2
     with pytest.raises(run_episodes.NotFrozen, match="production_config_mismatch"):
         run_episodes.frozen_settings(config, "release", off)
+
+
+@pytest.mark.parametrize("held", [False, True])
+def test_prestart_skips_survive_journal_resume_without_dispatch(tmp_path, held):
+    """RM16/RM44, AC36: unavailable arms and budget refusals never start or fail."""
+    from whole_task_helpers import ENVIRONMENT, freeze_doc, tasks_doc
+
+    freeze = freeze_doc(task_ids=("t1",))
+    tasks = tasks_doc(freeze, lanes=("en_to_en",))
+    run = object.__new__(run_host.Run)
+    run.frozen = {c["arm"]: dict(config=c) for c in freeze["configurations"]}
+    run.budget = budget(tmp_path, cap=200_000, spent=0 if held else 1)
+    if held:
+        assert run.budget.reserve("t1-native") is None
+        assert run.budget.reserve("t1-provider_only") == "budget_cap"
+    journal = tmp_path / "run.jsonl"
+
+    def unexpected(*args):
+        pytest.fail("skipped work was dispatched")
+
+    kwargs = dict(
+        environment=ENVIRONMENT,
+        artifacts=[],
+        qualification="fixture",
+        input_manifest=dict(path=None, digest="0" * 64, bytes=0),
+        interrupted=lambda: False,
+        skip_reason=run.skip_reason,
+    )
+    report = run_host.run_host_plan(tasks, freeze, unexpected, journal, **kwargs)
+    reasons = {r["arm"]: r["reason"] for r in report["rows"]}
+    assert reasons == dict(
+        native="row_reserved" if held else "budget_cap",
+        provider_only="budget_cap",
+        recommendations="person_choice_unavailable",
+    )
+    assert all(r["status"] == "not_run" for r in report["rows"])
+    assert all(a["failed"] == 0 and a["not_run"] == 1 for a in report["summary"]["arms"])
+    assert all(json.loads(line)["type"] != "started" for line in journal.read_text().splitlines())
+    kwargs["skip_reason"] = unexpected
+    assert run_host.run_host_plan(tasks, freeze, unexpected, journal, **kwargs) == report
+
+
+@pytest.mark.parametrize("field", ["baseUrl", "apiKey"])
+def test_effective_config_rejects_changed_private_values(field):
+    """RM03/RM16, AC36: keeping a secret key cannot bypass the request gate."""
+    frozen = read(CONFIGS / "host-native.json")
+    expected = dict(baseUrl="http://127.0.0.1:9/v1", apiKey="test-key")
+    effective = run_host.realize(frozen, expected)
+    run_host.check_effective(frozen, effective, expected)
+    effective["models"]["providers"]["external"][field] = "changed"
+    with pytest.raises(run_host.FreezeMismatch, match="host_config_mismatch"):
+        run_host.check_effective(frozen, effective, expected)
+
+
+def test_annotation_preserves_unpadded_answers_and_notes(tmp_path, monkeypatch):
+    """RM16/RM40, AC31: a handle formatting slip cannot change the raw judgment."""
+    from types import SimpleNamespace
+
+    write(tmp_path / "catalog.json", dict(assets=[dict(record=dict(asset_id="asset:one"))]))
+    template = tmp_path / "template.json"
+    write(
+        template,
+        dict(
+            annotator_id="machine-annotator-a",
+            items=[
+                dict(
+                    case_id="c1",
+                    lane="en_to_en",
+                    task_text="Find it",
+                    language_tags=["en"],
+                    judgment=None,
+                )
+            ],
+        ),
+    )
+    notes = "  original note " * 150
+    raw = dict(
+        case_id="c1",
+        **{"class": "positive"},
+        acceptable=["A1"],
+        language_valid=False,
+        independent_case=True,
+        notes=notes,
+    )
+    monkeypatch.setattr(harness, "catalog_listing", lambda catalog: "A001 asset:one")
+    monkeypatch.setattr(
+        harness,
+        "chat",
+        lambda *a, **k: dict(
+            choices=[dict(message=dict(content=json.dumps(dict(judgments=[raw]))))]
+        ),
+    )
+    out = tmp_path / "out.json"
+    harness.cmd_annotate(
+        SimpleNamespace(
+            root=tmp_path,
+            template=template,
+            ledger=tmp_path / "ledger",
+            cap=1000,
+            output=out,
+            batch=1,
+            max_batches=0,
+            log=tmp_path / "log",
+        )
+    )
+    result = read(out)["items"][0]["judgment"]
+    assert result is not None
+    assert result["class"] == "positive"
+    assert result["acceptable_asset_ids"] == ["asset:one"]
+    assert result["language_valid"] is False and result["independent_case"] is True
+    assert result["notes"] == notes
+
+
+def test_call_log_holds_original_bytes_and_individual_rejections(tmp_path):
+    """RM16/RM40, AC31: drafting evidence keeps bytes, not only their hashes."""
+    from types import SimpleNamespace
+
+    logs = tmp_path / "log"
+    logs.mkdir()
+    sent = b'{ "messages": [ ], "temperature": 0 }\n'
+    received = b'{ "created": 0, "model": "fixture" }\n'
+    (logs / "draft.request.json").write_bytes(sent)
+    (logs / "draft.response.json").write_bytes(received)
+    out = tmp_path / "drafting-log.json"
+    harness.cmd_log(
+        SimpleNamespace(
+            log=logs,
+            copy_to=tmp_path / "copy",
+            output=out,
+            template="drafter.txt",
+            role="author",
+            rejected=[
+                "e001:wrong_lane_language:draft.response.json e002:duplicate:draft.response.json",
+            ],
+        )
+    )
+    log = read(out)
+    call = log["calls"][0]
+    assert call["request_utf8"].encode("utf-8") == sent
+    assert call["response_utf8"].encode("utf-8") == received
+    assert call["request_sha256"] == harness.sha256(sent)
+    assert call["response_sha256"] == harness.sha256(received)
+    assert log["rejected"] == [
+        dict(item="e001", reason="wrong_lane_language", response="draft.response.json"),
+        dict(item="e002", reason="duplicate", response="draft.response.json"),
+    ]
+
+
+def test_chat_keeps_the_exact_transmitted_request_bytes(tmp_path, monkeypatch):
+    """RM16/RM40, AC31: reserialization is not original request evidence."""
+    monkeypatch.setenv("RELAYMIND_EXTERNAL_BASE_URL", "http://127.0.0.1:9/v1")
+    monkeypatch.setenv("RELAYMIND_EXTERNAL_API_KEY", "test-key")
+    import io
+
+    sent = []
+    raw = b'{"usage":{"prompt_tokens":1,"completion_tokens":1}}'
+
+    def respond(request, timeout):
+        sent.append(request.data)
+        return io.BytesIO(raw)
+
+    monkeypatch.setattr(harness.urllib.request, "urlopen", respond)
+    harness.chat(
+        harness.Ledger(tmp_path / "ledger", 10000),
+        "draft",
+        [dict(role="user", content="中文")],
+        tmp_path / "log",
+        "draft",
+        max_output=100,
+    )
+    assert (tmp_path / "log/draft.request.json").read_bytes() == sent[0]
+    assert (tmp_path / "log/draft.response.json").read_bytes() == raw
+
+
+@pytest.mark.parametrize(
+    "failure", [FileNotFoundError(), run_host.subprocess.CalledProcessError(1, ["zstd"])]
+)
+def test_transcript_decode_failure_retains_row_with_unknown_cost(tmp_path, monkeypatch, failure):
+    """RM16/RM44, AC36: missing/broken decompression cannot lose the executed row."""
+    import sqlite3
+    from types import SimpleNamespace
+
+    run = object.__new__(run_host.Run)
+    run.frozen = run_host.frozen_arm_configs(FREEZE, CONFIGS, MODEL)
+    run.budget = budget(tmp_path)
+    run.prompts = {"c1": "prompt"}
+    run.work = tmp_path / "work"
+    run.evidence_root = tmp_path / "evidence"
+    run.secrets = []
+    run.native = SimpleNamespace(command=["fixture-host"], env={}, config_path="c")
+    run.gate = SimpleNamespace(
+        open_row=lambda *a: None,
+        charged=lambda: 10,
+        refused=False,
+        close_row=lambda: dict(prompt=8, completion=2, charged=10, refused=False),
+    )
+
+    def executed(*args, **kwargs):
+        state = run.work / "state/t1-native"
+        with sqlite3.connect(state / "openclaw-agent.sqlite") as conn:
+            conn.execute(
+                "CREATE TABLE transcript_events(seq INTEGER, event_json TEXT, event_zstd BLOB)"
+            )
+            conn.execute(
+                "INSERT INTO transcript_events VALUES(1, ?, NULL)",
+                (json.dumps(dict(usage=dict(input=1, output=1), responseId="first")),),
+            )
+            conn.execute("INSERT INTO transcript_events VALUES(2, NULL, ?)", (b"packed",))
+        return dict(
+            status="completed",
+            exit_code=0,
+            elapsed_ms=1,
+            row_tokens_at_stop=10,
+            stdout='{"ok":true}',
+            stderr="",
+        )
+
+    def broken(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(run_host, "run_bounded", executed)
+    monkeypatch.setattr(run_host.subprocess, "run", broken)
+    config = next(c for c in FREEZE["configurations"] if c["arm"] == "native")
+    row, refs = run.execute(dict(id="t1", prompt_case_id="c1"), "native", config)
+    assert row["status"] == "completed"
+    assert row["reason"] == "transcript_usage_unavailable"
+    assert row["attempts"] == []  # Partial coverage must not look complete.
+    assert run.budget.spent() == 10
+    usage = next(r for r in refs if r["id"].endswith("transcript-usage.json"))
+    assert usage["id"] in row["evidence_ids"]
+    assert read(run.evidence_root / usage["path"]) == dict(error="transcript_usage_unavailable")
+
+
+def test_future_drafting_evidence_is_restricted_and_lock_bound(tmp_path):
+    """RM12/RM40, AC31: exact drafting bytes stay private through corpus bundling."""
+    from types import SimpleNamespace
+
+    root = tmp_path / "release"
+    root.mkdir()
+    write(
+        root / "catalog.json",
+        dict(assets=[], evidence=[], people=[dict(id="machine-drafter", evidence_ids=[])]),
+    )
+    write(
+        root / "plan.json",
+        dict(seed=1, items=[dict(item_id="h001", cohort="host", lane="en_to_en")]),
+    )
+    write(root / "drafts.json", {"h001": dict(prompts=["Find it"], rubric=["Correct answer"])})
+    write(root / "drafting-log.json", dict(calls=[dict(request_utf8="{}", response_utf8="{}")]))
+    (root / "PROTOCOL.md").write_text("Fixture protocol")
+    harness.cmd_cases(
+        SimpleNamespace(
+            root=root,
+            plan=root / "plan.json",
+            drafts=root / "drafts.json",
+            drafting_log=root / "drafting-log.json",
+        )
+    )
+    entry = next(e for e in read(root / "catalog.json")["evidence"] if e["kind"] == "authorship")
+    assert entry["access"] == "restricted"
+    assert entry["sha256"] == harness.sha256((root / "drafting-log.json").read_bytes())
+    assert read(root / "cases.json")["cases"][0]["authorship_evidence_ids"] == [entry["id"]]
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"class": "negative", "acceptable": ["A001"]},
+        {"acceptable": None},
+        {"language_valid": "false"},
+        {"independent_case": None},
+        {"notes": 7},
+    ],
+)
+def test_annotation_rejects_inconsistent_answers_without_coercion(change):
+    """RM16/RM40, AC31: invalid answers are retried rather than rewritten."""
+    raw = dict(
+        **{"class": "positive"},
+        acceptable=["A001"],
+        language_valid=True,
+        independent_case=True,
+        notes="unchanged",
+    )
+    raw.update(change)
+    with pytest.raises(ValueError):
+        harness._classes(raw, {"asset:one": "A001"})

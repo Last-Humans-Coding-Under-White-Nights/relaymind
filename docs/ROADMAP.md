@@ -1074,23 +1074,6 @@ skill/MCP use, 11 of 14 provider_only rows failed (`host_failed`; the cause
 is not in the surviving evidence), and the run's private evidence was lost,
 so it is not graded. A full two-arm host run needs about 13M external tokens. See
 `docs/evidence/m10/owner-run-260/README.md`. No gate has passed.
-#255 has committed two **pending** negative `host_operation` records for the
-pinned 2026.10.7 host: `m10-negative-skill-loaded-use-openclaw-2026.10.7`
-(`stop_point_absent`) and `m10-negative-mcp-use-openclaw-2026.10.7`
-(`exact_route_absent`). Both operations stay disabled. See
-`docs/evidence/m10/host-use-settlement-20261101.md`. The host has hooks, tool-result
-middleware and the provider stream that can stop a read or a request, but none
-can re-verify fresh person authority, the session incarnation and the pinned
-bytes, so none can fence the next model request as 7.6.1 requires. The only
-delegation candidate, `GatewaySessionAccessAuthority.retain()`, has no defined
-qualification. No supported route invokes an independent, non-App MCP tool by
-its exact native identity: `tools.invoke` is name-only, the harness runtimes
-are documented private, and the App-scoped `mcp.app.callTool` does not count. The records lift nothing until a
-pull request review by an org member other than the owner is written into
-them, which will make these host limitations. The first VPS run could not
-start a person tier (no private interface, missing Chromium libraries), so the
-first substantive captures came from CI run 41286397320. A second VPS run at
-62c4dcd, after the owner's setup, also binds its captures. Person ingress
 #255 has committed one **pending** negative `host_operation` record for the
 pinned 2026.10.7 host: `m10-negative-mcp-use-openclaw-2026.10.7`
 (`exact_route_absent`). No supported route invokes an independent, non-App MCP
@@ -1121,8 +1104,10 @@ is now `control_refused` on the real host. That run exited 2 because the
 62c4dcd predicate expected one pin in the session's selection listing while
 the host lists every pin of the owner profile; the selected-skill pin check
 (5d92b64) is already in this branch, and the current predicate accepts the
-committed capture. A CI run of the current harness is still missing. The CI and
-VPS2 MCP captures show an empty `tools.effective` list only because the old
+committed capture. [CI run 41340879424](https://github.com/LHCWN/relaymind/actions/runs/41340879424)
+at ed21e007 completed loaded-use observation with the reset case
+`control_refused`; its captures are workflow artifacts, not committed here.
+The older CI and VPS2 MCP captures show an empty `tools.effective` list only because the old
 probe read `payload.tools` instead of the host's `groups[].tools`; a third VPS
 run at bba0cf1 with the #249 fix lists both colliding tools and is still
 `blocked`, and the MCP record binds it. The MCP finding is unchanged. #259, #260 and #261 remain open and
@@ -1145,9 +1130,11 @@ The #238 recorder (`integrations/openclaw/test/host-walkthrough/record.py`)
 now drives the unchanged ordinary installed-host qualification in `en-US` and
 `zh-CN` through the plugin's own labels, with screenshots, video and a digest
 manifest. Loaded skill use, MCP use and host MCP approval are recorded as
-`blocked`. No walkthrough has been recorded with it yet, and its
-`functional_fixture` tier does not satisfy the qualified-host walkthrough of
-#238.
+`blocked`. The en-US and zh-CN walkthroughs were recorded on 1 November 2026
+(`docs/evidence/m10/walkthroughs-20261101-vps/`), both complete at
+`functional_fixture` tier. They do not satisfy the qualified-host walkthrough
+of #238. Loaded skill use remains unqualified after #267; it is not an
+approved host limitation. MCP use and MCP approval also remain blocked.
 
 #270 (RM12/RM39; AC30) localizes all recommendation-detail labels for `en-US`
 and `zh-CN`, displays ordinary characters through text-only DOM rendering,
@@ -1157,14 +1144,19 @@ feedback values.
 Source locators remain the exact offered record: spec sections 4.6.1 and 7.6
 define local locators as resolved `SKILL.md` paths and return that record in
 the scoped view; no home-path abbreviation/redaction rule is specified.
-In text mode a source backslash is doubled and the quote inside the quoted
-description is escaped, so source text cannot imitate a neutralized control
-or a field; one locale rule (`zh`, `zh-CN`, `zh_CN`, `zh-Hans`) serves the
-panel and its evidence, and a receipt that cannot be displayed leaves the
-shown recommendation and its actions in place.
+In text mode only a backslash introducing literal `\u{` notation is doubled;
+ordinary Windows path and description backslashes stay exact. The quote inside
+the quoted description is escaped, so source text cannot imitate a neutralized
+control or a field; one locale rule (`zh`, `zh-CN`, `zh_CN`, `zh-Hans`) serves the
+panel and its evidence. A recommendation receipt is validated against the
+published contract before updating the shown evidence, actions or feedback
+revision; malformed receipts leave all three in place. Native skill labels
+distinguish literal control notation using the same text helper. The ledger
+comment limits its 0600 owner-only access claim to POSIX; Windows access depends
+on the filesystem ACL.
 The adapter revision is repinned to the built bytes that include these review
 fixes and the #256 ledger and fence fixes
-(`d47d07640a0280a37580ca015a4a83a151d5ac9bdfd0500b69010edbf64e53c8`).
+(`38a65c787be8ddfbed99527c4e3b2c167d4a308bd2b566d2cf18acac975f06b4`).
 The committed capture below ran the earlier bytes
 (`ddeb3c70d69c3d6de61902b41b05008853c777b1e13c04ec9d7cc827db01b894`), so it
 must be recaptured from CI for the new revision before merge.
@@ -1522,7 +1514,9 @@ probe first starts the session MCP runtime with public `mcp.app.discover`. One
 Linux x86-64 VPS run at bba0cf1 listed both colliding tools; it is now committed
 as `docs/evidence/m10/openclaw-mcp-use-20261101-vps3.json` and bound by the
 #255 MCP record. It is discovery evidence only, exact MCP use remains blocked,
-and no CI run of the corrected harness exists yet.
+and [CI run 41340879424](https://github.com/LHCWN/relaymind/actions/runs/41340879424)
+at ed21e007 confirmed the corrected discovery and blocked exact-use result.
+That newer CI capture remains a workflow artifact, not committed evidence.
 
 #250 implements bounded native configuration preflight with the installed
 OpenClaw 2026.10.7 validator under Node, including strict/plugin checks and
@@ -1600,10 +1594,14 @@ PID but was not created by it (PID 1 in a container), reserved the exact
 room for each binding's dispatch marker and longest receipt under the byte
 cap, and compiled each host schema pattern once per operation. These bytes are
 re-pinned to adapter revision
-`37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`; the
-evidence revision still names the earlier capture, so the evidence must be
-recaptured from CI for this new revision before the entry is qualified evidence
-for it. As before, this is Linux
+`37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`. The
+ordinary installed-host run of these exact bytes (CI run 41335800361, pinned
+OpenClaw 2026.10.7, Ubuntu runner, commit c791c0f, PR merge checkout
+44d4f9f) passed the ordinary-pass and ordinary-skill-pass predicates with all
+15 harness sources matching; its unmodified capture replaces
+`openclaw-native-actions-20261101-adapter.json` (SHA-256
+`1212d0e28080b08999f936b70416a70c6cef14802eef35d4553a45682a65b093`), which
+the registry's evidence revision names. As before, this is Linux
 functional evidence with disposable accounts. `tests/test_openclaw_install.py` fails when the registry and
 the built adapter digest of the release artifact drift.
 
@@ -1709,9 +1707,9 @@ lifecycle (install, configure `baseUrl`, enable, inspect), because the pinned
 host installs the plugin disabled until it is configured. The bundle is
 private, the install record keeps no host free text, and the provisional gate
 binds closed preflight/install records to the frozen package. They are verified
-over fixture bundles and a host double only. The owner-run trial itself (#259),
-its frozen inputs and genuine
-native row observations remain open; no provisional cost has been recorded.
+over fixture bundles and a host double; the first owner-run trial (#259),
+frozen inputs and native usage are now recorded below. That provisional,
+blocked trial does not close acceptance.
 
 #259 early trial on the owner's Apple M1 8 GiB MacBook (1 November 2026;
 `docs/evidence/m10/early-trial-m1-20261101/`): one frozen
@@ -1727,12 +1725,18 @@ Linux x86-64). The provisional bundle grades `blocked` (graded without the
 record, so its output carries no labelling). The pending host_trial record binds
 it but is not a section 12.6.6 preregistration: the case and label lock was not
 committed and owner-approved before a separate preregistration commit, so the
-record's `preregistration` is null and the verifier rejects any approved copy of
-it. Findings also include the kit's fresh-host install order and the machine
+record's `preregistration` is null. The verifier requires preregistration for
+host_acceptance and adaptation, not host_trial; the committed trial remains
+pending and non-qualifying. Its preserved `runs_started_at` is an end-time upper
+bound, not a dispatch. Future tooling records host dispatch before execution,
+and the verifier checks bound dispatch evidence when preregistration is claimed.
+Findings also include the kit's fresh-host install order and the machine
 name in host system prompts (redacted before bundling). Still open: a
 preregistered rerun with the owner's lock approval first, an equal
 per-generation limit across arms, the recommendations arm's person sign-in, more
-tasks, the walkthroughs (Linux harness) and #240. No gate is claimed.
+tasks, qualified walkthroughs and #240. The en-US/zh-CN Linux walkthroughs were
+recorded on 1 November 2026 at functional_fixture tier; loaded skill use, MCP
+use and MCP approval remain blocked and unqualified. No gate is claimed.
 
 #201 native benchmark contract checkpoint (spec 0.61): explicit local-cold
 preparation records actual gateway worker jobs/readiness, setup and owned cleanup
@@ -1752,10 +1756,12 @@ new numerical threshold or final-M10 pass is supplied by this contract.
 
 #274 native Windows run (RM38; AC29, AC37; spec 0.66):
 `docs/evidence/m10/windows-platform-run-2026-11-01/` records the owner's
-AMD64 Windows PC and the packaged lifecycle, with a pending qualification
-record. All 15 lifecycle steps passed. Ordinary person ingress is Linux-only;
-skill use, MCP use and restart remain unobserved. Generated inputs retain
-fixture qualification, and this evidence does not close final acceptance.
+AMD64 Windows PC and the install-check lifecycle, with a pending qualification
+record. All 15 install-check lifecycle steps passed. In the separate platform
+report, recommend, choose, feedback, delete and reset are `not_run` because
+ordinary person ingress is Linux-only; skill use, MCP use and restart also
+remain `not_run`. Generated inputs retain fixture qualification, and this
+evidence does not close final acceptance.
 Review recapture uses interpreter-reported PIDs for memory (12 MiB gateway-only
 increase), redacts the host default model, and moves the full reproducibility
 bundle to a SHA-256-bound release attachment. The earlier memory figure is
@@ -1790,3 +1796,6 @@ reports reject with `inventory_membership`. The README's claim that a later
 commit always produces `unsupported_generator` is too narrow. Use its
 procedure with the recorded run commit `2f4ddecc3da0efd632df89ed0d63f3cc1d72c00f`
 to reproduce `verify.txt`; the bound README and evidence remain unchanged.
+The evidence README pins reproduction to `8d406e94` with Python 3.12 and
+documents the broken companion locator, unsupported startup memory phase and
+unloadable archived capture record. The digest-bound capture remains unchanged.

@@ -48,6 +48,11 @@ def inventory(kind: str) -> dict:
     return dict(schema_version=1, files=files)
 
 
+def put(base: Path, relative: str, payload: bytes) -> None:
+    (base / relative).parent.mkdir(parents=True, exist_ok=True)
+    (base / relative).write_bytes(payload)
+
+
 class Bundle:
     def __init__(self, out: Path, private: Path):
         self.out, self.private = out.absolute(), private.absolute()
@@ -66,13 +71,10 @@ class Bundle:
         path = None
         relative = "docs/" + hashlib.sha256(name.encode()).hexdigest() + ".json"
         if publish:
-            (self.out / relative).parent.mkdir(parents=True, exist_ok=True)
-            (self.out / relative).write_bytes(payload)
+            put(self.out, relative, payload)
             path = relative
         else:
-            target = self.private / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(payload)
+            put(self.private, relative, payload)
             self.resolver.append(
                 dict(id=name, hash_kind="canonical", hash=digest, bytes=len(payload), path=relative)
             )
@@ -89,12 +91,10 @@ class Bundle:
         relative = relative or ("evidence/" + hashlib.sha256(evidence_id.encode()).hexdigest())
         path = None
         if publish:
-            (self.out / relative).parent.mkdir(parents=True, exist_ok=True)
-            (self.out / relative).write_bytes(payload)
+            put(self.out, relative, payload)
             path = relative
         else:
-            (self.private / relative).parent.mkdir(parents=True, exist_ok=True)
-            (self.private / relative).write_bytes(payload)
+            put(self.private, relative, payload)
             self.resolver.append(
                 dict(
                     id=evidence_id,

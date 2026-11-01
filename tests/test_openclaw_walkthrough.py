@@ -427,6 +427,13 @@ def test_the_manifest_lists_the_installed_font_digests(rec, tmp_path):
     assert build(rec, tmp_path, {"en-US": 0, "zh-CN": 0})["fonts"] == []
 
 
+def record_args(rec, tmp_path, fonts):
+    """Parsed `record` arguments with new work and output roots under ``tmp_path``."""
+    paths = ["--tarball", tmp_path / "a.tgz", "--work-root", tmp_path / "w"]
+    paths += ["--out-dir", tmp_path / "o", "--font-dir", fonts]
+    return rec.parse_args(["record", *map(str, paths)])
+
+
 def test_record_passes_one_font_snapshot_to_every_language(rec, tmp_path, monkeypatch):
     """RM39: the manifest digests are the bytes every language installs.
 
@@ -450,19 +457,7 @@ def test_record_passes_one_font_snapshot_to_every_language(rec, tmp_path, monkey
         "build_manifest",
         lambda out, outcomes, fonts: listed.update(fonts=fonts) or dict(complete=True),
     )
-    args = rec.parse_args(
-        [
-            "record",
-            "--tarball",
-            str(tmp_path / "a.tgz"),
-            "--work-root",
-            str(tmp_path / "w"),
-            "--out-dir",
-            str(tmp_path / "o"),
-            "--font-dir",
-            str(fonts),
-        ]
-    )
+    args = record_args(rec, tmp_path, fonts)
     assert rec.record(args) == 0
     assert len(commands) == 2
     snapshots = {command[command.index("--font-dir") + 1] for command in commands}
@@ -478,19 +473,7 @@ def test_record_passes_one_font_snapshot_to_every_language(rec, tmp_path, monkey
 def test_record_refuses_an_empty_font_dir_before_creating_anything(rec, tmp_path):
     empty = tmp_path / "empty"
     empty.mkdir()
-    args = rec.parse_args(
-        [
-            "record",
-            "--tarball",
-            str(tmp_path / "a.tgz"),
-            "--work-root",
-            str(tmp_path / "w"),
-            "--out-dir",
-            str(tmp_path / "o"),
-            "--font-dir",
-            str(empty),
-        ]
-    )
+    args = record_args(rec, tmp_path, empty)
     with pytest.raises(ValueError, match="walkthrough_font_dir"):
         rec.record(args)
     assert not (tmp_path / "w").exists() and not (tmp_path / "o").exists()

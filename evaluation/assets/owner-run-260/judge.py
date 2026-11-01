@@ -28,16 +28,13 @@ sys.path.insert(0, str(HERE.parents[2] / "src"))
 sys.path.insert(0, str(HERE))
 
 import harness  # noqa: E402
+from harness import read  # noqa: E402
 
 from relaymind.canonical import canonical_digest, canonical_json  # noqa: E402
 
 _NAMES = re.compile(
     r"relay\s*mind|openclaw|glm[-\w.]*|zhipu|z\.ai|external-openai-compatible", re.IGNORECASE
 )
-
-
-def read(path):
-    return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 class JudgingIncomplete(ValueError):
@@ -122,12 +119,13 @@ def cmd_blind(args) -> None:
         ).hexdigest()
     )
     write(args.items, dict(format="relaymind.owner_run_blind_items.v1", items=items))
-    write(args.map, dict(format="relaymind.owner_run_blind_map.v1", map=mapping))
+    blind_map = dict(format="relaymind.owner_run_blind_map.v1", map=mapping)
+    write(args.map, blind_map)
     write(
         args.map_digest,
         dict(
             format="relaymind.owner_run_blind_map_digest.v1",
-            map_canonical_sha256=canonical_digest(read(args.map)),
+            map_canonical_sha256=canonical_digest(blind_map),
             items=len(items),
         ),
     )
@@ -142,6 +140,7 @@ def cmd_judge(args) -> None:
     todo = [i for i in items if i["blind_id"] not in out]
     for start in range(0, len(todo), args.batch):
         batch = todo[start : start + args.batch]
+        asked = {i["blind_id"] for i in batch}
         request = [{k: i[k] for k in ("blind_id", "request", "rubric", "answer")} for i in batch]
         messages = [
             dict(role="system", content=template),
@@ -155,9 +154,7 @@ def cmd_judge(args) -> None:
             print("unparsed", name, file=sys.stderr)
             continue
         for row in rows:
-            if row.get("blind_id") in {i["blind_id"] for i in batch} and isinstance(
-                row.get("success"), bool
-            ):
+            if row.get("blind_id") in asked and isinstance(row.get("success"), bool):
                 out[row["blind_id"]] = dict(success=row["success"], notes=str(row.get("notes")))
         write(args.output, out)
         print(json.dumps(dict(done=len(out), ledger=ledger.total)))
@@ -275,7 +272,7 @@ def cmd_apply(args) -> None:
         files[name] = dict(
             id=f"judging:{name}",
             path=relative,
-            sha256=hashlib.sha256(data).hexdigest(),
+            sha256=harness.sha256(data),
             bytes=len(data),
             provenance="observed",
         )

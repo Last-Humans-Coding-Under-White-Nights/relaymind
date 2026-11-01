@@ -3,35 +3,13 @@
 <div id="panel"></div>
 <script type="module">
   import plugin from "./control-ui.js";
+  import { decodeJson, encodeJson } from "./recommendation-json.js";
   const row = {
     key: "native-key",
     sessionId: "native-id",
     lifecycleRevision: "native-life",
   };
-  const asset = {
-    asset_id: "skill:fixture",
-    content_hash: "a".repeat(64),
-    kind: "skill",
-    source_version: null,
-    source_id: "fixture",
-    source_locator:
-      "/home/operator/技能/" + "long-package-".repeat(80) + "/SKILL.md",
-    availability: "unknown",
-    description:
-      '<img src=x onerror=alert(1)> **source** [link](https://example.test) 中文\u202e',
-  };
-  const view =
-    '{"recommendation_id":"4774d146-17bd-4ec9-8507-f528ccea51fa","state":"ready","decision":"choice_required","state_version":9223372036854775806,"feedback_revision":1234567890123456789,"displayed_candidates":' +
-    JSON.stringify([{
-      asset,
-      candidate: {
-        asset_id: asset.asset_id,
-        score: 0.75,
-        score_kind: "token_overlap_count",
-        evidence_refs: ["/description"],
-      },
-    }]) +
-    "}";
+  const view = VIEW_RECEIPT;
   window.calls = [];
   window.listeners = [];
   const host = {
@@ -47,13 +25,21 @@
       window.calls.push({ method, params });
       if (method === "sessions.describe") return { session: row };
       if (params.input.kind === "recommend" && window.malformedNext) {
+        const malformed = decodeJson(view);
+        malformed.feedback_revision = 999n;
+        if (window.malformedNext === "missing-evidence")
+          malformed.displayed_candidates = [{ asset: {}, candidate: {} }];
+        else if (window.malformedNext === "empty-candidate")
+          malformed.displayed_candidates = [{ asset: {}, candidate: { evidence_refs: [] } }];
+        else if (window.malformedNext === "missing-version")
+          delete malformed.state_version;
+        else if (window.malformedNext === "mismatched-asset")
+          malformed.displayed_candidates[0].asset.content_hash = "b".repeat(64);
         window.malformedNext = false;
-        // A candidate without evidence_refs cannot be formatted.
         return {
           label: "recommendation",
           text: "",
-          receipt_json:
-            '{"recommendation_id":"00000000-0000-4000-8000-000000000000","state":"ready","decision":"choice_required","state_version":1,"displayed_candidates":[{"asset":{},"candidate":{}}]}',
+          receipt_json: encodeJson(malformed),
         };
       }
       if (params.input.kind === "recommend")

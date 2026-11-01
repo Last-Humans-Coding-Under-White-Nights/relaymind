@@ -364,23 +364,14 @@ def test_base_url_outside_the_plugin_rules_is_refused_before_any_host_command(tm
     assert not (tmp_path / "fake_openclaw.py.log").exists()
 
 
-@pytest.mark.parametrize(
-    ("url", "configured"),
-    [
-        ("http://127.0.0.1:8080/v1", "http://127.0.0.1:8080/v1"),
-        ("http://LOCALHOST:8080/v1/", "http://localhost:8080/v1"),
-        ("https://127.10.0.1/v1", "https://127.10.0.1/v1"),
-        ("http://[::1]:8080/v1", "http://[::1]:8080/v1"),
-    ],
-)
-def test_loopback_base_url_is_configured_in_its_normal_form(url, configured):
-    """#269 review: the configured value is the plugin's own form, origin plus /v1."""
-    assert kit.check_base_url(url) == configured
-
-
-# Forms the pinned plugin's WHATWG URL parse accepts and normalizes (#271 review;
-# the expected values are what `parsePluginConfig` in config.ts returns).
+# Forms the pinned plugin's WHATWG URL parse accepts and normalizes (#269, #271
+# review; the expected values are what `parsePluginConfig` in config.ts returns):
+# the configured value is the plugin's own form, origin plus /v1.
 PLUGIN_NORMALIZED_BASE_URLS = [
+    ("http://127.0.0.1:8080/v1", "http://127.0.0.1:8080/v1"),
+    ("http://LOCALHOST:8080/v1/", "http://localhost:8080/v1"),
+    ("https://127.10.0.1/v1", "https://127.10.0.1/v1"),
+    ("http://[::1]:8080/v1", "http://[::1]:8080/v1"),
     ("http://127.0.0.1.:8080/v1", "http://127.0.0.1:8080/v1"),
     ("http://[0:0:0:0:0:0:0:1]:8080/v1", "http://[::1]:8080/v1"),
     ("http://127.1:8080/v1", "http://127.0.0.1:8080/v1"),
@@ -1020,6 +1011,11 @@ def _argv_off_base_url(install):
     install["steps"][1]["argv"][-1] = "http://127.0.0.1:9999/v1"
 
 
+def _non_normal_base_url(install):
+    install["base_url"] = "http://127.1:8080/v1"
+    install["steps"][1]["argv"][-1] = install["base_url"]
+
+
 def _disabled_but_passed(install):
     install["steps"][-1]["inspect"]["enabled"] = False
 
@@ -1030,11 +1026,12 @@ def _disabled_but_passed(install):
         (_two_step, "install_record"),
         (_foreign_base_url, "install_record"),
         (_argv_off_base_url, "install_record"),
+        (_non_normal_base_url, "install_record"),
         (_disabled_but_passed, "install_contradiction"),
     ],
 )
 def test_provisional_install_gate_follows_the_host_lifecycle(tmp_path, bundle, tamper, reason):
-    """#262 gate over the #269 lifecycle: install, configure baseUrl, enable, inspect.
+    """RM39/RM44; AC30/AC36 tooling: the #262 gate over the #269 lifecycle.
 
     The recorded base_url must be the plugin's normal form and match the
     configure argv, and a passed inspection must report the plugin enabled.

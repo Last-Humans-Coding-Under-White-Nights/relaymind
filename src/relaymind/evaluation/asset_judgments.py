@@ -141,7 +141,8 @@ def validate_judgments(catalog: dict, cases: dict, labels: dict) -> dict:
     people = id_map(catalog["people"])
     assets = {entry["record"]["asset_id"]: entry for entry in catalog["assets"]}
     case_map = id_map(cases["cases"])
-    owner_machine = labels["agreement"]["method"] == OWNER_MACHINE
+    method = labels["agreement"]["method"]
+    owner_machine = method == OWNER_MACHINE
     check_object_order(labels["judgments"], ("case_id", "annotator_id"))
     rows = defaultdict(list)
     for row in labels["judgments"]:
@@ -179,13 +180,13 @@ def validate_judgments(catalog: dict, cases: dict, labels: dict) -> dict:
             # The owner adjudicates.
             if final["adjudicator_id"] != owner:
                 raise AssetCorpusError("role_conflict")
-    if labels["agreement"]["method"] == MACHINE_DUAL:
+    if method == MACHINE_DUAL:
         check_machine_dual(
             (j["annotator_id"] for j in labels["judgments"]),
             (a["adjudicator_id"] for a in labels["adjudications"]),
             people,
         )
-    if labels["agreement"]["method"] in (OWNER_MACHINE, MACHINE_DUAL):
+    if method in (OWNER_MACHINE, MACHINE_DUAL):
         # Spec 12.6.6: a nonempty reason on every disagreement, for both profiles.
         for case_id, final in finals.items():
             if disagree(*rows[case_id]) and not final["reason"].strip():

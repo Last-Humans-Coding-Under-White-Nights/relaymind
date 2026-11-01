@@ -6,7 +6,18 @@ preregistration commit `6b1c676b918b3308c434ff85c5e04bd00eea4f9d`
 (2026-11-01T10:01:54Z). Prompts are `machine_drafted_owner_approved` and labels
 `machine_dual_owner_approved`. The one qualification record
 (`../m10-owner-run-260-adaptation.json`) is **pending**: it has no pull
-request review yet and lifts nothing. No gate has passed.
+request review yet and lifts nothing. Its labelling and drafting evidence also fail
+section 12.6.6; approval alone cannot qualify this run. See the
+[record limitations](../m10-owner-run-260-adaptation.md). No gate has passed.
+
+The five raw judgment discrepancies are preserved because the corpus lock,
+preregistration and adaptation bundle bind the labels. The actual replies
+would give 594/600 class agreements and kappa 0.2462311557788928, versus the
+stored 589/600 and 0.14629414047342054. These stored figures cannot support
+raw-label approval. Original drafting requests are absent and the bound log
+contains only hashes, not the request/response bytes required by section
+12.6.6. The record's [limitations document](../m10-owner-run-260-adaptation.md)
+gives the exact cases, unchanged fields, per-lane effects and bindings.
 
 ## Adaptation episodes (`adaptation/`)
 
@@ -78,8 +89,9 @@ run through the journaled `run_host_plan` driver with the in-process executor
 in `evaluation/assets/owner-run-260/run_host.py`.
 
 - `recommendations` cannot run unattended: explicit choice needs a signed-in
-  person in the native Control UI, and skill/MCP use is disabled on this host
-  version (the two pending negative records). In `report-partial.json` the
+  person in the native Control UI. Loaded skill use is unqualified and disabled
+  (#280); its negative record was withdrawn in #267. Only MCP use has a
+  pending negative record (`exact_route_absent`). In `report-partial.json` the
   13 recommendations slots the run reached (h001–h013) are `not_run` with
   reason `person_choice_unavailable`; the other 87 are `not_run` with reason
   `interrupted` because the run stopped.
@@ -128,6 +140,11 @@ bind.
   as in the cohort README. Rebuild the plugin tarball with
   `npm run pack:release` in `integrations/openclaw`; its SHA-256 must equal
   the frozen package (`b066ae27…`).
+- **Transcript decompression.** Install the `zstd` executable on PATH. If it
+  is missing or fails, the runner retains the executed row with empty attempts
+  and `transcript_usage_unavailable` evidence, so its cost stays unknown. A
+  completed row also carries that reason; a cancelled or failed row keeps its
+  execution reason. The ledger still retains the gated charge.
 - **The run itself.** Run `run_host.py` with a new `--ledger` path (it starts
   at zero when the file does not exist), then `judge.py`: blind items, a
   committed map digest, then both judges, adjudication and apply. Then run
@@ -140,7 +157,14 @@ bind.
   every start and resume. The external-token cap is enforced per row and per
   request: a row starts only if its whole `--row-budget` (default 250k) fits,
   and that reservation is written to the ledger and fsynced, keyed to the
-  journal row (`<task>-<arm>`), before anything is dispatched. Both arms reach
+  journal row (`<task>-<arm>`), before anything is dispatched. A read-only
+  pre-start check records unavailable recommendations, a cap refusal or an
+  already-held reservation as `not_run` (`person_choice_unavailable`,
+  `budget_cap`, `row_reserved`) without journaling execution as started. These
+  skips survive resume and require a fresh run to retry. Once a row starts, a
+  mid-turn cap stop remains `cancelled`/`budget_cap`; section 12.6.5 counts
+  started non-completed rows as failed in summaries, not as unattempted work.
+  Both arms reach
   the provider only through a loopback request gate (the native host's
   `baseUrl` and the gateway's external `base_url` point at it). The gate
   admits each request before dispatch: it sets `max_tokens` to at most
@@ -164,14 +188,15 @@ bind.
   `model_mismatch`, `config_digest_mismatch`), each host is configured from
   its frozen document (the gateway listens on the frozen plugin `baseUrl`, and
   the plugin config has no diagnostics file), the effective host config is
-  checked against it (`host_config_mismatch`), and a row whose config is not
+  checked against it, including the expected private endpoint and credential
+  values (`host_config_mismatch`), and a row whose config is not
   its arm's frozen configuration rejects (`freeze_config_mismatch`). A failing
   usage read stops the host turn before the error is raised. The guards have
   deterministic tests only (`tests/test_owner_run_260_scripts.py`).
 - **A person-driven recommendations arm.** Without it the final gate stays
   blocked: it needs a signed-in person in the native Control UI to choose, and
-  qualified skill/MCP use, which is disabled on OpenClaw 2026.10.7 (the two
-  pending negative records).
+  qualified skill/MCP use. Loaded use remains unqualified and disabled (#280);
+  only MCP has a pending negative record (`exact_route_absent`).
 - **Gateway budgets bound in the freeze.** The host freeze does not bind the
   gateway's budgets (for example the shipped 30 s `external_seconds`). A rerun
   should record them in the host freeze; changing them is a new
@@ -191,7 +216,10 @@ where `<session-uuid>` stands for a UUID, in the file, that names a local
 working session. The fragment holds no user name, host name, address or
 credential, and the directory no longer exists. The other paths in the file
 are `<run-dir>`, and the other UUIDs are the host's own session and run IDs.
-`run_host.py` now also replaces any tail of the run directory path of 16 or
+The historical bytes are unchanged under L4 because the report binds them;
+this is an acknowledged local-path/session-identifier disclosure, not a claim
+that the capture is free of private text. No path or identifier is repeated in
+new evidence. `run_host.py` now also replaces any tail of the run directory path of 16 or
 more characters.
 
 ## Token guards strengthened after the recorded runs

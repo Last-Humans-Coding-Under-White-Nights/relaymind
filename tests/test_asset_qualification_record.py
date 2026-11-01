@@ -648,15 +648,21 @@ def test_machine_dual_record_checks_the_catalog_persons_roles(tmp_path, person, 
         ),
     ],
 )
-def test_an_owner_approved_profile_cannot_be_approved_without_preregistration(tmp_path, overrides):
-    """Spec 12.6.6: the owner approves drafted cases and machine_dual labels in the
-    pull request that commits their lock, before preregistration. A record of
-    these profiles without a preregistration loads while pending and rejects
-    once it is marked approved (review of #276)."""
+def test_an_approved_trial_profile_may_omit_preregistration(tmp_path, overrides):
+    """RM40/RM44, AC31/AC36: 12.6.6 requires preregistration by scope."""
     record = dual_record(tmp_path, scope="host_trial", preregistration=None, **overrides)
     pending = copy.deepcopy(record)
     pending["review"].update(pull_request=None, reviewer_logins=[], approved_at=None)
     assert not load_record(save(tmp_path, pending, "pending.json")).approved
+    assert load_record(save(tmp_path, record)).approved
+
+
+@pytest.mark.parametrize("scope", ["host_acceptance", "adaptation"])
+def test_approved_acceptance_profiles_still_require_preregistration(tmp_path, scope):
+    """RM40/RM42/RM44, AC31/AC33/AC36: the two required scopes reject."""
+    record = dual_record(tmp_path, scope=scope, preregistration=None)
+    if scope == "adaptation":
+        next(s for s in record["subjects"] if s["role"] == "tasks")["role"] = "episodes"
     with pytest.raises(WholeTaskRejected, match="preregistration_missing"):
         load_record(save(tmp_path, record))
 
@@ -1110,3 +1116,56 @@ def test_a_record_for_another_report_rejects_as_unbound_before_input_checks(tmp_
     inputs.release = None  # never reached: the binding rejects first
     with pytest.raises(WholeTaskRejected, match="qualification_record_unbound"):
         assess_inputs("host", report, inputs, record=record, report_sha256="c" * 64)
+
+
+@pytest.mark.parametrize(
+    "started,dispatch,preregistered,expected",
+    [
+        (None, None, "2026-11-03T00:00:05Z", "preregistration_missing"),
+        ("2026-11-03T00:00:00Z", None, "2026-11-03T00:00:05Z", "preregistration_late"),
+        (None, "2026-11-03T00:00:00Z", "2026-11-03T00:00:05Z", "preregistration_late"),
+        (None, "2026-11-03T00:00:00Z", "2026-11-02T00:00:00Z", None),
+    ],
+)
+def test_preregistration_uses_bound_dispatch_not_an_end_time(
+    tmp_path, started, dispatch, preregistered, expected
+):
+    """RM16/RM44, AC36: preregistration between dispatch and completion is late."""
+    record = host_record(tmp_path)
+    record["preregistration"]["committed_at"] = preregistered
+    record["runs_started_at"] = "2026-11-03T00:00:10Z" if expected else dispatch
+    row = dict(
+        task_id="task-1",
+        arm="native",
+        status="completed",
+        evidence_ids=[],
+        attempts=[dict(started_at=started, ended_at="2026-11-03T00:00:10Z")],
+    )
+    evidence = []
+    if dispatch:
+        payload = json.dumps(
+            dict(schema_version=1, task_id="task-1", arm="native", started_at=dispatch)
+        ).encode()
+        (tmp_path / "dispatch.json").write_bytes(payload)
+        row["evidence_ids"] = ["host-dispatch:0001"]
+        evidence = [
+            dict(
+                id="host-dispatch:0001",
+                path="dispatch.json",
+                sha256=hashlib.sha256(payload).hexdigest(),
+                bytes=len(payload),
+                provenance="observed",
+            )
+        ]
+    report = json.dumps(dict(rows=[row], evidence=evidence)).encode()
+    record["subjects"] = [s for s in record["subjects"] if s["role"] != "report"]
+    record["subjects"].append(_subject(tmp_path, "report", "report.json", report))
+    record["subjects"].sort(key=lambda s: s["path"])
+    if expected:
+        with pytest.raises(WholeTaskRejected, match=expected):
+            load_record(save(tmp_path, record))
+    else:
+        assert load_record(save(tmp_path, record)).approved
+        (tmp_path / "dispatch.json").write_text("changed")
+        with pytest.raises(WholeTaskRejected, match="record_digest_mismatch"):
+            load_record(save(tmp_path, record))

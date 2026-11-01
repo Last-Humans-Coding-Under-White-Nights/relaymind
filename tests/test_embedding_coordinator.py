@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 
+from helpers import FakeClock
 from relaymind.selection.asset_chain import (
     AttemptFinished,
     RecommendationFailure,
@@ -30,7 +31,7 @@ def test_hybrid_query_observations_reach_ready_and_primary_attempt_once(tmp_path
             req,
             primary=primary,
             lexical_floor=None,
-            budget=SelectionBudget(500),
+            budget=SelectionBudget(500, clock=FakeClock()),
             primary_ms=150,
             fallback_enabled=False,
             current_catalog=snapshot,

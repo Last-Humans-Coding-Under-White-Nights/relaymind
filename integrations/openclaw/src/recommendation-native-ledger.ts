@@ -13,8 +13,9 @@
 // closed receipts (that base, outcome, code, native run and call IDs),
 // consumed approval IDs, and blocked session incarnations (session key,
 // session ID and lifecycle revision). These are identifiers, not secrets; the
-// file is created owner-only (0600). It never stores arguments, tool output,
-// instructions or credentials.
+// file is created owner-only (0600) on POSIX. On Windows, access depends on
+// the filesystem ACL; the mode argument does not enforce owner-only access.
+// It never stores arguments, tool output, instructions or credentials.
 import * as fs from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";

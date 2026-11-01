@@ -97,11 +97,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `machine_drafted_owner_approved` profile needs a preregistration
   (`preregistration_missing`), since the owner approves the lock before it;
   `machine_dual` `check_labels` checks the catalog Persons' roles;
+  and a repeated machine pass keeps the earlier call bytes. Second review of
+  #276: `machine_dual` `check_labels` checks the catalog Persons' roles;
   `QualificationRecord.check_grade` rejects a grade that does not carry the
   record's labelling and prompt authorship. The M1 trial record now names
   `2b4e439`, the commit holding its `harness_sha256` bytes, and has a null
   `preregistration`: its lock was neither committed nor owner-approved before a
-  separate preregistration commit, so it stays pending and cannot be approved.
+  separate preregistration commit, so it stays pending and non-qualifying.
   Its committed grade was made without the record, as its README states. The
   `record` command stops on an uncommitted harness, and the success adjudicator
   is asked only for the disagreements.
@@ -122,14 +124,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   selection; the README states that the report's `memory.complete` does not
   mean complete coverage and which private harness address remains in the VPS
   capture.
+  is asked only for the disagreements. Further review narrows mandatory
+  preregistration to host_acceptance and adaptation, as section 12.6.6 states;
+  host_trial approval is not rejected solely for lacking it. Preregistered host
+  records check bound dispatch evidence instead of trusting an end-time upper
+  bound. Maintained trial scripts record dispatch before host execution and
+  bind superseded drafts through the catalog, cases and lock. Archived harness
+  and evidence bytes stay unchanged; the trial README documents their gaps.
 - #274 native Windows platform evidence (RM38; AC29, AC37), with a pending
   qualification draft in `docs/evidence/m10/windows-platform-run-2026-11-01/`.
-  The packaged lifecycle passes; fixture qualification and unobserved host
-  operations remain explicit. The operations harness ignores proxy settings
-  for its loopback client, covered by a test-first real-gateway regression.
+  The 15 install-check lifecycle steps pass. The separate platform report
+  leaves recommend, choose, feedback, delete, reset, skill use, MCP use and
+  restart `not_run`; qualification remains fixture. The operations harness
+  ignores proxy settings for its loopback client, covered by a test-first
+  real-gateway regression.
   Review fixes sample the interpreter PID rather than a Windows venv redirector,
   redact the host default model before export, and retain the complete evidence
   in a digest-bound release attachment with a compact repository record.
+  Review corrections pin historical verification to its matching harness
+  commit, document the invalid companion locator and archived record plus
+  missing startup memory samples, and redact additional plain-text default
+  model spellings without changing captured evidence.
 
 - #255 host use settlement (RM16/RM37/RM39; AC30/AC35; spec 0.66 sections
   7.6.1, 7.6.2, 12.6.6) adds one pending negative `host_operation` record for
@@ -139,9 +154,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     independent, non-App MCP tool by its exact native identity: `tools.invoke`
     is name-only and the harness runtimes are private; the App-scoped
     `mcp.app.callTool` does not count. These verdicts rest on the pinned host
-    source; the inventory's `attempted_routes` lists what the captures
-    attempted (`mcp.app.discover`, `tools.effective`, `mcp.app.listTools`) and
-    what was not called.
+    source; the inventory's `attempted_routes` lists the corrected VPS3
+    attempts (`mcp.app.discover`, `tools.effective`, `mcp.app.listTools`) and
+    what was not called. Its older CI/VPS2 entries omit their
+    `tools.effective` reads; the settlement document records that gap.
   - `skill_loaded_use` has **no** negative record. Hooks, middleware and the
     provider can stop a read or a request but cannot re-verify fresh person
     authority, the session incarnation and the pinned bytes on their own. The
@@ -155,11 +171,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
   Both operations stay disabled. The MCP record lifts nothing until it is
   approved. `tests/test_m10_host_use_records.py` loads it with the checker,
-  checks every cited host file hash (including the reset policy sources), ties
-  the attempted routes to the captures, ties the record's commit and harness to
-  the VPS3 capture and its tracked sources to that commit's bytes, and checks
-  that no #255 capture publishes a plaintext hostname (the CI loaded-use
-  capture's runner hostname is now its SHA-256). The MCP record also binds the
+  checks cited hashes against the inventory and, in the OpenClaw CI job,
+  against the installed pinned host files (including the reset policy sources).
+  It ties listed attempts to captures and checks the documented older-route
+  omissions, ties the record's commit and harness to the VPS3 capture and its
+  tracked sources to that commit's bytes, and rebuilds that historical adapter
+  to verify its emitted files and recorded revision. Both CI jobs retain full
+  history; a missing record commit fails. Privacy checks reject plaintext
+  hostnames and personal home paths, allowing only the documented VPS
+  placeholder and the standard CI home. The MCP record also binds the
   second VPS run's MCP capture (`openclaw-mcp-use-20261101-vps2.json`,
   checkout 62c4dcd), with the user name and hostname rewritten. Person ingress
   passed there, and MCP use was `blocked`. That run's loaded-use capture exited
@@ -204,7 +224,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   admitted only 8 of OpenClaw 2026.10.7's 49 bundled skills: 32 bodies were
   rejected for `<placeholder>` text or HTML examples and 9 for more than three
   code-fence lines, and one rejected file failed the whole folder. Bodies now
-  keep only the encoding, control and size checks, and a rejected candidate is
+  keep only the NFC, encoding, control and size checks, and a rejected candidate is
   excluded on its own with a fixed reason. Five verbatim copies are test
   fixtures (`tests/fixtures/openclaw-bundled-skills/`, MIT) in the default
   suite. `tests/test_openclaw_pinned_package.py` scans a copy of the pinned
@@ -445,7 +465,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   marker and longest receipt under the byte cap and compiles each host schema
   pattern once per operation; the entry is re-pinned to adapter revision
   `37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`, whose
-  capture is taken from CI before merge.
+  evidence revision names its fresh capture (CI run 41335800361, SHA-256
+  `1212d0e28080…`).
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,
@@ -547,6 +568,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Activate two independently reviewed exact Linux CPU embedding identities;
   record ordinary native launch and provisional 412/128 benchmark results,
   including partial indexing, lexical fallback and the observed quality regression.
+
+### Fixed
+
+- The loaded-use observation harness records the exact person-scope
+  `sessions.reset` refusal (`operator.admin` required on the pinned host) as
+  `control_refused`, with no turn, instead of raising
+  `ordinary_skill_control_failed`. CI run 41286397320 hit that error. Any other
+  refusal, and any turn evidence on a refused control, still fails the
+  predicate (#255). The second VPS run observed the refusal as
+  `control_refused`. [CI run 41340879424](https://github.com/LHCWN/relaymind/actions/runs/41340879424)
+  at ed21e007 also completed loaded-use observation with that reset result and
+  confirmed corrected MCP discovery; exact use stayed blocked. These newer CI
+  captures are workflow artifacts, not committed evidence.
 
 ### Changed
 

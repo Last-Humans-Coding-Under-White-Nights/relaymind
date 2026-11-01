@@ -8,11 +8,11 @@ with an in-process executor over the pinned OpenClaw 2026.10.7 host:
 * ``provider_only``: the RelayMind provider plugin (release tarball) over a
   gateway started with ``relaymind serve --config``, recommendations off;
 * ``recommendations``: needs a signed-in person in the native Control UI to
-  choose, and exact skill/MCP use is disabled on this host version (the two
-  pending negative records), so an unattended run cannot exercise it. Its
-  rows are ``not_run`` with reason ``person_choice_unavailable``.
+  choose. Loaded skill use is unqualified and disabled (#280); only MCP use
+  has a pending negative record (``exact_route_absent``). An unattended run
+  cannot exercise this arm. Its rows are ``not_run`` with reason ``person_choice_unavailable``.
 
-Every row runs ``openclaw agent exec`` in a fresh sandbox and state directory.
+Every executed row runs ``openclaw agent exec`` in a fresh sandbox and state directory.
 The native arm's usage is the host's own persisted per-message usage (the
 session transcript), and the provider arm's usage the gateway TraceEvents. The
 verdict stays null here: blind success judging is a later, separate step.
@@ -28,9 +28,9 @@ bound must fit in what is left of the reservation, or it is refused (closed
 reason) and the host turn is stopped (``cancelled``, ``budget_cap``). Unknown
 consumption is charged at the request's bound, and a row that is never settled
 keeps its whole reservation charged, also after a resume. A row that cannot
-start is ``not_run`` with reason ``budget_cap``. Credentials and the provider
-endpoint live only in private files of the run directory, which are deleted at
-the end, and in this process.
+start is journaled before dispatch as ``not_run`` with reason ``budget_cap``
+or ``row_reserved``. Credentials and the provider endpoint live only in private
+files of the run directory, which are deleted at the end, and in this process.
 
 The host freeze is enforced: before setup, the executed arms' frozen model,
 provider and provider, sampling and host config digests must equal the
@@ -43,7 +43,6 @@ closed reason (``FreezeMismatch``).
 """
 
 import argparse
-import hashlib
 import http.server
 import json
 import os
@@ -52,6 +51,7 @@ import signal
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -69,9 +69,11 @@ sys.path.insert(0, str(HERE))
 import harness  # noqa: E402
 import live_acceptance  # noqa: E402
 import openclaw_install_check as install_check  # noqa: E402
+from harness import read  # noqa: E402
 
 from relaymind.canonical import canonical_digest, canonical_json  # noqa: E402
 from relaymind.evaluation.asset_host_runner import (  # noqa: E402
+    ExecutorFailed,
     attempts_from_trace,
     run_host_plan,
 )
@@ -84,10 +86,6 @@ EXECUTED_ARMS = ("native", "provider_only")
 SECRETS_KEY = "omitted_secret_fields"
 # The shortest tail of the run directory path that is still redacted.
 MIN_PATH_TAIL = 16
-
-
-def read(path):
-    return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 class CorpusMismatch(ValueError):
@@ -103,7 +101,6 @@ def verified_prompts(tasks, freeze, lock_path: Path, evidence_root: Path) -> dic
     bind to its frozen case. An edited cases file therefore rejects, whether or
     not it was relocked, on the first start and on every resume.
     """
-    from relaymind.canonical import canonical_digest
     from relaymind.evaluation.asset_corpus import load_asset_release
     from relaymind.evaluation.asset_whole_task_corpus import bind_host_tasks
 
@@ -169,12 +166,12 @@ def realize(frozen, secrets) -> dict:
     return frozen
 
 
-def check_effective(frozen, effective, path=()) -> None:
+def check_effective(frozen, effective, expected_secrets=None, path=()) -> None:
     """The effective host config must carry the frozen document exactly.
 
     Every frozen value must be present and equal; a frozen object that lists
     omitted secret fields, and every plugin ``config`` object, is closed: it
-    has exactly the frozen keys and the named secrets. Host-owned keys outside
+    has exactly the frozen keys and the expected secret values. Host-owned keys outside
     those objects are allowed.
     """
     if isinstance(frozen, dict):
@@ -185,10 +182,15 @@ def check_effective(frozen, effective, path=()) -> None:
         closed = SECRETS_KEY in frozen or path[-1:] == ("config",)
         if not secrets <= set(effective) or (closed and set(effective) != keys | secrets):
             raise FreezeMismatch("host_config_mismatch")
+        for key in secrets:
+            if expected_secrets is None or key not in expected_secrets:
+                raise FreezeMismatch("host_config_mismatch")
+            if effective[key] != expected_secrets[key]:
+                raise FreezeMismatch("host_config_mismatch")
         for key in keys:
             if key not in effective:
                 raise FreezeMismatch("host_config_mismatch")
-            check_effective(frozen[key], effective[key], (*path, key))
+            check_effective(frozen[key], effective[key], expected_secrets, (*path, key))
     elif canonical_json(frozen) != canonical_json(effective):
         raise FreezeMismatch("host_config_mismatch")
 
@@ -222,17 +224,10 @@ class Budget:
         self.path, self.cap = Path(ledger), cap
         self.row_budget, self.max_output = row_budget, max_output
         # A fresh ledger starts at zero; an existing one carries its spending.
-        self.data = (
-            read(self.path)
-            if self.path.exists()
-            else dict(total_input=0, total_output=0, calls=0, stages={})
-        )
-        self.data.setdefault("rows", {})
+        self.data = harness.open_ledger(self.path, "rows")
 
     def spent(self) -> int:
-        d = self.data
-        held = sum(r["amount"] for r in d["rows"].values() if r["state"] != "settled")
-        return d["total_input"] + d["total_output"] + d.get("unlogged_estimate", 0) + held
+        return harness.ledger_total(self.data, "rows")
 
     def can_start(self) -> bool:
         return self.spent() + self.row_budget <= self.cap
@@ -464,9 +459,6 @@ def run_bounded(command, *, env, timeout, usage, limit_reached, poll=1.0) -> dic
     Returns the same fields as the M9 ``Host.run`` plus ``row_tokens_at_stop``.
     ``status`` is ``completed``, ``failed``, ``timed_out`` or ``budget_stopped``.
     """
-    import subprocess
-    import tempfile
-
     started = time.monotonic()
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
         try:
@@ -529,7 +521,18 @@ def _stop(process) -> None:
 def write_bytes(path: Path, payload: bytes) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(payload)
-    return dict(sha256=hashlib.sha256(payload).hexdigest(), bytes=len(payload))
+    return dict(sha256=harness.sha256(payload), bytes=len(payload))
+
+
+def last_json(stdout: str):
+    """The whole output as JSON, else its last line that parses; ``None`` when none does."""
+    text = stdout.strip()
+    for candidate in (text, *reversed(text.splitlines())):
+        try:
+            return json.loads(candidate)
+        except ValueError:
+            continue
+    return None
 
 
 def now() -> str:
@@ -587,16 +590,9 @@ class Run:
         self.native = self.host("native-home", True)
         if self.native.run(["--version"], timeout=m9.SETUP_TIMEOUT)["status"] != "completed":
             raise SystemExit("native_setup_failed")
-        self.native.merge_config(
-            realize(
-                native_frozen,
-                dict(
-                    apiKey=os.environ["RELAYMIND_EXTERNAL_API_KEY"],
-                    baseUrl=gate_url,
-                ),
-            )
-        )
-        check_effective(native_frozen, read(self.native.config_path))
+        native_secrets = dict(apiKey=os.environ["RELAYMIND_EXTERNAL_API_KEY"], baseUrl=gate_url)
+        self.native.merge_config(realize(native_frozen, native_secrets))
+        check_effective(native_frozen, read(self.native.config_path), native_secrets)
         plugin = relay_frozen["plugins"]["entries"][m9.PLUGIN_ID]["config"]
         port = urlsplit(plugin["baseUrl"]).port
         gateway_dir = self.work / "gateway"
@@ -701,29 +697,28 @@ class Run:
                     text = subprocess.run(
                         ["zstd", "-dc"], input=packed, capture_output=True, check=True
                     ).stdout.decode("utf-8")
-                for cell in (text,):
-                    if not isinstance(cell, str) or '"usage"' not in cell:
-                        continue
-                    try:
-                        value = json.loads(cell)
-                    except ValueError:
-                        continue
-                    stack = [value]
-                    while stack:
-                        item = stack.pop()
-                        if isinstance(item, dict):
-                            if isinstance(item.get("usage"), dict) and "input" in item["usage"]:
-                                found.append(
-                                    dict(
-                                        responseId=item.get("responseId"),
-                                        timestamp=item.get("timestamp"),
-                                        model=item.get("model"),
-                                        usage=item["usage"],
-                                    )
+                if not isinstance(text, str) or '"usage"' not in text:
+                    continue
+                try:
+                    value = json.loads(text)
+                except ValueError:
+                    continue
+                stack = [value]
+                while stack:
+                    item = stack.pop()
+                    if isinstance(item, dict):
+                        if isinstance(item.get("usage"), dict) and "input" in item["usage"]:
+                            found.append(
+                                dict(
+                                    responseId=item.get("responseId"),
+                                    timestamp=item.get("timestamp"),
+                                    model=item.get("model"),
+                                    usage=item["usage"],
                                 )
-                            stack.extend(item.values())
-                        elif isinstance(item, list):
-                            stack.extend(item)
+                            )
+                        stack.extend(item.values())
+                    elif isinstance(item, list):
+                        stack.extend(item)
         unique, seen = [], set()
         for item in found:
             key = item["responseId"] or json.dumps(item, sort_keys=True)
@@ -737,37 +732,27 @@ class Run:
         traces = live_acceptance._traces(self.store, window)
         return [e for i in window for e in traces[i]]
 
-    def not_run(self, task, arm, reason):
-        return dict(
-            task_id=task["id"],
-            arm=arm,
-            status="not_run",
-            success=None,
-            attempts=[],
-            elapsed_ms=None,
-            active_ms=None,
-            human_wait_ms=None,
-            interactions=None,
-            local_turns=None,
-            cpu_ms=None,
-            peak_bytes=None,
-            recommendation_ids=[],
-            host_session_id=None,
-            evidence_ids=[],
-            reason=reason,
-        ), []
+    def skip_reason(self, task, arm, config) -> str | None:
+        """Read-only pre-start check; the driver journals refusals without starting."""
+        if arm == "recommendations":
+            return "person_choice_unavailable"
+        self.arm_config(arm, config)
+        if f"{task['id']}-{arm}" in self.budget.data["rows"]:
+            return "row_reserved"
+        return None if self.budget.can_start() else "budget_cap"
 
     def execute(self, task, arm, config):
         if arm == "recommendations":
-            return self.not_run(task, arm, "person_choice_unavailable")
+            raise ExecutorFailed("person_choice_unavailable")
         config = self.arm_config(arm, config)
         key = f"{task['id']}-{arm}"
         # The whole row budget is reserved durably before anything is dispatched;
         # a row that is never settled keeps it charged.
         refused = self.budget.reserve(key)
         if refused is not None:
-            # budget_cap, or row_reserved: the key's reservation is already held.
-            return self.not_run(task, arm, refused)
+            # The pre-start check normally handles this. A changed ledger after
+            # journal.start is an execution error, never a retroactive skip.
+            raise ExecutorFailed(refused)
         host = self.native if arm == "native" else self.relay
         model = f"{DIRECT}/{config['model']}" if arm == "native" else install_check.MODEL_REF
         sandbox = self.work / "sandboxes" / key
@@ -814,18 +799,8 @@ class Run:
         )
         ended = now()
         refs: list = []
-        report = None
-        for line in reversed(result["stdout"].strip().splitlines() or [""]):
-            try:
-                report = json.loads(result["stdout"].strip())
-                break
-            except ValueError:
-                try:
-                    report = json.loads(line)
-                    break
-                except ValueError:
-                    continue
-        host_id = self.evidence(
+        report = last_json(result["stdout"])
+        self.evidence(
             key,
             "host-result.json",
             dict(
@@ -843,9 +818,19 @@ class Run:
         )
         attempts = []
         local_turns = None
+        usage_error = None
         if arm == "native":
-            usages = self.transcript_usage(state)
-            usage_id = self.evidence(key, "transcript-usage.json", usages, refs)
+            try:
+                usages = self.transcript_usage(state)
+            except (OSError, subprocess.CalledProcessError, UnicodeError):
+                usages = []
+                usage_error = "transcript_usage_unavailable"
+            usage_id = self.evidence(
+                key,
+                "transcript-usage.json",
+                dict(error=usage_error) if usage_error else usages,
+                refs,
+            )
             for n, item in enumerate(usages, 1):
                 u = item["usage"]
                 attempts.append(
@@ -904,9 +889,9 @@ class Run:
             cpu_ms=None,
             peak_bytes=None,
             recommendation_ids=[],
-            host_session_id=(report or {}).get("sessionId") if isinstance(report, dict) else None,
-            evidence_ids=sorted({host_id, *(i for a in attempts for i in a["evidence_ids"])}),
-            reason={"completed": None, "cancelled": "budget_cap"}.get(status, "host_failed"),
+            host_session_id=report.get("sessionId") if isinstance(report, dict) else None,
+            evidence_ids=sorted(r["id"] for r in refs),
+            reason={"completed": usage_error, "cancelled": "budget_cap"}.get(status, "host_failed"),
         )
         return row, refs
 
@@ -961,6 +946,7 @@ def main():
             qualification="provisional",
             input_manifest=dict(path=None, digest="0" * 64, bytes=0),
             interrupted=lambda: stop,
+            skip_reason=run.skip_reason,
         )
     finally:
         run.close()
