@@ -28,12 +28,14 @@ from relaymind.canonical import canonical_digest
 from relaymind.evaluation.asset_benchmark_io import REPORT_BYTES, json_bytes
 from relaymind.evaluation.asset_corpus_io import AssetCorpusError, parse_json
 from relaymind.evaluation.asset_judgments import LANES
-from relaymind.evaluation.asset_run_journal import RunJournal
+from relaymind.evaluation.asset_run_journal import RunJournal, bound_header
 from relaymind.evaluation.asset_whole_task import (
     ACCEPTANCE_TASKS,
+    Executor,
     WholeTaskRejected,
     _check_row,
     _not_run,
+    _utf8,
     grade_host_report,
     host_summary,
     plan_host_trial,
@@ -41,10 +43,14 @@ from relaymind.evaluation.asset_whole_task import (
     verify_host_tasks,
 )
 
-JOURNAL_FORMAT = "relaymind.s3_run_journal.v1"
 EXECUTOR_REQUEST = "relaymind.host_executor_request.v1"
 REQUIRED_LANES = tuple(lane for lane in LANES if lane != "zh_hant_diagnostic")
 RUN_QUALIFICATIONS = ("fixture", "provisional")
+TOKEN_RELATIONSHIPS = (
+    "component_disjoint",
+    "cached_within_input_reasoning_within_output",
+    "unknown",
+)
 
 
 class ExecutorFailed(Exception):
@@ -53,10 +59,6 @@ class ExecutorFailed(Exception):
     def __init__(self, reason: str):
         super().__init__(reason)
         self.reason = reason
-
-
-def _utf8(value: str) -> bytes:
-    return value.encode("utf-8")
 
 
 # --- preregistration --------------------------------------------------------------
@@ -92,19 +94,7 @@ def host_preregistration(tasks: Mapping, freeze: Mapping) -> dict:
     )
 
 
-def host_journal_header(record: Mapping) -> dict:
-    return dict(
-        format=JOURNAL_FORMAT,
-        kind="host",
-        input_digest=record["input_digest"],
-        freeze_digest=record["freeze_digest"],
-        plan_digest=record["plan_digest"],
-    )
-
-
 # --- runner -----------------------------------------------------------------------
-
-Executor = Callable[[Mapping, str, Mapping], tuple[Mapping, Sequence[Mapping]]]
 
 
 def _unknown_row(task_id: str, arm: str, status: str, reason: str) -> dict:
@@ -164,7 +154,7 @@ def run_host_plan(
     rows: dict[int, dict] = {}
     evidence: dict[str, dict] = {}
     seen: set[str] = set()
-    with RunJournal(journal_path, host_journal_header(record)) as journal:
+    with RunJournal(journal_path, bound_header("host", record)) as journal:
         for planned in plan:
             key, ordinal = str(planned["ordinal"]), planned["ordinal"]
             task_id, arm = planned["task_id"], planned["arm"]
@@ -214,7 +204,9 @@ def run_host_plan(
     return report
 
 
-def command_executor(argv: Sequence[str], tasks: Mapping) -> Executor:
+def command_executor(
+    argv: Sequence[str], tasks: Mapping, *, timeout: float | None = None
+) -> Executor:
     """A host executor program: one planned row per invocation.
 
     The program reads ``{format, ordinal, task, arm, arm_config}`` as JSON on
@@ -222,6 +214,12 @@ def command_executor(argv: Sequence[str], tasks: Mapping) -> Executor:
     ``{row, evidence}`` (a HostRow and its EvidenceRefs) on standard output.
     Standard error is passed through. A nonzero exit or unusable output is
     ExecutorFailed: the row is then recorded as failed with unknown consumption.
+
+    ``timeout`` (seconds, default none) is a harness bound, not a task budget:
+    a program still running when it expires is killed and the row is failed
+    with unknown consumption, never recorded as a host task timeout. Set it
+    above the frozen task budgets; it never replaces or changes them. Only the
+    direct child process is killed; the program must stop its own children.
     """
     argv = [str(a) for a in argv]
     ordinals = {(p["task_id"], p["arm"]): p["ordinal"] for p in plan_host_trial(tasks)}
@@ -236,8 +234,14 @@ def command_executor(argv: Sequence[str], tasks: Mapping) -> Executor:
         )
         try:
             done = subprocess.run(  # noqa: S603 - the operator's own executor program
-                argv, input=json_bytes(request), stdout=subprocess.PIPE, check=False
+                argv,
+                input=json_bytes(request),
+                stdout=subprocess.PIPE,
+                check=False,
+                timeout=timeout,
             )
+        except subprocess.TimeoutExpired:
+            raise ExecutorFailed("executor_timeout") from None
         except OSError:
             raise ExecutorFailed("executor_start") from None
         if done.returncode != 0:
@@ -257,7 +261,6 @@ def command_executor(argv: Sequence[str], tasks: Mapping) -> Executor:
 
 # --- external cost capture --------------------------------------------------------
 
-_RELATIONSHIPS = ("component_disjoint", "cached_within_input_reasoning_within_output", "unknown")
 _COUNTS = ("input_tokens", "output_tokens", "cached_tokens", "reasoning_tokens")
 
 
@@ -299,7 +302,7 @@ def attempts_from_trace(
     """
     from relaymind.store.trace_event import validate_trace_event
 
-    if token_relationship not in _RELATIONSHIPS:
+    if token_relationship not in TOKEN_RELATIONSHIPS:
         raise ValueError("token_relationship")
     if token_relationship != "unknown" and relationship_evidence_id is None:
         raise ValueError("relationship_evidence")
@@ -311,11 +314,20 @@ def attempts_from_trace(
             raise ValueError("trace_order")
         last[data["run_id"]] = data["seq"]
         checked.append(data)
-    finished = {
-        (e["run_id"], e["payload"]["call_id"]): e
-        for e in checked
-        if e["event_type"] == "model.finished" and e["actor"] == "external"
-    }
+    started_calls: dict[tuple, Mapping] = {}
+    finished: dict[tuple, Mapping] = {}
+    for e in checked:
+        if e["actor"] != "external" or e["event_type"] not in ("model.started", "model.finished"):
+            continue
+        call = (e["run_id"], e["payload"]["call_id"])
+        own = started_calls if e["event_type"] == "model.started" else finished
+        if call in own:
+            # A repeated receipt is not a new attempt; the trace is contradictory.
+            raise ValueError("trace_duplicate_call")
+        if own is finished and call not in started_calls:
+            # A finish must follow its own start in the same run.
+            raise ValueError("trace_order")
+        own[call] = e
     evidence_ids = sorted({evidence_id, relationship_evidence_id} - {None}, key=_utf8)
     attempts = []
     for start in checked:

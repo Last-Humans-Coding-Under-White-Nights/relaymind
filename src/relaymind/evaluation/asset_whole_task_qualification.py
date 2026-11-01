@@ -28,12 +28,14 @@ from relaymind.evaluation.asset_corpus import assess_asset_release
 from relaymind.evaluation.asset_qualification import CustodianReview
 from relaymind.evaluation.asset_qualification_record import REPORT_SCOPES, QualificationRecord
 from relaymind.evaluation.asset_whole_task import WholeTaskRejected
+from relaymind.evaluation.asset_whole_task_inputs import WholeTaskInputs
 
 REVIEW_UNDEFINED = "qualified_evidence_review"
 # Spec 12.6.5: actual Apple Silicon macOS and named native x86-64 Windows.
 # WSL, CI and Linux do not satisfy the platform gate.
 TARGET_PLATFORMS = frozenset({("Darwin", "arm64"), ("Windows", "AMD64"), ("Windows", "x86_64")})
 _STRONG_CLAIMS = ("provisional", "qualified", "measured")
+_FIXTURE_REASONS = frozenset({"fixture_corpus", "fixture_evidence"})
 
 
 @dataclass(frozen=True)
@@ -59,7 +61,6 @@ def assess_qualification(
     *,
     kind: str,
     claimed: str,
-    corpus_purpose: str,
     corpus_status: str,
     evidence: Iterable[Mapping],
     artifacts: Iterable[Mapping],
@@ -71,7 +72,8 @@ def assess_qualification(
     """Assess one S3 report's qualification tier from verified facts.
 
     ``corpus_status`` is the section 12.6.1 release assessment
-    (``fixture|unverified|qualified``); ``unverified`` lists what input
+    (``fixture|unverified|qualified``; a fixture-purpose lock is always
+    ``fixture``); ``unverified`` lists what input
     resolution could not verify; ``platform`` is the platform report's
     Environment (``None`` for host and adaptation reports). ``record`` is a
     loaded section 12.6.6 record and ``report_sha256`` the SHA-256 of the
@@ -93,15 +95,12 @@ def assess_qualification(
         else:
             reasons.add(REVIEW_UNDEFINED)
         labelling = record.labelling
-    fixture = False
-    if corpus_purpose == "fixture" or corpus_status == "fixture":
+    if corpus_status == "fixture":
         reasons.add("fixture_corpus")
-        fixture = True
     elif corpus_status != "qualified":
         reasons.add("corpus_unqualified")
     if any(_provenance(item) == "fixture" for item in evidence):
         reasons.add("fixture_evidence")
-        fixture = True
     if any(_provenance(item) in {"unknown", None} for item in artifacts):
         reasons.add("artifact_provenance_unknown")
     if kind == "platform" and (
@@ -109,16 +108,33 @@ def assess_qualification(
         or (platform.get("os"), platform.get("architecture")) not in TARGET_PLATFORMS
     ):
         reasons.add("platform_not_target")
+    fixture = reasons & _FIXTURE_REASONS
     assessed = "fixture" if fixture else ("provisional" if reasons else "qualified")
     return WholeTaskQualification(kind, claimed, assessed, tuple(sorted(reasons)), labelling)
 
 
+# Report Environment field -> record machine field (spec 0.66 section 12.6.6).
+_MACHINE_FIELDS = (
+    ("os", "os"),
+    ("architecture", "architecture"),
+    ("os_version", "os_version"),
+    ("cpu", "cpu_model"),
+    ("ram_bytes", "ram_bytes"),
+)
+
+
 def _check_platform_machine(machine: Mapping, platform: Mapping, reasons: set[str]) -> None:
-    """The record's machine identity must be the one the report measured."""
-    if (machine["os"], machine["architecture"]) != (platform["os"], platform["architecture"]) or (
-        platform["ram_bytes"] is not None and platform["ram_bytes"] != machine["ram_bytes"]
-    ):
-        raise WholeTaskRejected("record_machine_mismatch")
+    """The record's machine identity must be the one the report measured.
+
+    A contradicting field rejects; a field the report did not record leaves
+    the identity unverified, never matched.
+    """
+    for env_field, machine_field in _MACHINE_FIELDS:
+        value = platform.get(env_field) if isinstance(platform, Mapping) else None
+        if value is None:
+            reasons.add("machine_identity_unverified")
+        elif value != machine[machine_field]:
+            raise WholeTaskRejected("record_machine_mismatch")
     if machine["role"] == "linux_host":
         reasons.add("platform_not_target")
 
@@ -145,13 +161,13 @@ def enforce_qualification(assessment: WholeTaskQualification, gate: str) -> str:
 def assess_inputs(
     kind: str,
     report: Mapping,
-    inputs,
+    inputs: WholeTaskInputs,
     *,
     custodian_review: CustodianReview | None = None,
     record: QualificationRecord | None = None,
     report_sha256: str | None = None,
 ) -> WholeTaskQualification:
-    """Assess a report over its resolved ``WholeTaskInputs``.
+    """Assess a report over its resolved inputs.
 
     ``custodian_review`` is the trusted section 12.6.1 corpus review assertion.
     An approved section 12.6.6 record may carry it instead; without either the
@@ -160,14 +176,14 @@ def assess_inputs(
     """
     release = inputs.release
     if record is not None:
-        record.check_labels(release.labels)
+        record.check_inputs(kind, inputs)
+        record.check_labels(release.labels, {p["id"]: p for p in release.catalog["people"]})
         if custodian_review is None:
             custodian_review = record.custodian_review()
     status = assess_asset_release(release, custodian_review=custodian_review).status
     return assess_qualification(
         kind=kind,
         claimed=report["qualification"],
-        corpus_purpose=release.lock["purpose"],
         corpus_status=status,
         evidence=report["evidence"],
         artifacts=report.get("artifacts", ()),

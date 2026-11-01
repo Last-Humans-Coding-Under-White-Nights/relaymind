@@ -164,7 +164,6 @@ def _assess(**overrides):
     values = dict(
         kind="host",
         claimed="qualified",
-        corpus_purpose="acceptance",
         corpus_status="unverified",
         evidence=[{"provenance": "observed"}],
         artifacts=[{"provenance": "observed"}],
@@ -197,7 +196,7 @@ def test_no_assessment_reaches_qualified_without_a_defined_review_record():
 
 
 def test_fixture_signals_take_precedence():
-    assert _assess(corpus_purpose="fixture").assessed == "fixture"
+    assert _assess(corpus_status="fixture").assessed == "fixture"
     assert _assess(evidence=[{"provenance": "fixture"}]).assessed == "fixture"
 
 
@@ -224,14 +223,14 @@ def test_platform_reports_need_an_actual_target_platform(os, architecture, targe
 
 
 def test_enforcement_rejects_contradictions_and_never_passes_unqualified_claims():
-    fixture = _assess(corpus_purpose="fixture")
+    fixture = _assess(corpus_status="fixture")
     with pytest.raises(WholeTaskRejected, match="qualification_contradiction"):
         enforce_qualification(fixture, "blocked")
     provisional = _assess()
     # A known failure still takes precedence; nothing unqualified passes.
     assert enforce_qualification(provisional, "fail") == "fail"
     assert enforce_qualification(provisional, "pass") == "blocked"
-    assert enforce_qualification(_assess(claimed="fixture", corpus_purpose="fixture"), "x") == "x"
+    assert enforce_qualification(_assess(claimed="fixture", corpus_status="fixture"), "x") == "x"
 
 
 def test_lower_claims_are_kept():
@@ -328,21 +327,29 @@ def test_plan_episodes_rejects_unsorted_episodes(bundle, capsys):
 # --- spec 0.66 section 12.6.6 qualification records on the command line (#251) ----
 
 
-def _graded_with_record(bundle, labelling, *, bind=True):
+def _graded_with_record(bundle, labelling, *, bind=True, bind_inputs=True):
     import hashlib
 
     from test_asset_qualification_record import host_record
 
     report_path = bundle.save("grade-host.json", bundle.host_report())
-    record = host_record(bundle.root, labelling=labelling)
+    scope = dict(early_trial="host_trial", acceptance="host_acceptance")[bundle.tasks["kind"]]
+    (bundle.root / "record").mkdir()
+    record = host_record(bundle.root / "record", labelling=labelling, scope=scope)
+    if scope == "host_trial":
+        record.update(preregistration=None, runs_started_at=None)
+    inputs = dict(tasks=bundle.tasks, freeze=bundle.freeze)
+    if not bind_inputs:
+        inputs["freeze"] = dict(bundle.freeze, rubric_evidence_ids=["unrelated"])
     if labelling != "owner_machine":
         record.update(annotators=None, agreement=None)
-    payload = report_path.read_bytes() if bind else b"{}"
+    payloads = {role: json.dumps(value).encode() for role, value in inputs.items()}
+    payloads["report"] = report_path.read_bytes() if bind else b"{}"
     for subject in record["subjects"]:
-        if subject["role"] == "report":
-            (bundle.root / subject["path"]).write_bytes(payload)
-            subject.update(sha256=hashlib.sha256(payload).hexdigest(), bytes=len(payload))
-    record_path = bundle.save("record.json", record)
+        payload = payloads[subject["role"]]
+        (bundle.root / "record" / subject["path"]).write_bytes(payload)
+        subject.update(sha256=hashlib.sha256(payload).hexdigest(), bytes=len(payload))
+    record_path = bundle.save("record/record.json", record)
     output = bundle.root / "graded.json"
     argv = ["grade-host", "--report", str(report_path), "--inputs"]
     argv += [str(bundle.root / "inputs.json"), "--resolver", str(bundle.resolver)]
@@ -361,6 +368,12 @@ def test_a_bound_record_reports_its_labelling_but_never_lifts_fixture_inputs(bun
 def test_a_record_for_another_report_rejects(bundle):
     code, result = _graded_with_record(bundle, "independent", bind=False)
     assert (code, result["reason"]) == (2, "qualification_record_unbound")
+
+
+def test_a_record_with_an_unrelated_freeze_rejects(bundle):
+    """Spec 12.6.6: the record's freeze and tasks are the report's resolved inputs."""
+    code, result = _graded_with_record(bundle, "independent", bind_inputs=False)
+    assert (code, result["reason"]) == (2, "record_input_mismatch")
 
 
 def test_an_owner_machine_record_over_independent_labels_rejects(bundle):

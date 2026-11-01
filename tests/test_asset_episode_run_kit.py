@@ -24,7 +24,7 @@ from test_asset_episode_driver import setup
 from whole_task_helpers import ENVIRONMENT, H
 
 
-def run(tmp_path, release, freeze, episodes, arms, journal, interrupted=lambda: False):
+def run(release, freeze, episodes, arms, journal, interrupted=lambda: False):
     return asyncio.run(
         run_adaptation_episodes(
             episodes,
@@ -79,9 +79,9 @@ def test_a_journaled_run_resumes_without_rerunning_completed_episodes(tmp_path, 
         return result
 
     monkeypatch.setattr(asset_episode_driver, "_run_episode", counted)
-    partial, _ = run(tmp_path, release, freeze, episodes, arms, journal, lambda: bool(ran))
+    partial, _ = run(release, freeze, episodes, arms, journal, lambda: bool(ran))
     assert [e["status"] for e in partial["episodes"]] == ["completed", "not_run"]
-    report, evidence = run(tmp_path, release, freeze, episodes, arms, journal)
+    report, evidence = run(release, freeze, episodes, arms, journal)
     assert ran == ["e1", "e2"]
     assert [e["status"] for e in report["episodes"]] == ["completed", "completed"]
     # The first episode's reset evidence is restored from the journal.
@@ -114,9 +114,9 @@ def test_an_episode_started_before_a_crash_is_cancelled_not_rerun(tmp_path, monk
 
     monkeypatch.setattr(asset_episode_driver, "_run_episode", crash)
     with pytest.raises(Crash):
-        run(tmp_path, release, freeze, episodes, arms, journal)
+        run(release, freeze, episodes, arms, journal)
     monkeypatch.setattr(asset_episode_driver, "_run_episode", original)
-    report, evidence = run(tmp_path, release, freeze, episodes, arms, journal)
+    report, evidence = run(release, freeze, episodes, arms, journal)
     first, second = report["episodes"]
     assert first["status"] == "completed"
     assert second["status"] == "cancelled" and second["reason"] == "interrupted_unrecorded"
@@ -129,11 +129,11 @@ def test_an_episode_started_before_a_crash_is_cancelled_not_rerun(tmp_path, monk
 def test_changed_episodes_cannot_resume_a_journal(tmp_path):
     release, freeze, episodes, arms = setup(tmp_path)
     journal = tmp_path / "episodes.jsonl"
-    run(tmp_path, release, freeze, episodes, arms, journal)
+    run(release, freeze, episodes, arms, journal)
     episodes["episodes"][0]["control_case_ids"] = ["case-06", "case-07"]
     episodes["episodes"][0]["reset_probe_case_ids"] = ["case-00"]
     with pytest.raises(JournalError, match="journal_binding"):
-        run(tmp_path, release, freeze, episodes, arms, journal)
+        run(release, freeze, episodes, arms, journal)
 
 
 def test_an_interrupted_episode_is_kept_and_the_resumed_run_continues(tmp_path):
@@ -145,9 +145,9 @@ def test_an_interrupted_episode_is_kept_and_the_resumed_run_continues(tmp_path):
         calls.append(1)
         return len(calls) > 4
 
-    partial, _ = run(tmp_path, release, freeze, episodes, arms, journal, interrupted)
+    partial, _ = run(release, freeze, episodes, arms, journal, interrupted)
     assert [e["status"] for e in partial["episodes"]] == ["cancelled", "not_run"]
-    report, evidence = run(tmp_path, release, freeze, episodes, arms, journal)
+    report, evidence = run(release, freeze, episodes, arms, journal)
     # Its consumed work is conserved as cancelled; the next episode still runs.
     assert [e["status"] for e in report["episodes"]] == ["cancelled", "completed"]
     assert report["episodes"][0] == partial["episodes"][0]

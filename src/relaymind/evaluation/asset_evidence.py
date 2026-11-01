@@ -191,8 +191,13 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.66 with the #268 amendment, the #266 record input, scope and
+            # identity rules and the LHCWN repository rename (merged stack).
+            ("3393af66c79f18922d8493f56f81d41d1fd1e4ae52c2cc5c1ce56b764e6d7421", 624939),
             # Reviewed 0.66 with the #268 amendment and the LHCWN repository rename.
             ("72d3815fe8c304c04ece8f4a3ec2a669c2a4d2a119f882036617f7e3c15749f2", 624188),
+            # Reviewed 0.66 with the #266 record input, scope and identity rules.
+            ("f4f70b0640207baf78442bd8c7596f23461c9319920adfd37effa29e1148ed51", 622923),
             # Reviewed 0.66 with the LHCWN repository rename.
             ("b5c3327b138e5bfedc3e9a5c3b5c1453509643a562f5ec6f324288672b9ca70d", 622172),
             # Reviewed 0.66 owner-run acceptance profile and qualification record

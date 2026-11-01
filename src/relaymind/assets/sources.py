@@ -96,19 +96,20 @@ class CandidateRejected(SourceFailure):
 _CANDIDATE_REASONS = frozenset({"invalid_data", "size_limit"})
 
 
+def _validation_reason(exc: AssetValidationError) -> str:
+    return "size_limit" if str(exc) == "size_limit" else "invalid_data"
+
+
 def _candidate(function: Callable[[], Any]) -> Any:
     """Run a pure check of staged candidate bytes; content errors reject only it."""
     try:
         return function()
-    except CandidateRejected:
-        raise
     except SourceFailure as exc:
         if exc.reason not in _CANDIDATE_REASONS:
             raise
         raise CandidateRejected(exc.reason) from None
     except AssetValidationError as exc:
-        reason = "size_limit" if str(exc) == "size_limit" else "invalid_data"
-        raise CandidateRejected(reason) from None
+        raise CandidateRejected(_validation_reason(exc)) from None
     except (UnicodeError, yaml.YAMLError, RecursionError, ValueError, TypeError, KeyError):
         raise CandidateRejected("invalid_data") from None
 
@@ -223,13 +224,15 @@ class CaptureContext:
 
     def finish_record(self) -> None:
         self.batch_records += 1
-        if self.batch_records + self.batch_rejected == 25:
-            self.finish_batch()
+        self._finish_full_batch()
 
     def reject_record(self) -> None:
         """One candidate excluded on its own (spec 0.66 section 4.6.1)."""
         self.rejected_count += 1
         self.batch_rejected += 1
+        self._finish_full_batch()
+
+    def _finish_full_batch(self) -> None:
         if self.batch_records + self.batch_rejected == 25:
             self.finish_batch()
 
@@ -581,6 +584,12 @@ def _check_owner(asset_id: str, previous: SourceInventory, source_id: str) -> No
         raise SourceFailure("invalid_data")
 
 
+def _skill_asset_id(source: SourceConfig, package: str) -> str:
+    return "skill:" + canonical_digest(
+        {"source_id": source.source_id, "relative_package_path": package}
+    )
+
+
 def _skill_document(
     source, package, metadata, body, fallback, digest, locator, context, *, source_version=None
 ):
@@ -597,12 +606,9 @@ def _skill_document(
     version = extra.get("version", fallback.get("version"))
     languages = extra.get("languages", fallback.get("languages", []))
     check_language_tags(languages)
-    asset_id = "skill:" + canonical_digest(
-        {"source_id": source.source_id, "relative_package_path": package}
-    )
     value = dict(
         schema_version=1,
-        asset_id=asset_id,
+        asset_id=_skill_asset_id(source, package),
         kind="skill",
         source_id=source.source_id,
         source_locator=locator,
@@ -623,12 +629,6 @@ def _skill_document(
     )
     return project_asset(
         validate_asset_record(value), body=body, redactor=context.redactor, secrets=secrets
-    )
-
-
-def _local_asset_id(source: SourceConfig, package: str) -> str:
-    return "skill:" + canonical_digest(
-        {"source_id": source.source_id, "relative_package_path": package}
     )
 
 
@@ -683,7 +683,7 @@ def _local(
     for package in candidates:
         context.add_record()
         relative = "SKILL.md" if package == "." else f"{package}/SKILL.md"
-        asset_id = _local_asset_id(source, package)
+        asset_id = _skill_asset_id(source, package)
         # The derived ID can collide with another source's record; that is a
         # source-level conflict, never one candidate's rejection.
         _check_owner(asset_id, previous, source.source_id)
@@ -699,7 +699,7 @@ def _local(
         paths[asset_id] = package
         context.finish_record()
     context.finish_batch()
-    complete = not rejected
+    complete = not exclusions
     absent = set()
     for item in previous.records:
         context.check()
@@ -712,9 +712,6 @@ def _local(
         if stage.exists(location):
             raise SourceFailure("invalid_data")
         absent.add(item.record.asset_id)
-    if not complete:
-        # A partial generation applies no removals; omitted records stay stale.
-        absent.clear()
     stage.verify()
     entries = sorted(
         ({"relative_path": f.relative_path, "sha256": f.sha256} for f in stage.files),
@@ -729,11 +726,11 @@ def _local(
         tuple(documents),
         tuple(stage.files),
         complete,
-        frozenset(absent),
+        # A partial generation applies no removals; omitted records stay stale.
+        frozenset(absent) if complete else frozenset(),
         freeze_json(paths),
         context.received_bytes,
         tuple(context.batch_durations_ms),
-        len(exclusions),
         tuple(exclusions),
     )
 
@@ -873,8 +870,9 @@ def capture_source(
         exc.received_bytes = context.received_bytes
         raise
     except AssetValidationError as exc:
-        reason = "size_limit" if str(exc) == "size_limit" else "invalid_data"
-        raise SourceFailure(reason, received_bytes=context.received_bytes) from None
+        raise SourceFailure(
+            _validation_reason(exc), received_bytes=context.received_bytes
+        ) from None
     except (
         OSError,
         UnicodeError,
