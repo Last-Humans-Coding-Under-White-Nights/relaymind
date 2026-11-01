@@ -1053,8 +1053,24 @@ approved by a pull request review from at least one org member other than the
 owner; a negative record closes the `skill_loaded_use` or `mcp_use` gate on
 the pinned host with the operation disabled and listed as a known host
 limitation. The verifier support is implemented (`--qualification-record`,
-`--labelling owner_machine`) and fixture-tested only. No record has been
-committed and no gate has passed: #255, #259, #260 and #261 remain open and
+`--labelling owner_machine`) and fixture-tested only. No gate has passed.
+#255 has committed two **pending** negative `host_operation` records for the
+pinned 2026.10.7 host: `m10-negative-skill-loaded-use-openclaw-2026.10.7`
+(`stop_point_absent`) and `m10-negative-mcp-use-openclaw-2026.10.7`
+(`exact_route_absent`). Both operations stay disabled. See
+`docs/evidence/m10/host-use-settlement-20261101.md`. The host has hooks, tool-result
+middleware and the provider stream that can stop a read or a request, but none
+carries the fresh person authority that the 7.6.1 fence needs. The only
+delegation candidate, `GatewaySessionAccessAuthority.retain()`, has no defined
+qualification. The MCP routes are name-only (`tools.invoke`), App-view-bound
+(`mcp.app.callTool`) or documented private. The records lift nothing until a
+pull request review by an org member other than the owner is written into
+them, which will make these host limitations. The VPS could not run either
+person tier: it has no private IPv4 interface, and Chromium lacks `libgbm.so.1`
+and `libasound.so.2`. The substantive captures therefore come from CI run
+41286397320. The harness now records the person-scope `sessions.reset` refusal
+(`operator.admin` required) as `control_refused` instead of failing. That fix
+has unit tests only and needs a CI run. #259, #260 and #261 remain open and
 need the real runs, captures, labels and reviews. Host configuration semantics
 (#250/#240) still keep host reports below `qualified`. Spec-only decisions
 awaiting implementation: the rank 4–10 choice receipt returning the offered

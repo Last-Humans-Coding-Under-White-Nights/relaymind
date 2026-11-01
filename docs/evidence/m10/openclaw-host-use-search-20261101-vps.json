@@ -1,0 +1,364 @@
+{
+ "kind": "relaymind-openclaw-host-use-search",
+ "issue": 255,
+ "requirements": [
+  "RM16",
+  "RM37",
+  "RM39",
+  "AC30",
+  "AC35"
+ ],
+ "spec": "0.66 sections 7.6.1, 7.6.2, 12.6.6",
+ "method": "Source inspection of the installed pinned host package (npm ci from integrations/openclaw/package-lock.json) plus the CI and VPS captures listed in the record. File digests were computed on the linux_host VPS and matched a second npm ci on the owner's MacBook byte for byte. Hook and middleware behaviour below is read from the shipped code and documentation; none of the candidate gates was exercised on a running host by this search.",
+ "host": {
+  "package": "openclaw",
+  "version": "2026.10.7",
+  "sdk_package_version": "2026.10.7"
+ },
+ "machine_runs": {
+  "node": "v24.22.1 (nvm)",
+  "npm": "11.19.1",
+  "release_tarball_sha256": "63c2c660ed69e2c3006c14053d583eec7b32ea0072d0d5d69b50b6295e0224a3",
+  "person_trial": "setup_unavailable: private_network_unavailable (only a public IPv4 on eth0; no sudo; unprivileged user namespaces are restricted by AppArmor)",
+  "browser": "Playwright 1.64.1 chromium-1248 and chromium_headless_shell-1248 lack libgbm.so.1 and libasound.so.2 (ldd: not found); no system packages installed"
+ },
+ "files": [
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/agent-tools.before-tool-call-CReBJLEA.mjs",
+   "sha256": "cd9eeb8a55dec75154c4733044cf85cd9250fb3206da0413bd4d4abb6c4fbbca"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/agents-models-skills-Bqpau12X.mjs",
+   "sha256": "e984003e8a84caf478d39f93e085168706adeeed6d161e2eff2d89c0dcc3f605"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/config-contracts-Db6WHFol.d.ts",
+   "sha256": "48c2f15bb8041a49dd7da5d34663cab7f73081b2ed03f807c09c01ab61851a3d"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/control-ui/assets/control-ui-boot-chat-Bx7ozLFZ.js",
+   "sha256": "080c2b9b4f4ce37f91bf068e6c7aa3497de094310d0edd5c9b85fd44b96f8689"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/core-method-policy-DkntKRY_.mjs",
+   "sha256": "76a772a67b4972ea170676f238bb57bb3622d1b17034ef923c1d255345e66c78"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/hook-types-CoUXuQe1.mjs",
+   "sha256": "468f9f5bf542fba630cbf975d9c541c06f0a2d3550eef94700559d6733b49688"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/hooks-DJ64650m.mjs",
+   "sha256": "8e16b646bc9fb21b03262f14fdee78f802f3db20ba6d3fb14d14c7ad849f600a"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-DRRDUDxP.mjs",
+   "sha256": "fa254a637d0e13bbbf7f5d19130249253dd8abf9eeebc3afb91deb8c7dd275c5"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/agent-harness-tool-runtime.js",
+   "sha256": "608f8f1f70f3279fc14a4c56f744ac84fb4e3edeb6f6fcf0806e73bdba37bf6e"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/codex-mcp-projection.js",
+   "sha256": "16f6598461e42339d9fcce0635da44d8e50a52f275e57ef489712d9b0e2163c0"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/gateway-method-runtime.d.ts",
+   "sha256": "07ba7e74de80f40aa859021019c730bc3b6403e5152d8df5c86c4372c53fdfff"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/gateway-method-runtime.js",
+   "sha256": "47836459dc2586ce35099773121ad3eb0a40eb7fd38f458272d613415d312ce3"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/plugin-runtime.d.ts",
+   "sha256": "91487091273ea2d307c089cbb75914687004a37e24e63060fe4a7c18779066ca"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/session-method-policy-B7o-3I76.mjs",
+   "sha256": "e352776a2f8e05adb10ddd1da2a8f0bf5296ef7049b1829a4c41f96a38e35517"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/tool-result-middleware-DrFwJLV6.mjs",
+   "sha256": "48ca35c9df5238a296de712db645947147dc1f6fc57e0b66bd2c5784b90c2c5a"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/hooks.md",
+   "sha256": "fa18d4753c922643fe7cce991db2ec322722a352748c8a30d395978fb630b51a"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/hooks/prompt-and-session.md",
+   "sha256": "6e84e739638c66a45315a9af7c5348dc9d244bbd0bb97a40e5e872212b369c4a"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/hooks/reference.md",
+   "sha256": "f5c829cad2363652f61b9892b22f0b983ad0335a07dce8ed9944d877b8c3f495"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/hooks/tool-policy.md",
+   "sha256": "d7de3dbedae8f8e512a1198aa40ec04ed2908371b1f3edca28843d361c030198"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/sdk-agent-harness/attempt-runtime.md",
+   "sha256": "3a29e743411f7be25adfee54ba711397d3c7e3aa01577527ff2bda021dc5ef49"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/sdk-runtime/gateway-and-nodes.md",
+   "sha256": "636e26e07231dca7a49e98091790989ec66b7344ffd1abc6b022b52cd15e106d"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/sdk-subpaths.md",
+   "sha256": "65e36c4b85b0726e9770df757bf9575f1b972f0d4291552728c4dedcffd51dc4"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/docs/tools/skills.md",
+   "sha256": "2ec6dbe7ca39d393138aa4de63581b8e813fd972e03cd2a96e2082652bce8675"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/package.json",
+   "sha256": "362f8c0fda7b71a116e0ca2f812e896bfe9cfec41e64b6b66243f95703aaf7b8"
+  }
+ ],
+ "skill_loaded_use": {
+  "question": "A supported point that can stop or fence the next model request after skills_read, with fresh genuine host authority for that turn (spec 7.6.1 use-time fence).",
+  "surfaces": [
+   {
+    "name": "before_tool_call",
+    "kind": "gate (terminal block, fail closed on error/timeout)",
+    "source": [
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/hook-types-CoUXuQe1.mjs",
+      "sha256": "468f9f5bf542fba630cbf975d9c541c06f0a2d3550eef94700559d6733b49688"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/hooks-DJ64650m.mjs",
+      "sha256": "8e16b646bc9fb21b03262f14fdee78f802f3db20ba6d3fb14d14c7ad849f600a"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/agent-tools.before-tool-call-CReBJLEA.mjs",
+      "sha256": "cd9eeb8a55dec75154c4733044cf85cd9250fb3206da0413bd4d4abb6c4fbbca"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/hooks/tool-policy.md",
+      "sha256": "d7de3dbedae8f8e512a1198aa40ec04ed2908371b1f3edca28843d361c030198"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/hooks/reference.md",
+      "sha256": "f5c829cad2363652f61b9892b22f0b983ad0335a07dce8ed9944d877b8c3f495"
+     }
+    ],
+    "can_stop": "the managed read (skills_read) before it runs",
+    "context": "agentId, sessionKey, sessionId, runId, toolCallId, abortSignal, requester{channel,accountId,senderId,senderIsOwner,roleIds}; the host keeps its executionIdentityToken/receiptAuthority receipt internal",
+    "authority": "none: no session access authority, no assertCurrent, no lifecycleRevision; hook contexts are excluded as authority by 7.6.2(2)",
+    "verdict": "stop without fence"
+   },
+   {
+    "name": "api.registerAgentToolResultMiddleware",
+    "kind": "async tool-result transform before the harness feeds output back to the model; a throw replaces the result with a failure result",
+    "source": [
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/tool-result-middleware-DrFwJLV6.mjs",
+      "sha256": "48ca35c9df5238a296de712db645947147dc1f6fc57e0b66bd2c5784b90c2c5a"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/config-contracts-Db6WHFol.d.ts",
+      "sha256": "48c2f15bb8041a49dd7da5d34663cab7f73081b2ed03f807c09c01ab61851a3d"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/sdk-agent-harness/attempt-runtime.md",
+      "sha256": "3a29e743411f7be25adfee54ba711397d3c7e3aa01577527ff2bda021dc5ef49"
+     }
+    ],
+    "can_stop": "instruction bytes reaching the model (replaces the tool result); does not stop the model request itself",
+    "context": "runtime, agentId, sessionId, sessionKey, runId",
+    "authority": "none (same as above); needs manifest contracts.agentToolResultMiddleware and explicit enablement",
+    "verdict": "replace without fence"
+   },
+   {
+    "name": "provider wrapStreamFn / options.onPayload (RelayMind's own provider)",
+    "kind": "the provider transport for every model request of the composition; a throw in onPayload fails the request before it is sent",
+    "source": [
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/config-contracts-Db6WHFol.d.ts",
+      "sha256": "48c2f15bb8041a49dd7da5d34663cab7f73081b2ed03f807c09c01ab61851a3d"
+     }
+    ],
+    "can_stop": "the next model request before HTTP dispatch",
+    "context": "ProviderWrapStreamFnContext: agentId, auth facts, model, extraParams, thinkingLevel, streamFn; per call: context.messages, options.sessionId",
+    "authority": "none: no sessionKey, lifecycleRevision or person authority",
+    "verdict": "stop without fence"
+   },
+   {
+    "name": "before_agent_run",
+    "kind": "gate",
+    "source": [
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/hooks.md",
+      "sha256": "fa18d4753c922643fe7cce991db2ec322722a352748c8a30d395978fb630b51a"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/hooks/prompt-and-session.md",
+      "sha256": "6e84e739638c66a45315a9af7c5348dc9d244bbd0bb97a40e5e872212b369c4a"
+     }
+    ],
+    "can_stop": "the run once, before its first model submission",
+    "context": "prompt, messages, system prompt",
+    "authority": "none",
+    "verdict": "does not reach the post-read model request of the same run"
+   },
+   {
+    "name": "llm_input, model_call_started, model_call_ended, after_tool_call",
+    "kind": "observe",
+    "source": [
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/hooks/reference.md",
+      "sha256": "f5c829cad2363652f61b9892b22f0b983ad0335a07dce8ed9944d877b8c3f495"
+     }
+    ],
+    "can_stop": "nothing (return values ignored)",
+    "authority": "none",
+    "verdict": "observation only"
+   },
+   {
+    "name": "tool_result_persist, before_message_write",
+    "kind": "synchronous transcript-persistence modify/gate",
+    "source": [
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/hooks/reference.md",
+      "sha256": "f5c829cad2363652f61b9892b22f0b983ad0335a07dce8ed9944d877b8c3f495"
+     }
+    ],
+    "can_stop": "transcript persistence only; promises ignored, errors logged",
+    "authority": "none",
+    "verdict": "not a model-request boundary"
+   },
+   {
+    "name": "GatewaySessionAccessAuthority.retain()",
+    "kind": "original-person access borrow {signal, assertCurrent, release} obtainable inside a sessionAccess gateway method handler",
+    "source": [
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/config-contracts-Db6WHFol.d.ts",
+      "sha256": "48c2f15bb8041a49dd7da5d34663cab7f73081b2ed03f807c09c01ab61851a3d"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/sdk-runtime/gateway-and-nodes.md",
+      "sha256": "636e26e07231dca7a49e98091790989ec66b7344ffd1abc6b022b52cd15e106d"
+     }
+    ],
+    "can_stop": "nothing by itself; the only host object found that could carry person currentness past the RPC into a later turn",
+    "authority": "a native delegation candidate whose acquisition, scope, lifetime and revocation 7.6.1/7.6.2(2) require to be qualified separately; spec 0.66 defines no such qualification",
+    "verdict": "unqualified delegation (spec gap, not used)"
+   },
+   {
+    "name": "dispatchGatewayMethod (openclaw/plugin-sdk/gateway-method-runtime)",
+    "kind": "in-process dispatch inside an original authenticated plugin request",
+    "source": [
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/gateway-method-runtime.d.ts",
+      "sha256": "07ba7e74de80f40aa859021019c730bc3b6403e5152d8df5c86c4372c53fdfff"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/gateway-method-runtime.js",
+      "sha256": "47836459dc2586ce35099773121ad3eb0a40eb7fd38f458272d613415d312ce3"
+     }
+    ],
+    "can_stop": "n/a",
+    "authority": "only within the original request scope; unavailable to hooks and the provider during a later agent run",
+    "verdict": "cannot re-run the fence's skills.library.read at use time"
+   }
+  ],
+  "host_observations": [
+   "CI run 41286397320: stale and deleted controls still delivered the pinned revision's bytes on the next turn (observed loaded_pinned_revision); the host keeps the session pin after a library head update or removal.",
+   "sessions.reset requires operator.admin (core-method-policy); the configured person policy lacks it. The native Control UI new-session control calls sessions.reset (declaring requiredScope operator.admin) only for a board session and otherwise sessions.create (control-ui-boot-chat).",
+   "skills_read takes only {name} (docs/tools/skills.md); the name resolves to the session pin on this host."
+  ],
+  "reset_policy_source": [
+   {
+    "path": "integrations/openclaw/node_modules/openclaw/dist/core-method-policy-DkntKRY_.mjs",
+    "sha256": "76a772a67b4972ea170676f238bb57bb3622d1b17034ef923c1d255345e66c78"
+   },
+   {
+    "path": "integrations/openclaw/node_modules/openclaw/dist/session-method-policy-B7o-3I76.mjs",
+    "sha256": "e352776a2f8e05adb10ddd1da2a8f0bf5296ef7049b1829a4c41f96a38e35517"
+   },
+   {
+    "path": "integrations/openclaw/node_modules/openclaw/dist/control-ui/assets/control-ui-boot-chat-Bx7ozLFZ.js",
+    "sha256": "080c2b9b4f4ce37f91bf068e6c7aa3497de094310d0edd5c9b85fd44b96f8689"
+   },
+   {
+    "path": "integrations/openclaw/node_modules/openclaw/docs/tools/skills.md",
+    "sha256": "2ec6dbe7ca39d393138aa4de63581b8e813fd972e03cd2a96e2082652bce8675"
+   }
+  ],
+  "conclusion": "Points that can stop the read or the next request exist, but none carries the fresh host person authority (or a qualified native delegation) that the 7.6.1 use-time fence must check at the final boundary. No point can fence the next model request: finding stop_point_absent; skill_loaded_use stays disabled."
+ },
+ "mcp_use": {
+  "question": "A public route a plugin may use to invoke an exact MCP identity (server/original/exposed name/schema/currentness tuple) for an independent tool.",
+  "routes": [
+   {
+    "name": "tools.invoke",
+    "source": [
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/agents-models-skills-Bqpau12X.mjs",
+      "sha256": "e984003e8a84caf478d39f93e085168706adeeed6d161e2eff2d89c0dcc3f605"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/core-method-policy-DkntKRY_.mjs",
+      "sha256": "76a772a67b4972ea170676f238bb57bb3622d1b17034ef923c1d255345e66c78"
+     }
+    ],
+    "params": "closed {name, args?, sessionKey?, agentId?, confirm?, idempotencyKey?, conversationReadOrigin?}",
+    "verdict": "name-only; excluded by 7.6.2(3)"
+   },
+   {
+    "name": "mcp.app.callTool (and mcp.app.listTools)",
+    "source": [
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-DRRDUDxP.mjs",
+      "sha256": "fa254a637d0e13bbbf7f5d19130249253dd8abf9eeebc3afb91deb8c7dd275c5"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/core-method-policy-DkntKRY_.mjs",
+      "sha256": "76a772a67b4972ea170676f238bb57bb3622d1b17034ef923c1d255345e66c78"
+     }
+    ],
+    "params": "sessionKey, viewId (required), toolName, arguments",
+    "verdict": "requires an active MCP App view bound to requester/session; independent tools have none; CI capture: mcp.app.listTools refused without a viewId; no legitimate selected-asset-to-view binding exists"
+   },
+   {
+    "name": "openclaw/plugin-sdk/agent-harness-tool-runtime (runAgentHarnessToolInvocation) and openclaw/plugin-sdk/codex-mcp-projection (materializeStaticMcpToolsForHarnessRun)",
+    "source": [
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/agent-harness-tool-runtime.js",
+      "sha256": "608f8f1f70f3279fc14a4c56f744ac84fb4e3edeb6f6fcf0806e73bdba37bf6e"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/codex-mcp-projection.js",
+      "sha256": "16f6598461e42339d9fcce0635da44d8e50a52f275e57ef489712d9b0e2163c0"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/sdk-subpaths.md",
+      "sha256": "65e36c4b85b0726e9770df757bf9575f1b972f0d4291552728c4dedcffd51dc4"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/sdk-agent-harness/attempt-runtime.md",
+      "sha256": "3a29e743411f7be25adfee54ba711397d3c7e3aa01577527ff2bda021dc5ef49"
+     }
+    ],
+    "verdict": "documented private (harness-only, not for third-party plugins); calling a materialized tool's execute is excluded by 7.6.2(3)"
+   },
+   {
+    "name": "dispatchGatewayMethod -> tools.effective",
+    "source": [
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/gateway-method-runtime.js",
+      "sha256": "47836459dc2586ce35099773121ad3eb0a40eb7fd38f458272d613415d312ce3"
+     }
+    ],
+    "verdict": "read-only discovery; CI capture: ok with an empty tool list for the person session while both disposable stdio servers listed append"
+   }
+  ],
+  "conclusion": "No public route reaches an exact MCP identity on 2026.10.7: finding exact_route_absent; mcp_use stays disabled and relaymind.mcp is not registered."
+ }
+}

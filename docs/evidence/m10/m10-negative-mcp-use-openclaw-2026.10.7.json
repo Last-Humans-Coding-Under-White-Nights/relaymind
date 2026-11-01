@@ -1,0 +1,61 @@
+{
+ "schema_version": 1,
+ "record_id": "m10-negative-mcp-use-openclaw-2026.10.7",
+ "profile": "owner_run",
+ "outcome": "negative",
+ "scope": "host_operation",
+ "labelling": "not_applicable",
+ "annotators": null,
+ "agreement": null,
+ "corpus_review": null,
+ "preregistration": null,
+ "runs_started_at": null,
+ "machine": {
+  "role": "linux_host",
+  "os": "Linux",
+  "os_build": "Ubuntu 26.04.1 LTS 7.0.0-38-generic",
+  "architecture": "x86_64",
+  "cpu_model": "Intel Xeon Processor (Skylake, IBRS)",
+  "ram_bytes": 11998482432,
+  "hostname_sha256": "bafcdd4933633f2d8c15bec38b13546e4d879cd8b65095a56e713b8336cedd01"
+ },
+ "revisions": {
+  "repository_commit": "acc40415a46ddbac1b29595a8bf136576c1a1cba",
+  "adapter_revision": "653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f",
+  "harness_sha256": "e84b4e7da8cfffe3c6a5ec93895e75c4ca634db1bd84ab7a6080dd24e5777ba8"
+ },
+ "operation": {
+  "name": "mcp_use",
+  "host": "openclaw",
+  "host_version": "2026.10.7",
+  "finding": "exact_route_absent",
+  "disabled": true
+ },
+ "subjects": [
+  {
+   "role": "inventory",
+   "path": "openclaw-host-use-search-20261101-vps.json",
+   "sha256": "50271d4e98ed564f2f8672d3920b305c5e213636aaa6ec185bdad28d590d7ec6",
+   "bytes": 17932
+  },
+  {
+   "role": "capture",
+   "path": "openclaw-mcp-use-20261101-ci.json",
+   "sha256": "04770efb91e510235acf091104754afddb9565658fbf808444a39257eacc8d59",
+   "bytes": 207752
+  },
+  {
+   "role": "capture",
+   "path": "openclaw-mcp-use-20261101-vps.json",
+   "sha256": "cda481d755924d42cdca67251b5e80d3412c9828993cb59c2972fb09202e698d",
+   "bytes": 26193
+  }
+ ],
+ "review": {
+  "owner_login": "devnullexile",
+  "pull_request": null,
+  "reviewer_logins": [],
+  "approved_at": null
+ },
+ "recorded_at": "2026-11-01T08:21:33Z"
+}

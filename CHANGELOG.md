@@ -8,6 +8,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- #255 host use settlement (RM16/RM37/RM39; AC30/AC35; spec 0.66 sections
+  7.6.1, 7.6.2, 12.6.6) adds two pending negative `host_operation` records for
+  OpenClaw 2026.10.7, with the VPS host surface inventory and the CI/VPS
+  captures they bind (`docs/evidence/m10/`):
+  - `skill_loaded_use` is `stop_point_absent`. No hook, middleware or provider
+    point carries fresh person authority for the turn.
+  - `mcp_use` is `exact_route_absent`. `tools.invoke` is name-only,
+    `mcp.app.callTool` needs an App view, and the harness runtimes are private.
+
+  Both operations stay disabled. The records lift nothing until they are
+  approved. `tests/test_m10_host_use_records.py` loads them with the checker.
+
+### Fixed
+
+- The loaded-use observation harness records the exact person-scope
+  `sessions.reset` refusal (`operator.admin` required on the pinned host) as
+  `control_refused`, with no turn, instead of raising
+  `ordinary_skill_control_failed`. CI run 41286397320 hit that error. Any other
+  refusal, and any turn evidence on a refused control, still fails the
+  predicate (#255). The fix has unit tests only; no CI run has confirmed it.
+
 - Owner-run qualification records and `owner_machine` labelling (#251; RM16,
   RM39, RM40, RM42, RM44; AC30, AC31, AC33, AC35–AC37; spec 0.66 section
   12.6.6): the closed `asset_qualification_record.v1.json` schema and
