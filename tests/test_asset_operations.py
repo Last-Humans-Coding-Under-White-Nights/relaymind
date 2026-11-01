@@ -45,7 +45,7 @@ def _synthetic_timing(record, start, *, elapsed=0.05, observed_ms=50.0):
     These fixtures test the AC29 grader, not this machine: under parallel test
     workers a real 300 ms or 1 s budget is not a property of the code.
     """
-    if record.view is None or not record.events:
+    if record.view is None or not record.events or record.view.get("result") is None:
         return record
     view = copy.deepcopy(dict(record.view))
     events = [copy.deepcopy(dict(event)) for event in record.events]
@@ -94,13 +94,18 @@ def _measured_workload(records):
     return WorkloadSamples("measured", requests=list(records), origin_at=0.0)
 
 
-@pytest.mark.parametrize("missing_view", [True, False])
-def test_synthetic_timing_preserves_failed_samples(validated_request_cohort, missing_view):
+@pytest.mark.parametrize("shape", ["no_view", "no_events", "no_result"])
+def test_synthetic_timing_preserves_failed_samples(validated_request_cohort, shape):
     """RM16/RM38/AC29: missing evidence stays a failed sample in the denominator."""
+    sample = validated_request_cohort[0]
+    view = None if shape == "no_view" else dict(sample.view)
+    if shape == "no_result":
+        # A failed or cancelled recommendation keeps its trace but has no result.
+        view.update(state="failed", result=None)
     record = replace(
-        validated_request_cohort[0],
-        view=None if missing_view else validated_request_cohort[0].view,
-        events=(),
+        sample,
+        view=view,
+        events=() if shape == "no_events" else sample.events,
         outcome="failed",
         error="deadline_exceeded",
     )
