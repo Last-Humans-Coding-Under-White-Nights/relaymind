@@ -137,7 +137,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   unexpired choice, the eligible asset and operator association, a nonremoved
   library entry and the immutable selected bytes before loading, after the
   exact read and immediately before delivery, keeps R0 across a library head
-  update and blocks the conversation after any failure. The `relaymind.mcp`
+  update and blocks the conversation after a fence failure. The `relaymind.mcp`
   handler implements the closed request, the 60-second preparation/dispatch
   deadline with the separately bounded approval wait, exact native binding with
   a recomputed canonical schema hash, closed argument validation, approval
@@ -154,10 +154,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   operation is in the shipped registry, no production MCP route exists, and
   `relaymind.mcp` is not registered; the tests use injected fixture resolvers
   and routes only. The shipped direct-action/exact-selection entry is re-pinned
-  to the new adapter revision `653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`; its evidence revision names the
-  fresh ordinary installed-host capture of this revision (CI run 41286397320,
-  SHA-256 `933fb4e7c8b3…`). A release-artifact test now fails
-  when the registry and the built adapter digest drift.
+  to the new adapter revision `d5b6048af14dce5b6069dea2bd1a7e8abf57077e08d8b20d390791389dd22572`; its evidence revision still names
+  the capture of the earlier revision `653902615edf…` (CI run 41286397320,
+  SHA-256 `933fb4e7c8b3…`), and the evidence recapture of this revision is
+  pending before merge. A release-artifact test now fails when the registry
+  and the built adapter digest drift. After review, the ledger never writes a
+  record recovery would reject and has `close()` (on gateway stop); a
+  same-key request during preparation recovers that attempt's actual receipt;
+  gateway transport, overload and deadline failures report `unavailable` or
+  `timeout`; only failures attributable to the verified person and session
+  block a conversation; and each native method registers on its own entry.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,

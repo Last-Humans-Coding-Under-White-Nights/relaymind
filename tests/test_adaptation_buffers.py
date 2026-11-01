@@ -48,12 +48,21 @@ def _close_against_real_feedback_mutation(directory, operation):
     import threading
     from pathlib import Path
 
+    from helpers import FakeClock
     from recommendation_helpers import BODY
     from test_asset_adaptation_store import correct
     from test_asset_user_actions import action_client
 
     async def run():
-        async with action_client(Path(directory)) as (client, app, service, runs, catalog, _):
+        # A frozen clock keeps the real selection inside the budget under load.
+        async with action_client(Path(directory), clock=FakeClock()) as (
+            client,
+            app,
+            service,
+            runs,
+            catalog,
+            _,
+        ):
             parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
             receipt = await correct(client, parent, 0, "correction")
             feedback = app.state.feedback_store

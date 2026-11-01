@@ -54,3 +54,45 @@ it("RM39/AC30 refuses oversized retained tool content before appending any bytes
     rmSync(work, { recursive: true, force: true });
   }
 });
+
+it.each([undefined, null, false, 7, "bad", [], {}])("RM39/AC30 ignores malformed hook event %j without a host exception", (event) => {
+  const work = mkdtempSync(join(tmpdir(), "rm-observer-invalid-"));
+  const path = join(work, "events.jsonl");
+  writeFileSync(path, "");
+  const original = globalThis.fetch;
+  const key = Symbol.for("relaymind.ordinary.fixture.fetch-observer");
+  const previous = (globalThis as any)[key];
+  try {
+    const hooks = new Map<string, (...args: any[]) => void>();
+    plugin.register({ pluginConfig: { eventFile: path }, on: (name: string, callback: (...args: any[]) => void) => hooks.set(name, callback) });
+    expect(() => hooks.get("after_tool_call")!(event, null)).not.toThrow();
+    expect(readFileSync(path, "utf8")).toBe("");
+  } finally {
+    globalThis.fetch = original;
+    (globalThis as any)[key] = previous;
+    rmSync(work, { recursive: true, force: true });
+  }
+});
+
+it("RM39/AC30 classifies unserializable native records without leaking TypeError or partial bytes", () => {
+  const work = mkdtempSync(join(tmpdir(), "rm-observer-serialization-"));
+  const path = join(work, "events.jsonl");
+  writeFileSync(path, "");
+  const original = globalThis.fetch;
+  const key = Symbol.for("relaymind.ordinary.fixture.fetch-observer");
+  const previous = (globalThis as any)[key];
+  try {
+    const hooks = new Map<string, (...args: any[]) => void>();
+    plugin.register({ pluginConfig: { eventFile: path }, on: (name: string, callback: (...args: any[]) => void) => hooks.set(name, callback) });
+    const cyclic: any = {};
+    cyclic.self = cyclic;
+    for (const result of [1n, cyclic]) {
+      expect(() => hooks.get("after_tool_call")!({ toolName: "skills_read", result }, null)).toThrow(/^capture_invalid$/);
+      expect(readFileSync(path, "utf8")).toBe("");
+    }
+  } finally {
+    globalThis.fetch = original;
+    (globalThis as any)[key] = previous;
+    rmSync(work, { recursive: true, force: true });
+  }
+});

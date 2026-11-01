@@ -141,6 +141,17 @@ def test_collision_schema_and_requester_misattribution_block_effect_credit(field
     assert not module().effect_matches(value, "allow-once")
 
 
+def test_empty_arguments_object_is_a_valid_binding():
+    """RM39/AC35: a tool with no arguments has a present, empty arguments object."""
+    binding = trial()["binding"] | {"arguments": {}}
+    approval = dict(binding)
+    assert module().binding_matches(binding, approval)
+    assert not module().binding_matches(binding, approval | {"arguments": None})
+    assert not module().binding_matches(
+        binding, {key: value for key, value in approval.items() if key != "arguments"}
+    )
+
+
 @pytest.mark.parametrize(
     "field", ["call_id", "server", "original", "arguments", "counter", "result"]
 )
@@ -190,6 +201,13 @@ def test_effect_accounting_accepts_real_server_log(tmp_path, node_runtime):
     value["tool_results"][0]["content"] = json.loads(result.stdout)["content"][0]["text"]
     assert module().effect_matches(value, "allow-once")
     assert not module().mcp_use_pass(value)
+
+
+def test_read_jsonl_annotation_admits_string_records():
+    """RM39/AC35: sandbox files hold JSON string primitives, not only objects."""
+    from typing import get_type_hints
+
+    assert get_type_hints(module("qualify").read_jsonl)["return"] == list[dict | str]
 
 
 @pytest.mark.parametrize("part", ["approval", "tool_results", "ui_events", "server_events"])
@@ -246,7 +264,9 @@ def test_effect_requires_the_observed_ui_binding(field):
     assert not module().effect_matches(value, "allow-once")
 
 
-@pytest.mark.parametrize("case", ["schema_change", "server_removal", "session_reset"])
+@pytest.mark.parametrize(
+    "case", ["schema_change", "server_removal", "session_reset", "arguments_changed"]
+)
 def test_stale_trials_need_authority_rejection_and_zero_new_calls(case):
     value = dict(
         name=case,
@@ -257,6 +277,7 @@ def test_stale_trials_need_authority_rejection_and_zero_new_calls(case):
         rejection={"code": "STALE_BINDING", "phase": "final_io"},
     )
     assert module().stale_case_pass(value)
+    assert module().negative_control_pass(value)
     changed = copy.deepcopy(value)
     changed["server_events"] = [dict(kind="call")]
     assert not module().stale_case_pass(changed)
@@ -264,6 +285,50 @@ def test_stale_trials_need_authority_rejection_and_zero_new_calls(case):
     assert not module().stale_case_pass(value)
     value["status"] = "not_run"
     assert not module().stale_case_pass(value)
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "policy_denied",
+        "disconnected",
+        "foreign_requester",
+        "approval_replay",
+        "cancelled",
+        "timeout",
+        "choice_expired",
+        "registration_revoked",
+    ],
+)
+def test_each_negative_control_needs_its_own_rejection(case):
+    """RM39/AC35: a stale-schema refusal cannot stand in for another control."""
+    api = module()
+    value = dict(
+        name=case,
+        status="observed",
+        server_events=[],
+        before={"a": []},
+        after={"a": []},
+        rejection={"code": "STALE_BINDING", "phase": "final_io"},
+    )
+    assert not api.stale_case_pass(value)
+    assert not api.negative_control_pass(value)
+    code, phase = api.CASE_REJECTIONS[case]
+    value["rejection"] = {"code": code, "phase": phase}
+    assert api.negative_control_pass(value)
+    assert not api.stale_case_pass(value)
+
+
+def test_every_negative_control_has_an_explicit_rejection():
+    api = module()
+    assert set(api.CASE_REJECTIONS) == set(api.NEGATIVE_CASES)
+    assert set(api.STALE_CASES) < set(api.NEGATIVE_CASES)
+    assert set(api.STALE_CASES) == {
+        "schema_change",
+        "server_removal",
+        "session_reset",
+        "arguments_changed",
+    }
 
 
 def test_gateway_execution_is_derived_from_trace_and_requires_observed_runs():
@@ -385,6 +450,38 @@ def test_cli_missing_tarball_cannot_publish_a_blocked_capture(tmp_path):
     assert not output.exists()
 
 
+def test_cli_grades_discovery_once(tmp_path, monkeypatch):
+    """RM39/AC35: the discovery check is computed once and reused for the outcome."""
+    from test_openclaw_ordinary_channel import module as ordinary_module
+
+    api, ordinary = module("qualify"), ordinary_module()
+    calls = []
+    original = api.GRADE.fixture_discovery_pass
+
+    def counted(capture):
+        calls.append(capture)
+        return original(capture)
+
+    monkeypatch.setattr(api.GRADE, "fixture_discovery_pass", counted)
+    original_capture = {"status": "completed", "mcp_use": discovery_capture()["mcp_use"]}
+
+    def ordinary_trial(argv):
+        Path(argv[argv.index("--out") + 1]).write_text(json.dumps(original_capture))
+        return 0
+
+    monkeypatch.setattr(ordinary, "main", ordinary_trial)
+    monkeypatch.setattr(api, "load", lambda *_: ordinary)
+    archive = tmp_path / "provider.tgz"
+    archive.write_bytes(b"fixture archive")
+    output = tmp_path / "published.json"
+    code = api.main(
+        ["--tarball", str(archive), "--work-dir", str(tmp_path / "work"), "--out", str(output)]
+    )
+    assert code == 0
+    assert len(calls) == 1
+    assert json.loads(output.read_bytes())["fixture_discovery_pass"] is True
+
+
 @pytest.mark.parametrize("broken", ["probe", "server", "inventory", "call", "effect", "sandbox"])
 def test_fixture_discovery_failure_is_not_a_blocked_capability(broken):
     """RM39/AC35 F4: the raw discovery prerequisites must succeed."""
@@ -449,6 +546,10 @@ def test_missing_dist_cannot_shrink_the_pin(tmp_path, monkeypatch):
     monkeypatch.setattr(api, "ROOT", tmp_path)
     fixture_path = tmp_path / "integrations/openclaw/test/host-mcp-use-qualification/grade.py"
     monkeypatch.setattr(api, "__file__", str(fixture_path))
+    # Outputs are derived from the source tree, which exists even without dist/.
+    source = tmp_path / "integrations/openclaw/src/index.ts"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"export {}")
     assert "integrations/openclaw/dist/index.js" in api.required_sources()
     inventory = []
     for name in api.required_sources():
@@ -561,7 +662,7 @@ def test_inventory_projection_keeps_no_raw_params_or_payloads(node_runtime):
           const events = [];
           const dispatch = async () => ({ok:true,
             payload:{tools:[{name:'append', secret:'private-config'}]}});
-          await observeDispatch(dispatch, event => events.push(event), 'request-1')(
+          await observeDispatch(dispatch, event => events.push(event))(
             'tools.effective', {sessionKey:'private-session'}, {});
           console.log(JSON.stringify(events));
         """,
@@ -677,6 +778,35 @@ def test_configure_keeps_provider_policy_and_installs_two_colliding_host_owned_s
     assert str(DIRECTORY) in config["plugins"]["load"]["paths"]
     assert extension.config["recommendations"]["bindings"] == []
     assert "relaymind-action-qualification" not in config["plugins"]["allow"]
+
+
+def test_collect_is_safe_when_setup_failed_before_configure(tmp_path):
+    """RM39/AC35: an early setup failure must not turn reporting into AttributeError."""
+    from test_openclaw_ordinary_channel import module as ordinary_module
+
+    api = module("qualify")
+    archive = tmp_path / "fixture.tgz"
+    archive.write_bytes(b"unused")
+    extension = api.composition_type(ordinary_module())(
+        "http://127.0.0.1:12345/v1",
+        "app-fixture",
+        "action-fixture",
+        *[threading.Event() for _ in range(3)],
+        archive=archive,
+        runs=None,
+        skill_text="fixture",
+        skill_asset={},
+    )
+    assert (extension.probe_exit, extension.mcp_work, extension.inventory_file) == (
+        None,
+        None,
+        None,
+    )
+    capture = api.blocked_capture("exact_route_unqualified")
+    extension.collect(capture)
+    assert capture["mcp_use"]["probe_exit_code"] is None
+    assert capture["mcp_use"]["inventories"] == []
+    assert capture["mcp_use"]["sandbox_files"] == {}
 
 
 @pytest.mark.skipif(os.environ.get("RELAYMIND_OPENCLAW_NODE") != "1", reason="opt-in pinned host")
