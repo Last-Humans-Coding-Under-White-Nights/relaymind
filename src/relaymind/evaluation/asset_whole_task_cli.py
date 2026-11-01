@@ -202,7 +202,6 @@ def _trial(args) -> int:
                 install = asset_trial_kit.install_plugin(
                     _host(args), args.tarball, work / "install"
                 )
-            tarball = args.tarball
         elif args.command == "trial-run":
             preflight, _ = read_json_path(asset_trial_kit.real_path(args.preflight))
             # Offline bundling may run elsewhere: the report keeps the target
@@ -211,7 +210,6 @@ def _trial(args) -> int:
             install = (
                 read_json_path(asset_trial_kit.real_path(args.install))[0] if args.install else None
             )
-            tarball = args.tarball
     except (WholeTaskBlocked, WholeTaskRejected, AssetCorpusError, OSError, ValueError) as exc:
         # An identifier only: an OSError's text names local paths and is never printed.
         reason = getattr(exc, "reason", None)
@@ -233,7 +231,7 @@ def _trial(args) -> int:
             environment=environment,
             preflight_record=preflight,
             install_record=install,
-            tarball=tarball,
+            tarball=args.tarball,
             ask=input if args.interactive else None,
             interrupted=lambda: bool(stop),
         )
