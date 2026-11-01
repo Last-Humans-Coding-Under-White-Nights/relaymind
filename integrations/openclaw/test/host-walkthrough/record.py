@@ -27,7 +27,14 @@ Usage (Linux x86-64 with the person-ingress prerequisites)::
 
     python integrations/openclaw/test/host-walkthrough/record.py record \\
         --tarball /abs/relaymind-openclaw-provider-0.1.0.tgz \\
-        --work-root /abs/new-private-work --out-dir /abs/new-walkthrough
+        --work-root /abs/new-private-work --out-dir /abs/new-walkthrough \\
+        [--font-dir /abs/cjk-fonts]
+
+The harness starts the browser with ``HOME`` inside the work directory, so
+system-wide fonts are the only fonts it sees. On a host without a CJK font the
+Chinese labels still match but render as empty boxes. ``--font-dir`` copies
+the ``.otf``, ``.ttf`` and ``.ttc`` files of a directory into that isolated
+home before the host is installed, and the manifest lists their digests.
 """
 
 import hashlib
@@ -55,6 +62,7 @@ BLOCKED = {
     ),
 }
 STEP_NAMES = (*UI_STEPS, "select_skill", *BLOCKED)
+FONT_SUFFIXES = (".otf", ".ttf", ".ttc")
 
 
 def _ordinary():
@@ -220,10 +228,44 @@ def localized_run_ui(language: str, shooter: Shooter, run_ui=None):
     return run
 
 
-def walkthrough_composition(language: str, shooter: Shooter):
+def font_files(font_dir: Path) -> list[dict]:
+    """The regular font files of ``font_dir`` (no symlinks), with their digests."""
+    fonts = []
+    for path in sorted(Path(font_dir).iterdir()):
+        if path.is_symlink() or not path.is_file() or path.suffix.lower() not in FONT_SUFFIXES:
+            continue
+        payload = path.read_bytes()
+        fonts.append(
+            dict(
+                name=path.name,
+                sha256=hashlib.sha256(payload).hexdigest(),
+                bytes=len(payload),
+                path=path,
+            )
+        )
+    if not fonts:
+        raise ValueError("walkthrough_font_dir")
+    return fonts
+
+
+def install_fonts(font_dir: Path, home: Path) -> None:
+    """Copy the fonts into the browser's isolated ``HOME/.fonts`` (read by fontconfig)."""
+    target = Path(home) / ".fonts"
+    target.mkdir(mode=0o700, exist_ok=True)
+    for font in font_files(font_dir):
+        (target / font["name"]).write_bytes(font["path"].read_bytes())
+
+
+def walkthrough_composition(language: str, shooter: Shooter, font_dir: Path | None = None):
     """The ordinary composition with its native skill selection localized."""
 
     class WalkthroughComposition(ORDINARY.OrdinaryComposition):
+        def prepare_host(self, host, environment, work, config_path):
+            # Runs after the harness created the isolated home, before any browser starts.
+            if font_dir is not None:
+                install_fonts(font_dir, Path(environment["HOME"]))
+            return super().prepare_host(host, environment, work, config_path)
+
         def source_paths(self):
             # Bind the recorder source into the capture with the harness sources.
             return super().source_paths() + [HERE]
@@ -311,7 +353,9 @@ def _digest(evidence: dict, out: Path, evidence_id: str, path: Path) -> str:
     return evidence_id
 
 
-def build_manifest(out: Path, outcomes: dict, *, predicates: dict | None = None) -> dict:
+def build_manifest(
+    out: Path, outcomes: dict, *, predicates: dict | None = None, fonts: list | None = None
+) -> dict:
     """The walkthrough manifest for the languages recorded under ``out``."""
     out = Path(out)
     predicates = predicates or _default_predicates()
@@ -366,6 +410,7 @@ def build_manifest(out: Path, outcomes: dict, *, predicates: dict | None = None)
             recorder=hashlib.sha256(HERE.read_bytes()).hexdigest(),
         ),
         blocked={name: dict(value) for name, value in BLOCKED.items()},
+        fonts=[{key: font[key] for key in ("name", "sha256", "bytes")} for font in fonts or []],
         languages=languages,
         evidence=[evidence[key] for key in sorted(evidence)],
         complete=complete,
@@ -390,7 +435,7 @@ def child(args) -> int:
     shooter = Shooter(media)
     Browser.new_context = new_context
     ORDINARY.run_ui = localized_run_ui(args.language, shooter)
-    ORDINARY.OrdinaryComposition = walkthrough_composition(args.language, shooter)
+    ORDINARY.OrdinaryComposition = walkthrough_composition(args.language, shooter, args.font_dir)
     try:
         return ORDINARY.main(
             [
@@ -409,6 +454,10 @@ def child(args) -> int:
 
 def record(args) -> int:
     work_root, out = args.work_root.absolute(), args.out_dir.absolute()
+    fonts = None
+    if args.font_dir is not None:
+        args.font_dir = args.font_dir.absolute()
+        fonts = font_files(args.font_dir)
     work_root.mkdir(mode=0o700, parents=True, exist_ok=False)
     out.mkdir(mode=0o700, parents=True, exist_ok=False)
     outcomes = {}
@@ -419,18 +468,20 @@ def record(args) -> int:
         command += ["--tarball", str(args.tarball.absolute()), "--work-dir"]
         command += [str(work_root / language), "--out", str(media / "capture.json")]
         command += ["--media", str(media)]
+        if args.font_dir is not None:
+            command += ["--font-dir", str(args.font_dir)]
         try:
             code = subprocess.run(command, timeout=CHILD_SECONDS).returncode
         except subprocess.TimeoutExpired:
             code = None
         outcomes[language] = dict(exit_code=code)
-    manifest = build_manifest(out, outcomes)
+    manifest = build_manifest(out, outcomes, fonts=fonts)
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", "utf-8")
     print(json.dumps(dict(complete=manifest["complete"], manifest=str(out / "manifest.json"))))
     return 0 if manifest["complete"] else 2
 
 
-def main(argv=None) -> int:
+def parse_args(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -440,13 +491,19 @@ def main(argv=None) -> int:
     run.add_argument("--work-root", type=Path, required=True, help="new private directory")
     run.add_argument("--out-dir", type=Path, required=True, help="new output directory")
     run.add_argument("--languages", nargs="+", choices=LANGUAGES, default=list(LANGUAGES))
+    run.add_argument("--font-dir", type=Path, help="fonts for the isolated browser home")
     one = sub.add_parser("child", help="internal: one language")
     one.add_argument("--language", choices=LANGUAGES, required=True)
     one.add_argument("--tarball", type=Path, required=True)
     one.add_argument("--work-dir", type=Path, required=True)
     one.add_argument("--out", type=Path, required=True)
     one.add_argument("--media", type=Path, required=True)
-    args = parser.parse_args(argv)
+    one.add_argument("--font-dir", type=Path)
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> int:
+    args = parse_args(argv)
     return record(args) if args.command == "record" else child(args)
 
 
