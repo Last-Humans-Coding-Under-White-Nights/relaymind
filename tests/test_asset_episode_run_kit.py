@@ -8,6 +8,7 @@ episodes only, always unqualified.
 """
 
 import asyncio
+import dataclasses
 
 import pytest
 
@@ -47,13 +48,15 @@ def test_preregistration_reports_digests_and_acceptance_eligibility(tmp_path):
     assert record["freeze_digest"] == canonical_digest(freeze)
     assert record["episodes"] == 2
     assert record["acceptance_eligible"] is False
-    # The fixture corpus is a provisional fixture release, and too small.
+    # The fixture corpus is a provisional fixture release, and too small; its
+    # probes are not held out (section 12.6.5 requires held-out probe sets).
     assert record["reasons"] == [
         "below_minimum_episodes",
         "corpus_not_acceptance",
         "corpus_not_frozen",
+        "probes_not_held_out",
     ]
-    assert record["probes_not_held_out"] == 8  # diagnostic only
+    assert record["probes_not_held_out"] == 8
     assert record["unlabelled_probes"] == 0
     assert record["missing_pool_targets"] == 0
 
@@ -178,3 +181,14 @@ def test_a_changed_execution_identity_cannot_resume_an_episode_journal(tmp_path,
     arguments.update(change)
     with pytest.raises(JournalError, match="journal_binding"):
         asyncio.run(run_adaptation_episodes(episodes, freeze, release, arms, **arguments))
+
+
+def test_a_changed_corpus_release_cannot_resume_an_episode_journal(tmp_path):
+    """Spec 0.65 section 12.6.5 (RM42; AC33): the journal binds the corpus release
+    the episodes were run against, so restored results never mix two releases."""
+    release, freeze, episodes, arms = setup(tmp_path)
+    journal = tmp_path / "episodes.jsonl"
+    run(release, freeze, episodes, arms, journal)
+    other = dataclasses.replace(release, lock=dict(release.lock, release_id="other"))
+    with pytest.raises(JournalError, match="journal_binding"):
+        run(other, freeze, episodes, arms, journal)

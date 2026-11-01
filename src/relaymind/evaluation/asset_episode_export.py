@@ -88,9 +88,11 @@ def episode_preregistration(episodes: Mapping, freeze: Mapping, release=None) ->
     supplied, which can never be eligible). Section 12.6.5 requires at least
     100 independent episodes and section 12.6.1 an acceptance release frozen
     with custodian-reviewed labels; this check states only what the documents
-    show, never that labels are independent. Probe cases outside the
-    ``held_out`` split, probes with no included adjudication and correction
-    targets missing from the pool are counted as diagnostics.
+    show, never that labels are independent. Section 12.6.5 requires
+    held-out paraphrase/control/reset sets, so a probe case outside the
+    ``held_out`` split makes the set ineligible, as does a probe with no
+    included adjudication. Correction targets missing from the pool are
+    counted only: they are retained and graded incorrect.
     """
     from relaymind.evaluation.asset_whole_task_corpus import bind_episodes, release_labels
 
@@ -120,6 +122,8 @@ def episode_preregistration(episodes: Mapping, freeze: Mapping, release=None) ->
         not_held_out = sum(splits[case_id] != "held_out" for case_id in probes)
         unlabelled = sum(case_id not in labels for e in rows for _, case_id in probe_plan(e))
         missing = sum(c["target_asset_id"] not in assets for e in rows for c in e["corrections"])
+        if not_held_out:
+            reasons.append("probes_not_held_out")
         if unlabelled:
             reasons.append("unlabelled_probes")
     return dict(

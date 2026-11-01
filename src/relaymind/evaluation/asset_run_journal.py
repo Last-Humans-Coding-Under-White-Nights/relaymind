@@ -13,7 +13,9 @@ work begins and ``finished`` holds the conserved outcome, so a crash leaves a
 started entry that the driver must account for, never silently rerun.
 
 Only an unterminated trailing record (a torn final write) is dropped; any other
-malformed record rejects the journal. One runner at a time holds the journal
+malformed record rejects the journal. A file with no complete record (a crash
+while the header was written) cannot hold a started row and is initialized
+again. One runner at a time holds the journal
 through an exclusive lock file, which a crashed runner leaves behind for the
 operator to remove after checking no runner is still alive.
 """
@@ -93,6 +95,13 @@ class RunJournal:
         if os.name != "nt":
             os.chmod(self.path, 0o600)
         payload = self.path.read_bytes()
+        if b"\n" not in payload:
+            # A crash while the header was written: no record completed, so no
+            # row can have started. Write the header again.
+            self._file = open(self.path, "r+b")  # noqa: SIM115 - held until close()
+            self._file.truncate(0)
+            self._append(dict(self.header, type="header"))
+            return
         complete, _, torn = payload.rpartition(b"\n")
         lines = complete.split(b"\n") if complete else []
         records = []

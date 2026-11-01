@@ -94,7 +94,9 @@ def control_ui_labels() -> tuple[dict, dict]:
 
 
 _ENGLISH, _CHINESE = control_ui_labels()
-_NUMBERED = {"choose": re.compile(r"Choose (\d+)"), "correction": re.compile(r"Correct to (\d+)")}
+_NUMBERED = {
+    key: re.compile(re.escape(_ENGLISH[key]) + r" (\d+)") for key in ("choose", "correction")
+}
 
 
 # The number part of a numbered-label regex: digits, digit classes and quantifiers only.
@@ -563,15 +565,15 @@ def run_child(command: list[str], timeout: float, grace: float = STOP_GRACE_SECO
     """Run one language in its own session and return its exit code.
 
     On timeout (``subprocess.TimeoutExpired``) or interruption the whole
-    process group is stopped before the exception propagates, so no gateway or
-    proxy the harness started outlives it.
+    process group is stopped before the exception propagates; when the child
+    exits on its own (including a crash) any member it left in its group is
+    stopped too. No gateway or proxy the harness started outlives it.
     """
     process = subprocess.Popen(command, start_new_session=True)
     try:
         return process.wait(timeout=timeout)
-    except BaseException:
+    finally:
         _stop_group(process, grace)
-        raise
 
 
 # --- commands -------------------------------------------------------------------------
@@ -619,6 +621,9 @@ def _refused(reason: str) -> int:
 
 def record(args) -> int:
     work_root, out = args.work_root.absolute(), args.out_dir.absolute()
+    # One child and one media directory per language: a repeat is refused first.
+    if len(set(args.languages)) != len(args.languages):
+        return _refused("languages_repeated")
     # Both must be new; an existing one is refused before either is created.
     for path, reason in ((work_root, "work_root_exists"), (out, "out_dir_exists")):
         if path.exists() or path.is_symlink():

@@ -656,3 +656,47 @@ def test_child_restores_every_patched_harness_attribute(rec, tmp_path, monkeypat
     assert (rec.ORDINARY.run_ui, rec.ORDINARY.OrdinaryComposition, Browser.new_context) == (
         originals
     )
+
+
+# --- third review follow-ups (PR #262) ----------------------------------------
+
+EXITING_CHILD = r"""
+import subprocess, sys
+grand = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"])
+open(sys.argv[1], "w").write(str(grand.pid))
+raise SystemExit(3)
+"""
+
+
+@pytest.mark.skipif(__import__("sys").platform == "win32", reason="POSIX process groups")
+def test_a_child_that_exits_on_its_own_leaves_nothing_running(rec, tmp_path):
+    """RM39/AC30: a crashed child's gateway or proxy never outlives it."""
+    import sys
+
+    script = tmp_path / "exiting_child.py"
+    script.write_text(EXITING_CHILD, encoding="utf-8")
+    pid_file = tmp_path / "grandchild.pid"
+    command = [sys.executable, str(script), str(pid_file)]
+    assert rec.run_child(command, timeout=30, grace=0.5) == 3
+    assert not _alive(int(pid_file.read_text()))
+
+
+def test_record_refuses_a_repeated_language_before_creating_anything(
+    rec, tmp_path, monkeypatch, capsys
+):
+    """RM39/AC30: a repeated language is a structured refusal, not a crash."""
+    monkeypatch.setattr(rec, "run_child", lambda command, timeout: pytest.fail("ran"))
+    tarball = tmp_path / "plugin.tgz"
+    tarball.write_bytes(b"tgz")
+    argv = ["record", "--tarball", str(tarball), "--work-root", str(tmp_path / "work")]
+    argv += ["--out-dir", str(tmp_path / "out"), "--languages", "en-US", "en-US"]
+    assert rec.main(argv) == 2
+    outcome = json.loads(capsys.readouterr().out)
+    assert outcome == dict(complete=False, reason="languages_repeated", manifest=None)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["plugin.tgz"]
+
+
+def test_numbered_labels_follow_the_control_ui_table(rec):
+    """The numbered label families are built from the parsed Control UI labels."""
+    for key, pattern in rec._NUMBERED.items():
+        assert pattern.fullmatch(f"{rec._ENGLISH[key]} 7").group(1) == "7"

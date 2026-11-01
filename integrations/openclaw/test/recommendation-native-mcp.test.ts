@@ -1307,3 +1307,63 @@ it("checks registration once for a concurrent same-key request waiting on the in
   expect(f.replies).toHaveLength(2);
   expect(registrations(f)).toBe(baseline + 1);
 });
+
+/**
+ * Spec 0.65 section 7.6.2 condition 1 (RM39; AC35): "a not_dispatched receipt
+ * proves no native dispatch for this attempt" and "the same key may only
+ * recover its historical receipt after current authorization checks". When
+ * the first attempt dispatches and settles while a same-key request is still
+ * awaiting its registration check, the second request must recover that
+ * settled receipt, never a stale pre-await view reported as not_dispatched.
+ */
+it("recovers the receipt settled while a same-key request awaited its registration check", async () => {
+  const f = setup();
+  let decide: () => void = () => {};
+  f.setDecision(
+    (r: any) =>
+      new Promise((resolve) => {
+        decide = () =>
+          resolve({
+            decision: "allow-once",
+            approvalId: "approval-1",
+            operationId: r.operationId,
+            argumentsDigest: r.argumentsDigest,
+          });
+      }),
+  );
+  const first = f.run();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  // The second request's registration check waits until the first settles.
+  let releaseRegistration: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    releaseRegistration = resolve;
+  });
+  const original = f.deps.actionClient;
+  let gated = false;
+  f.deps.actionClient = async (...args: any[]) => {
+    const client = await original(...args);
+    // Only the very next check (the second request's) waits on the gate.
+    const wait = !gated;
+    gated = true;
+    return {
+      listFeedback: async (...rest: any[]) => {
+        if (wait) await gate;
+        return client.listFeedback(...rest);
+      },
+    };
+  };
+  const second = f.handler(f.options);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  decide();
+  await first;
+  expect(f.replies[0]?.[1]).toEqual(
+    receipt("completed", "ok", {
+      nativeRunId: "native-run-1",
+      nativeCallId: "native-call-1",
+    }),
+  );
+  releaseRegistration();
+  await second;
+  expect(f.replies[1]).toEqual(f.replies[0]);
+  expect(f.invokes()).toBe(1);
+});
