@@ -967,3 +967,23 @@ def test_base_config_root_dotted_keys_keep_their_table(tmp_path):
     parsed = tomllib.loads(_config(tmp_path, base, tmp_path, 1234).read_text())
     assert parsed["store"]["path"] == str(tmp_path / "runs.sqlite")
     assert parsed["server"] == {"host": "127.0.0.1", "port": 1234}
+
+
+def test_loopback_gateway_ignores_operator_proxy(tmp_path, monkeypatch):
+    """RM38/AC29: proxy settings must not divert local measurement traffic."""
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
+    monkeypatch.setenv("ALL_PROXY", "http://127.0.0.1:1")
+    monkeypatch.setenv("NO_PROXY", "")
+    generate_catalog(tmp_path / "catalog", 3)
+    base = _base(tmp_path, monkeypatch)
+
+    async def go():
+        async with serve(tmp_path / "work", tmp_path / "catalog", base_config=base, timeout=10) as (
+            _,
+            client,
+        ):
+            response = await client.get("/relay/v1/recommendations/readiness")
+            assert response.status_code == 200
+            assert response.json()["state"] == "ready"
+
+    asyncio.run(go())

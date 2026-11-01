@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "lock",
+    "lock_digest",
+    "production_config",
+    "production_config_digest",
+    "split",
+    "track",
+    "seed",
+    "repetitions",
+    "warmups",
+    "environment_lock",
+    "environment_lock_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "lock": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "x-maxBytes": 2048,
+      "x-relative": true
+    },
+    "lock_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "production_config": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "x-maxBytes": 2048,
+      "x-relative": true
+    },
+    "production_config_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "split": {
+      "enum": [
+        "development",
+        "held_out",
+        "diagnostic"
+      ]
+    },
+    "track": {
+      "enum": [
+        "primary_only",
+        "service"
+      ]
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "repetitions": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "warmups": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "environment_lock": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "x-maxBytes": 2048,
+      "x-relative": true
+    },
+    "environment_lock_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+    },
+    "preparation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {
+            "mode": {
+              "enum": [
+                "none",
+                "http"
+              ]
+            },
+            "url": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "profile": {
+              "enum": [
+                null,
+                "cold",
+                "reuse"
+              ]
+            },
+            "total_ms": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 600000
+            },
+            "request_ms": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "poll_ms": {
+              "type": "integer",
+              "minimum": 50,
+              "maximum": 5000
+            },
+            "max_polls": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "profile"
+          ],
+          "properties": {
+            "mode": {
+              "const": "local"
+            },
+            "url": {
+              "type": "null"
+            },
+            "profile": {
+              "const": "cold"
+            },
+            "total_ms": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60000
+            },
+            "request_ms": {
+              "const": 2000
+            },
+            "poll_ms": {
+              "const": 250
+            },
+            "max_polls": {
+              "const": 240
+            }
+          }
+        }
+      ]
+    }
+  }
+}

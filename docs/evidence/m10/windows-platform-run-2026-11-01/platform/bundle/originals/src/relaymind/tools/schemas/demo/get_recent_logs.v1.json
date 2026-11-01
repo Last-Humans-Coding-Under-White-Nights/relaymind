@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaymind.local/schemas/demo/get_recent_logs.v1.json",
+  "title": "get_recent_logs",
+  "description": "Read the most recent log entries of one demo service, newest first, capped at limit.",
+  "input_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "service": {
+        "title": "service",
+        "x-relaymind-label": {
+          "en": "service",
+          "zh": "服务"
+        },
+        "enum": [
+          "staging-api",
+          "payments-api"
+        ]
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100
+      }
+    },
+    "required": [
+      "service",
+      "limit"
+    ],
+    "additionalProperties": false
+  },
+  "output_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "service": {
+        "enum": [
+          "staging-api",
+          "payments-api"
+        ]
+      },
+      "entries": {
+        "type": "array",
+        "maxItems": 100,
+        "items": {
+          "type": "object",
+          "properties": {
+            "timestamp": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+            },
+            "level": {
+              "enum": [
+                "debug",
+                "info",
+                "warning",
+                "error"
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "timestamp",
+            "level",
+            "message",
+            "source"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "truncated": {
+        "type": "boolean"
+      },
+      "fixture": {
+        "type": "object",
+        "description": "Sandbox fixture scenario and observation metadata (spec section 9).",
+        "properties": {
+          "scenario": {
+            "type": "string",
+            "minLength": 1
+          },
+          "observed_at": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          }
+        },
+        "required": [
+          "scenario",
+          "observed_at"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "service",
+      "entries",
+      "truncated",
+      "fixture"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,5 @@
+﻿operations.json: ok (startups useful 0/10, scheduled useful 115/120 (p95 service 31.00000019185245 ms, scheduled 63.00000008195639 ms), batches visible 2/4, gateway-only memory increment 36864 bytes, harness errors [])
+{"status": "graded", "gate": "not_applicable", "reason": null}
+platform/platform.json: ok (Windows AMD64: install=passed, configure=passed, recommend=not_run, choose=not_run, skill_use=not_run, mcp_use=not_run, feedback=not_run, delete=not_run, reset=not_run, restart=not_run, uninstall=passed)
+{"status": "graded", "gate": "not_applicable", "reason": null}
+platform-rerun/platform.json: ok (Windows AMD64: install=passed, configure=passed, recommend=not_run, choose=not_run, skill_use=not_run, mcp_use=not_run, feedback=not_run, delete=not_run, reset=not_run, restart=not_run, uninstall=passed)

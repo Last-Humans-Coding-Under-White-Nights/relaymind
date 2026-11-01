@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relaymind.local/schemas/selection_result.v1.json",
+  "title": "SelectionResult",
+  "description": "What a skill selector returns (spec 0.31 RM28, section 8). The candidate is a skill, a clarification, or none. tools optionally narrows the selected skill's allowed tools; the gateway intersects it with the allowlist, so it can only remove tools (RM08). confidence is selector-reported, never a calibrated probability (RM04). alternatives are other skill IDs the selector judges relevant; the gateway ignores them for admission. model_calls are the model calls the selector reports having made. Unknown fields are rejected.",
+  "type": "object",
+  "properties": {
+    "schema_version": {"const": 1},
+    "candidate": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {"const": "skill"},
+            "skill_id": {"type": "string", "pattern": "\\S"}
+          },
+          "required": ["kind", "skill_id"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {"const": "clarify"},
+            "clarification": {"type": "string", "pattern": "\\S"}
+          },
+          "required": ["kind", "clarification"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {"kind": {"const": "none"}},
+          "required": ["kind"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "tools": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "\\S"},
+      "uniqueItems": true
+    },
+    "mechanism": {"type": "string", "pattern": "\\S"},
+    "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "alternatives": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "\\S"},
+      "uniqueItems": true
+    },
+    "selector": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string", "pattern": "\\S"},
+        "version": {"type": "string", "pattern": "\\S"}
+      },
+      "required": ["name", "version"],
+      "additionalProperties": false
+    },
+    "model_calls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "model": {"type": "string", "pattern": "\\S"},
+          "call_id": {"type": "string", "pattern": "\\S"}
+        },
+        "required": ["model"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["schema_version", "candidate", "mechanism", "confidence", "selector", "model_calls"],
+  "additionalProperties": false
+}

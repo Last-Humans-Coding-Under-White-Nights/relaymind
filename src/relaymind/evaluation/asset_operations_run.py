@@ -403,6 +403,7 @@ async def _gateway(
             base_url=f"http://127.0.0.1:{port}",
             headers={"Authorization": "Bearer " + token},
             timeout=10,
+            trust_env=False,
         ) as client:
             await (_wait_ready if recommendations else _wait_serving)(client, deadline, process)
             yield Gateway(process.pid, client, control)

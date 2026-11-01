@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "dataset_id",
+    "release",
+    "cases",
+    "split_review_evidence_ids"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "dataset_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "x-maxBytes": 256
+    },
+    "release": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "split",
+          "task_family_ids",
+          "target_asset_family_ids",
+          "lane",
+          "task_text",
+          "conversation",
+          "requested_kinds",
+          "language_tags",
+          "code_switched",
+          "author_ids",
+          "authorship",
+          "authorship_evidence_ids",
+          "derived_from_case_id",
+          "source_case_evidence_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-maxBytes": 256
+          },
+          "split": {
+            "enum": [
+              "development",
+              "held_out",
+              "diagnostic"
+            ]
+          },
+          "task_family_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "minItems": 1,
+            "uniqueItems": true,
+            "x-sorted": true
+          },
+          "target_asset_family_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          },
+          "lane": {
+            "enum": [
+              "zh_hans_to_zh_hans",
+              "en_to_en",
+              "zh_hans_to_en",
+              "en_to_zh_hans",
+              "code_switch",
+              "zh_hant_diagnostic"
+            ]
+          },
+          "task_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192,
+            "x-maxBytes": 8192
+          },
+          "conversation": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "role",
+                "text"
+              ],
+              "properties": {
+                "role": {
+                  "enum": [
+                    "system",
+                    "developer",
+                    "user",
+                    "assistant"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "maxItems": 32
+          },
+          "requested_kinds": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "skill",
+                "mcp_tool"
+              ]
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "language_tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9-]{1,64}$(?![\\s\\S])"
+            },
+            "maxItems": 32,
+            "uniqueItems": true,
+            "x-sorted": true
+          },
+          "code_switched": {
+            "type": "boolean"
+          },
+          "author_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          },
+          "authorship": {
+            "enum": [
+              "original",
+              "translated",
+              "generated"
+            ]
+          },
+          "authorship_evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "uniqueItems": true,
+            "x-sorted": true
+          },
+          "derived_from_case_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "x-maxBytes": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_case_evidence_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "x-maxBytes": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "maxItems": 10000
+    },
+    "split_review_evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "x-maxBytes": 256
+      },
+      "uniqueItems": true,
+      "x-sorted": true
+    }
+  }
+}

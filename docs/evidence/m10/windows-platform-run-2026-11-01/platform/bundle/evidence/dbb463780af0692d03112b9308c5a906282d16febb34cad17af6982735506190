@@ -1,0 +1,333 @@
+{
+  "kind": "asset-operations-run",
+  "schema_version": 1,
+  "qualification": "fixture",
+  "acceptance": "not_applicable",
+  "acceptance_reason": "not_an_acceptance_platform",
+  "environment": {
+    "os": "Windows",
+    "os_version": "Windows 10.0.26300",
+    "architecture": "AMD64",
+    "cpu": "AMD Ryzen 5 3600 6-Core Processor",
+    "ram_bytes": 68671221760,
+    "gpu": [
+      {
+        "model": "NVIDIA GeForce RTX 5060 Ti",
+        "device": null,
+        "cores": null
+      }
+    ],
+    "python": "3.12.10",
+    "dependencies_digest": "fdc8072a2a447f5b61638caac0c4f3abe319d20c29c5c412f7e7d2273140e5d9",
+    "runtime": null,
+    "runtime_version": null,
+    "runtime_config_digest": null
+  },
+  "runner": {
+    "label": "owner Windows PC",
+    "variables": {
+      "RUNNER_OS": null,
+      "RUNNER_ARCH": null,
+      "RUNNER_ENVIRONMENT": null,
+      "ImageOS": null,
+      "ImageVersion": null,
+      "GITHUB_RUN_ID": null,
+      "GITHUB_RUN_ATTEMPT": null,
+      "GITHUB_SHA": null,
+      "GITHUB_REF": null
+    }
+  },
+  "catalog": {
+    "assets": 300,
+    "generated": true,
+    "committed_acceptance_catalog": false,
+    "reason": "committed_acceptance_catalog_unavailable"
+  },
+  "bounds": {
+    "launches": 10,
+    "startup_to_first_lexical_ms": 1000,
+    "batches": 4,
+    "batch_records": 25,
+    "receipt_to_visibility_ms": 1000,
+    "workload_seconds": 60,
+    "requests_per_second": 2,
+    "concurrency": 1,
+    "service_p95_ms": 300,
+    "scheduled_p95_ms": 300,
+    "slot_deadline_ms": 500,
+    "incremental_memory_bytes": 1073741824
+  },
+  "startups": [
+    {
+      "ordinal": 0,
+      "process_started_at": 1202331.406,
+      "first_useful_at": null,
+      "pid": null,
+      "attempts": [],
+      "outcome": "failed",
+      "error": "deadline_exceeded",
+      "readiness": null,
+      "provenance": "fixture"
+    },
+    {
+      "ordinal": 1,
+      "process_started_at": 1202332.406,
+      "first_useful_at": null,
+      "pid": null,
+      "attempts": [],
+      "outcome": "failed",
+      "error": "deadline_exceeded",
+      "readiness": null,
+      "provenance": "fixture"
+    },
+    {
+      "ordinal": 2,
+      "process_started_at": 1202333.421,
+      "first_useful_at": null,
+      "pid": null,
+      "attempts": [],
+      "outcome": "failed",
+      "error": "deadline_exceeded",
+      "readiness": null,
+      "provenance": "fixture"
+    },
+    {
+      "ordinal": 3,
+      "process_started_at": 1202334.421,
+      "first_useful_at": null,
+      "pid": null,
+      "attempts": [],
+      "outcome": "failed",
+      "error": "deadline_exceeded",
+      "readiness": null,
+      "provenance": "fixture"
+    },
+    {
+      "ordinal": 4,
+      "process_started_at": 1202335.437,
+      "first_useful_at": null,
+      "pid": null,
+      "attempts": [],
+      "outcome": "failed",
+      "error": "deadline_exceeded",
+      "readiness": null,
+      "provenance": "fixture"
+    },
+    {
+      "ordinal": 5,
+      "process_started_at": 1202336.437,
+      "first_useful_at": null,
+      "pid": null,
+      "attempts": [],
+      "outcome": "failed",
+      "error": "deadline_exceeded",
+      "readiness": null,
+      "provenance": "fixture"
+    },
+    {
+      "ordinal": 6,
+      "process_started_at": 1202337.453,
+      "first_useful_at": null,
+      "pid": null,
+      "attempts": [],
+      "outcome": "failed",
+      "error": "deadline_exceeded",
+      "readiness": null,
+      "provenance": "fixture"
+    },
+    {
+      "ordinal": 7,
+      "process_started_at": 1202338.468,
+      "first_useful_at": null,
+      "pid": null,
+      "attempts": [],
+      "outcome": "failed",
+      "error": "deadline_exceeded",
+      "readiness": null,
+      "provenance": "fixture"
+    },
+    {
+      "ordinal": 8,
+      "process_started_at": 1202339.484,
+      "first_useful_at": null,
+      "pid": null,
+      "attempts": [],
+      "outcome": "failed",
+      "error": "deadline_exceeded",
+      "readiness": null,
+      "provenance": "fixture"
+    },
+    {
+      "ordinal": 9,
+      "process_started_at": 1202340.5,
+      "first_useful_at": null,
+      "pid": null,
+      "attempts": [],
+      "outcome": "failed",
+      "error": "deadline_exceeded",
+      "readiness": null,
+      "provenance": "fixture"
+    }
+  ],
+  "workload": {
+    "provenance": "fixture",
+    "identities": {},
+    "environment": {
+      "os": "Windows",
+      "os_version": "Windows 10.0.26300",
+      "architecture": "AMD64",
+      "cpu": "AMD Ryzen 5 3600 6-Core Processor",
+      "ram_bytes": 68671221760,
+      "gpu": [
+        {
+          "model": "NVIDIA GeForce RTX 5060 Ti",
+          "device": null,
+          "cores": null
+        }
+      ],
+      "python": "3.12.10",
+      "dependencies_digest": "fdc8072a2a447f5b61638caac0c4f3abe319d20c29c5c412f7e7d2273140e5d9",
+      "runtime": null,
+      "runtime_version": null,
+      "runtime_config_digest": null
+    },
+    "requests": [],
+    "batches": [],
+    "rebuild": null,
+    "jobs": [],
+    "errors": [],
+    "origin_at": null,
+    "origin_utc": null
+  },
+  "memory": {
+    "baseline_bytes": null,
+    "peak_bytes": null,
+    "counter_source": "tasklist_working_set",
+    "coverage": [
+      "gateway"
+    ],
+    "phases": [
+      "startup",
+      "rebuild",
+      "import",
+      "query"
+    ],
+    "complete": false
+  },
+  "memory_samples": {
+    "counter": "tasklist_working_set",
+    "baseline_bytes": null,
+    "startup_bytes": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "workload_bytes": [],
+    "peak_bytes": null,
+    "increment_bytes": null
+  },
+  "harness_errors": [
+    "baseline_TimeoutError",
+    "workload_TimeoutError"
+  ],
+  "summary": {
+    "provenance": "fixture",
+    "identities": {},
+    "environment": {
+      "os": "Windows",
+      "os_version": "Windows 10.0.26300",
+      "architecture": "AMD64",
+      "cpu": "AMD Ryzen 5 3600 6-Core Processor",
+      "ram_bytes": 68671221760,
+      "gpu": [
+        {
+          "model": "NVIDIA GeForce RTX 5060 Ti",
+          "device": null,
+          "cores": null
+        }
+      ],
+      "python": "3.12.10",
+      "dependencies_digest": "fdc8072a2a447f5b61638caac0c4f3abe319d20c29c5c412f7e7d2273140e5d9",
+      "runtime": null,
+      "runtime_version": null,
+      "runtime_config_digest": null
+    },
+    "startup": {
+      "denominator": 10,
+      "observed": 10,
+      "useful": 0,
+      "missing": 0,
+      "elapsed_ms": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "passes": false
+    },
+    "scheduled": {
+      "denominator": 120,
+      "observed": 0,
+      "missing": 120,
+      "useful": 0,
+      "failed": 0,
+      "delayed": 0,
+      "service_observed_count": 0,
+      "client_elapsed_count": 0,
+      "scheduled_elapsed_count": 0,
+      "client_elapsed_ms": [],
+      "scheduled_elapsed_ms": [],
+      "scheduling_delay_ms": [],
+      "p95_observed_ms": null,
+      "p95_client_elapsed_ms": null,
+      "p95_scheduled_elapsed_ms": null,
+      "passes": false
+    },
+    "batches": {
+      "denominator": 4,
+      "observed": 0,
+      "visible": 0,
+      "coverage": 0,
+      "reported_coverage": 0,
+      "receipt_to_visibility_ms": [],
+      "passes": false
+    },
+    "memory": {
+      "incremental_bytes": null,
+      "passes": null,
+      "counter_source": "tasklist_working_set",
+      "coverage": [
+        "gateway"
+      ],
+      "phases": [
+        "startup",
+        "rebuild",
+        "import",
+        "query"
+      ]
+    },
+    "cost_observations": {
+      "observed": 0,
+      "reported": 0,
+      "unknown_attempts": 0
+    },
+    "fallbacks": 0,
+    "rebuild": null,
+    "jobs": [],
+    "contention_observed": null,
+    "errors": []
+  }
+}

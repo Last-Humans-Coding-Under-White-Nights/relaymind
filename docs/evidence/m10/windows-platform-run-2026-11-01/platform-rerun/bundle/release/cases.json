@@ -1,0 +1,250 @@
+{
+  "schema_version": 1,
+  "dataset_id": "fixture-small",
+  "release": 1,
+  "cases": [
+    {
+      "id": "case-01",
+      "split": "development",
+      "task_family_ids": [
+        "task-calendar"
+      ],
+      "target_asset_family_ids": [
+        "calendar-family"
+      ],
+      "lane": "en_to_en",
+      "task_text": "Show my calendar 01",
+      "conversation": [],
+      "requested_kinds": [
+        "skill",
+        "mcp_tool"
+      ],
+      "language_tags": [
+        "en"
+      ],
+      "code_switched": false,
+      "author_ids": [
+        "author"
+      ],
+      "authorship": "original",
+      "authorship_evidence_ids": [
+        "authorship"
+      ],
+      "derived_from_case_id": null,
+      "source_case_evidence_id": null
+    },
+    {
+      "id": "case-02",
+      "split": "development",
+      "task_family_ids": [
+        "task-calendar"
+      ],
+      "target_asset_family_ids": [
+        "calendar-family"
+      ],
+      "lane": "en_to_en",
+      "task_text": "Show my calendar 02",
+      "conversation": [],
+      "requested_kinds": [
+        "skill",
+        "mcp_tool"
+      ],
+      "language_tags": [
+        "en"
+      ],
+      "code_switched": false,
+      "author_ids": [
+        "author"
+      ],
+      "authorship": "original",
+      "authorship_evidence_ids": [
+        "authorship"
+      ],
+      "derived_from_case_id": null,
+      "source_case_evidence_id": null
+    },
+    {
+      "id": "case-03",
+      "split": "development",
+      "task_family_ids": [
+        "task-calendar"
+      ],
+      "target_asset_family_ids": [
+        "calendar-family"
+      ],
+      "lane": "en_to_en",
+      "task_text": "Show my calendar 03",
+      "conversation": [],
+      "requested_kinds": [
+        "skill",
+        "mcp_tool"
+      ],
+      "language_tags": [
+        "en"
+      ],
+      "code_switched": false,
+      "author_ids": [
+        "author"
+      ],
+      "authorship": "original",
+      "authorship_evidence_ids": [
+        "authorship"
+      ],
+      "derived_from_case_id": null,
+      "source_case_evidence_id": null
+    },
+    {
+      "id": "case-04",
+      "split": "development",
+      "task_family_ids": [
+        "task-calendar"
+      ],
+      "target_asset_family_ids": [
+        "calendar-family"
+      ],
+      "lane": "en_to_en",
+      "task_text": "Show my calendar 04",
+      "conversation": [],
+      "requested_kinds": [
+        "skill",
+        "mcp_tool"
+      ],
+      "language_tags": [
+        "en"
+      ],
+      "code_switched": false,
+      "author_ids": [
+        "author"
+      ],
+      "authorship": "original",
+      "authorship_evidence_ids": [
+        "authorship"
+      ],
+      "derived_from_case_id": null,
+      "source_case_evidence_id": null
+    },
+    {
+      "id": "case-05",
+      "split": "development",
+      "task_family_ids": [
+        "task-calendar"
+      ],
+      "target_asset_family_ids": [
+        "calendar-family"
+      ],
+      "lane": "en_to_en",
+      "task_text": "Show my calendar 05",
+      "conversation": [],
+      "requested_kinds": [
+        "skill",
+        "mcp_tool"
+      ],
+      "language_tags": [
+        "en"
+      ],
+      "code_switched": false,
+      "author_ids": [
+        "author"
+      ],
+      "authorship": "original",
+      "authorship_evidence_ids": [
+        "authorship"
+      ],
+      "derived_from_case_id": null,
+      "source_case_evidence_id": null
+    },
+    {
+      "id": "case-06",
+      "split": "development",
+      "task_family_ids": [
+        "task-calendar"
+      ],
+      "target_asset_family_ids": [
+        "calendar-family"
+      ],
+      "lane": "en_to_en",
+      "task_text": "Show my calendar 06",
+      "conversation": [],
+      "requested_kinds": [
+        "skill",
+        "mcp_tool"
+      ],
+      "language_tags": [
+        "en"
+      ],
+      "code_switched": false,
+      "author_ids": [
+        "author"
+      ],
+      "authorship": "original",
+      "authorship_evidence_ids": [
+        "authorship"
+      ],
+      "derived_from_case_id": null,
+      "source_case_evidence_id": null
+    },
+    {
+      "id": "case-07",
+      "split": "development",
+      "task_family_ids": [
+        "task-calendar"
+      ],
+      "target_asset_family_ids": [
+        "calendar-family"
+      ],
+      "lane": "en_to_en",
+      "task_text": "Show my calendar 07",
+      "conversation": [],
+      "requested_kinds": [
+        "skill",
+        "mcp_tool"
+      ],
+      "language_tags": [
+        "en"
+      ],
+      "code_switched": false,
+      "author_ids": [
+        "author"
+      ],
+      "authorship": "original",
+      "authorship_evidence_ids": [
+        "authorship"
+      ],
+      "derived_from_case_id": null,
+      "source_case_evidence_id": null
+    },
+    {
+      "id": "case-a",
+      "split": "development",
+      "task_family_ids": [
+        "task-calendar"
+      ],
+      "target_asset_family_ids": [
+        "calendar-family"
+      ],
+      "lane": "en_to_en",
+      "task_text": "Show my calendar 00",
+      "conversation": [],
+      "requested_kinds": [
+        "skill",
+        "mcp_tool"
+      ],
+      "language_tags": [
+        "en"
+      ],
+      "code_switched": false,
+      "author_ids": [
+        "author"
+      ],
+      "authorship": "original",
+      "authorship_evidence_ids": [
+        "authorship"
+      ],
+      "derived_from_case_id": null,
+      "source_case_evidence_id": null
+    }
+  ],
+  "split_review_evidence_ids": [
+    "split_review"
+  ]
+}

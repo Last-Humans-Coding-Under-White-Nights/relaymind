@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "qualification": "fixture",
+  "input_digest": "e7bff7db91e84b3f3f98cec9e75267b540d564659bd011d27ad574bb50e7d24e",
+  "input_manifest": {
+    "path": "inputs.json",
+    "digest": "9cac9d0cc29b4bf7adf435bbd0088979dc6ce885f15a90c5e6666d2355ded5d2",
+    "bytes": 14143
+  },
+  "platform": {
+    "os": "Windows",
+    "os_version": "Windows 10.0.26300",
+    "architecture": "AMD64",
+    "cpu": "AMD Ryzen 5 3600 6-Core Processor",
+    "ram_bytes": 68671221760,
+    "gpu": [
+      {
+        "model": "NVIDIA GeForce RTX 5060 Ti",
+        "device": null,
+        "cores": null
+      }
+    ],
+    "python": "3.12.10",
+    "dependencies_digest": "fdc8072a2a447f5b61638caac0c4f3abe319d20c29c5c412f7e7d2273140e5d9",
+    "runtime": null,
+    "runtime_version": null,
+    "runtime_config_digest": null
+  },
+  "artifacts": [],
+  "steps": [
+    {
+      "name": "install",
+      "status": "passed",
+      "evidence_ids": [
+        "install-check"
+      ],
+      "reason": null
+    },
+    {
+      "name": "configure",
+      "status": "passed",
+      "evidence_ids": [
+        "install-check"
+      ],
+      "reason": null
+    },
+    {
+      "name": "recommend",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "ordinary_harness_linux_only"
+    },
+    {
+      "name": "choose",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "ordinary_harness_linux_only"
+    },
+    {
+      "name": "skill_use",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "skill_use_not_observed"
+    },
+    {
+      "name": "mcp_use",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "mcp_use_disabled"
+    },
+    {
+      "name": "feedback",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "ordinary_harness_linux_only"
+    },
+    {
+      "name": "delete",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "ordinary_harness_linux_only"
+    },
+    {
+      "name": "reset",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "ordinary_harness_linux_only"
+    },
+    {
+      "name": "restart",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "restart_not_observed"
+    },
+    {
+      "name": "uninstall",
+      "status": "passed",
+      "evidence_ids": [
+        "install-check"
+      ],
+      "reason": null
+    }
+  ],
+  "operations_evidence": {
+    "id": "operations-report",
+    "path": "evidence/dbb463780af0692d03112b9308c5a906282d16febb34cad17af6982735506190",
+    "sha256": "b99886d4c5db40419720956b00b45615e9a3a7fa150369d9f76b1bbef4b541f9",
+    "bytes": 7053699,
+    "provenance": "observed"
+  },
+  "approvals_evidence": [],
+  "evidence": [
+    {
+      "id": "install-check",
+      "path": "evidence/86355c3b3ba0bc98efa8c3942f9a2325d0ae2932d5a3ae593f3e8171a569f00a",
+      "sha256": "46b1d42861894256db67c27f65e486beae3b79798657c55815849edbae94a7a6",
+      "bytes": 129872,
+      "provenance": "observed"
+    },
+    {
+      "id": "operations-report",
+      "path": "evidence/dbb463780af0692d03112b9308c5a906282d16febb34cad17af6982735506190",
+      "sha256": "b99886d4c5db40419720956b00b45615e9a3a7fa150369d9f76b1bbef4b541f9",
+      "bytes": 7053699,
+      "provenance": "observed"
+    },
+    {
+      "id": "ordinary-capture",
+      "path": "evidence/1fa8b7800aa738093608f650c1d5aef296cff49beeff8eef2ef154322c07f2eb",
+      "sha256": "a58056945dfd3f17b6c5d21ed54d0f58119806b99e85b1fc29f585250c647598",
+      "bytes": 1394,
+      "provenance": "observed"
+    }
+  ],
+  "gate": "not_applicable"
+}

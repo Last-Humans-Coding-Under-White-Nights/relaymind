@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "identity": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "manifest_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "representation": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": "asset_fields.v1"
+        },
+        "normalization": {
+          "const": "NFC"
+        },
+        "query_prefix": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "document_prefix": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "max_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        },
+        "overflow": {
+          "const": "unavailable"
+        }
+      },
+      "required": [
+        "version",
+        "normalization",
+        "query_prefix",
+        "document_prefix",
+        "max_tokens",
+        "overflow"
+      ],
+      "additionalProperties": false
+    },
+    "index": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": "exact_cosine.v1"
+        },
+        "batch_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25
+        }
+      },
+      "required": [
+        "version",
+        "batch_size"
+      ],
+      "additionalProperties": false
+    },
+    "fusion": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": "weighted_rrf.v1"
+        },
+        "lexical_weight": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "semantic_weight": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "k": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "min_cosine": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "version",
+        "lexical_weight",
+        "semantic_weight",
+        "k",
+        "min_cosine"
+      ],
+      "additionalProperties": false
+    },
+    "confidence": {
+      "type": "object",
+      "properties": {
+        "min_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "min_margin": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "min_score",
+        "min_margin"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "identity",
+    "manifest_digest",
+    "representation",
+    "index",
+    "fusion",
+    "confidence"
+  ],
+  "additionalProperties": false
+}

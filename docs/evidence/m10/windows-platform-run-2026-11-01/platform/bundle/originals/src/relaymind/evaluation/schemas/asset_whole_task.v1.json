@@ -1,0 +1,423 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "relaymind:asset_whole_task.v1",
+  "title": "M10 host trial, adaptation episode and platform exports (spec 0.60 section 12.6.5)",
+  "description": "Shared Environment, ArtifactIdentity, Rate, Row and InputManifestV1 are merged from asset_benchmark_report.v1.json at load time; only DocumentRef.kind is extended, and only here.",
+  "$defs": {
+    "ID": {"type": "string", "minLength": 1, "maxLength": 256, "x-maxBytes": 256},
+    "H": {"type": "string", "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"},
+    "Time": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "IDSet": {"type": "array", "items": {"$ref": "#/$defs/ID"}, "maxItems": 100000, "uniqueItems": true, "x-sorted": true},
+    "Uint32": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "NonNegInt": {"type": "integer", "minimum": 0},
+    "PosInt": {"type": "integer", "minimum": 1},
+    "NonNegNumber": {"type": "number", "minimum": 0},
+    "Lane": {"enum": ["zh_hans_to_zh_hans", "en_to_en", "zh_hans_to_en", "en_to_zh_hans", "code_switch", "zh_hant_diagnostic"]},
+    "Arm": {"enum": ["native", "provider_only", "recommendations"]},
+    "Gate": {"enum": ["pass", "fail", "blocked"]},
+    "ManifestRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "digest", "bytes"],
+      "properties": {
+        "path": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 2048, "x-maxBytes": 2048, "x-relative": true}, {"type": "null"}]},
+        "digest": {"$ref": "#/$defs/H"},
+        "bytes": {"$ref": "#/$defs/NonNegInt"}
+      }
+    },
+    "EvidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "sha256", "bytes", "provenance"],
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "path": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 2048, "x-maxBytes": 2048, "x-relative": true}, {"type": "null"}]},
+        "sha256": {"$ref": "#/$defs/H"},
+        "bytes": {"$ref": "#/$defs/NonNegInt"},
+        "provenance": {"enum": ["observed", "reported", "fixture"]}
+      }
+    },
+    "EvidenceList": {"type": "array", "items": {"$ref": "#/$defs/EvidenceRef"}, "maxItems": 100000},
+    "AssetBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asset_id", "content_hash", "schema_hash"],
+      "properties": {
+        "asset_id": {"$ref": "#/$defs/ID"},
+        "content_hash": {"$ref": "#/$defs/H"},
+        "schema_hash": {"anyOf": [{"$ref": "#/$defs/H"}, {"type": "null"}]}
+      }
+    },
+    "HostArmConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arm", "provider", "model", "provider_config_digest", "sampling_config_digest", "host_config_digest", "recommendation_config_digest"],
+      "properties": {
+        "arm": {"$ref": "#/$defs/Arm"},
+        "provider": {"$ref": "#/$defs/ID"},
+        "model": {"$ref": "#/$defs/ID"},
+        "provider_config_digest": {"$ref": "#/$defs/H"},
+        "sampling_config_digest": {"$ref": "#/$defs/H"},
+        "host_config_digest": {"$ref": "#/$defs/H"},
+        "recommendation_config_digest": {"anyOf": [{"$ref": "#/$defs/H"}, {"type": "null"}]}
+      }
+    },
+    "HostFreezeV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "corpus_lock_digest", "configurations", "task_policies", "native_inventory_digest", "packages", "host", "asset_bindings", "rubric_evidence_ids"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "corpus_lock_digest": {"$ref": "#/$defs/H"},
+        "configurations": {"type": "array", "items": {"$ref": "#/$defs/HostArmConfig"}, "minItems": 3, "maxItems": 3},
+        "task_policies": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["task_id", "permissions", "budgets_digest"],
+            "properties": {
+              "task_id": {"$ref": "#/$defs/ID"},
+              "permissions": {"$ref": "#/$defs/IDSet"},
+              "budgets_digest": {"$ref": "#/$defs/H"}
+            }
+          }
+        },
+        "native_inventory_digest": {"$ref": "#/$defs/H"},
+        "packages": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "version", "sha256", "bytes", "evidence_id"],
+            "properties": {
+              "name": {"$ref": "#/$defs/ID"},
+              "version": {"$ref": "#/$defs/ID"},
+              "sha256": {"$ref": "#/$defs/H"},
+              "bytes": {"$ref": "#/$defs/NonNegInt"},
+              "evidence_id": {"$ref": "#/$defs/ID"}
+            }
+          }
+        },
+        "host": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version", "sdk_version", "distribution_evidence_ids"],
+          "properties": {
+            "name": {"$ref": "#/$defs/ID"},
+            "version": {"$ref": "#/$defs/ID"},
+            "sdk_version": {"$ref": "#/$defs/ID"},
+            "distribution_evidence_ids": {"$ref": "#/$defs/IDSet"}
+          }
+        },
+        "asset_bindings": {"type": "array", "items": {"$ref": "#/$defs/AssetBinding"}, "maxItems": 100000},
+        "rubric_evidence_ids": {"$ref": "#/$defs/IDSet"}
+      }
+    },
+    "HostTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "lane", "family_ids", "prompt_case_id", "setup_evidence_ids", "success_rubric_evidence_id", "permissions_digest", "budgets_digest", "asset_bindings", "mutation"],
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "lane": {"$ref": "#/$defs/Lane"},
+        "family_ids": {"$ref": "#/$defs/IDSet"},
+        "prompt_case_id": {"$ref": "#/$defs/ID"},
+        "setup_evidence_ids": {"$ref": "#/$defs/IDSet"},
+        "success_rubric_evidence_id": {"$ref": "#/$defs/ID"},
+        "permissions_digest": {"$ref": "#/$defs/H"},
+        "budgets_digest": {"$ref": "#/$defs/H"},
+        "asset_bindings": {"type": "array", "items": {"$ref": "#/$defs/AssetBinding"}, "maxItems": 10000},
+        "mutation": {"type": "boolean"}
+      }
+    },
+    "AssetHostTasksV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "kind", "corpus_lock_digest", "seed", "freeze_digest", "tasks"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "kind": {"enum": ["early_trial", "acceptance"]},
+        "corpus_lock_digest": {"$ref": "#/$defs/H"},
+        "seed": {"$ref": "#/$defs/Uint32"},
+        "freeze_digest": {"$ref": "#/$defs/H"},
+        "tasks": {"type": "array", "items": {"$ref": "#/$defs/HostTask"}, "maxItems": 33333}
+      }
+    },
+    "PlannedHostRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "arm", "ordinal"],
+      "properties": {
+        "task_id": {"$ref": "#/$defs/ID"},
+        "arm": {"$ref": "#/$defs/Arm"},
+        "ordinal": {"$ref": "#/$defs/PosInt"}
+      }
+    },
+    "HostAttempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "ordinal", "model", "provider", "external", "started_at", "ended_at", "input_tokens", "output_tokens", "cached_tokens", "reasoning_tokens", "total_tokens", "token_relationship", "calls", "usage_provenance", "evidence_ids", "outcome"],
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "ordinal": {"$ref": "#/$defs/PosInt"},
+        "model": {"$ref": "#/$defs/ID"},
+        "provider": {"$ref": "#/$defs/ID"},
+        "external": {"type": "boolean"},
+        "started_at": {"anyOf": [{"$ref": "#/$defs/Time"}, {"type": "null"}]},
+        "ended_at": {"anyOf": [{"$ref": "#/$defs/Time"}, {"type": "null"}]},
+        "input_tokens": {"anyOf": [{"$ref": "#/$defs/NonNegInt"}, {"type": "null"}]},
+        "output_tokens": {"anyOf": [{"$ref": "#/$defs/NonNegInt"}, {"type": "null"}]},
+        "cached_tokens": {"anyOf": [{"$ref": "#/$defs/NonNegInt"}, {"type": "null"}]},
+        "reasoning_tokens": {"anyOf": [{"$ref": "#/$defs/NonNegInt"}, {"type": "null"}]},
+        "total_tokens": {"anyOf": [{"$ref": "#/$defs/NonNegInt"}, {"type": "null"}]},
+        "token_relationship": {"enum": ["component_disjoint", "cached_within_input_reasoning_within_output", "unknown"]},
+        "calls": {"anyOf": [{"$ref": "#/$defs/NonNegInt"}, {"type": "null"}]},
+        "usage_provenance": {"enum": ["observed", "reported", "unknown"]},
+        "evidence_ids": {"$ref": "#/$defs/IDSet"},
+        "outcome": {"enum": ["success", "failed", "timeout", "cancelled", "unknown"]}
+      }
+    },
+    "HostRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "arm", "status", "success", "attempts", "elapsed_ms", "active_ms", "human_wait_ms", "interactions", "local_turns", "cpu_ms", "peak_bytes", "recommendation_ids", "host_session_id", "evidence_ids", "reason"],
+      "properties": {
+        "task_id": {"$ref": "#/$defs/ID"},
+        "arm": {"$ref": "#/$defs/Arm"},
+        "status": {"enum": ["completed", "failed", "timeout", "cancelled", "not_run"]},
+        "success": {"type": ["boolean", "null"]},
+        "attempts": {"type": "array", "items": {"$ref": "#/$defs/HostAttempt"}, "maxItems": 10000},
+        "elapsed_ms": {"anyOf": [{"$ref": "#/$defs/NonNegNumber"}, {"type": "null"}]},
+        "active_ms": {"anyOf": [{"$ref": "#/$defs/NonNegNumber"}, {"type": "null"}]},
+        "human_wait_ms": {"anyOf": [{"$ref": "#/$defs/NonNegNumber"}, {"type": "null"}]},
+        "interactions": {"anyOf": [{"$ref": "#/$defs/NonNegInt"}, {"type": "null"}]},
+        "local_turns": {"anyOf": [{"$ref": "#/$defs/NonNegInt"}, {"type": "null"}]},
+        "cpu_ms": {"anyOf": [{"$ref": "#/$defs/NonNegNumber"}, {"type": "null"}]},
+        "peak_bytes": {"anyOf": [{"$ref": "#/$defs/NonNegInt"}, {"type": "null"}]},
+        "recommendation_ids": {"$ref": "#/$defs/IDSet"},
+        "host_session_id": {"anyOf": [{"$ref": "#/$defs/ID"}, {"type": "null"}]},
+        "evidence_ids": {"$ref": "#/$defs/IDSet"},
+        "reason": {"anyOf": [{"$ref": "#/$defs/ID"}, {"type": "null"}]}
+      }
+    },
+    "ArmSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arm", "planned", "success", "failed", "not_run", "external_tokens", "external_calls", "unknown_cost_rows"],
+      "properties": {
+        "arm": {"$ref": "#/$defs/Arm"},
+        "planned": {"$ref": "#/$defs/NonNegInt"},
+        "success": {"$ref": "#/$defs/NonNegInt"},
+        "failed": {"$ref": "#/$defs/NonNegInt"},
+        "not_run": {"$ref": "#/$defs/NonNegInt"},
+        "external_tokens": {"anyOf": [{"$ref": "#/$defs/NonNegInt"}, {"type": "null"}]},
+        "external_calls": {"anyOf": [{"$ref": "#/$defs/NonNegInt"}, {"type": "null"}]},
+        "unknown_cost_rows": {"$ref": "#/$defs/NonNegInt"}
+      }
+    },
+    "LaneSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lane", "planned_tasks", "arms", "gains", "losses", "external_token_difference_per_task", "external_call_difference_per_task", "success_gate", "cost_gate", "gate"],
+      "properties": {
+        "lane": {"$ref": "#/$defs/Lane"},
+        "planned_tasks": {"$ref": "#/$defs/NonNegInt"},
+        "arms": {"type": "array", "items": {"$ref": "#/$defs/ArmSummary"}, "minItems": 3, "maxItems": 3},
+        "gains": {"$ref": "#/$defs/NonNegInt"},
+        "losses": {"$ref": "#/$defs/NonNegInt"},
+        "external_token_difference_per_task": {"type": ["number", "null"]},
+        "external_call_difference_per_task": {"type": ["number", "null"]},
+        "success_gate": {"$ref": "#/$defs/Gate"},
+        "cost_gate": {"$ref": "#/$defs/Gate"},
+        "gate": {"$ref": "#/$defs/Gate"}
+      }
+    },
+    "HostSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["planned_tasks", "arms", "gains", "losses", "external_token_difference_per_task", "external_call_difference_per_task", "success_gate", "cost_gate", "gate", "lanes"],
+      "properties": {
+        "planned_tasks": {"$ref": "#/$defs/NonNegInt"},
+        "arms": {"type": "array", "items": {"$ref": "#/$defs/ArmSummary"}, "minItems": 3, "maxItems": 3},
+        "gains": {"$ref": "#/$defs/NonNegInt"},
+        "losses": {"$ref": "#/$defs/NonNegInt"},
+        "external_token_difference_per_task": {"type": ["number", "null"]},
+        "external_call_difference_per_task": {"type": ["number", "null"]},
+        "success_gate": {"$ref": "#/$defs/Gate"},
+        "cost_gate": {"$ref": "#/$defs/Gate"},
+        "gate": {"$ref": "#/$defs/Gate"},
+        "lanes": {"type": "array", "items": {"$ref": "#/$defs/LaneSummary"}, "maxItems": 6}
+      }
+    },
+    "AssetHostReportV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "kind", "qualification", "input_digest", "freeze_digest", "input_manifest", "environment", "artifacts", "planned", "rows", "summary", "evidence"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "kind": {"enum": ["early_trial", "acceptance"]},
+        "qualification": {"enum": ["fixture", "provisional", "qualified"]},
+        "input_digest": {"$ref": "#/$defs/H"},
+        "freeze_digest": {"$ref": "#/$defs/H"},
+        "input_manifest": {"$ref": "#/$defs/ManifestRef"},
+        "environment": {"$ref": "#/$defs/Environment"},
+        "artifacts": {"type": "array", "items": {"$ref": "#/$defs/ArtifactIdentity"}, "maxItems": 10000},
+        "planned": {"type": "array", "items": {"$ref": "#/$defs/PlannedHostRow"}, "maxItems": 100000},
+        "rows": {"type": "array", "items": {"$ref": "#/$defs/HostRow"}, "maxItems": 100000},
+        "summary": {"$ref": "#/$defs/HostSummary"},
+        "evidence": {"$ref": "#/$defs/EvidenceList"}
+      }
+    },
+    "EpisodeFreezeV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "off_config_digest", "on_config_digest", "adaptation_config_digest", "seed"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "off_config_digest": {"$ref": "#/$defs/H"},
+        "on_config_digest": {"$ref": "#/$defs/H"},
+        "adaptation_config_digest": {"$ref": "#/$defs/H"},
+        "seed": {"$ref": "#/$defs/Uint32"}
+      }
+    },
+    "Correction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "target_asset_id", "content_hash", "schema_hash"],
+      "properties": {
+        "case_id": {"$ref": "#/$defs/ID"},
+        "target_asset_id": {"$ref": "#/$defs/ID"},
+        "content_hash": {"$ref": "#/$defs/H"},
+        "schema_hash": {"anyOf": [{"$ref": "#/$defs/H"}, {"type": "null"}]}
+      }
+    },
+    "Episode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "intent_family_ids", "corrections", "paraphrase_case_ids", "control_case_ids", "reset_probe_case_ids"],
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "intent_family_ids": {"$ref": "#/$defs/IDSet"},
+        "corrections": {"type": "array", "items": {"$ref": "#/$defs/Correction"}, "minItems": 3, "maxItems": 3},
+        "paraphrase_case_ids": {"allOf": [{"$ref": "#/$defs/IDSet"}, {"minItems": 1}]},
+        "control_case_ids": {"allOf": [{"$ref": "#/$defs/IDSet"}, {"minItems": 1}]},
+        "reset_probe_case_ids": {"allOf": [{"$ref": "#/$defs/IDSet"}, {"minItems": 1}]}
+      }
+    },
+    "AssetEpisodesV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "dataset_lock_digest", "config_digest", "episodes"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "dataset_lock_digest": {"$ref": "#/$defs/H"},
+        "config_digest": {"$ref": "#/$defs/H"},
+        "episodes": {"type": "array", "items": {"$ref": "#/$defs/Episode"}, "maxItems": 10000}
+      }
+    },
+    "CorrectionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ordinal", "case_id", "status", "feedback_id", "event_digest"],
+      "properties": {
+        "ordinal": {"enum": [1, 2, 3]},
+        "case_id": {"$ref": "#/$defs/ID"},
+        "status": {"enum": ["accepted", "failed", "not_run"]},
+        "feedback_id": {"anyOf": [{"$ref": "#/$defs/ID"}, {"type": "null"}]},
+        "event_digest": {"anyOf": [{"$ref": "#/$defs/H"}, {"type": "null"}]}
+      }
+    },
+    "ProbeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "kind", "off", "on"],
+      "properties": {
+        "case_id": {"$ref": "#/$defs/ID"},
+        "kind": {"enum": ["paraphrase", "control"]},
+        "off": {"$ref": "#/$defs/Row"},
+        "on": {"$ref": "#/$defs/Row"}
+      }
+    },
+    "EpisodeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["episode_id", "status", "corrections", "probes", "reset_baseline_digest", "reset_result_digest", "reset_equal", "reason"],
+      "properties": {
+        "episode_id": {"$ref": "#/$defs/ID"},
+        "status": {"enum": ["completed", "failed", "cancelled", "not_run"]},
+        "corrections": {"type": "array", "items": {"$ref": "#/$defs/CorrectionResult"}, "minItems": 3, "maxItems": 3},
+        "probes": {"type": "array", "items": {"$ref": "#/$defs/ProbeResult"}, "maxItems": 100000},
+        "reset_baseline_digest": {"anyOf": [{"$ref": "#/$defs/H"}, {"type": "null"}]},
+        "reset_result_digest": {"anyOf": [{"$ref": "#/$defs/H"}, {"type": "null"}]},
+        "reset_equal": {"type": ["boolean", "null"]},
+        "reason": {"anyOf": [{"$ref": "#/$defs/ID"}, {"type": "null"}]}
+      }
+    },
+    "EpisodeSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["planned_episodes", "completed_episodes", "paraphrases", "off_control_top1", "on_control_top1", "control_loss", "reset_passed", "reset_unknown", "gate"],
+      "properties": {
+        "planned_episodes": {"$ref": "#/$defs/NonNegInt"},
+        "completed_episodes": {"$ref": "#/$defs/NonNegInt"},
+        "paraphrases": {"$ref": "#/$defs/Rate"},
+        "off_control_top1": {"$ref": "#/$defs/Rate"},
+        "on_control_top1": {"$ref": "#/$defs/Rate"},
+        "control_loss": {"type": ["number", "null"]},
+        "reset_passed": {"$ref": "#/$defs/NonNegInt"},
+        "reset_unknown": {"$ref": "#/$defs/NonNegInt"},
+        "gate": {"enum": ["pass", "fail", "blocked", "not_applicable"]}
+      }
+    },
+    "AssetAdaptationReportV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "kind", "qualification", "input_digest", "input_manifest", "off_config_digest", "on_config_digest", "environment", "episodes", "summary", "evidence"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "kind": {"const": "adaptation"},
+        "qualification": {"enum": ["fixture", "provisional", "qualified"]},
+        "input_digest": {"$ref": "#/$defs/H"},
+        "input_manifest": {"$ref": "#/$defs/ManifestRef"},
+        "off_config_digest": {"$ref": "#/$defs/H"},
+        "on_config_digest": {"$ref": "#/$defs/H"},
+        "environment": {"$ref": "#/$defs/Environment"},
+        "episodes": {"type": "array", "items": {"$ref": "#/$defs/EpisodeResult"}, "maxItems": 10000},
+        "summary": {"$ref": "#/$defs/EpisodeSummary"},
+        "evidence": {"$ref": "#/$defs/EvidenceList"}
+      }
+    },
+    "PlatformStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status", "evidence_ids", "reason"],
+      "properties": {
+        "name": {"enum": ["install", "configure", "recommend", "choose", "skill_use", "mcp_use", "feedback", "delete", "reset", "restart", "uninstall"]},
+        "status": {"enum": ["passed", "failed", "not_run"]},
+        "evidence_ids": {"$ref": "#/$defs/IDSet"},
+        "reason": {"anyOf": [{"$ref": "#/$defs/ID"}, {"type": "null"}]}
+      }
+    },
+    "AssetPlatformReportV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "qualification", "input_digest", "input_manifest", "platform", "artifacts", "steps", "operations_evidence", "approvals_evidence", "evidence", "gate"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "qualification": {"enum": ["fixture", "measured"]},
+        "input_digest": {"$ref": "#/$defs/H"},
+        "input_manifest": {"$ref": "#/$defs/ManifestRef"},
+        "platform": {"$ref": "#/$defs/Environment"},
+        "artifacts": {"type": "array", "items": {"$ref": "#/$defs/ArtifactIdentity"}, "maxItems": 10000},
+        "steps": {"type": "array", "items": {"$ref": "#/$defs/PlatformStep"}, "minItems": 11, "maxItems": 11},
+        "operations_evidence": {"anyOf": [{"$ref": "#/$defs/EvidenceRef"}, {"type": "null"}]},
+        "approvals_evidence": {"$ref": "#/$defs/EvidenceList"},
+        "evidence": {"$ref": "#/$defs/EvidenceList"},
+        "gate": {"enum": ["pass", "fail", "blocked", "not_applicable"]}
+      }
+    }
+  }
+}
