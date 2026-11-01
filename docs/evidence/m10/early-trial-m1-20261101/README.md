@@ -1,7 +1,7 @@
 # #259 owner-run early installed-skill trial on the Apple M1 8 GiB MacBook
 
 **Status: provisional early-trial bundle, graded `blocked`; record pending,
-not preregistered under section 12.6.6 and not approvable.** One frozen task,
+not preregistered under section 12.6.6 and non-qualifying.** One frozen task,
 three planned rows, run on the owner's MacBook on 1 November 2026 by the
 operator tooling on the owner's instruction, with no
 person in the loop. Spec 0.66 sections 12.6, 12.6.5, 12.6.6; RM16, RM39, RM40,
@@ -16,7 +16,7 @@ one-task, one-sample result says nothing general about the arms.
 | External model | the owner's OpenAI-compatible endpoint (base URL and key never written), `glm-5.3-flash` for all three arms |
 | Frozen inputs | `frozen/inputs.json`, committed in `21e93e3` before the first row (09:41:39Z). This is not a section 12.6.6 preregistration (see "Preregistration gap" below), so the record's `preregistration` is null. The record's `runs_started_at` 09:46:02.976Z is the end of the native row's first model turn, the earliest recorded attempt time: the host transcript has no dispatch time, so it is an upper bound on the first dispatch. The native row began no earlier than 09:45:21.5Z (its last turn ended 09:46:38.717Z after 77.2 s elapsed), still after the commit |
 | Bundle | `bundle/` (`report.json`, `grade.json`, `inputs.json`, `SHA256SUMS`); `grade.json` was graded without the record (see "Grade and record" below) |
-| Record | `../m10-early-trial-m1-openclaw-2026.10.7-20261101.json`, scope `host_trial`, pending, not preregistered; it cannot be approved (the verifier rejects an approved copy with `preregistration_missing`) |
+| Record | `../m10-early-trial-m1-openclaw-2026.10.7-20261101.json`, scope `host_trial`, pending, not preregistered and non-qualifying; host_trial approval does not itself require preregistration (see below) |
 
 ## Profile (spec 0.66 section 12.6.6)
 
@@ -165,7 +165,8 @@ no committed output or bundle file changed
 The same review made two more changes for later passes, with no committed
 output changed. `machine_passes.py` keeps an earlier call's bytes as
 `<name>.superseded-<n>.*` instead of overwriting them (spec 12.6.6: a rejected
-draft stays in the drafting evidence), and `draft-cases` sets each case's
+draft stays under `machine/calls`, but the archived builder does not include
+superseded pairs in the catalog or lock), and `draft-cases` sets each case's
 `language_tags` and `code_switched` from its lane (the one `en_to_en` case is
 unchanged). `build_trial_inputs.py record` was brought up to the current
 checker: the record machine carries `os_version` (added to the committed record
@@ -194,12 +195,44 @@ run freeze were committed together in `21e93e3`, and no owner approval
 happened before the rows ran (the review is still pending; any approval now
 comes after the run). `21e93e3` still shows that the inputs were frozen before
 the first row, but it is not a preregistration, so the record's
-`preregistration` is null. The verifier rejects an approved record of the
-`machine_dual_owner_approved` labelling or `machine_drafted_owner_approved`
-prompt profile without a preregistration (`preregistration_missing`), so this
-record stays pending and lifts nothing. A qualifying trial needs a new freeze:
+`preregistration` is null. Section 12.6.6 requires preregistration for
+`host_acceptance` and `adaptation`; it does not make a `host_trial` record
+unapprovable merely because preregistration is absent. The verifier now follows
+that scope rule. Lock approval and its ordering remain review assertions
+audited through repository history; a preregistration object alone proves
+neither. This committed record stays pending and lifts nothing: no review,
+bound value or grade was changed. To address the documented trial gaps, use a
+new freeze:
 commit the lock, have the owner approve it in that pull request, then commit
 the preregistration before the first dispatch.
+
+## Review corrections for future trials
+
+The historical harness and all bound evidence remain unchanged. Its
+`runs_started_at` is incorrectly an assistant end time, as the table above
+explains. It cannot establish timely preregistration. The record has no
+preregistration and remains pending; its timestamp is preserved as historical
+data, not repaired with an inferred dispatch time. The verifier now checks a
+preregistered host report against its bound dispatch evidence; an unknown first
+dispatch rejects, and a commit after that dispatch rejects even if the record
+supplies a later end time.
+
+The archived builder also omits superseded drafting pairs from the frozen
+catalog and lock. No rejected draft was recorded for this trial, so its bundle
+has no missing rejected pair; the earlier claim that the rerun path kept those
+pairs in *bound* drafting evidence was incorrect. For future trials,
+`scripts/m1_trial_inputs.py` copies every current and superseded pair into the
+catalog and every case's authorship evidence before labelling. Freeze checks
+those bytes again and refuses a rerun that has not been incorporated. The lock
+and companion bundle bind the retained pairs by digest and length.
+
+Use the maintained `scripts/m1_trial_inputs.py` and
+`scripts/m1_trial_observe.py` for a new trial directory; see
+[scripts/README.md](../../../../scripts/README.md). The observer persists
+`host-dispatch.json` immediately before invoking the host and includes it in
+row evidence, independently of the native inference timestamps. Tests cover
+both the archived and maintained observers' redaction of envelope, transcript,
+gateway trace and recommendation receipt, using synthetic machine names.
 
 ## Grade and record
 
@@ -246,11 +279,12 @@ digest-bound and stay unchanged. Read any step that recorded loaded use as a
 
 ## What remains
 
-1. A preregistered rerun. This record cannot be approved (see "Preregistration
-   gap"); a qualifying trial needs a new freeze with the owner's approval of the
-   case and label lock before a separate preregistration commit, and a grade
-   made with `--qualification-record`.
+1. A preregistered rerun to address the documented gaps. This record stays
+   pending and non-qualifying (see "Preregistration gap"); use a new freeze with
+   the owner's approval of the case and label lock before a separate
+   preregistration commit, and a grade made with `--qualification-record`.
 2. The recommendations arm, which needs a person sign-in (above).
-3. Walkthroughs (#238 recorder), which need the Linux person-ingress harness;
-   the VPS lacks `libgbm`/`libasound` and a private interface.
+3. Qualified walkthroughs. The en-US and zh-CN functional_fixture recordings
+   are now complete (see [their README](../walkthroughs-20261101-vps/README.md));
+   loaded skill use, MCP use and MCP approval remain blocked and unqualified.
 4. Native configuration semantics (#240) keep the report below `qualified`.

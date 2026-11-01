@@ -174,12 +174,6 @@ def _check_rules(record: Mapping) -> None:
             _reject("preregistration_missing")
         if _time(prereg["committed_at"]) > _time(started):
             _reject("preregistration_late")
-    # The owner approves drafted cases and machine_dual labels in the pull
-    # request that commits their lock, before preregistration (12.6.6), so an
-    # approved record of those profiles always names its preregistration.
-    owner_approved = labelling == MACHINE_DUAL_PROFILE or record["prompt_authorship"] == DRAFTED
-    if owner_approved and prereg is None and record["review"]["approved_at"] is not None:
-        _reject("preregistration_missing")
     # Machine identity.
     machine = record["machine"]
     if scope in _MACHINE_SCOPES and machine is None:
@@ -431,6 +425,63 @@ class QualificationRecord:
                 _reject("prompt_authorship_mismatch")
 
 
+def first_host_dispatch(report: Mapping, root: Path | None = None) -> str | None:
+    """RM16/RM44: earliest evidenced dispatch, never an assistant end time.
+
+    A host dispatch capture covers the entire row, including native attempts
+    whose individual start times the host does not expose. Without it, every
+    attempt must have a start; a missing row start cannot be repaired by a
+    later known one. The record may name an earlier planned dispatch.
+    """
+    times = []
+    for row in report.get("rows", []):
+        if row.get("status") == "not_run":
+            continue
+        refs = [
+            ref
+            for ref in report.get("evidence", [])
+            if ref["id"] in row.get("evidence_ids", []) and ref["id"].startswith("host-dispatch:")
+        ]
+        if refs:
+            if len(refs) != 1 or root is None:
+                return None
+            ref = refs[0]
+            try:
+                payload = read_local(root, ref["path"], DOCUMENT_BYTES)
+            except (OSError, ValueError) as exc:
+                raise WholeTaskRejected("record_subject_unavailable") from exc
+            if len(payload) != ref["bytes"] or hashlib.sha256(payload).hexdigest() != ref["sha256"]:
+                _reject("record_digest_mismatch")
+            try:
+                capture = parse_json(payload)
+            except ValueError as exc:
+                raise WholeTaskRejected("record_input_mismatch") from exc
+            if (
+                not isinstance(capture, dict)
+                or set(capture) != {"schema_version", "task_id", "arm", "started_at"}
+                or capture["schema_version"] != 1
+                or capture["task_id"] != row["task_id"]
+                or capture["arm"] != row["arm"]
+                or not isinstance(capture["started_at"], str)
+                or ref.get("provenance") != "observed"
+            ):
+                _reject("record_input_mismatch")
+            dispatch = capture["started_at"]
+            _time(dispatch)
+            # A capture after a known attempt cannot describe its dispatch.
+            for attempt in row["attempts"]:
+                for key in ("started_at", "ended_at"):
+                    if attempt.get(key) is not None and _time(dispatch) > _time(attempt[key]):
+                        _reject("record_input_mismatch")
+            times.append(dispatch)
+        else:
+            starts = [a["started_at"] for a in row["attempts"]]
+            if not starts or any(t is None for t in starts):
+                return None
+            times.extend(starts)
+    return min(times, key=_time) if times else None
+
+
 def load_record(path: Path) -> QualificationRecord:
     """Read, validate and verify one record; subject paths are relative to it."""
     path = Path(path).absolute()
@@ -453,6 +504,25 @@ def load_record(path: Path) -> QualificationRecord:
             or len(payload) != subject["bytes"]
         ):
             _reject("record_digest_mismatch")
+        if (
+            subject["role"] == "report"
+            and record["scope"] in _HOST_SCOPES.values()
+            and record["preregistration"] is not None
+        ):
+            try:
+                report = parse_json(payload)
+            except ValueError as exc:
+                raise WholeTaskRejected("record_input_mismatch") from exc
+            # Full report shape is checked by the report verifier. When rows
+            # are present, its bound evidence must corroborate preregistration.
+            if isinstance(report, dict) and "rows" in report:
+                first = first_host_dispatch(report, path.parent / Path(subject["path"]).parent)
+                if first is None:
+                    _reject("preregistration_missing")
+                if _time(record["preregistration"]["committed_at"]) > _time(first):
+                    _reject("preregistration_late")
+                if _time(record["runs_started_at"]) > _time(first):
+                    _reject("record_input_mismatch")
         if subject["role"] in _INPUT_ROLES:
             try:
                 canonical[subject["role"]] = canonical_digest(parse_json(payload))

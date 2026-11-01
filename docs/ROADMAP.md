@@ -1115,9 +1115,11 @@ The #238 recorder (`integrations/openclaw/test/host-walkthrough/record.py`)
 now drives the unchanged ordinary installed-host qualification in `en-US` and
 `zh-CN` through the plugin's own labels, with screenshots, video and a digest
 manifest. Loaded skill use, MCP use and host MCP approval are recorded as
-`blocked`. No walkthrough has been recorded with it yet, and its
-`functional_fixture` tier does not satisfy the qualified-host walkthrough of
-#238.
+`blocked`. The en-US and zh-CN walkthroughs were recorded on 1 November 2026
+(`docs/evidence/m10/walkthroughs-20261101-vps/`), both complete at
+`functional_fixture` tier. They do not satisfy the qualified-host walkthrough
+of #238. Loaded skill use remains unqualified after #267; it is not an
+approved host limitation. MCP use and MCP approval also remain blocked.
 
 #270 (RM12/RM39; AC30) localizes all recommendation-detail labels for `en-US`
 and `zh-CN`, displays ordinary characters through text-only DOM rendering,
@@ -1690,9 +1692,9 @@ lifecycle (install, configure `baseUrl`, enable, inspect), because the pinned
 host installs the plugin disabled until it is configured. The bundle is
 private, the install record keeps no host free text, and the provisional gate
 binds closed preflight/install records to the frozen package. They are verified
-over fixture bundles and a host double only. The owner-run trial itself (#259),
-its frozen inputs and genuine
-native row observations remain open; no provisional cost has been recorded.
+over fixture bundles and a host double; the first owner-run trial (#259),
+frozen inputs and native usage are now recorded below. That provisional,
+blocked trial does not close acceptance.
 
 #259 early trial on the owner's Apple M1 8 GiB MacBook (1 November 2026;
 `docs/evidence/m10/early-trial-m1-20261101/`): one frozen
@@ -1708,12 +1710,18 @@ Linux x86-64). The provisional bundle grades `blocked` (graded without the
 record, so its output carries no labelling). The pending host_trial record binds
 it but is not a section 12.6.6 preregistration: the case and label lock was not
 committed and owner-approved before a separate preregistration commit, so the
-record's `preregistration` is null and the verifier rejects any approved copy of
-it. Findings also include the kit's fresh-host install order and the machine
+record's `preregistration` is null. The verifier requires preregistration for
+host_acceptance and adaptation, not host_trial; the committed trial remains
+pending and non-qualifying. Its preserved `runs_started_at` is an end-time upper
+bound, not a dispatch. Future tooling records host dispatch before execution,
+and the verifier checks bound dispatch evidence when preregistration is claimed.
+Findings also include the kit's fresh-host install order and the machine
 name in host system prompts (redacted before bundling). Still open: a
 preregistered rerun with the owner's lock approval first, an equal
 per-generation limit across arms, the recommendations arm's person sign-in, more
-tasks, the walkthroughs (Linux harness) and #240. No gate is claimed.
+tasks, qualified walkthroughs and #240. The en-US/zh-CN Linux walkthroughs were
+recorded on 1 November 2026 at functional_fixture tier; loaded skill use, MCP
+use and MCP approval remain blocked and unqualified. No gate is claimed.
 
 #201 native benchmark contract checkpoint (spec 0.61): explicit local-cold
 preparation records actual gateway worker jobs/readiness, setup and owned cleanup
