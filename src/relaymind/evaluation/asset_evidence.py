@@ -191,11 +191,16 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.66 with the #268 amendment, the precise negative-finding
+            # definitions and the LHCWN rename (merged stack).
+            ("b77227bdf2ca4d4f59451ff3165ab24fb37a2c47f2f41063b8584d0eeed56310", 625266),
             # Reviewed 0.66 with the #268 amendment, the #266 record input, scope and
             # identity rules and the LHCWN repository rename (merged stack).
             ("3393af66c79f18922d8493f56f81d41d1fd1e4ae52c2cc5c1ce56b764e6d7421", 624939),
             # Reviewed 0.66 with the #268 amendment and the LHCWN repository rename.
             ("72d3815fe8c304c04ece8f4a3ec2a669c2a4d2a119f882036617f7e3c15749f2", 624188),
+            # Reviewed 0.66 with the precise negative-finding definitions.
+            ("8c00f5154b64da1f1ad00352aadea9cee419e4b96e24f757ec1cd812259abf13", 623250),
             # Reviewed 0.66 with the #266 record input, scope and identity rules.
             ("f4f70b0640207baf78442bd8c7596f23461c9319920adfd37effa29e1148ed51", 622923),
             # Reviewed 0.66 with the LHCWN repository rename.

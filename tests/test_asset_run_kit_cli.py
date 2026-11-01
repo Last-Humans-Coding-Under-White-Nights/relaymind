@@ -296,3 +296,72 @@ def test_run_host_executor_timeout_fails_the_row(tmp_path):
     report = read(tmp_path / "report.json")
     assert code == 0
     assert {(r["status"], r["reason"]) for r in report["rows"]} == {("failed", "executor_error")}
+
+
+def test_capture_costs_reads_events_strictly(tmp_path, capsys):
+    """Duplicate keys and non-finite numbers are rejected, as for every input."""
+    from test_asset_host_runner import USAGE, finished, started
+
+    text = json.dumps([started(1, "c1"), finished(2, "c1", USAGE)])
+    events = tmp_path / "events.json"
+    events.write_text(text.replace('"seq": 2,', '"seq": 7, "seq": 2,', 1), encoding="utf-8")
+    out = tmp_path / "attempts.json"
+    base = ["capture-costs", "--provider", "p", "--attempt-prefix", "a-", "--evidence-id", "t"]
+    code = main([*base, "--events", str(events), "--output", str(out)])
+    assert code == 2 and not out.exists()
+    assert json.loads(capsys.readouterr().err)["status"] == "rejected"
+    events.write_text(text.replace("100", "NaN", 1), encoding="utf-8")
+    assert main([*base, "--events", str(events), "--output", str(out)]) == 2
+
+
+def run_host_args(tmp_path, tasks, freeze, *extra):
+    return [
+        "run-host",
+        "--tasks",
+        str(write(tmp_path / "tasks.json", tasks)),
+        "--freeze",
+        str(write(tmp_path / "freeze.json", freeze)),
+        "--journal",
+        str(tmp_path / "run.jsonl"),
+        "--inputs",
+        str(write(tmp_path / "inputs.json", dict(documents=[], evidence=[]))),
+        "--environment",
+        str(write(tmp_path / "environment.json", ENVIRONMENT)),
+        "--qualification",
+        "fixture",
+        "--output",
+        str(tmp_path / "report.json"),
+        *extra,
+    ]
+
+
+def test_run_host_reads_artifacts_strictly(tmp_path, capsys):
+    freeze, tasks = setup(1)
+    artifacts = tmp_path / "artifacts.json"
+    artifacts.write_text('[{"role": "a", "role": "b"}]', encoding="utf-8")
+    args = run_host_args(tmp_path, tasks, freeze, "--artifacts", str(artifacts), "--")
+    assert main([*args, *executor_script(tmp_path)]) == 2
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals")
+def test_run_host_exits_3_after_an_interruption(tmp_path):
+    """SIGINT ends the run; unstarted rows stay not_run and the exit is 3."""
+    freeze, tasks = setup(1)
+    script = tmp_path / "interrupting.py"
+    script.write_text(
+        f"""
+import json, os, signal, sys
+sys.path[:0] = {sys.path!r}
+from test_asset_host_runner import captured
+from whole_task_helpers import row
+request = json.load(sys.stdin)
+os.kill(os.getppid(), signal.SIGINT)
+r, refs = captured(row(request["task"]["id"], request["arm"]))
+json.dump(dict(row=r, evidence=refs), sys.stdout)
+""",
+        encoding="utf-8",
+    )
+    code = main(run_host_args(tmp_path, tasks, freeze, "--", sys.executable, str(script)))
+    report = read(tmp_path / "report.json")
+    assert code == 3
+    assert [r["status"] for r in report["rows"]] == ["completed", "not_run", "not_run"]

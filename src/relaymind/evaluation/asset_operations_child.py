@@ -47,12 +47,15 @@ async def handle(app, command: Mapping) -> dict:
     if op not in ("rescan", "rebuild"):
         return dict(reply, error="unknown_op")
     source_id = command.get("source_id") if op == "rescan" else None
-    before = {job["job_id"] for job in catalog.store.job_outcomes()}
+    # Every failure, including reading the job store, is answered at once so
+    # the parent never waits for its control timeout.
     try:
+        before = {job["job_id"] for job in catalog.store.job_outcomes()}
         if op == "rescan":
             publication = await catalog.rescan(source_id)
         else:
             publication = await catalog.rebuild()
+        jobs = _new_jobs(catalog, before, source_id)
     except Exception as error:
         return dict(reply, error=type(error).__name__, reason=getattr(error, "reason", None))
     return dict(
@@ -60,13 +63,31 @@ async def handle(app, command: Mapping) -> dict:
         ok=True,
         revision=publication.revision,
         changed=publication.changed,
-        jobs=_new_jobs(catalog, before, source_id),
+        jobs=jobs,
     )
 
 
 def _write(reply: Mapping) -> None:
     sys.stdout.write(CONTROL_PREFIX + json.dumps(reply, ensure_ascii=True, default=str) + "\n")
     sys.stdout.flush()
+
+
+def forward_lines(stream, loop: asyncio.AbstractEventLoop, lines: asyncio.Queue) -> None:
+    """Hand each line, then None at EOF, to the loop; stop quietly once it is closed."""
+
+    def put(item) -> bool:
+        if loop.is_closed():
+            return False
+        try:
+            loop.call_soon_threadsafe(lines.put_nowait, item)
+        except RuntimeError:  # Closed between the check and the call.
+            return False
+        return True
+
+    for line in stream:
+        if not put(line):
+            return
+    put(None)
 
 
 def controlled_serve(app, *, host: str, port: int, on_started=None) -> None:
@@ -77,12 +98,12 @@ def controlled_serve(app, *, host: str, port: int, on_started=None) -> None:
         loop = asyncio.get_running_loop()
         lines: asyncio.Queue = asyncio.Queue()
 
-        def read() -> None:
-            for line in sys.stdin:
-                loop.call_soon_threadsafe(lines.put_nowait, line)
-            loop.call_soon_threadsafe(lines.put_nowait, None)
-
-        threading.Thread(target=read, name="operations-control", daemon=True).start()
+        threading.Thread(
+            target=forward_lines,
+            args=(sys.stdin, loop, lines),
+            name="operations-control",
+            daemon=True,
+        ).start()
         replies: set[asyncio.Task] = set()
 
         async def answer(line: str) -> None:
