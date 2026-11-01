@@ -11,6 +11,9 @@ from relaymind.evaluation.asset_judgments import DRAFTED, OWNER_MACHINE
 from relaymind.evaluation.asset_splits import input_identity
 from relaymind.schema_util import freeze_json
 
+if TYPE_CHECKING:
+    from relaymind.evaluation.asset_corpus import VerifiedAssetRelease
+
 
 def counted_authorship(prompt_authorship: str | None) -> tuple[str, ...]:
     """Case authorship that counts in the cohort.
@@ -21,10 +24,6 @@ def counted_authorship(prompt_authorship: str | None) -> tuple[str, ...]:
     generated prompts never count.
     """
     return ("original", DRAFTED) if prompt_authorship == DRAFTED else ("original",)
-
-
-if TYPE_CHECKING:
-    from relaymind.evaluation.asset_corpus import VerifiedAssetRelease
 
 
 @dataclass(frozen=True)

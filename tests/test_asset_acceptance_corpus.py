@@ -826,11 +826,9 @@ def test_rm40_ac31_complete_fixture_cannot_be_upgraded_by_custodian_assertions(f
     assert "case_cohort_incomplete" not in result.reasons
 
 
-def test_rm40_ac31_machine_drafted_owner_approved_cases_count_without_competence(
-    full_cohort_pair,
-):
-    """Spec 0.66 section 12.6.6: drafted cases replace the author competence rule."""
-    _, root = full_cohort_pair
+def _draft_every_case(pair):
+    """Mark every case machine-drafted and drop its authors' competencies."""
+    _, root = pair
     cases, catalog = read(root, "cases"), read(root, "catalog")
     for row in cases["cases"]:
         row["authorship"] = "machine_drafted_owner_approved"
@@ -841,6 +839,13 @@ def test_rm40_ac31_machine_drafted_owner_approved_cases_count_without_competence
     write(root, "cases", cases)
     write(root, "catalog", catalog)
     relock(root)
+
+
+def test_rm40_ac31_machine_drafted_owner_approved_cases_count_without_competence(
+    full_cohort_pair,
+):
+    """Spec 0.66 section 12.6.6: drafted cases replace the author competence rule."""
+    _draft_every_case(full_cohort_pair)
     result = assessment_api()(
         *verified_pair(full_cohort_pair), prompt_authorship="machine_drafted_owner_approved"
     )
@@ -856,17 +861,7 @@ def test_rm40_ac31_machine_drafted_cases_count_only_under_the_owner_run_profile(
     """Spec 0.66 section 12.6.6 (RM40/AC31; review of #276): drafted cases count only
     under the owner-run profile's record. Without it they are not original prompts
     and fill no lane minimum."""
-    _, root = full_cohort_pair
-    cases, catalog = read(root, "cases"), read(root, "catalog")
-    for row in cases["cases"]:
-        row["authorship"] = "machine_drafted_owner_approved"
-    authors = {a for row in cases["cases"] for a in row["author_ids"]}
-    for person in catalog["people"]:
-        if person["id"] in authors:
-            person["competencies"] = []
-    write(root, "cases", cases)
-    write(root, "catalog", catalog)
-    relock(root)
+    _draft_every_case(full_cohort_pair)
     pair = verified_pair(full_cohort_pair)
     for authorship in (None, "original"):
         result = assessment_api()(*pair, prompt_authorship=authorship)
