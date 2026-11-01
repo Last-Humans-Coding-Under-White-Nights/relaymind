@@ -863,3 +863,103 @@ def test_numbered_labels_follow_the_control_ui_table(rec):
     """The numbered label families are built from the parsed Control UI labels."""
     for key, pattern in rec._NUMBERED.items():
         assert pattern.fullmatch(f"{rec._ENGLISH[key]} 7").group(1) == "7"
+
+
+# --- review follow-ups, round 4 (PR #262) -------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("pattern", "sample", "expected", "other"),
+    [
+        ("Choose 100", "Choose 100", "选择 100", "选择 10"),
+        (r"Choose \d{3}", "Choose 123", "选择 123", "选择 12"),
+        (r"Correct to [1-9][0-9]{2}", "Correct to 250", "纠正为 250", "纠正为 25"),
+        (r"Choose 1000", "Choose 1000", "选择 1000", "选择 100"),
+    ],
+)
+def test_numbered_regex_names_translate_for_any_positive_number(
+    rec, pattern, sample, expected, other
+):
+    """A numbered button regex is not limited to 1-99; translate() takes any number."""
+    import re
+
+    compiled = re.compile(pattern)
+    assert compiled.fullmatch(sample) and rec.translate(sample, "zh-CN") == expected
+    translated = rec.translate(compiled, "zh-CN")
+    assert translated.fullmatch(expected) and not translated.fullmatch(other)
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [r"Choose [A-Z]+", r"Choose [,-]", r"Choose {3}", r"Choose \d+|Choose none", r"Choose \w+"],
+)
+def test_numbered_regex_names_with_a_non_digit_tail_are_unknown(rec, pattern):
+    import re
+
+    with pytest.raises(ValueError, match="walkthrough_label_unknown"):
+        rec.translate(re.compile(pattern), "zh-CN")
+
+
+class _ExitedProcess:
+    pid = 424242
+
+    def poll(self):
+        return 0
+
+    def wait(self, timeout=None):
+        return 0
+
+
+@pytest.mark.parametrize(
+    ("alive", "expected"),
+    [
+        # The group empties during the grace period: no SIGKILL to a reusable PGID.
+        ({"SIGTERM": True, 0: False}, ["SIGTERM", 0]),
+        # The group is already empty: nothing but the one SIGTERM attempt.
+        ({"SIGTERM": False}, ["SIGTERM"]),
+        # The group outlives the grace period: SIGKILL after a final liveness check.
+        ({"SIGTERM": True, 0: True, "SIGKILL": True}, None),
+    ],
+)
+def test_stop_group_kills_only_a_group_still_alive_after_the_grace(
+    rec, monkeypatch, alive, expected
+):
+    import signal
+
+    sent = []
+
+    def fake_signal(group, signum):
+        name = signum if signum == 0 else signal.Signals(signum).name
+        sent.append(name)
+        assert group == _ExitedProcess.pid
+        return alive[name]
+
+    monkeypatch.setattr(rec, "_signal_group", fake_signal)
+    rec._stop_group(_ExitedProcess(), grace=0.1)
+    if expected is not None:
+        assert sent == expected
+    else:
+        assert sent[0] == "SIGTERM" and sent[-2:] == [0, "SIGKILL"]
+        assert sent.count("SIGKILL") == 1
+
+
+@pytest.mark.parametrize("layout", ["same", "out_inside_work", "work_inside_out", "alias"])
+def test_record_refuses_overlapping_work_and_out_before_creating_anything(
+    rec, tmp_path, monkeypatch, capsys, layout
+):
+    """RM39/AC30: the work root and the output never overlap; nothing is created."""
+    monkeypatch.setattr(rec, "run_child", lambda command, timeout: pytest.fail("ran"))
+    tarball = tmp_path / "plugin.tgz"
+    tarball.write_bytes(b"tgz")
+    (tmp_path / "link").symlink_to(tmp_path, target_is_directory=True)
+    work, out = {
+        "same": (tmp_path / "w", tmp_path / "w"),
+        "out_inside_work": (tmp_path / "w", tmp_path / "w" / "out"),
+        "work_inside_out": (tmp_path / "o" / "work", tmp_path / "o"),
+        "alias": (tmp_path / "w", tmp_path / "link" / "w"),
+    }[layout]
+    argv = ["record", "--tarball", str(tarball), "--work-root", str(work), "--out-dir", str(out)]
+    assert rec.main(argv) == 2
+    outcome = json.loads(capsys.readouterr().out)
+    assert outcome == dict(complete=False, reason="work_root_out_dir_overlap", manifest=None)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["link", "plugin.tgz"]
