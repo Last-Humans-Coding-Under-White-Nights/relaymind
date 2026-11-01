@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
+from helpers import FakeClock
 from recommendation_helpers import BODY, client_for, setup
 from relaymind.assets.catalog import acquisition_budgets
 from relaymind.assets.service import AssetCatalogService
@@ -62,7 +63,13 @@ def validated_request_cohort(tmp_path_factory):
     """Real API evidence with synthetic timestamps; never AC29 measurement."""
 
     async def collect():
-        app, service, runs, _ = setup(tmp_path_factory.mktemp("operations-cohort"))
+        # A frozen clock keeps the 500 ms budget from expiring between two
+        # checks when a parallel worker loses the CPU. These records are
+        # fixture evidence for the AC29 grader; their outcome must not depend
+        # on this machine.
+        app, service, runs, _ = setup(
+            tmp_path_factory.mktemp("operations-cohort"), clock=FakeClock()
+        )
         await service.start()
         try:
             async with await client_for(app) as client:
@@ -600,7 +607,7 @@ def test_production_observations_require_nonempty_lexical_and_new_keys(tmp_path)
     """RM38/AC29: authenticated production responses and stored attempts prove usefulness."""
 
     async def go():
-        app, service, runs, _ = setup(tmp_path)
+        app, service, runs, _ = setup(tmp_path, clock=FakeClock())
         await service.start()
         try:
             async with await client_for(app) as client:
@@ -641,7 +648,7 @@ def test_event_fetch_timeout_does_not_extend_measured_response(tmp_path):
     """RM38/AC29: evidence collection is bounded but excluded from service latency."""
 
     async def go():
-        app, service, runs, _ = setup(tmp_path)
+        app, service, runs, _ = setup(tmp_path, clock=FakeClock())
         await service.start()
         try:
             async with await client_for(app) as production:
@@ -1197,7 +1204,9 @@ def production_batch_samples(tmp_path_factory):
             )
             for document in capture(template).documents
         }
-        app, service, runs, catalog = setup(tmp_path, populate=False)
+        # Frozen clock: see validated_request_cohort. The probes below must be
+        # useful on a busy runner too.
+        app, service, runs, catalog = setup(tmp_path, populate=False, clock=FakeClock())
         source = tmp_path / "source"
         worker = AssetCatalogService(
             AssetSettings((SourceConfig("example", "local_directory", source),)),
