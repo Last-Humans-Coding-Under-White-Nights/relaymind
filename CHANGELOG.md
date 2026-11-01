@@ -19,6 +19,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
   Both operations stay disabled. The records lift nothing until they are
   approved. `tests/test_m10_host_use_records.py` loads them with the checker.
+  The records also bind the second VPS run's captures (`*-20261101-vps2.json`,
+  checkout 62c4dcd), with the user name and hostname rewritten. Person ingress
+  passed there, and MCP use was `blocked`. The loaded-use observation still
+  fails its single-pin check, because the host lists the whole profile's pins.
 
 ### Fixed
 
@@ -27,7 +31,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `control_refused`, with no turn, instead of raising
   `ordinary_skill_control_failed`. CI run 41286397320 hit that error. Any other
   refusal, and any turn evidence on a refused control, still fails the
-  predicate (#255). The fix has unit tests only; no CI run has confirmed it.
+  predicate (#255). The second VPS run observed the refusal as
+  `control_refused`; no CI run has confirmed it yet.
 
 - Owner-run qualification records and `owner_machine` labelling (#251; RM16,
   RM39, RM40, RM42, RM44; AC30, AC31, AC33, AC35–AC37; spec 0.66 section

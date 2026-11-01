@@ -1065,12 +1065,15 @@ delegation candidate, `GatewaySessionAccessAuthority.retain()`, has no defined
 qualification. The MCP routes are name-only (`tools.invoke`), App-view-bound
 (`mcp.app.callTool`) or documented private. The records lift nothing until a
 pull request review by an org member other than the owner is written into
-them, which will make these host limitations. The VPS could not run either
-person tier: it has no private IPv4 interface, and Chromium lacks `libgbm.so.1`
-and `libasound.so.2`. The substantive captures therefore come from CI run
-41286397320. The harness now records the person-scope `sessions.reset` refusal
-(`operator.admin` required) as `control_refused` instead of failing. That fix
-has unit tests only and needs a CI run. #259, #260 and #261 remain open and
+them, which will make these host limitations. The first VPS run could not
+start a person tier (no private interface, missing Chromium libraries), so the
+first substantive captures came from CI run 41286397320. A second VPS run at
+62c4dcd, after the owner's setup, also binds its captures. Person ingress
+passes there. MCP use is `blocked` (`exact_route_unqualified`). The reset case
+is now `control_refused` on the real host. The loaded-use observation still
+exits 2: its predicate expects one pin in the session's selection listing, but
+the host lists every pin of the owner profile. That harness check needs a
+reviewed change and a CI run. The finding is unchanged. #259, #260 and #261 remain open and
 need the real runs, captures, labels and reviews. Host configuration semantics
 (#250/#240) still keep host reports below `qualified`. Spec-only decisions
 awaiting implementation: the rank 4–10 choice receipt returning the offered
