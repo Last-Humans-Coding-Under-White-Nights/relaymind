@@ -486,14 +486,16 @@ def test_cancel_with_the_health_tool_in_flight_settles_the_operation(tmp_path):
 
     def handler(arguments):
         entered.set()
-        release.wait(5)
+        release.wait(30)
         return original(arguments)
 
     replace_handler(gateway, "get_service_health", handler, timeout_seconds=30.0)
 
     async def go():
         started = gateway.orchestrator.start(user(PROMPT), execution_mode="parallel_demo")
-        assert await asyncio.to_thread(entered.wait, 5)
+        # Parallel workers on a 2-vCPU runner can delay the dispatch; the bound
+        # matches the tool timeout and only limits how long a real failure waits.
+        assert await asyncio.to_thread(entered.wait, 30)
         version = gateway.store.get_run(started.run_id).version
         record = await gateway.orchestrator.cancel(started.run_id, version)
         release.set()

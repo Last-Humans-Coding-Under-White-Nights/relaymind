@@ -9,7 +9,9 @@ from pathlib import Path
 
 import pytest
 
+from helpers import FakeClock
 from relaymind.canonical import canonical_digest
+from relaymind.store import TraceClock
 from test_asset_corpus import read, write
 from test_asset_diagnostic import development_input as development_input
 from test_asset_diagnostic import load, save_input
@@ -56,6 +58,7 @@ def english_case(root):
 
 
 def run(root, config=None, **options):
+    options.setdefault("clock", FakeClock())
     return asyncio.run(
         api().run_source_benchmark(
             load(root), production_config=config or production(root), **options
@@ -125,7 +128,7 @@ def test_rm35_timeout_retains_failed_row_and_is_not_abstention(development_input
     monkeypatch.setattr(api(), "build_asset_selector", lambda settings: Slow())
     root = development_input
     english_case(root)
-    report = run(root, config=production(root, http=True, primary_ms=1))
+    report = run(root, config=production(root, http=True, primary_ms=1), clock=TraceClock())
     assert report["rows"][0]["status"] == "failed"
     assert report["rows"][0]["observed_ms"] is not None
     assert report["summary"]["failed"] == 1 and report["summary"]["abstentions"] == 0
@@ -294,6 +297,7 @@ def test_rm40_compare_rejects_erased_failed_primary_with_retained_floor_result(
     report = run(
         development_input,
         config=production(development_input, http=True, fallback=True, primary_ms=1),
+        clock=TraceClock(),
     )
     assert len(report["rows"][0]["result"]["attempts"]) == 2
     assert api().compare_source_benchmarks(report, report)["compatible"]
@@ -354,6 +358,7 @@ def test_rm40_cancellation_conserves_planned_slots_and_consumed_attempts(
         task = asyncio.create_task(
             api().run_source_benchmark(
                 load(development_input),
+                clock=FakeClock(),
                 production_config=production(development_input),
                 repetitions=3,
             )

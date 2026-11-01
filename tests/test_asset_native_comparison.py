@@ -7,6 +7,7 @@ from dataclasses import replace
 
 import pytest
 
+from helpers import FakeClock
 from relaymind.canonical import canonical_digest
 from relaymind.evaluation import asset_benchmark, asset_comparison, asset_evidence
 from test_asset_diagnostic import development_input as development_input
@@ -356,11 +357,14 @@ def source_pair(development_input, tmp_path, monkeypatch):
     )
     verified = load(development_input)
     left = asyncio.run(
-        source.run_source_benchmark(verified, production_config=development_input / "lexical.toml")
+        source.run_source_benchmark(
+            verified, clock=FakeClock(), production_config=development_input / "lexical.toml"
+        )
     )
     right = asyncio.run(
         source.run_source_benchmark(
             verified,
+            clock=FakeClock(),
             production_config=development_input / "native.toml",
             preparation=local_config(total_ms=2000),
         )
