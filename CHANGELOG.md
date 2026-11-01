@@ -64,7 +64,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Reconciles registration with the existing qualified direct-action exception,
   places the 512 KiB native request cap in section 14.5, and bounds approval
   waiting separately from the 60-second preparation/dispatch deadline without
-  changing existing budgets.
+  changing existing budgets. Clarifies pre-dispatch timeout/cancellation
+  receipts, the native RPC error envelope for pre-admission refusals, and
+  that the outer native request cap applies before the inner create-body cap;
+  both bounds hold. Repairs roadmap links and aligns the bilingual validation
+  notices and historical qualification notes with these unreleased rules.
   Requires source-bound pinned native host configuration validation with
   the captured native regex dialect and explicit provider/sampling/budget
   schema binding.
