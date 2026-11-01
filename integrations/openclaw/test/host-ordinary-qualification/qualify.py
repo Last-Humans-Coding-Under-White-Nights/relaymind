@@ -38,7 +38,6 @@ ORDINARY_UI_ACTIONS = frozenset(
 
 
 HOST_EVENT_WAIT_SECONDS = BASE.person_module().HOST_EVENT_WAIT_SECONDS
-read_native_events = BASE.person_module().read_native_events
 ORDINARY_FAILURE_STEPS = frozenset(
     {
         "configure",
@@ -423,27 +422,41 @@ def bounded_skill_content(content):
     return content
 
 
+def _request_messages(attempt):
+    if not isinstance(attempt, dict) or not isinstance(attempt.get("body"), dict):
+        return []
+    messages = attempt["body"].get("messages")
+    if not isinstance(messages, list) or not all(isinstance(item, dict) for item in messages):
+        return []
+    return messages
+
+
 def advertised_skill(requests, selected):
     """Return the one native advertisement for this skill, including its revision."""
-    found = []
-    if not requests:
+    try:
+        found = []
+        if not requests:
+            return None
+        for message in _request_messages(requests[0]):
+            if message["role"] != "system":
+                continue
+            for block in re.findall(
+                r"<skill>\s*(.*?)\s*</skill>", _text_content(message.get("content")), re.S
+            ):
+                name = re.search(r"<name>(.*?)</name>", block, re.S)
+                location = re.search(r"<location>(.*?)</location>", block, re.S)
+                if name and location:
+                    match = re.search(
+                        r"/skill-library/"
+                        + re.escape(selected["skillId"])
+                        + r"/revisions/([a-f0-9]{64})/SKILL\.md$",
+                        location.group(1).strip(),
+                    )
+                    if match:
+                        found.append((name.group(1).strip(), match.group(1)))
+        return found[0] if len(found) == 1 else None
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError):
         return None
-    for message in requests[0]["body"]["messages"]:
-        if message["role"] != "system":
-            continue
-        for block in re.findall(r"<skill>\s*(.*?)\s*</skill>", message["content"], re.S):
-            name = re.search(r"<name>(.*?)</name>", block, re.S)
-            location = re.search(r"<location>(.*?)</location>", block, re.S)
-            if name and location:
-                match = re.search(
-                    r"/skill-library/"
-                    + re.escape(selected["skillId"])
-                    + r"/revisions/([a-f0-9]{64})/SKILL\.md$",
-                    location.group(1).strip(),
-                )
-                if match:
-                    found.append((name.group(1).strip(), match.group(1)))
-    return found[0] if len(found) == 1 else None
 
 
 def _text_content(content):
@@ -466,57 +479,63 @@ def _contains_observation_task(content, task):
 
 def _loaded_round_trip(case, *, require_selected=True):
     """Actual native result and receiving HTTP tool message, joined by call ID."""
-    selected, current = case["selected"], case["current"]
-    run_id = case["chat"]["frame"]["payload"]["runId"]
-    if len(case["tools"]) != 1 or len(case["requests"]) != 2:
+    try:
+        selected, current = case["selected"], case["current"]
+        run_id = case["chat"]["frame"]["payload"]["runId"]
+        if len(case["tools"]) != 1 or len(case["requests"]) != 2:
+            return False
+        tool = case["tools"][0]
+        event, context = tool["event"], tool["context"]
+        call_id = event["toolCallId"]
+        if (
+            not call_id
+            or event["toolName"] != "skills_read"
+            or event.get("error")
+            or event["params"] != {"name": selected["name"]}
+            or event["runId"] != run_id
+            or context["runId"] != run_id
+            or context["toolCallId"] != call_id
+            or any(context[field] != current[field] for field in ("sessionKey", "sessionId"))
+            or (
+                require_selected
+                and _text_content(event["result"]["content"]) != selected["content"]
+            )
+        ):
+            return False
+        first, second = [item["body"]["messages"] for item in case["requests"]]
+        if any(message["role"] == "tool" for message in first):
+            return False
+        advertisement = advertised_skill(case["requests"], selected)
+        if (
+            advertisement is None
+            or advertisement[0] != selected["name"]
+            or advertisement[1] != case["advertised_revision"]
+            or (require_selected and advertisement[1] != selected["revision"])
+        ):
+            return False
+        results = [message for message in second if message["role"] == "tool"]
+        calls = [
+            call
+            for message in second
+            if message["role"] == "assistant"
+            for call in message.get("tool_calls", [])
+        ]
+        return (
+            len(results) == 1
+            and results[0]["tool_call_id"] == call_id
+            and _text_content(results[0]["content"]) == _text_content(event["result"]["content"])
+            and len(calls) == 1
+            and calls[0]["id"] == call_id
+            and calls[0]["function"]["name"] == "skills_read"
+            and json.loads(calls[0]["function"]["arguments"]) == {"name": selected["name"]}
+        )
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError):
         return False
-    tool = case["tools"][0]
-    event, context = tool["event"], tool["context"]
-    call_id = event["toolCallId"]
-    if (
-        not call_id
-        or event["toolName"] != "skills_read"
-        or event.get("error")
-        or event["params"] != {"name": selected["name"]}
-        or event["runId"] != run_id
-        or context["runId"] != run_id
-        or context["toolCallId"] != call_id
-        or any(context[field] != current[field] for field in ("sessionKey", "sessionId"))
-        or (require_selected and _text_content(event["result"]["content"]) != selected["content"])
-    ):
-        return False
-    first, second = [item["body"]["messages"] for item in case["requests"]]
-    if any(message["role"] == "tool" for message in first):
-        return False
-    advertisement = advertised_skill(case["requests"], selected)
-    if (
-        advertisement is None
-        or advertisement[0] != selected["name"]
-        or advertisement[1] != case["advertised_revision"]
-        or (require_selected and advertisement[1] != selected["revision"])
-    ):
-        return False
-    results = [message for message in second if message["role"] == "tool"]
-    calls = [
-        call
-        for message in second
-        if message["role"] == "assistant"
-        for call in message.get("tool_calls", [])
-    ]
-    return (
-        len(results) == 1
-        and results[0]["tool_call_id"] == call_id
-        and _text_content(results[0]["content"]) == _text_content(event["result"]["content"])
-        and len(calls) == 1
-        and calls[0]["id"] == call_id
-        and calls[0]["function"]["name"] == "skills_read"
-        and json.loads(calls[0]["function"]["arguments"]) == {"name": selected["name"]}
-    )
 
 
 def loaded_use_observation(case):
     """Closed observations, with no stale/deleted/reset acceptance rule invented."""
-    if case["chat"]["frame"]["ok"] is False or case["terminal"].get("state") in {
+    if case["chat"]["frame"].get("ok") is False or case["terminal"].get("state") in {
         "error",
         "aborted",
     }:
@@ -531,50 +550,55 @@ def loaded_use_observation(case):
 
 
 def _control_observed(case):
-    name, before, current = case["case"], case["before"], case["current"]
-    if name == "positive":
-        return case["intervention"] is None and before == current
-    change = case["intervention"]
-    if change["frame"]["ok"] is not True:
-        return False
-    params, selected = change["params"], case["selected"]
-    if name == "reset":
+    try:
+        name, before, current = case["case"], case["before"], case["current"]
+        if name == "positive":
+            return case["intervention"] is None and before == current
+        change = case["intervention"]
+        if change["frame"].get("ok") is not True:
+            return False
+        params, selected = change["params"], case["selected"]
+        if name == "reset":
+            entry = change["frame"]["payload"]["entry"]
+            return (
+                change["method"] == "sessions.reset"
+                and params
+                == dict(
+                    key=before["sessionKey"], expectedSessionId=before["sessionId"], reason="reset"
+                )
+                and before["sessionKey"] == current["sessionKey"]
+                and before["lifecycleRevision"] != current["lifecycleRevision"]
+                and entry["sessionId"] == current["sessionId"]
+                and entry["lifecycleRevision"] == current["lifecycleRevision"]
+            )
+        if (
+            before != current
+            or params["skillId"] != selected["skillId"]
+            or params["expectedRevision"] != selected["revision"]
+        ):
+            return False
+        if name == "deleted":
+            receipt = change["frame"]["payload"]
+            entry = receipt["entry"]
+            return (
+                change["method"] == "skills.library.mutate"
+                and params["action"] == "remove"
+                and receipt["state"] == "removed"
+                and entry["removed"] is True
+                and entry["skillId"] == selected["skillId"]
+                and entry["revision"] == selected["revision"]
+            )
         entry = change["frame"]["payload"]["entry"]
         return (
-            change["method"] == "sessions.reset"
-            and params
-            == dict(key=before["sessionKey"], expectedSessionId=before["sessionId"], reason="reset")
-            and before["sessionKey"] == current["sessionKey"]
-            and before["lifecycleRevision"] != current["lifecycleRevision"]
-            and entry["sessionId"] == current["sessionId"]
-            and entry["lifecycleRevision"] == current["lifecycleRevision"]
-        )
-    if (
-        before != current
-        or params["skillId"] != selected["skillId"]
-        or params["expectedRevision"] != selected["revision"]
-    ):
-        return False
-    if name == "deleted":
-        receipt = change["frame"]["payload"]
-        entry = receipt["entry"]
-        return (
-            change["method"] == "skills.library.mutate"
-            and params["action"] == "remove"
-            and receipt["state"] == "removed"
-            and entry["removed"] is True
+            name == "stale"
+            and change["method"] == "skills.library.save"
+            and params["content"] != selected["content"]
             and entry["skillId"] == selected["skillId"]
-            and entry["revision"] == selected["revision"]
+            and _REVISION.fullmatch(entry["revision"]) is not None
+            and entry["revision"] != selected["revision"]
         )
-    entry = change["frame"]["payload"]["entry"]
-    return (
-        name == "stale"
-        and change["method"] == "skills.library.save"
-        and params["content"] != selected["content"]
-        and entry["skillId"] == selected["skillId"]
-        and _REVISION.fullmatch(entry["revision"]) is not None
-        and entry["revision"] != selected["revision"]
-    )
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError):
+        return False
 
 
 def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
@@ -634,7 +658,7 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
                 return False
             read = selected["read"]
             if (
-                read["ok"] is not True
+                read.get("ok") is not True
                 or read["payload"]["content"] != selected["content"]
                 or read["payload"]["entry"]["skillId"] != selected["skillId"]
                 or read["payload"]["entry"]["revision"] != selected["revision"]
@@ -648,7 +672,7 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
                 instructions="not_observed",
             )
             selection = case["selection"]
-            if selection["ok"] is not True or not _control_observed(case):
+            if selection.get("ok") is not True or not _control_observed(case):
                 return False
             if case["case"] == "positive":
                 if selection["payload"] != expected:
@@ -678,7 +702,7 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
             chat, terminal = case["chat"], case["terminal"]
             subscription = case["subscription"]
             if (
-                subscription["ok"] is not True
+                subscription.get("ok") is not True
                 or subscription["subscribed"] is not True
                 or subscription["key"] != case["current"]["sessionKey"]
                 or not isinstance(subscription["socket_id"], str)
@@ -703,7 +727,7 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
             ):
                 return False
             host_id = chat["params"]["idempotencyKey"]
-            if chat["frame"]["ok"] is True:
+            if chat["frame"].get("ok") is True:
                 if (
                     chat["frame"]["payload"]["runId"] != host_id
                     or terminal["runId"] != host_id
@@ -715,7 +739,7 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
                 if not minimum <= len(case["requests"]) <= 2:
                     return False
             elif (
-                chat["frame"]["ok"] is not False
+                chat["frame"].get("ok") is not False
                 or not chat["frame"].get("error")
                 or case["requests"]
                 or case["tools"]
@@ -828,7 +852,6 @@ class LoadedUseGatewayObservation:
                     if path in block and name:
                         names.append(name.group(1).strip())
             if len(names) == 1 and "skills_read" in {tool.name for tool in request.tool_schemas}:
-                self.advertised_name = names[0]
                 return tool_turn(
                     "skills_read", call_id="read" + secrets.token_hex(12), name=names[0]
                 )
@@ -872,11 +895,21 @@ def loaded_use_gateway(work, recommendations):
             body.extend(chunk)
         # Starlette replays the bounded body to downstream request validation.
         request._body = bytes(body)
+        try:
+            parsed_body = json.loads(body)
+            failure_reason = None
+        except (ValueError, UnicodeDecodeError):
+            parsed_body = None
+            failure_reason = "invalid_json"
         record = dict(
             request_id=str(uuid.uuid4()),
             idempotency_key=request.headers.get("Idempotency-Key"),
-            body=json.loads(body),
+            body=parsed_body,
+            status=None,
+            run_id=None,
         )
+        if failure_reason is not None:
+            record["failure_reason"] = failure_reason
         overflow = len(observation.requests) - observation.window_start >= 4
         if overflow:
             # One retained overflow per window; repeated rejection cannot fill the global cap.
@@ -884,7 +917,14 @@ def loaded_use_gateway(work, recommendations):
                 observation.requests.append(dict(record, status=429, run_id=None))
             return JSONResponse({"error": "observation_request_bound"}, status_code=429)
         observation.requests.append(record)
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except asyncio.CancelledError:
+            record["failure_reason"] = "request_cancelled"
+            raise
+        except Exception:
+            record["failure_reason"] = "request_failed"
+            raise
         record.update(
             status=response.status_code, run_id=response.headers.get("X-RelayMind-Run-Id")
         )
@@ -1419,9 +1459,9 @@ class OrdinaryComposition(BASE.ActionComposition):
             ]
             case["requests"] = self.observation.requests[start:]
             has_result = any(
-                message["role"] == "tool"
+                message.get("role") == "tool"
                 for attempt in case["requests"]
-                for message in attempt["body"]["messages"]
+                for message in _request_messages(attempt)
             )
             case["provider_attempts"] = [
                 record
@@ -1547,20 +1587,25 @@ class OrdinaryComposition(BASE.ActionComposition):
                     key=scope["sessionKey"], expectedSessionId=scope["sessionId"], reason="reset"
                 )
                 changed = rpc(page, "sessions.reset", params)
-                case["intervention"] = dict(
-                    method="sessions.reset", params=params, frame=changed["frame"]
-                )
-                if changed["frame"].get("ok") is True:
-                    entry = changed["frame"]["payload"]["entry"]
-                    selected_session = dict(
-                        sessionKey=scope["sessionKey"],
-                        expectedSessionId=entry["sessionId"],
-                        expectedLifecycleRevision=entry["lifecycleRevision"],
+                try:
+                    case["intervention"] = dict(
+                        method="sessions.reset", params=params, frame=changed["frame"]
                     )
-                    current = rpc(page, "rmqualification.person", selected_session)
-                    case["current"] = {
-                        field: current["frame"]["payload"][field] for field in _SCOPE_FIELDS
-                    }
+                    if changed["frame"].get("ok") is True:
+                        entry = changed["frame"]["payload"]["entry"]
+                        selected_session = dict(
+                            sessionKey=scope["sessionKey"],
+                            expectedSessionId=entry["sessionId"],
+                            expectedLifecycleRevision=entry["lifecycleRevision"],
+                        )
+                        current = rpc(page, "rmqualification.person", selected_session)
+                        if current["frame"].get("ok") is not True:
+                            raise ValueError("ordinary_skill_control_failed")
+                        case["current"] = {
+                            field: current["frame"]["payload"][field] for field in _SCOPE_FIELDS
+                        }
+                except (KeyError, TypeError, AttributeError):
+                    raise ValueError("ordinary_skill_control_failed") from None
             if not _control_observed(case):
                 raise ValueError("ordinary_skill_control_failed")
             try:
@@ -1745,6 +1790,7 @@ def main(argv=None):
     gateway, observation = None, None
     if args.observe_loaded_use:
         app, gateway, observation = loaded_use_gateway(backend / "inference", service)
+    app.state.application_token = secrets.token_urlsafe(48)
     action_token = secrets.token_urlsafe(48)
     registration = ActionRegistrations(runs)  # Actual DEFAULT production resolver.
     registration.replace(

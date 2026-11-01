@@ -820,12 +820,12 @@ def _close_contexts(contexts: list) -> None:
             pass
 
 
-def read_native_events(path: Path, *, offset: int = 0) -> list[dict]:
+def read_native_events(path: Path) -> list[dict]:
     """Complete JSONL events only; a trailing line still being appended is retried later."""
     raw = path.read_bytes()
     if len(raw) > 1024 * 1024:
         raise ValueError("native_event_bound")
-    complete, _, _partial = raw[offset:].rpartition(b"\n")
+    complete, _, _partial = raw.rpartition(b"\n")
     events = []
     for line in complete.split(b"\n"):
         # Blank, whitespace-only and CRLF blank lines carry no event.
