@@ -918,3 +918,45 @@ def test_trial_dispatch_refuses_an_unknown_command():
 
     with pytest.raises(ValueError, match="trial_command"):
         cli._trial(argparse.Namespace(command="trial-bogus"))
+
+
+# --- third review follow-ups (PR #262) ----------------------------------------
+
+
+@pytest.mark.parametrize(
+    "output",
+    [
+        b"OpenClaw 2026.10.7-beta.2\n",
+        b"OpenClaw 2026.10.7+local\n",
+        b"OpenClaw 2026.10.7.1\n",
+        b"OpenClaw v2026.10.7rc1\n",
+    ],
+)
+def test_a_suffixed_host_version_is_not_the_pinned_version(monkeypatch, output):
+    """RM39/AC30: a pre-release or suffixed host is not the pinned 2026.10.7."""
+    monkeypatch.setattr(kit, "_run", lambda argv, timeout=60: (0, output, b""))
+    assert kit.host_version(["openclaw"])[0] is None
+
+
+@pytest.mark.parametrize(
+    "output",
+    [
+        b"OpenClaw 2026.10.7\n",
+        b"OpenClaw 2026.10.7 (a1b2c3d)\n",
+        b"2026.10.7.",
+        b"openclaw v2026.10.7\n",
+    ],
+)
+def test_the_exact_pinned_host_version_is_recognized(monkeypatch, output):
+    monkeypatch.setattr(kit, "_run", lambda argv, timeout=60: (0, output, b""))
+    assert kit.host_version(["openclaw"])[0] == kit.PINNED_OPENCLAW
+
+
+def test_a_blocked_trial_command_reports_blocked(tmp_path, capsys):
+    """RM39/AC30: the stderr status agrees with exit 3 (blocked), never rejected."""
+    tarball = release(tmp_path)
+    argv = ["trial-install", "--tarball", str(tarball), "--work", str(tmp_path / "work")]
+    argv += ["--output", str(tmp_path / "install.json"), "--", *fake_host(tmp_path, "old")]
+    assert main(argv) == 3
+    outcome = json.loads(capsys.readouterr().err)
+    assert outcome == dict(status="blocked", reason="host_version")
