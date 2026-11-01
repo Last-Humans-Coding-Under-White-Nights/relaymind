@@ -274,6 +274,11 @@ export function createSkillLoadedUseFence(dependencies: Dependencies) {
       }
       current();
       unexpired();
+      // RM16: the host's generic retryable failure (UNAVAILABLE) refuses this
+      // attempt only; a library refusal (missing/foreign revision, removed
+      // entry, changed session) or any other result blocks.
+      if (!result.ok && (result as any).error?.code === "UNAVAILABLE")
+        transient();
       const loaded = result.ok ? (result.payload as any) : undefined;
       if (!loaded) refuse("binding_changed");
       if (

@@ -992,7 +992,8 @@ result.
   reports `Darwin`, `arm64`, CPU `Apple M1` and exactly 8 GiB of memory;
 - `environment_lock`: every value in the manifest's `environment_lock` matches;
 - `host_version`: `openclaw --version` names only `2026.10.7` (the plugin's
-  `PINNED_OPENCLAW`), which the freeze's host and SDK versions also name;
+  `PINNED_OPENCLAW`), which the freeze's host and SDK versions also name; a
+  suffixed version such as `2026.10.7-beta.2` or `2026.10.7.1` is another version;
 - `release_checksum`: the tarball's SHA-256 is the one in `SHA256SUMS` and
   `release.json` beside it (`npm run pack:release`), and `release.json` pins
   that host;
@@ -1154,12 +1155,15 @@ the harness reason. Earlier steps with screenshots are `not_verified`, and
 later ones are `not_run`. A screenshot alone never makes a step recorded. If a
 language's child fails or times out (15 minutes), the recorder still writes
 `manifest.json`. Each child runs in its own process session: on a timeout or
-an interruption the recorder sends SIGTERM to the whole process group (so the
+an interruption, and also when the child exits on its own (a crash included),
+the recorder sends SIGTERM to whatever is left in the process group (so the
 harness can stop its gateway and proxy), waits up to 15 seconds, then sends
 SIGKILL, so no process left in that group keeps running. The manifest has
 `complete: false`. It sets the language `reason` to
 `child_failed` or `child_timeout`, and every outcome-dependent step to
 `not_run` with `capture_missing`, or `capture_invalid` for a torn capture.
+A repeated `--languages` value is refused before anything is created
+(`languages_repeated`, exit `2`, no manifest).
 Any partial files are still listed by digest, including every
 `screens/*.png` that `screens.json` does not name (a killed child never saves
 it). Such a screenshot belongs to no step. A torn `screens.json`, a listed file
