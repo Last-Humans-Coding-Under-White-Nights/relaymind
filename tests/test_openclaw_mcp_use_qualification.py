@@ -361,10 +361,132 @@ def discovery_capture():
     capture["mcp_use"].update(
         probe_exit_code=0,
         server_events=[dict(kind="list", server=name) for name in ("alpha.one", "alpha?one")],
-        inventories=[dict(method="tools.effective", status="ok", tool_names=["append"])],
+        inventories=[
+            # A session can be inventoried before its MCP runtime connects.
+            effective_event("empty", [], notices=["mcp-not-yet-connected"]),
+            dict(method="mcp.app.listTools", status="refused", inventory="none", tool_names=[]),
+            effective_event("listed", list(COLLIDING_ROWS)),
+        ],
         sandbox_files={"alpha.one": [], "alpha?one": []},
     )
     return capture
+
+
+# Projection of the pinned host's grouped tools.effective rows (probe.mjs).
+COLLIDING_ROWS = (
+    dict(name="alpha-one__append", server="alpha.one", original="append"),
+    dict(name="alpha-one-2__append", server="alpha?one", original="append"),
+)
+
+
+def effective_event(inventory, mcp_tools, *, core=("read",), notices=()):
+    names = [*core, *(row["name"] for row in mcp_tools)] if inventory == "listed" else []
+    return dict(
+        method="tools.effective",
+        status="ok",
+        inventory=inventory,
+        tool_names=names,
+        mcp_tools=[dict(row) for row in mcp_tools],
+        notices=list(notices),
+    )
+
+
+@pytest.mark.parametrize(
+    "inventories",
+    [
+        pytest.param([effective_event("empty", [])], id="empty"),
+        pytest.param([effective_event("malformed", [])], id="malformed"),
+        pytest.param(
+            [effective_event("listed", list(COLLIDING_ROWS)), effective_event("malformed", [])],
+            id="any_malformed",
+        ),
+        pytest.param([effective_event("listed", [])], id="core_tools_only"),
+        pytest.param([effective_event("listed", [COLLIDING_ROWS[0]])], id="one_colliding_tool"),
+        pytest.param(
+            [
+                effective_event(
+                    "listed",
+                    [COLLIDING_ROWS[0], {**COLLIDING_ROWS[1], "name": "alpha-one__append"}],
+                )
+            ],
+            id="same_exposed_name",
+        ),
+        pytest.param(
+            [
+                effective_event(
+                    "listed", [COLLIDING_ROWS[0], {**COLLIDING_ROWS[1], "original": "other"}]
+                )
+            ],
+            id="wrong_original",
+        ),
+        pytest.param(
+            [
+                effective_event(
+                    "listed", [COLLIDING_ROWS[0], {**COLLIDING_ROWS[1], "denied_by_session": True}]
+                )
+            ],
+            id="denied_by_session",
+        ),
+        pytest.param(
+            [effective_event("listed", [*COLLIDING_ROWS, {**COLLIDING_ROWS[1], "name": "third"}])],
+            id="duplicate_server_row",
+        ),
+        pytest.param(
+            [{**effective_event("listed", list(COLLIDING_ROWS)), "tool_names": ["read"]}],
+            id="names_not_listed",
+        ),
+        pytest.param(
+            [{**effective_event("listed", list(COLLIDING_ROWS)), "status": "refused"}],
+            id="refused",
+        ),
+        # The pre-fix projection: status ok, no inventory outcome, no mapping.
+        pytest.param(
+            [dict(method="tools.effective", status="ok", tool_names=[])], id="legacy_empty"
+        ),
+        pytest.param(
+            [
+                dict(
+                    method="tools.effective",
+                    status="ok",
+                    tool_names=[r["name"] for r in COLLIDING_ROWS],
+                )
+            ],
+            id="legacy_names_only",
+        ),
+        pytest.param(
+            [
+                dict(
+                    method="mcp.app.listTools",
+                    **{
+                        k: v
+                        for k, v in effective_event("listed", list(COLLIDING_ROWS)).items()
+                        if k != "method"
+                    },
+                )
+            ],
+            id="other_method",
+        ),
+    ],
+)
+def test_discovery_requires_both_colliding_tools_in_the_session_inventory(inventories):
+    """RM39/AC35: an empty, malformed or partial session inventory is not discovery."""
+    api = module()
+    capture = discovery_capture()
+    assert api.fixture_discovery_pass(capture)
+    capture["mcp_use"]["inventories"] = inventories
+    assert not api.fixture_discovery_pass(capture)
+    assert module("qualify").trial_outcome(capture) == 1
+
+
+def test_recorded_ci_inventory_shape_is_not_discovery():
+    """RM39/AC35: the six rows the pre-fix projection recorded on the real host."""
+    capture = discovery_capture()
+    capture["mcp_use"]["inventories"] = [
+        dict(method=method, status=status, tool_names=[], monotonic_ns=str(n))
+        for n in range(3)
+        for method, status in (("tools.effective", "ok"), ("mcp.app.listTools", "refused"))
+    ]
+    assert not module().fixture_discovery_pass(capture)
 
 
 def test_trial_exit_distinguishes_blocked_environment_from_harness_failure():
@@ -660,8 +782,15 @@ def test_inventory_projection_keeps_no_raw_params_or_payloads(node_runtime):
             """
           import {observeDispatch} from './test/host-mcp-use-qualification/probe.mjs';
           const events = [];
-          const dispatch = async () => ({ok:true,
-            payload:{tools:[{name:'append', secret:'private-config'}]}});
+          // Pinned host shapes: grouped tools.effective, MCP tools/list for Apps.
+          const dispatch = async method => method === 'tools.effective'
+            ? {ok:true, payload:{agentId:'main', profile:'full', groups:[{id:'mcp',
+                label:'MCP server tools', source:'mcp', tools:[{id:'alpha-one__append',
+                label:'append', description:'private-config', rawDescription:'private-config',
+                source:'mcp', pluginId:'bundle-mcp', mcpServer:'alpha.one',
+                mcpToolName:'append'}]}],
+                notices:[{id:'mcp-stale-catalog', severity:'info', message:'private-config'}]}}
+            : {ok:true, payload:{tools:[{name:'append', secret:'private-config'}]}};
           await observeDispatch(dispatch, event => events.push(event))(
             'tools.effective', {sessionKey:'private-session'}, {});
           console.log(JSON.stringify(events));
@@ -677,8 +806,15 @@ def test_inventory_projection_keeps_no_raw_params_or_payloads(node_runtime):
     assert "private-config" not in result.stdout
     events = json.loads(result.stdout)
     assert events == [
-        dict(method=method, status="ok", tool_names=["append"])
-        for method in ("tools.effective", "mcp.app.listTools")
+        dict(
+            method="tools.effective",
+            status="ok",
+            inventory="listed",
+            tool_names=["alpha-one__append"],
+            mcp_tools=[dict(name="alpha-one__append", server="alpha.one", original="append")],
+            notices=["mcp-stale-catalog"],
+        ),
+        dict(method="mcp.app.listTools", status="ok", inventory="listed", tool_names=["append"]),
     ]
 
 

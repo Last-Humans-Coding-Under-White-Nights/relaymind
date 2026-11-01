@@ -1342,6 +1342,11 @@ native UI allow/deny is functional evidence only; genuine human approval,
 actual Apple M1/macOS and native Windows, and whole-task gates remain open.
 No adapter/registry activation or host-use measurement is supplied by this
 revision; its only code change adds the reviewed specification evidence anchor.
+The #204 harness now projects the pinned host's grouped `tools.effective`
+inventory; its fixture discovery check requires both colliding fixture tools in
+the session inventory, so an empty or malformed inventory fails the run. Earlier
+captures recorded an empty list because of the old flat projection. No real-host
+run of the corrected harness exists yet.
 
 #240 host_config evidence must validate with the pinned host's own validator
 and captured schema/validator identities, including the native regex dialect.

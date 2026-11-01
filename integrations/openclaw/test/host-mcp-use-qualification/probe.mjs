@@ -5,12 +5,64 @@ import {definePluginEntry} from "openclaw/plugin-sdk/plugin-entry";
 import {dispatchGatewayMethod} from "openclaw/plugin-sdk/gateway-method-runtime";
 import {createPersonProbe} from "../host-person-qualification/probe.mjs";
 
-const inventory = (method, result) => ({method,
-  status: result?.ok === true ? "ok" : "refused",
-  tool_names: Array.isArray(result?.payload?.tools)
-    ? result.payload.tools.slice(0, 4096).map(tool => tool?.name)
-      .filter(name => typeof name === "string" && name.length <= 256) : [],
-});
+const TOOL_LIMIT = 4096;
+const NOTICE_LIMIT = 64;
+const bounded = value => typeof value === "string" && value.length > 0 && value.length <= 256;
+const isRecord = value => value !== null && typeof value === "object" && !Array.isArray(value);
+const malformed = Symbol("malformed");
+
+// Pinned 2026.10.7 tools.effective payload: {groups: [{tools: [entry]}], notices?}.
+// Entries are keyed by `id`; MCP rows carry mcpServer/mcpToolName and an
+// optional deniedBySession. Any other shape is malformed, never an empty list.
+function effectiveRows(payload) {
+  if (!isRecord(payload) || !Array.isArray(payload.groups)) return malformed;
+  const rows = [];
+  for (const group of payload.groups) {
+    if (!isRecord(group) || !Array.isArray(group.tools)) return malformed;
+    for (const tool of group.tools) {
+      if (!isRecord(tool) || !bounded(tool.id) || rows.length >= TOOL_LIMIT) return malformed;
+      if (tool.mcpServer === undefined && tool.mcpToolName === undefined) {
+        rows.push({name: tool.id});
+        continue;
+      }
+      if (!bounded(tool.mcpServer) || !bounded(tool.mcpToolName)) return malformed;
+      rows.push({name: tool.id, server: tool.mcpServer, original: tool.mcpToolName,
+        ...tool.deniedBySession === true ? {denied_by_session: true} : {}});
+    }
+  }
+  return rows;
+}
+
+function noticeIds(payload) {
+  if (payload.notices === undefined) return [];
+  if (!Array.isArray(payload.notices) || payload.notices.length > NOTICE_LIMIT) return malformed;
+  const ids = payload.notices.map(notice => notice?.id);
+  return ids.every(bounded) ? ids : malformed;
+}
+
+// MCP tools/list result through mcp.app.listTools: {tools: [{name}]}.
+function listedRows(payload) {
+  if (!isRecord(payload) || !Array.isArray(payload.tools) || payload.tools.length > TOOL_LIMIT) {
+    return malformed;
+  }
+  const names = payload.tools.map(tool => tool?.name);
+  return names.every(bounded) ? names.map(name => ({name})) : malformed;
+}
+
+// Records only bounded names, MCP mapping and notice IDs; never descriptions,
+// messages, schemas or the session key.
+const inventory = (method, result, status = result?.ok === true ? "ok" : "refused") => {
+  const effective = method === "tools.effective";
+  const event = {method, status, inventory: "none", tool_names: [],
+    ...effective ? {mcp_tools: [], notices: []} : {}};
+  if (status !== "ok") return event;
+  const rows = effective ? effectiveRows(result.payload) : listedRows(result.payload);
+  const notices = effective && rows !== malformed ? noticeIds(result.payload) : [];
+  if (rows === malformed || notices === malformed) return {...event, inventory: "malformed"};
+  return {...event, inventory: rows.length ? "listed" : "empty",
+    tool_names: rows.map(row => row.name),
+    ...effective ? {mcp_tools: rows.filter(row => row.server !== undefined), notices} : {}};
+};
 
 export function observeDispatch(dispatch, record) {
   return async (method, params, options) => {
@@ -23,7 +75,7 @@ export function observeDispatch(dispatch, record) {
         const appResult = await dispatch("mcp.app.listTools", {}, {timeoutMs: 3000});
         record(inventory("mcp.app.listTools", appResult));
       } catch {
-        record({method: "mcp.app.listTools", status: "unavailable", tool_names: []});
+        record(inventory("mcp.app.listTools", undefined, "unavailable"));
       }
     }
     return result;

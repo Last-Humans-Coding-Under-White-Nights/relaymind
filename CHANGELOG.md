@@ -26,6 +26,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   records, observe approval identity and resolution, and rescan final captures
   for secrets. The CI timeout is four minutes; missing run traces and native
   exact-use receipts still prevent qualification.
+- Fix the MCP capability tier's `tools.effective` projection (#204; RM39/AC35):
+  the pinned host returns grouped entries (`groups[].tools[].id`), so the old
+  flat `payload.tools` projection always recorded an empty list. The probe now
+  records an explicit `listed`/`empty`/`malformed` outcome, the host's MCP
+  server/original mapping and notice IDs, and discovery requires both colliding
+  fixture tools in the session inventory. Earlier captures' empty
+  `tools.effective` lists came from the projection, not the host; no new
+  real-host run exists yet.
 
 - Operations and platform run kit (#242, toward #241, #235, #234; RM38, RM39, RM44; AC29, AC37):
   - `scripts/asset_operations_run.py startup` measures ten real `relaymind serve` startups over a generated 300-skill bilingual catalog, using the existing AC29 driver. It waits for recommendations to be ready and samples memory on POSIX and Windows.
