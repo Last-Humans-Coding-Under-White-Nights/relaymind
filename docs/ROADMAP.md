@@ -1116,7 +1116,8 @@ or a field; one locale rule (`zh`, `zh-CN`, `zh_CN`, `zh-Hans`) serves the
 panel and its evidence, and a receipt that cannot be displayed leaves the
 shown recommendation and its actions in place.
 The adapter revision is repinned to the built bytes that include these review
-fixes (`6ec24fd1bbbd786f50c6b5ad2208439aabc60b5efff4372172ddf24ffa0b9480`).
+fixes and the #256 ledger and fence fixes
+(`3fc77018c85ed3bae757427365d71089b692d647194f8c67bde5e31f21bb8ced`).
 The committed capture below ran the earlier bytes
 (`ddeb3c70d69c3d6de61902b41b05008853c777b1e13c04ec9d7cc827db01b894`), so it
 must be recaptured from CI for the new revision before merge.
@@ -1384,7 +1385,8 @@ session-selection harness (CI run 41318389858, commit c0bd6f4, PR merge
 checkout c22ad40) passed the ordinary-pass and ordinary-skill-pass predicates
 with all 15 harness sources matching; its capture
 `openclaw-native-actions-20261101-adapter.json` (SHA-256
-`35436e519245…`) is the registry's evidence revision. As before, this is
+`35436e519245…`) was the registry's evidence revision until the ledger fixes
+below were recaptured. As before, this is
 Linux functional evidence with disposable accounts, not macOS/Windows or
 owner-run acceptance. The person-ingress harness hardening raised in the #224 review
 (#228) changed evidence-bound harness files; a fresh ordinary installed-host
@@ -1478,11 +1480,13 @@ and no CI run of the corrected harness exists yet.
 #250 implements bounded native configuration preflight with the installed
 OpenClaw 2026.10.7 validator under Node, including strict/plugin checks and
 native default handling, with a Python timeout and closed verdicts recording
-the host version and validator file SHA-256. The child state is a disposable
+the host version and the SHA-256 of every pinned host entry point the checker
+imports; any other validator identity is rejected. The child state is a disposable
 directory without operator credentials; when the config names `relaymind` it
 holds only the packaged RelayMind plugin (the built integration, or the
 unpacked release passed as `plugin_root`), so installed-plugin discovery checks
-its settings. A referenced plugin without an inspected schema is `unavailable`
+its settings. A plugin referenced in `plugins.entries` or `plugins.allow`
+without an inspected schema is `unavailable`
 (`plugin_schema_not_inspected`), not `valid`. Valid/invalid, Unicode-pattern,
 plugin-schema, installed RelayMind, unknown/uninspected plugin and
 unavailable-host fixtures run in the OpenClaw CI job.
@@ -1524,11 +1528,36 @@ shipped `direct_actions`/`exact_skill_selection` entry is re-pinned to it
 ledger takes over a stale owner lock without ever removing a live owner's
 lock (per-owner lock files; one owner under any interleaving) and writes each
 record completely across short writes before acknowledging it; these changed
-bytes are that new revision. Its evidence revision still names the capture of
-the previous revision `943e1f0e…` (CI run 41318389858,
-`openclaw-native-actions-20261101-adapter.json`, SHA-256 `35436e519245…`), so
-the evidence must be recaptured from CI for the new adapter revision before
-merge. `tests/test_openclaw_install.py` fails when the registry and
+bytes are that new revision. The ordinary installed-host run of these exact
+bytes (CI run 41322540111, pinned OpenClaw 2026.10.7, Ubuntu runner, commit
+7af9cc2, PR merge checkout ad97e0b) passed the ordinary-pass and
+ordinary-skill-pass predicates with all 15 harness sources matching the #247
+harness; its unmodified capture replaces
+`openclaw-native-actions-20261101-adapter.json` (SHA-256
+`6b8947df711e70c0d87f1f50d8a43e1ffb57b2a68699ff69d6457249f4b828b2`), which
+the registry's evidence revision named for that revision. A fourth review
+made the MCP use request fail as `invalid_request` before identity resolution
+when it has no canonical text (an explicit undefined property or an unpaired
+surrogate) or a non-string session field, checks registration once on the
+in-flight duplicate path, and reads the loaded-use fence deadline live. The
+ledger then cuts a torn final record through a separate read-write handle,
+because a Windows append handle cannot change the file length. These
+changed bytes were re-pinned to adapter revision
+`a29cac121c5e01932b6b3ee75e9bab2214e5e9e72cbc36d8f802f62b917c7cfe`. A fifth
+review made a same-key MCP request read its key history again after its
+registration check (an attempt that settled meanwhile is recovered, never
+reported as `not_dispatched`), kept a host `UNAVAILABLE` result of the exact
+skill read from blocking the conversation, digested the adapter bytes once
+per resolver, took over a stale ledger lock that names this process's own
+PID but was not created by it (PID 1 in a container), reserved the exact
+room for each binding's dispatch marker and longest receipt under the byte
+cap, and compiled each host schema pattern once per operation. These bytes are
+re-pinned to adapter revision
+`37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`; the
+evidence revision still names the earlier capture, so the evidence must be
+recaptured from CI for this new revision before the entry is qualified evidence
+for it. As before, this is Linux
+functional evidence with disposable accounts. `tests/test_openclaw_install.py` fails when the registry and
 the built adapter digest of the release artifact drift.
 
 #240 host_config evidence must validate with the pinned host's own validator
@@ -1585,8 +1614,8 @@ inputs do not block tooling implementation or explicitly unqualified fixture run
 AC37): the separate `Platform runs` workflow
 (`.github/workflows/platform-runs.yml`; manual, or on pull requests that change
 its files) runs on `macos-latest` (arm64), `windows-latest` (native x86-64) and
-`ubuntu-latest`. It runs the complete AC29 operations run
-(`scripts/asset_operations_run.py operations`): ten clean launches from a
+`ubuntu-latest`. It runs the lexical portion of the AC29 operations protocol as
+a fixture (`scripts/asset_operations_run.py operations`): ten clean launches from a
 generated 300-skill catalog, a recommendations-disabled memory baseline, and
 the 60-second 2 req/s workload. The workload has four 25-record metadata-import
 batches and a derived rebuild, driven by the existing `run_workload` through an
@@ -1602,14 +1631,11 @@ Spec 0.65 section 12.6.5 excludes CI runners from the actual Apple Silicon macOS
 platform gate stays `not_applicable`. Skill use and MCP use stay `not_run`
 (loaded use and MCP use remain disabled, spec 7.6.1/7.6.2), as do restart and
 the interactive approvals. The committed 300-asset acceptance catalog does not
-exist yet, so #241 and #235 stay open. A local development run on an Apple M1
-8 GiB machine (not the acceptance session) showed what such reports look like:
-- all ten startups exceeded 1,000 ms before a first lexical answer;
-- 119 of 120 slots were useful (service p95 about 54 ms);
-- two of four batches were visible within 1,000 ms, the other two delayed
-  behind the default 30-second periodic scan of the 300-record directory.
-
-These are fixture observations, not measured results.
+exist yet, so #241 and #235 stay open. The run is lexical-only: all-phase
+worker/device memory, embedding/rebuild/inference contention, and separate
+download, scan-detection and OpenClaw startup times are not measured, so it
+cannot close the AC29 protocol (spec 0.65 section 12.6). No runner or local
+report is committed as evidence yet.
 
 #236/#237 run kit (tooling only): blind section 12.6.1 label templates, the
 adjudication worksheet and label freeze; host-task and episode preregistration

@@ -6,11 +6,14 @@ Verdicts are closed: ``valid``/``invalid`` carry ``reason: null``;
 ``unavailable`` carries ``validator_unavailable`` (no host verdict) or
 ``plugin_schema_not_inspected`` (the host ran, but a referenced plugin's
 schema could not be inspected, so the config cannot be called valid).
+The validator identity is the pinned host version plus the SHA-256 of every
+host entry point the checker imports; any other identity is rejected.
+The input is the execution-effective preimage itself: the checker does not
+resolve ``$include`` files or ``${VAR}`` substitutions from operator state.
 """
 
 import json
 import os
-import re
 import shutil
 import subprocess
 import tempfile
@@ -18,9 +21,30 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from relaymind.evaluation.asset_benchmark_io import CONFIG_BYTES
+from relaymind.evaluation.asset_trial_kit import PINNED_OPENCLAW
 
 _PACKAGE = Path(__file__).resolve().parents[3] / "integrations/openclaw"
-_VALIDATOR_FILE = "dist/validation-ongxOmrj.mjs"
+# Every pinned host entry point check-host-config.mjs imports, by file digest.
+PINNED_VALIDATOR = {
+    "host_version": PINNED_OPENCLAW,
+    "validator_files": {
+        "dist/config-cli-validation-Dnu71lrA.mjs": (
+            "6e3dbbcdab56f21053764642fbc17127574b52328e4d8fc01e9354fae025321c"
+        ),
+        "dist/config-state-ByKt1EBw.mjs": (
+            "863d94fcfbba058d5dc439b3c6a6507eb152fe9d224e0015387cfab7dce6e79b"
+        ),
+        "dist/io.plugin-metadata-CyZLGhSx.mjs": (
+            "6bf0142104107467f9c2619ab70e0545acff5383b3a2117a39fd4679c8d9a78d"
+        ),
+        "dist/plugin-metadata-snapshot-YmhmQlNq.mjs": (
+            "2a03d6d904eaddae02f7b1ee0b342bef600535ea369b99e118bab29403e2ff8f"
+        ),
+        "dist/validation-ongxOmrj.mjs": (
+            "a79aac9f01ef15e5abcc78205814fe38a3248cc2b22dd0f3e075600eee236889"
+        ),
+    },
+}
 # The packaged plugin files the host reads to discover RelayMind and its schema.
 _PLUGIN_FILES = ("package.json", "openclaw.plugin.json", "dist")
 
@@ -43,15 +67,7 @@ def validate_verdict(value: object) -> dict:
         or value["reason"] != expected_reason
     ):
         raise ValueError("host_config_verdict")
-    identity = value["validator"]
-    if (
-        not isinstance(identity, dict)
-        or set(identity) != {"host_version", "validator_file", "validator_sha256"}
-        or identity["host_version"] != "2026.10.7"
-        or identity["validator_file"] != _VALIDATOR_FILE
-        or not isinstance(identity["validator_sha256"], str)
-        or re.fullmatch(r"[a-f0-9]{64}", identity["validator_sha256"]) is None
-    ):
+    if value["validator"] != PINNED_VALIDATOR:
         raise ValueError("host_config_verdict")
     path = value["issue_path"]
     if value["status"] == "valid":
@@ -63,7 +79,7 @@ def validate_verdict(value: object) -> dict:
 
 
 def check_host_config(
-    config: Mapping, *, host_root: Path | None = None, plugin_root: Path | None = None
+    config: object, *, host_root: Path | None = None, plugin_root: Path | None = None
 ) -> dict:
     """Check this exact preimage in Node, with a 15-second process deadline.
 
@@ -75,8 +91,11 @@ def check_host_config(
     RelayMind plugin from ``plugin_root`` (default: this integration's built
     package; pass the unpacked release the run uses), so ordinary
     installed-plugin discovery validates its settings; an unbuilt package is
-    unavailable. Any other referenced non-bundled plugin stays undiscovered and
-    the verdict is unavailable.
+    unavailable. Any other non-bundled plugin named in ``plugins.entries`` or
+    ``plugins.allow`` stays undiscovered and the verdict is unavailable; an
+    undiscovered ``plugins.slots`` owner is a native error, and a
+    ``plugins.deny`` name enables nothing to check. A non-object config gets
+    the host's own verdict.
     """
     try:
         payload = json.dumps(config, ensure_ascii=True, allow_nan=False).encode("utf-8")
@@ -141,9 +160,9 @@ def _install_plugin(source: Path, target: Path) -> None:
             shutil.copyfile(path, target / name)
 
 
-def _references_relaymind(config: Mapping) -> bool:
+def _references_relaymind(config: object) -> bool:
     """Whether plugins.entries/allow/deny/slots name the RelayMind plugin."""
-    plugins = config.get("plugins")
+    plugins = config.get("plugins") if isinstance(config, Mapping) else None
     if not isinstance(plugins, Mapping):
         return False
     names: list[object] = []

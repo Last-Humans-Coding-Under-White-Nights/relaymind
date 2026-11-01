@@ -191,6 +191,9 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.66 with the #268 amendment, the #266 corpus review and
+            # owner-only tuner waiver (merged stack).
+            ("b9601be8e69589a4bb3c218ead64c8251166ade4a81d4452ea3bd5f14c5d76ee", 625458),
             # Reviewed 0.66 with the #268 amendment, the precise negative-finding
             # definitions and the LHCWN rename (merged stack).
             ("b77227bdf2ca4d4f59451ff3165ab24fb37a2c47f2f41063b8584d0eeed56310", 625266),
@@ -199,6 +202,8 @@ _GENERATOR_ANCHORS = {
             ("3393af66c79f18922d8493f56f81d41d1fd1e4ae52c2cc5c1ce56b764e6d7421", 624939),
             # Reviewed 0.66 with the #268 amendment and the LHCWN repository rename.
             ("72d3815fe8c304c04ece8f4a3ec2a669c2a4d2a119f882036617f7e3c15749f2", 624188),
+            # Reviewed 0.66: platform records carry the corpus review; owner-only tuner waiver.
+            ("6b0c6ee476412a109db89cbbdd35648c0a4425ad03a8e4e0d9715711b722491a", 623442),
             # Reviewed 0.66 with the precise negative-finding definitions.
             ("8c00f5154b64da1f1ad00352aadea9cee419e4b96e24f757ec1cd812259abf13", 623250),
             # Reviewed 0.66 with the #266 record input, scope and identity rules.

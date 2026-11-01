@@ -316,13 +316,16 @@ def _assess_asset_release(
         custodian = people.get(review.custodian_id)
         if review.lock_digest != lock["digest"]:
             reasons.add("external_review_lock_mismatch")
-        # Spec 0.66 section 12.6.6: under owner_machine labelling the owner is
-        # custodian and tuner; the reviewed record and its label disclose it.
-        owner_machine = labels["agreement"]["method"] == OWNER_MACHINE
+        # Spec 0.66 section 12.6.6: under owner_machine labelling only the
+        # owner, who adjudicates every case, may be both custodian and tuner;
+        # any other custodian keeps the section 12.6.1 tuner exclusion.
+        owner_custodian = labels["agreement"]["method"] == OWNER_MACHINE and {
+            row["adjudicator_id"] for row in labels["adjudications"]
+        } == {review.custodian_id}
         if (
             custodian is None
             or "custodian" not in custodian["roles"]
-            or ("tuner" in custodian["roles"] and not owner_machine)
+            or ("tuner" in custodian["roles"] and not owner_custodian)
         ):
             reasons.add("custodian_unqualified")
         if (

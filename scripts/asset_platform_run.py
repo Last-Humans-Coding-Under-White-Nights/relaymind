@@ -103,14 +103,79 @@ def _ordinary(args) -> int:
 # --- platform report ----------------------------------------------------------------------
 
 
+# The files a platform run executes or loads (spec 0.65 section 12.6.5: the
+# runner inventory names the actual driver/grader and the shared modules it
+# imports). The S3 grader's own ``runner_inventory`` is closed to its package
+# and anchors, so these are bound by a separate registered evidence document,
+# ``platform-runner-files``. The release tarball the ordinary harness installs
+# is bound by ``release.json`` / ``SHA256SUMS``.
+PLATFORM_RUNNER_EVIDENCE = "platform-runner-files"
+_PLATFORM_RUNNER_FILES = (
+    ".github/workflows/platform-runs.yml",
+    "pyproject.toml",
+    "scripts/asset_operations_run.py",
+    "scripts/asset_platform_run.py",
+    "scripts/asset_whole_task.py",
+    "scripts/openclaw_install_check.py",
+    # The fixture companion bundle builder.
+    "tests/test_asset_whole_task_inputs.py",
+    "tests/whole_task_helpers.py",
+    # The test helpers the ordinary installed-host harness imports.
+    "tests/api_helpers.py",
+    "tests/gateway_helpers.py",
+    "tests/helpers.py",
+    "tests/recommendation_helpers.py",
+    "tests/test_asset_catalog.py",
+    "tests/test_asset_sources.py",
+)
+# The ordinary harness and the action and person harnesses it is built on.
+_PLATFORM_HARNESS_DIRECTORIES = (
+    "integrations/openclaw/test/host-action-qualification",
+    "integrations/openclaw/test/host-ordinary-qualification",
+    "integrations/openclaw/test/host-person-qualification",
+)
+
+
+def platform_runner_files() -> list[str]:
+    """Every repository file the platform run executes or loads, as sorted paths."""
+    paths = set(_PLATFORM_RUNNER_FILES)
+    paths.update(
+        p.relative_to(ROOT).as_posix()
+        for p in (ROOT / "src/relaymind").rglob("*.py")
+        if "__pycache__" not in p.parts
+    )
+    for directory in _PLATFORM_HARNESS_DIRECTORIES:
+        paths.update(
+            p.relative_to(ROOT).as_posix()
+            for p in (ROOT / directory).rglob("*")
+            if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc"
+        )
+    return sorted(paths)
+
+
+def platform_runner_inventory() -> bytes:
+    """Path, SHA-256 and size of every ``platform_runner_files`` file, as JSON bytes."""
+    import hashlib
+
+    files = []
+    for path in platform_runner_files():
+        payload = (ROOT / path).read_bytes()
+        files.append(
+            dict(path=path, sha256=hashlib.sha256(payload).hexdigest(), bytes=len(payload))
+        )
+    return (json.dumps(dict(schema_version=1, files=files), indent=1) + "\n").encode("utf-8")
+
+
 def _bundle(out: Path, environment: Mapping, evidence: Mapping[str, bytes]):
-    """The fixture companion inputs, locked to the observed runner environment."""
+    """The fixture companion inputs, locked to the observed runner environment,
+    registering ``platform-runner-files`` next to the run's own evidence."""
     from test_asset_whole_task_inputs import Bundle
 
     bundle = Bundle(out)
     bundle.documents = [d for d in bundle.documents if d["id"] != "environment_lock"]
     bundle.add("environment_lock", dict(environment))
     bundle.extra_evidence.update(evidence)
+    bundle.extra_evidence[PLATFORM_RUNNER_EVIDENCE] = platform_runner_inventory()
     bundle.write_manifest()
     return bundle
 
@@ -158,7 +223,9 @@ def _normal(value) -> object:
 
 
 def verify_operations(path: Path) -> str | None:
-    """None when the stored summary is exactly what the grader computes again."""
+    """None when the stored summary is exactly what the grader computes again
+    and the run itself held: a report with harness errors (its command exited
+    2) is ``harness_errors``, never ok."""
     try:
         report = json.loads(Path(path).read_bytes())
         if (report.get("qualification"), report.get("acceptance")) != (
@@ -166,11 +233,16 @@ def verify_operations(path: Path) -> str | None:
             "not_applicable",
         ):
             return "qualification"
+        harness = report["harness_errors"]
+        if not isinstance(harness, list):
+            return "invalid_report"
         recomputed = summarize_operations(*load_operations_report(report))
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return "invalid_report"
     if _normal(recomputed) != _normal(report["summary"]):
         return "summary_mismatch"
+    if harness:
+        return "harness_errors"
     return None
 
 
@@ -195,7 +267,20 @@ def verify_platform(directory: Path) -> str | None:
         return f"grade_exit_{code}"
     if code != 0 or result.get("gate") != "not_applicable":
         return f"grade_exit_{code}_{result.get('reason')}"
-    return _rederive_platform(directory)
+    return _check_runner_files(directory) or _rederive_platform(directory)
+
+
+def _check_runner_files(directory: Path) -> str | None:
+    """The bound platform runner files must be this checkout's: the steps are
+    derived again with this checkout's driver and ordinary check."""
+    try:
+        manifest = json.loads((directory / "bundle" / "inputs.json").read_bytes())
+        registry = {e["id"]: e for e in manifest["evidence"]}
+        entry = registry[PLATFORM_RUNNER_EVIDENCE]
+        bound = (directory / "bundle" / entry["path"]).read_bytes()
+    except (OSError, ValueError, KeyError, TypeError):
+        return "platform_runner_files_missing"
+    return None if bound == platform_runner_inventory() else "platform_runner_files_changed"
 
 
 def _rederive_platform(directory: Path) -> str | None:
@@ -261,7 +346,12 @@ def _verify(paths: Sequence[str]) -> int:
             found += 1
             reason = verify_operations(path)
             failed += reason is not None
-            detail = _describe_operations(path) if reason is None else reason
+            if reason is None:
+                detail = _describe_operations(path)
+            elif reason == "harness_errors":
+                detail = f"{reason}: {_describe_operations(path)}"
+            else:
+                detail = reason
             _line(root, path, reason, detail)
         for path in sorted(root.rglob(NOT_BUILT)):
             found += 1
@@ -271,10 +361,19 @@ def _verify(paths: Sequence[str]) -> int:
             except (OSError, ValueError, AttributeError):
                 reason = "not_built"
             _line(root, path, reason, reason)
+        # A platform report and its bundle are one unit: either half alone is a
+        # partial download or a failed run, and fails instead of being skipped.
+        for inputs in sorted(root.rglob("bundle/inputs.json")):
+            if not (inputs.parent.parent / "platform.json").exists():
+                found += 1
+                failed += 1
+                _line(root, inputs, "platform_report_missing", "platform_report_missing")
         for path in sorted(root.rglob("platform.json")):
-            if not (path.parent / "bundle" / "inputs.json").exists():
-                continue
             found += 1
+            if not (path.parent / "bundle" / "inputs.json").exists():
+                failed += 1
+                _line(root, path, "platform_bundle_missing", "platform_bundle_missing")
+                continue
             reason = verify_platform(path.parent)
             failed += reason is not None
             detail = _describe_platform(path.parent) if reason is None else reason

@@ -1229,3 +1229,141 @@ it("refuses a concurrent same-key request with a different body as idempotency_c
   ]);
   expect(f.invokes()).toBe(0);
 });
+
+// Spec 0.65 7.6.2 condition 1: a malformed request fails closed as
+// invalid_request before identity resolution, never as unavailable or
+// unauthorized.
+it("refuses an explicit undefined property as invalid_request before any call", async () => {
+  const f = setup();
+  f.options.params.agentId = undefined;
+  await f.run();
+  expect(f.reply()).toEqual([
+    false,
+    undefined,
+    { code: "INVALID_REQUEST", message: "invalid_request" },
+  ]);
+  expect(f.record).toHaveLength(0);
+});
+
+it("refuses an unpaired surrogate in a session field as invalid_request before any call", async () => {
+  const f = setup();
+  f.options.sessionAccessAuthority.target.sessionKey = "native-\ud800";
+  f.options.params.sessionKey = "native-\ud800";
+  await f.run();
+  expect(f.reply()).toEqual([
+    false,
+    undefined,
+    { code: "INVALID_REQUEST", message: "invalid_request" },
+  ]);
+  expect(f.record).toHaveLength(0);
+});
+
+it("refuses non-string session fields as invalid_request, not unauthorized", async () => {
+  for (const [field, value] of [
+    ["sessionKey", 7],
+    ["expectedSessionId", null],
+    ["expectedLifecycleRevision", 1],
+    ["agentId", 3],
+  ] as const) {
+    const f = setup();
+    f.options.params[field] = value;
+    await f.run();
+    expect(f.reply()).toEqual([
+      false,
+      undefined,
+      { code: "INVALID_REQUEST", message: "invalid_request" },
+    ]);
+    expect(f.record).toHaveLength(0);
+  }
+});
+
+it("checks registration once for a concurrent same-key request waiting on the in-flight attempt", async () => {
+  const deny = (r: any) => ({
+    decision: "deny",
+    approvalId: "approval-1",
+    operationId: r.operationId,
+    argumentsDigest: r.argumentsDigest,
+  });
+  const registrations = (f: ReturnType<typeof setup>) =>
+    f.record.filter((item: any) => item[0] === "registration").length;
+  const single = setup();
+  single.setDecision(deny);
+  await single.run();
+  const baseline = registrations(single);
+  const f = setup();
+  let decide: () => void = () => {};
+  f.setDecision(
+    (r: any) =>
+      new Promise((resolve) => {
+        decide = () => resolve(deny(r));
+      }),
+  );
+  const first = f.run();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const second = f.handler(f.options);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  decide();
+  await Promise.all([first, second]);
+  expect(f.replies).toHaveLength(2);
+  expect(registrations(f)).toBe(baseline + 1);
+});
+
+/**
+ * Spec 0.65 section 7.6.2 condition 1 (RM39; AC35): "a not_dispatched receipt
+ * proves no native dispatch for this attempt" and "the same key may only
+ * recover its historical receipt after current authorization checks". When
+ * the first attempt dispatches and settles while a same-key request is still
+ * awaiting its registration check, the second request must recover that
+ * settled receipt, never a stale pre-await view reported as not_dispatched.
+ */
+it("recovers the receipt settled while a same-key request awaited its registration check", async () => {
+  const f = setup();
+  let decide: () => void = () => {};
+  f.setDecision(
+    (r: any) =>
+      new Promise((resolve) => {
+        decide = () =>
+          resolve({
+            decision: "allow-once",
+            approvalId: "approval-1",
+            operationId: r.operationId,
+            argumentsDigest: r.argumentsDigest,
+          });
+      }),
+  );
+  const first = f.run();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  // The second request's registration check waits until the first settles.
+  let releaseRegistration: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    releaseRegistration = resolve;
+  });
+  const original = f.deps.actionClient;
+  let gated = false;
+  f.deps.actionClient = async (...args: any[]) => {
+    const client = await original(...args);
+    // Only the very next check (the second request's) waits on the gate.
+    const wait = !gated;
+    gated = true;
+    return {
+      listFeedback: async (...rest: any[]) => {
+        if (wait) await gate;
+        return client.listFeedback(...rest);
+      },
+    };
+  };
+  const second = f.handler(f.options);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  decide();
+  await first;
+  expect(f.replies[0]?.[1]).toEqual(
+    receipt("completed", "ok", {
+      nativeRunId: "native-run-1",
+      nativeCallId: "native-call-1",
+    }),
+  );
+  releaseRegistration();
+  await second;
+  expect(f.replies[1]).toEqual(f.replies[0]);
+  expect(f.invokes()).toBe(1);
+});
