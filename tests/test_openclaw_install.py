@@ -213,6 +213,43 @@ def _install_from_artifact(tarball: Path, prefix: Path) -> Path:
     return target / "dist" / "index.js"
 
 
+def test_the_shipped_registry_names_the_released_adapter_bytes(releases, tmp_path):
+    """RM37/RM39; AC28/AC30/AC35: spec 0.65 section 7.6.1, "a reviewed built-in
+    qualification registry identifies the pinned host version, exact adapter
+    implementation revision and separately supported operations".
+
+    Every shipped entry must name the digest of the installed artifact's own
+    adapter bytes, so a source change cannot silently drift away from (or be
+    mistaken for) the reviewed revision. The evidence capture of that revision
+    is a separate pre-merge gate.
+    """
+    (dir_a, record), _ = releases
+    entry = _install_from_artifact(dir_a / record["filename"], tmp_path / "prefix")
+    dist = entry.parent
+    script = (
+        "const [n, q] = await Promise.all([import(process.argv[1]), import(process.argv[2])]);"
+        "console.log(JSON.stringify({revision: n.nativeAdapterRevision(),"
+        " pinned: q.NATIVE_QUALIFICATIONS.map((e) => e.adapterRevision)}));"
+    )
+    completed = subprocess.run(
+        [
+            _node(),
+            "--input-type=module",
+            "-e",
+            script,
+            (dist / "recommendation-native.js").resolve().as_uri(),
+            (dist / "recommendation-native-qualification.js").resolve().as_uri(),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert completed.returncode == 0, completed.stderr
+    value = json.loads(completed.stdout)
+    assert value["pinned"], "the shipped registry has no entry"
+    assert value["pinned"] == [value["revision"]] * len(value["pinned"]), value
+
+
 def test_the_plugin_round_trips_from_the_extracted_artifact(releases, tmp_path):
     """AC24, RM33: the packaged entry, not the checkout, registers and serves the alias."""
     (dir_a, record), _ = releases

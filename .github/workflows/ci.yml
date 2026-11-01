@@ -183,6 +183,7 @@ jobs:
           retention-days: 30
 
       - name: Disposable MCP use capability fixture
+        id: mcp_use_capture
         if: matrix.os == 'ubuntu-latest'
         timeout-minutes: 4
         run: |
@@ -193,7 +194,9 @@ jobs:
 
       - name: Upload MCP use capability capture
         uses: actions/upload-artifact@v4
-        if: always() && matrix.os == 'ubuntu-latest'
+        # Upload only when the fixture step ran, so an earlier failure is not
+        # masked by a missing-file error; a run that wrote nothing still fails.
+        if: always() && matrix.os == 'ubuntu-latest' && steps.mcp_use_capture.outcome != 'skipped'
         with:
           name: openclaw-mcp-use-ubuntu-${{ github.run_attempt }}
           path: ci-evidence/openclaw-mcp-use-ubuntu.json

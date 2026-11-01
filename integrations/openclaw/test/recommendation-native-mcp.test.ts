@@ -2,7 +2,11 @@
 // request row): the conditional direct MCP use path. Controlled host-shaped
 // doubles only; a fixture route and registry are never qualification evidence.
 import { createHash } from "node:crypto";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, it } from "vitest";
+import { createFileUseLedger } from "../src/recommendation-native-ledger.js";
 import { fixture } from "./recommendation-native-fixture.js";
 import {
   canonicalSchemaHash,
@@ -26,7 +30,30 @@ const SCOPE = {
   maxApprovalWaitMs: 30000,
 };
 
-function setup(options: { qualified?: boolean; route?: boolean } = {}) {
+function ledgerPath(): string {
+  return join(mkdtempSync(join(tmpdir(), "relaymind-ledger-")), "use.jsonl");
+}
+// Spec 0.65 7.6.2 condition 6: the native approval binds the same operation,
+// target, full arguments, server/tool/schema and current authority.
+const BOUND = [
+  "operationId",
+  "argumentsDigest",
+  "serverId",
+  "toolName",
+  "exposedName",
+  "schemaHash",
+  "sessionKey",
+];
+function echo(request: any) {
+  return Object.fromEntries(BOUND.map((key) => [key, request[key]]));
+}
+function setup(
+  options: {
+    qualified?: boolean;
+    route?: boolean;
+    ledger?: string | null;
+  } = {},
+) {
   const f = fixture();
   let now = 1;
   const record: unknown[] = [];
@@ -106,9 +133,13 @@ function setup(options: { qualified?: boolean; route?: boolean } = {}) {
     },
     requestApproval: async (_binding: unknown, request: any, control: any) => {
       record.push(["approval", control.timeoutMs]);
-      return typeof decision === "function"
+      const value = await (typeof decision === "function"
         ? decision(request, control)
-        : decision;
+        : decision);
+      // A well-behaved route echoes the binding unless a case overrides it.
+      return value && typeof value === "object"
+        ? { ...echo(request), ...value }
+        : value;
     },
     invoke: async (_binding: unknown, request: any, control: any) => {
       record.push(["invoke", request.arguments, request.approvalId]);
@@ -144,6 +175,10 @@ function setup(options: { qualified?: boolean; route?: boolean } = {}) {
       },
     }),
     operationId: () => "operation-1",
+    ledger:
+      options.ledger === null
+        ? undefined
+        : createFileUseLedger(options.ledger ?? ledgerPath()),
   };
   f.options.params = {
     sessionKey: "native-key",
@@ -766,4 +801,212 @@ it("refuses historical recovery with only a closed code when registration was re
     { code: "INVALID_REQUEST", message: "unauthorized" },
   ]);
   expect(f.invokes()).toBe(1);
+});
+
+/**
+ * Spec 0.65 section 7.6.2 condition 1: "the same key may only recover its
+ * historical receipt after current authorization checks, never dispatch
+ * again. If dispatch history is lost or unresolved, fail closed with an
+ * indeterminate outcome rather than replaying a possible mutation."
+ * Condition 6: "Allow-once is consumed at most once." The key claim and the
+ * consumed approval are durable before dispatch, so a restart (a new handler
+ * over the same ledger file) cannot replay either.
+ */
+it("fails closed as indeterminate after a restart lost a dispatched key's outcome", async () => {
+  const path = ledgerPath();
+  const first = setup({ ledger: path });
+  first.setInvoke(() => new Promise(() => {}));
+  void first.run();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(first.invokes()).toBe(1);
+  // The process restarts: new handler, new ledger instance, same file.
+  const restarted = setup({ ledger: path });
+  await restarted.run();
+  expect(restarted.reply()).toEqual([
+    true,
+    receipt("indeterminate", "transport_unknown"),
+    undefined,
+  ]);
+  expect(restarted.invokes()).toBe(0);
+});
+
+it("recovers a completed receipt after a restart without dispatching again", async () => {
+  const path = ledgerPath();
+  const first = setup({ ledger: path });
+  await first.run();
+  const restarted = setup({ ledger: path });
+  await restarted.run();
+  expect(restarted.reply()).toEqual(first.reply());
+  expect(restarted.invokes()).toBe(0);
+});
+
+it("keeps an allow-once approval consumed across a restart", async () => {
+  const path = ledgerPath();
+  await setup({ ledger: path }).run();
+  const restarted = setup({ ledger: path });
+  restarted.options.params.idempotencyKey = "explicit-use-2";
+  await restarted.run();
+  expect(restarted.reply()).toEqual([
+    true,
+    receipt("not_dispatched", "approval_denied"),
+    undefined,
+  ]);
+  expect(restarted.invokes()).toBe(0);
+});
+
+it("refuses without a durable use ledger before any call", async () => {
+  const f = setup({ ledger: null });
+  await f.run();
+  expect(f.reply()).toEqual([
+    false,
+    undefined,
+    { code: "INVALID_REQUEST", message: "unavailable" },
+  ]);
+  expect(f.record).toHaveLength(0);
+});
+
+it("refuses dispatch when the ledger cannot durably claim the key", async () => {
+  const f = setup();
+  f.deps.ledger.claim = () => {
+    throw Error("ledger_full");
+  };
+  await f.run();
+  expect(f.reply()).toEqual([
+    true,
+    receipt("not_dispatched", "unavailable"),
+    undefined,
+  ]);
+  expect(f.invokes()).toBe(0);
+});
+
+// A pre-dispatch refusal proves no dispatch, so it does not consume the key.
+it("lets the same key retry after a pre-dispatch refusal", async () => {
+  const f = setup();
+  const working = f.deps.actionClient;
+  f.deps.actionClient = async () => ({
+    listFeedback: async () => {
+      throw Error("deadline_exceeded");
+    },
+  });
+  await f.run();
+  expect(f.reply()?.[1]).toEqual(receipt("not_dispatched", "unauthorized"));
+  f.deps.actionClient = working;
+  await f.run();
+  expect(f.reply()?.[1]).toMatchObject({ outcome: "completed", code: "ok" });
+  expect(f.invokes()).toBe(1);
+});
+
+it.each(["serverId", "toolName", "exposedName", "schemaHash", "sessionKey"])(
+  "refuses an approval whose %s is not the bound target",
+  async (field) => {
+    const f = setup();
+    f.setDecision((r: any) => ({
+      decision: "allow-once",
+      approvalId: "approval-1",
+      operationId: r.operationId,
+      argumentsDigest: r.argumentsDigest,
+      [field]: "other",
+    }));
+    await f.run();
+    expect(f.reply()).toEqual([
+      true,
+      receipt("not_dispatched", "approval_denied"),
+      undefined,
+    ]);
+    expect(f.invokes()).toBe(0);
+  },
+);
+
+// The gateway's canonical_json keeps 0.0; a JSON value in this process
+// cannot. Such a schema is unavailable, never a claimed binding change.
+it("refuses an integral-float schema it cannot rehash as unavailable, not binding_changed", async () => {
+  const floatSchema = {
+    type: "object",
+    properties: { n: { type: "number", minimum: 0 } },
+    required: ["n"],
+    additionalProperties: false,
+  };
+  // relaymind.canonical.canonical_digest of the same schema with minimum 0.0.
+  const gatewayHash =
+    "52226622f5528168997a52a9cf3ac9a39dbbfdbf9674d14b7e0126b1b1a9ffb9";
+  expect(canonicalSchemaHash(floatSchema)).toBe(
+    "ae0ab8ab7bee0ce17a8d1e470c1c82b645052f20de229189afcabd03a4ef148e",
+  );
+  const f = setup();
+  f.native.inputSchema = structuredClone(floatSchema);
+  f.view.displayed_candidates[0].asset.identity.input_schema = floatSchema;
+  f.view.displayed_candidates[0].asset.identity.schema_hash = gatewayHash;
+  f.options.params.arguments = { n: 1 };
+  await f.run();
+  expect(f.reply()).toEqual([
+    true,
+    receipt("not_dispatched", "unavailable"),
+    undefined,
+  ]);
+  expect(f.invokes()).toBe(0);
+});
+
+function withPattern(f: any, pattern: string) {
+  f.native.inputSchema.properties.text = { type: "string", pattern };
+  f.view.displayed_candidates[0].asset.identity.input_schema =
+    f.native.inputSchema;
+  f.view.displayed_candidates[0].asset.identity.schema_hash =
+    canonicalSchemaHash(f.native.inputSchema);
+}
+// Spec 0.65 7.6.2 condition 1: the 60-second deadline covers preparation, so a
+// host schema pattern must not run unbounded synchronous backtracking.
+it.each([
+  "^(a+)+$",
+  "^(a|aa)*$",
+  "^a*a*b$",
+  "a+b",
+  "^(?=a)a$",
+  "^(a)\\1$",
+  "^\\p{L}+$",
+  "^[a-z]{0,64}[a-z]{0,64}x$",
+  "^" + "a".repeat(300) + "$",
+])(
+  "refuses the unprovably bounded pattern %s as unavailable",
+  async (pattern) => {
+    const f = setup();
+    withPattern(f, pattern);
+    f.options.params.arguments = { text: "a".repeat(30) + "b" };
+    const started = performance.now();
+    await f.run();
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(f.reply()).toEqual([
+      true,
+      receipt("not_dispatched", "unavailable"),
+      undefined,
+    ]);
+    expect(f.invokes()).toBe(0);
+  },
+);
+
+it.each([
+  ["^[a-z0-9_-]+$", "hello_1", true],
+  ["^\\d{4}-\\d{2}-\\d{2}$", "2026-11-01", true],
+  ["^[a-z]+$", "Hello", false],
+])("enforces the linear pattern %s", async (pattern, text, accepted) => {
+  const f = setup();
+  withPattern(f, pattern);
+  f.options.params.arguments = { text };
+  await f.run();
+  expect(f.reply()?.[1]).toMatchObject(
+    accepted
+      ? { outcome: "completed" }
+      : { outcome: "not_dispatched", code: "invalid_request" },
+  );
+});
+
+it("refuses a pattern-bound argument longer than the bounded match length", async () => {
+  const f = setup();
+  withPattern(f, "^[a-z]+$");
+  f.options.params.arguments = { text: "a".repeat(8193) };
+  await f.run();
+  expect(f.reply()).toEqual([
+    true,
+    receipt("not_dispatched", "unavailable"),
+    undefined,
+  ]);
 });

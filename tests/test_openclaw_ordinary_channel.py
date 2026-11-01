@@ -333,6 +333,8 @@ def test_exact_skill_selection_evidence_passes():
         "ui_unavailable",
         "negative_admitted",
         "negative_missing",
+        "mapping_missing_source_version",
+        "mapping_other_source_version",
     ],
 )
 def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
@@ -348,6 +350,10 @@ def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
         value["library_list"]["payload"]["entries"][0]["skillId"] = bad_id
     elif change == "mapping_missing_asset":
         value["mapping"].pop("assetId")
+    elif change == "mapping_missing_source_version":
+        value["mapping"].pop("sourceVersion")
+    elif change == "mapping_other_source_version":
+        value["mapping"]["sourceVersion"] = "v2"
     elif change.startswith("mapping_") and change.endswith("_asset"):
         value["mapping"]["assetId"] = {
             "mapping_empty_asset": "",
@@ -1371,8 +1377,8 @@ def test_library_selection_wait_cannot_swallow_browser_failure(tmp_path, monkeyp
     assert extension.failure_diagnostics()["ordinary_failure_step"] == "select_library_skill"
 
 
-@pytest.mark.parametrize("arrives", [True, False])
-def test_retirement_wait_allows_loaded_runner_but_stays_bounded(tmp_path, monkeypatch, arrives):
+@pytest.mark.parametrize("missing", [None, "fetch_abort", "ui_retirement"])
+def test_retirement_wait_allows_loaded_runner_but_stays_bounded(tmp_path, monkeypatch, missing):
     """RM16/RM39 AC30: delayed original abort evidence passes; absent evidence times out."""
     import json
 
@@ -1395,13 +1401,17 @@ def test_retirement_wait_allows_loaded_runner_but_stays_bounded(tmp_path, monkey
 
     def sleep(seconds):
         clock[0] += seconds
-        if arrives and clock[0] >= 4:
+        if missing != "fetch_abort" and clock[0] >= 4:
             extension.event_file.write_text(json.dumps(retirement["fetch_failures"][0]) + "\n")
 
     monkeypatch.setattr(api.time, "sleep", sleep)
-    monkeypatch.setattr(extension, "native_events", lambda: [retirement["ui_retired"]])
+    monkeypatch.setattr(
+        extension,
+        "native_events",
+        lambda: [] if missing == "ui_retirement" else [retirement["ui_retired"]],
+    )
     capture = {"ordinary_actions": {}}
-    if arrives:
+    if missing is None:
         extension.after_retirement(capture)
         assert (
             capture["ordinary_actions"]["retirement"]["fetch_failures"]
@@ -1416,6 +1426,95 @@ def test_retirement_wait_allows_loaded_runner_but_stays_bounded(tmp_path, monkey
             "ordinary_failure_step": "retirement_abort",
             "ordinary_error_class": "value_error",
         }
+
+
+@pytest.mark.parametrize("partial", [False, True])
+def test_retirement_holds_backend_until_ui_abort_is_observed(tmp_path, monkeypatch, partial):
+    """RM16/RM39 AC30: the account socket retiring does not retire the UI socket."""
+    import json
+
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    retirement = fixture(api)["ordinary_actions"]["retirement"]
+    extension.work = tmp_path
+    native = tmp_path / "native-events.jsonl"
+    # Run 41284215222 observed prepared + connection_retired for the base
+    # account probe, on a different socket from ordinary_actions.ui_person.
+    base_events = [
+        dict(phase="prepared", requestId="account-probe", connectionId="account-connection"),
+        dict(
+            phase="connection_retired",
+            requestId="account-probe",
+            connectionId="account-connection",
+            connection_aborted=True,
+        ),
+        retirement["ui_guard_events"][0],
+    ]
+    prefix = "".join(json.dumps(event) + "\n" for event in base_events)
+    native.write_text(prefix)
+    extension.event_file = tmp_path / "ordinary-events.jsonl"
+    # Earlier requests must not be attributed to the held request.
+    prior = json.dumps(dict(retirement["fetch_failures"][0], attempt_id="prior")) + "\n"
+    extension.event_file.write_text(prior)
+    extension.retirement_start = len(prior.encode())
+    extension.held_attempt = retirement["attempt"]
+    extension.held_request = "held"
+    extension.ui_guard_request = retirement["ui_guard_request"]
+    extension.ui_person = {
+        "frame": {"payload": {"connectionId": retirement["connection_id"]}},
+        "socket_id": retirement["native_socket_id"],
+    }
+    extension.entered.set()
+    clock = [0.0]
+    monkeypatch.setattr(api.time, "monotonic", lambda: clock[0])
+
+    def sleep(seconds):
+        clock[0] += seconds
+        # Releasing before the UI abort lets HTTP succeed; no later polling
+        # can recover the required http_error for that physical attempt.
+        if extension.release.is_set():
+            event = dict(
+                kind="http", path="/relay/v1/feedback", status=200, attempt_id="physical-1"
+            )
+            extension.event_file.write_text(prior + json.dumps(event) + "\n")
+        elif clock[0] >= 4:
+            line = json.dumps(retirement["fetch_failures"][0]) + "\n"
+            extension.event_file.write_text(
+                prior + (line[:30] if partial and clock[0] < 5 else line)
+            )
+        if clock[0] >= 2:
+            line = json.dumps(retirement["ui_retired"]) + "\n"
+            native.write_text(prefix + (line[:30] if partial and clock[0] < 3 else line))
+
+    monkeypatch.setattr(api.time, "sleep", sleep)
+    capture = {"ordinary_actions": {}}
+    extension.after_retirement(capture)
+    observed = capture["ordinary_actions"]["retirement"]
+    assert observed["fetch_failures"] == retirement["fetch_failures"]
+    assert observed["ui_retired"] == retirement["ui_retired"]
+    assert extension.release.is_set()
+    assert 4 <= clock[0] < 10
+
+
+@pytest.mark.parametrize("released", [True, False])
+def test_backend_hold_covers_sequential_retirement_waits_and_fails_closed(released):
+    """RM16/RM39 AC30: a hold timeout must not turn into a successful HTTP response."""
+    api = module()
+    elapsed = []
+
+    class Release:
+        def wait(self, timeout):
+            # The base socket takes 8s, then the UI socket and fetch take 6s.
+            elapsed.append(min(14, timeout) if released else timeout)
+            return released and timeout >= 14
+
+    if released:
+        api.wait_for_backend_release(Release())
+        assert elapsed == [14]
+    else:
+        with pytest.raises(TimeoutError, match="^ordinary_abort_unobserved$"):
+            api.wait_for_backend_release(Release())
+        assert 20 <= elapsed[0] < 570
 
 
 @pytest.mark.parametrize("stage", ["retirement_prepared", "retirement_attempt"])
@@ -1907,11 +2006,11 @@ def test_missing_native_pin_has_a_fixed_control_failure(pins):
         )
 
 
-@pytest.mark.parametrize("failure", ["ordinary_skill_turn_timeout", "not_text_content"])
-def test_observation_continues_controls_after_a_turn_fixture_failure(
+@pytest.mark.parametrize("failure", [None, "ordinary_skill_turn_timeout", "not_text_content"])
+def test_observation_saves_controls_after_a_completed_or_incomplete_turn(
     tmp_path, monkeypatch, failure
 ):
-    """RM39/AC30 F6/F9: one incomplete turn retains evidence without starving later cases."""
+    """RM39/AC30: the real save helper must reach controls after the captured positive turn."""
     api = module()
     capture = loaded_fixture(api)
     expected = capture["ordinary_skill_loaded_use"]["cases"]
@@ -1948,7 +2047,12 @@ def test_observation_continues_controls_after_a_turn_fixture_failure(
             )
             return dict(frame=dict(ok=True, payload=scope))
         if method == "skills.library.read":
+            selected["read"]["payload"]["entry"]["slug"] = "fixture"
             return dict(frame=selected["read"])
+        if method == "skills.library.save" and params["expectedRevision"] is None:
+            return dict(
+                frame=dict(ok=True, payload=dict(entry=selected["read"]["payload"]["entry"]))
+            )
         if method == "skills.library.list":
             return dict(
                 frame=dict(
@@ -1970,18 +2074,13 @@ def test_observation_continues_controls_after_a_turn_fixture_failure(
             return dict(frame=case["selection"])
         return dict(frame=case["intervention"]["frame"])
 
-    def save(*args):
-        case = expected[current[0]]
-        case["selected"]["read"]["payload"]["entry"]["slug"] = "fixture"
-        return dict(
-            mapping=dict(skillId=case["selected"]["skillId"], revision=REVISION),
-            content_sha256=case["selected"]["content_sha256"],
-        )
-
-    monkeypatch.setattr(extension, "save_library_skill", save)
-
     def turn(rpc, page, session, case):
         visited.append(case["case"])
+        if failure is None:
+            # CI run 41283633023 retained this completed positive case before
+            # the first control's save failed; keep that capture shape.
+            case.update(expected[current[0]])
+            return
         case["requests"] = [dict(status=429)]
         if case["case"] == "positive":
             if failure == "not_text_content":
@@ -1993,6 +2092,13 @@ def test_observation_continues_controls_after_a_turn_fixture_failure(
     monkeypatch.setattr(extension, "loaded_use_turn", turn)
     extension.observe_loaded_use(rpc, None, {}, capture)
     assert visited == ["positive", "stale", "deleted", "reset"]
+    assert extension.failure_diagnostics() == {}
+    if failure is None:
+        assert (
+            capture["ordinary_skill_loaded_use"]["cases"][0]["observed"] == "loaded_pinned_revision"
+        )
+        assert api.ordinary_skill_loaded_use_pass(capture)
+        return
     partial = capture["ordinary_skill_loaded_use"]["cases"][0]
     assert partial["observed"] == "incomplete"
     assert partial["failure_reason"] == failure
