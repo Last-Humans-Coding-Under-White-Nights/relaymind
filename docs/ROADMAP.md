@@ -1050,11 +1050,47 @@ functional host, never a target platform). Labels may be `owner_machine`
 adjudication), and reports say so. A closed `QualificationRecordV1` in
 `docs/evidence/m10/` binds the frozen inputs and reports by SHA-256 and is
 approved by a pull request review from at least one org member other than the
-owner; a negative record closes the `skill_loaded_use` or `mcp_use` gate on
-the pinned host with the operation disabled and listed as a known host
-limitation. The verifier support is implemented (`--qualification-record`,
-`--labelling owner_machine`) and fixture-tested only. No record has been
-committed and no gate has passed: #255, #259, #260 and #261 remain open and
+owner; an approved negative record (a pending one lifts nothing) closes the
+`skill_loaded_use` or `mcp_use` gate on the pinned host with the operation
+disabled and listed as a known host limitation. The verifier support is
+implemented (`--qualification-record`, `--labelling owner_machine`) and
+fixture-tested only. No gate has passed.
+#255 has committed one **pending** negative `host_operation` record for the
+pinned 2026.10.7 host: `m10-negative-mcp-use-openclaw-2026.10.7`
+(`exact_route_absent`). No supported route invokes an independent, non-App MCP
+tool by its exact native identity: `tools.invoke` is name-only, the harness
+runtimes are documented private, and the App-scoped `mcp.app.callTool` does not
+count. Those three verdicts rest on the pinned host source; the captures
+attempted only `mcp.app.discover`, `tools.effective` and `mcp.app.listTools`
+(listed in the inventory's `attempted_routes`). The record lifts nothing until
+a pull request review by an org member other than the owner is written into
+it, which will make MCP use a host limitation. There is **no** negative
+`skill_loaded_use` record: the hooks, tool-result middleware and the provider
+stream can stop a read or a request but cannot re-verify fresh person
+authority, the session incarnation and the pinned bytes on their own, while
+the host's `GatewaySessionAccessAuthority.retain()` borrow re-checks the
+person's grant and the exact session incarnation at call time and could back a
+provider `onPayload` fence. Spec 7.6.1 admits such a qualified delegation, so
+`stop_point_absent` is not established; the earlier pending record asserting it
+was withdrawn after review. Loaded use stays disabled as unqualified, and its
+AC30 evidence is still required on this host. Both operations stay disabled.
+See `docs/evidence/m10/host-use-settlement-20261101.md`. The first VPS run could
+not start a person tier (no private interface, missing Chromium libraries), so
+the first substantive captures came from CI run 41286397320. A second VPS run at
+62c4dcd, after the owner's setup, also ran; the MCP record binds its MCP
+capture. Person ingress passes there. MCP use is `blocked`
+(`exact_route_unqualified`). The reset case
+is now `control_refused` on the real host. That run exited 2 because the
+62c4dcd predicate expected one pin in the session's selection listing while
+the host lists every pin of the owner profile; the selected-skill pin check
+(5d92b64) is already in this branch, and the current predicate accepts the
+committed capture. [CI run 41340879424](https://github.com/LHCWN/relaymind/actions/runs/41340879424)
+at ed21e007 completed loaded-use observation with the reset case
+`control_refused`; its captures are workflow artifacts, not committed here.
+The older CI and VPS2 MCP captures show an empty `tools.effective` list only because the old
+probe read `payload.tools` instead of the host's `groups[].tools`; a third VPS
+run at bba0cf1 with the #249 fix lists both colliding tools and is still
+`blocked`, and the MCP record binds it. The MCP finding is unchanged. #259, #260 and #261 remain open and
 need the real runs, captures, labels and reviews. Host configuration semantics
 (#250/#240) still keep host reports below `qualified`. Spec-only decisions
 awaiting implementation: the rank 4–10 choice receipt returning the offered
@@ -1413,8 +1449,12 @@ inventory; its fixture discovery check requires both colliding fixture tools in
 the session inventory, so an empty or malformed inventory fails the run. Earlier
 captures recorded an empty list because of the old flat projection. The person
 probe first starts the session MCP runtime with public `mcp.app.discover`. One
-uncommitted Linux x86-64 VPS run listed both colliding tools; it is discovery
-evidence only, and exact MCP use remains blocked.
+Linux x86-64 VPS run at bba0cf1 listed both colliding tools; it is now committed
+as `docs/evidence/m10/openclaw-mcp-use-20261101-vps3.json` and bound by the
+#255 MCP record. It is discovery evidence only, exact MCP use remains blocked,
+and [CI run 41340879424](https://github.com/LHCWN/relaymind/actions/runs/41340879424)
+at ed21e007 confirmed the corrected discovery and blocked exact-use result.
+That newer CI capture remains a workflow artifact, not committed evidence.
 
 #250 implements bounded native configuration preflight with the installed
 OpenClaw 2026.10.7 validator under Node, including strict/plugin checks and

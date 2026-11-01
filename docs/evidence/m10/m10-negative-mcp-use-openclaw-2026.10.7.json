@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "record_id": "m10-negative-mcp-use-openclaw-2026.10.7",
+  "profile": "owner_run",
+  "outcome": "negative",
+  "scope": "host_operation",
+  "labelling": "not_applicable",
+  "annotators": null,
+  "agreement": null,
+  "corpus_review": null,
+  "preregistration": null,
+  "runs_started_at": null,
+  "machine": {
+    "role": "linux_host",
+    "os": "Linux",
+    "os_version": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+    "os_build": "Ubuntu 26.04.1 LTS 7.0.0-38-generic",
+    "architecture": "x86_64",
+    "cpu_model": "Intel Xeon Processor (Skylake, IBRS)",
+    "ram_bytes": 11998482432,
+    "hostname_sha256": "bafcdd4933633f2d8c15bec38b13546e4d879cd8b65095a56e713b8336cedd01"
+  },
+  "revisions": {
+    "repository_commit": "bba0cf109c459157cd3e8a62c521100a5e6a9712",
+    "adapter_revision": "f3241577e903feddd3da61fd58513b4a3e90889552d9bd7f52a302fd81f52c6c",
+    "harness_sha256": "60697f9d1fd8cd05ddc890007fa0f0b4579930333aea53e60328bb89982a3fa2"
+  },
+  "operation": {
+    "name": "mcp_use",
+    "host": "openclaw",
+    "host_version": "2026.10.7",
+    "finding": "exact_route_absent",
+    "disabled": true
+  },
+  "subjects": [
+    {
+      "role": "inventory",
+      "path": "openclaw-host-use-search-20261101-vps.json",
+      "sha256": "2432d9d42abdcf72af5edb008036b6171a9fec69341f893fd182fc9c1533576a",
+      "bytes": 28612
+    },
+    {
+      "role": "capture",
+      "path": "openclaw-mcp-use-20261101-ci.json",
+      "sha256": "04770efb91e510235acf091104754afddb9565658fbf808444a39257eacc8d59",
+      "bytes": 207752
+    },
+    {
+      "role": "capture",
+      "path": "openclaw-mcp-use-20261101-vps.json",
+      "sha256": "cda481d755924d42cdca67251b5e80d3412c9828993cb59c2972fb09202e698d",
+      "bytes": 26193
+    },
+    {
+      "role": "capture",
+      "path": "openclaw-mcp-use-20261101-vps2.json",
+      "sha256": "25461d2a1c2c238747842a638e273181bfb155c7cf9ef050018b620ee762cbcc",
+      "bytes": 208679
+    },
+    {
+      "role": "capture",
+      "path": "openclaw-mcp-use-20261101-vps3.json",
+      "sha256": "a618b25366718969745e49ee32250451b69de628b4619b70be26558bdecabc1f",
+      "bytes": 215681
+    }
+  ],
+  "review": {
+    "owner_login": "devnullexile",
+    "pull_request": null,
+    "reviewer_logins": [],
+    "approved_at": null
+  },
+  "recorded_at": "2026-11-01T14:58:19Z"
+}

@@ -27,7 +27,16 @@ Usage (Linux x86-64 with the person-ingress prerequisites)::
 
     python integrations/openclaw/test/host-walkthrough/record.py record \\
         --tarball /abs/relaymind-openclaw-provider-0.1.0.tgz \\
-        --work-root /abs/new-private-work --out-dir /abs/new-walkthrough
+        --work-root /abs/new-private-work --out-dir /abs/new-walkthrough \\
+        [--font-dir /abs/cjk-fonts]
+
+The harness starts the browser with ``HOME`` inside the work directory, so
+system-wide fonts are the only fonts it sees. On a host without a CJK font the
+Chinese labels still match but render as empty boxes. ``--font-dir`` copies
+the ``.otf``, ``.ttf`` and ``.ttc`` files of a directory once into the private
+work root, installs that copy into each isolated home's ``$XDG_DATA_HOME/fonts``
+(fontconfig on Linux) inside the install step, and the manifest lists the
+digests of that copy.
 """
 
 import hashlib
@@ -35,6 +44,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -59,6 +69,7 @@ BLOCKED = {
     ),
 }
 STEP_NAMES = (*UI_STEPS, "select_skill", *BLOCKED)
+FONT_SUFFIXES = (".otf", ".ttf", ".ttc")
 
 
 def _ordinary():
@@ -298,10 +309,65 @@ def localized_run_ui(language: str, shooter: Shooter, run_ui=None):
     return run
 
 
-def walkthrough_composition(language: str, shooter: Shooter):
+def _font_paths(font_dir: Path) -> list[Path]:
+    """The regular font files of ``font_dir`` (no symlinks), sorted by name."""
+    paths = [
+        path
+        for path in sorted(Path(font_dir).iterdir())
+        if not path.is_symlink() and path.is_file() and path.suffix.lower() in FONT_SUFFIXES
+    ]
+    if not paths:
+        raise ValueError("walkthrough_font_dir")
+    return paths
+
+
+def font_files(font_dir: Path) -> list[dict]:
+    """The regular font files of ``font_dir`` (no symlinks), with their digests."""
+    fonts = []
+    for path in _font_paths(font_dir):
+        payload = path.read_bytes()
+        digest = hashlib.sha256(payload).hexdigest()
+        fonts.append(dict(name=path.name, sha256=digest, bytes=len(payload), path=path))
+    return fonts
+
+
+def _copy_fonts(font_dir: Path, target: Path) -> None:
+    for path in _font_paths(font_dir):
+        shutil.copyfile(path, target / path.name)
+
+
+def snapshot_fonts(font_dir: Path, target: Path) -> list[dict]:
+    """Copy the fonts once into the new private ``target``; digests are of the copied bytes."""
+    target.mkdir(mode=0o700)
+    _copy_fonts(font_dir, target)
+    return font_files(target)
+
+
+def install_fonts(font_dir: Path, environment: dict) -> None:
+    """Copy the fonts into the browser's isolated ``$XDG_DATA_HOME/fonts`` (read by fontconfig)."""
+    # Only the isolated home the harness set: without one (or with a relative one) the
+    # fonts would land somewhere unexpected, so the install step fails closed instead.
+    data, home = environment.get("XDG_DATA_HOME"), environment.get("HOME")
+    data = Path(data) if data else Path(home) / ".local/share" if home else None
+    if data is None or not data.is_absolute():
+        raise ValueError("walkthrough_font_home")
+    target = data / "fonts"
+    target.mkdir(mode=0o700, parents=True, exist_ok=True)
+    _copy_fonts(font_dir, target)
+
+
+def walkthrough_composition(language: str, shooter: Shooter, font_dir: Path | None = None):
     """The ordinary composition with its native skill selection localized."""
 
     class WalkthroughComposition(ORDINARY.OrdinaryComposition):
+        def prepare_host(self, host, environment, work, config_path):
+            # Runs after the harness created the isolated home, before any browser starts;
+            # a font that cannot be installed fails the named install step.
+            if font_dir is not None:
+                with self.step("install"):
+                    install_fonts(font_dir, environment)
+            return super().prepare_host(host, environment, work, config_path)
+
         def source_paths(self):
             # Bind the recorder source into the capture with the harness sources.
             return super().source_paths() + [HERE]
@@ -462,7 +528,9 @@ def _screens(base: Path, out: Path, evidence: dict, language: str, problems: set
     return screens_id, shots
 
 
-def build_manifest(out: Path, outcomes: dict, *, predicates: dict | None = None) -> dict:
+def build_manifest(
+    out: Path, outcomes: dict, *, predicates: dict | None = None, fonts: list | None = None
+) -> dict:
     """The walkthrough manifest for the languages recorded under ``out``."""
     out = Path(out)
     predicates = predicates or _default_predicates()
@@ -541,6 +609,7 @@ def build_manifest(out: Path, outcomes: dict, *, predicates: dict | None = None)
             recorder=hashlib.sha256(HERE.read_bytes()).hexdigest(),
         ),
         blocked={name: dict(value) for name, value in BLOCKED.items()},
+        fonts=[{key: font[key] for key in ("name", "sha256", "bytes")} for font in fonts or []],
         languages=languages,
         evidence=[evidence[key] for key in sorted(evidence)],
         complete=complete,
@@ -643,7 +712,9 @@ def child(args) -> int:
     Browser.new_context = new_context
     try:
         ORDINARY.run_ui = localized_run_ui(args.language, shooter)
-        ORDINARY.OrdinaryComposition = walkthrough_composition(args.language, shooter)
+        ORDINARY.OrdinaryComposition = walkthrough_composition(
+            args.language, shooter, args.font_dir
+        )
         return ORDINARY.main(
             [
                 "--tarball",
@@ -675,6 +746,13 @@ def record(args) -> int:
     real_work, real_out = work_root.resolve(), out.resolve()
     if real_work == real_out or real_work in real_out.parents or real_out in real_work.parents:
         return _refused("work_root_out_dir_overlap")
+    fonts = font_snapshot = None
+    if args.font_dir is not None:
+        # Refuse a missing, non-directory or font-less directory before creating anything.
+        try:
+            _font_paths(args.font_dir)
+        except (ValueError, OSError):
+            return _refused("walkthrough_font_dir")
     # Both must be new; an existing one is refused before either is created.
     for path, reason in ((work_root, "work_root_exists"), (out, "out_dir_exists")):
         if os.path.lexists(path):
@@ -687,6 +765,10 @@ def record(args) -> int:
         out.mkdir(mode=0o700, parents=True, exist_ok=False)
     except FileExistsError:
         return _refused("out_dir_exists")
+    if args.font_dir is not None:
+        # One private copy: every language installs exactly the bytes the manifest lists.
+        font_snapshot = work_root / "fonts"
+        fonts = snapshot_fonts(args.font_dir.absolute(), font_snapshot)
     outcomes = {}
     for language in args.languages:
         media = out / language
@@ -695,19 +777,21 @@ def record(args) -> int:
         command += ["--tarball", str(args.tarball.absolute()), "--work-dir"]
         command += [str(work_root / language), "--out", str(media / "capture.json")]
         command += ["--media", str(media)]
+        if font_snapshot is not None:
+            command += ["--font-dir", str(font_snapshot)]
         try:
             code = run_child(command, CHILD_SECONDS)
             reason = None if code == 0 else "child_failed"
         except subprocess.TimeoutExpired:
             code, reason = None, "child_timeout"
         outcomes[language] = dict(exit_code=code, reason=reason)
-    manifest = build_manifest(out, outcomes)
+    manifest = build_manifest(out, outcomes, fonts=fonts)
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", "utf-8")
     print(json.dumps(dict(complete=manifest["complete"], manifest=str(out / "manifest.json"))))
     return 0 if manifest["complete"] else 2
 
 
-def main(argv=None) -> int:
+def parse_args(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -717,13 +801,19 @@ def main(argv=None) -> int:
     run.add_argument("--work-root", type=Path, required=True, help="new private directory")
     run.add_argument("--out-dir", type=Path, required=True, help="new output directory")
     run.add_argument("--languages", nargs="+", choices=LANGUAGES, default=list(LANGUAGES))
+    run.add_argument("--font-dir", type=Path, help="fonts for the isolated browser home")
     one = sub.add_parser("child", help="internal: one language")
     one.add_argument("--language", choices=LANGUAGES, required=True)
     one.add_argument("--tarball", type=Path, required=True)
     one.add_argument("--work-dir", type=Path, required=True)
     one.add_argument("--out", type=Path, required=True)
     one.add_argument("--media", type=Path, required=True)
-    args = parser.parse_args(argv)
+    one.add_argument("--font-dir", type=Path)
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> int:
+    args = parse_args(argv)
     return record(args) if args.command == "record" else child(args)
 
 

@@ -8,6 +8,66 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- #255 host use settlement (RM16/RM37/RM39; AC30/AC35; spec 0.66 sections
+  7.6.1, 7.6.2, 12.6.6) adds one pending negative `host_operation` record for
+  OpenClaw 2026.10.7, with the VPS host surface inventory and the CI/VPS
+  captures (`docs/evidence/m10/`):
+  - `mcp_use` is `exact_route_absent`. No supported route invokes an
+    independent, non-App MCP tool by its exact native identity: `tools.invoke`
+    is name-only and the harness runtimes are private; the App-scoped
+    `mcp.app.callTool` does not count. These verdicts rest on the pinned host
+    source; the inventory's `attempted_routes` lists the corrected VPS3
+    attempts (`mcp.app.discover`, `tools.effective`, `mcp.app.listTools`) and
+    what was not called. Its older CI/VPS2 entries omit their
+    `tools.effective` reads; the settlement document records that gap.
+  - `skill_loaded_use` has **no** negative record. Hooks, middleware and the
+    provider can stop a read or a request but cannot re-verify fresh person
+    authority, the session incarnation and the pinned bytes on their own. The
+    host's `GatewaySessionAccessAuthority.retain()` borrow, however, re-checks
+    the person's grant and the exact session incarnation at call time and
+    could back a provider `onPayload` fence, which spec 7.6.1 admits once
+    qualified. `stop_point_absent` is therefore not established, and the
+    pending record that asserted it was withdrawn after review. The inventory
+    records the borrow's source, its open questions and the
+    `before_prompt_build`/`ctx.toolAuthority` hook.
+
+  Both operations stay disabled. The MCP record lifts nothing until it is
+  approved. `tests/test_m10_host_use_records.py` loads it with the checker,
+  checks cited hashes against the inventory and, in the OpenClaw CI job,
+  against the installed pinned host files (including the reset policy sources).
+  It ties listed attempts to captures and checks the documented older-route
+  omissions, ties the record's commit and harness to the VPS3 capture and its
+  tracked sources to that commit's bytes, and rebuilds that historical adapter
+  to verify its emitted files and recorded revision. Both CI jobs retain full
+  history; a missing record commit fails. Privacy checks reject plaintext
+  hostnames and personal home paths, allowing only the documented VPS
+  placeholder and the standard CI home. The MCP record also binds the
+  second VPS run's MCP capture (`openclaw-mcp-use-20261101-vps2.json`,
+  checkout 62c4dcd), with the user name and hostname rewritten. Person ingress
+  passed there, and MCP use was `blocked`. That run's loaded-use capture exited
+  2 on the 62c4dcd single-pin check, because the host lists the whole
+  profile's pins; the selected-skill pin check (5d92b64) is already in this
+  branch and accepts the committed capture, which a test now checks. The MCP
+  record also binds a third VPS run at bba0cf1
+  (`openclaw-mcp-use-20261101-vps3.json`) with the #249 discovery fix:
+  `tools.effective` lists both colliding tools, and the result is still
+  `blocked`. The earlier "empty list" was the old harness projection
+  (`payload.tools` instead of `groups[].tools`), not a host result; the
+  settlement document records the correction.
+
+- Walkthrough recorder fonts (RM39; AC30): `--font-dir` on
+  `integrations/openclaw/test/host-walkthrough/record.py` copies the `.otf`,
+  `.ttf` and `.ttc` files of a directory once into the private work root, and
+  each language's install step copies that snapshot into the isolated browser
+  home's `$XDG_DATA_HOME/fonts` (fontconfig), so Chinese labels render on a host
+  without a system CJK font. `manifest.json` lists the snapshot's file names,
+  SHA-256 digests and sizes under `fonts`. An empty, missing or non-directory
+  font directory is the structured refusal `walkthrough_font_dir` before
+  anything is created, and an environment whose font data directory
+  (`XDG_DATA_HOME`, else `HOME/.local/share`) is unset or relative fails the
+  install step (`walkthrough_font_home`) rather than installing elsewhere.
+  `tests/test_openclaw_walkthrough.py` covers these cases.
+
 - Owner-run qualification records and `owner_machine` labelling (#251; RM16,
   RM39, RM40, RM42, RM44; AC30, AC31, AC33, AC35–AC37; spec 0.66 section
   12.6.6): the closed `asset_qualification_record.v1.json` schema and
@@ -264,8 +324,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `tools.effective` lists came from the projection, not the host. The person
   probe now starts the session's MCP runtime with public `mcp.app.discover`
   before the read (MCP Apps enabled, the shipped RelayMind model selected, zero
-  heartbeat). A Linux x86-64 VPS run of the CI command (not committed) listed
-  both colliding tools; exact use stays blocked.
+  heartbeat). A Linux x86-64 VPS run of the CI command at bba0cf1 listed both
+  colliding tools; exact use stays blocked. That capture is now committed as
+  `docs/evidence/m10/openclaw-mcp-use-20261101-vps3.json` (#255).
   A refused `chat.send` retains its request window, correlated provider records
   and native hooks; any such activity fails the case closed
   (`ordinary_skill_refusal_contradicted`) instead of an activity-free refusal.
@@ -334,6 +395,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Activate two independently reviewed exact Linux CPU embedding identities;
   record ordinary native launch and provisional 412/128 benchmark results,
   including partial indexing, lexical fallback and the observed quality regression.
+
+### Fixed
+
+- The loaded-use observation harness records the exact person-scope
+  `sessions.reset` refusal (`operator.admin` required on the pinned host) as
+  `control_refused`, with no turn, instead of raising
+  `ordinary_skill_control_failed`. CI run 41286397320 hit that error. Any other
+  refusal, and any turn evidence on a refused control, still fails the
+  predicate (#255). The second VPS run observed the refusal as
+  `control_refused`. [CI run 41340879424](https://github.com/LHCWN/relaymind/actions/runs/41340879424)
+  at ed21e007 also completed loaded-use observation with that reset result and
+  confirmed corrected MCP discovery; exact use stayed blocked. These newer CI
+  captures are workflow artifacts, not committed evidence.
 
 ### Changed
 

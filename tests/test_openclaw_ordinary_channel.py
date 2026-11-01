@@ -869,8 +869,8 @@ def test_controls_are_observations_without_rejection_requirement(observed):
 
 # The pinned 2026.10.7 refusal of `sessions.reset` for the configured person
 # policy (CI run 41286397320): the method needs operator.admin, which the person
-# policy does not grant; the native Control UI itself falls back to
-# sessions.create without that scope.
+# policy does not grant (the native Control UI declares that scope for its own
+# reset call and otherwise starts a new session with sessions.create).
 RESET_SCOPE_REFUSAL = dict(
     type="res",
     id="reset",

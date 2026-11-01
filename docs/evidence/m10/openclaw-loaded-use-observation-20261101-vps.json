@@ -1,0 +1,69 @@
+{
+  "kind": "openclaw-native-person-ingress",
+  "host_version": "2026.10.7",
+  "fixture": "disposable local identity-provider accounts; no human qualification",
+  "status": "setup_unavailable",
+  "reason": "private_network_unavailable",
+  "steps": [
+    {
+      "name": "network_peer",
+      "status": "not_run"
+    },
+    {
+      "name": "proxy_signature_controls",
+      "status": "not_run"
+    },
+    {
+      "name": "account_a_login",
+      "status": "not_run"
+    },
+    {
+      "name": "account_a_pairing",
+      "status": "not_run"
+    },
+    {
+      "name": "account_a_session",
+      "status": "not_run"
+    },
+    {
+      "name": "account_a_person_rpc",
+      "status": "not_run"
+    },
+    {
+      "name": "account_b_login",
+      "status": "not_run"
+    },
+    {
+      "name": "account_b_pairing",
+      "status": "not_run"
+    },
+    {
+      "name": "account_b_session",
+      "status": "not_run"
+    },
+    {
+      "name": "account_b_person_rpc",
+      "status": "not_run"
+    },
+    {
+      "name": "cross_account_denied",
+      "status": "not_run"
+    },
+    {
+      "name": "revocation_denied",
+      "status": "not_run"
+    }
+  ],
+  "login_progress": [],
+  "accounts": [],
+  "network": null,
+  "checks": {
+    "person_composition": false,
+    "production_adapter_qualified": false,
+    "ordinary_actions": false,
+    "ordinary_skill": false,
+    "ordinary_skill_loaded_use_observation": false,
+    "ordinary_skill_observation_complete": false
+  },
+  "observed_ms": 6.14171801134944
+}

@@ -668,8 +668,9 @@ tasks or labels it binds must be the resolved inputs. Every Time field must be
 a real UTC instant (`invalid_record_time`). Under spec 12.6.6 an approved
 `negative` record with scope `host_operation` closes the `skill_loaded_use`
 or `mcp_use` gate with the operation disabled; `known_host_limitations`
-returns those records for the roadmap, docs and reports to list. No approved
-negative record exists yet, so none is listed. The module is
+returns those records for the roadmap, docs and reports to list. A pending
+record lifts nothing. No approved negative record exists yet, so none is
+listed. The module is
 `relaymind.evaluation.asset_qualification_record`.
 
 **Native configuration validation (spec 0.65; #240).** Host, provider, sampling
@@ -1159,8 +1160,9 @@ revision and can record a different syntactically valid revision as
 A retained old pin is reported as observed even when the library head changed
 or the entry was removed; it is never relabeled a successful rejection control.
 On the pinned 2026.10.7 host `sessions.reset` requires `operator.admin`, which
-the configured person policy does not grant (the native Control UI itself uses
-`sessions.create` without that scope). Only that exact native
+the configured person policy does not grant (the native Control UI declares
+that scope for its own reset call and otherwise uses `sessions.create`). Only
+that exact native
 `FORBIDDEN`/`MISSING_SCOPE` refusal, with the session unchanged, is recorded as
 `control_refused`: no turn runs and any turn evidence fails the predicate. It is
 a host outcome, not a rejection RelayMind performed (#255).
@@ -1357,8 +1359,19 @@ pass predicates. For each language it:
 playwright install --with-deps --only-shell chromium
 python integrations/openclaw/test/host-walkthrough/record.py record \
   --tarball /abs/relaymind-openclaw-provider-0.1.0.tgz \
-  --work-root /abs/new-private-work --out-dir /abs/new-walkthrough
+  --work-root /abs/new-private-work --out-dir /abs/new-walkthrough \
+  [--font-dir /abs/cjk-fonts]
 ```
+
+The harness starts the browser with `HOME` inside the work directory, so it
+sees only system fonts. On a host without a CJK font, the Chinese labels still
+match but render as empty boxes. `--font-dir` copies the `.otf`, `.ttf` and
+`.ttc` files of a directory once into the work root (`fonts/`), then installs
+that copy into each isolated home's `$XDG_DATA_HOME/fonts` (Linux fontconfig)
+as part of the install step, before the host is installed. The manifest lists
+the names and digests of that copy under `fonts`, so they are the bytes every
+language installed. Use a work root whose path holds no user name, because the
+source locator and the capture show it.
 
 The output directory holds, per language, `capture.json` (the harness's
 sanitized capture), `screens/`, `screens.json` and `video/`. `manifest.json`
@@ -1401,8 +1414,11 @@ The tier is `functional_fixture`, with a deterministic gateway and disposable
 fixture accounts. It is not an owner, human or live-model walkthrough and
 not platform acceptance. Blocked steps are never attempted. Screenshots and
 video can show fixture account names; keep them private until reviewed, and
-never publish the work directory. Whether the pinned host's Control UI
-follows the browser locale has not been observed yet; if it does not, the
-Chinese run fails on its first label rather than recording English screens.
+never publish the work directory. On the owner's VPS (1 November 2026), the
+pinned host's Control UI and the plugin's controls followed the `zh-CN` browser
+locale. The recommendation detail block and the identity provider's sign-in
+pages stayed in English, and the host's community banner stays visible because
+the harness never dismisses it. An unknown label still fails the Chinese run
+on that label rather than recording English screens.
 The recorder is not part of CI. Its fixture tests
 (`tests/test_openclaw_walkthrough.py`) run in the default `pytest`.

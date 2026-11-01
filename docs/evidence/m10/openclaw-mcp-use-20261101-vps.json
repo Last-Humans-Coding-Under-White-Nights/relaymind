@@ -1,0 +1,680 @@
+{
+  "kind": "openclaw-mcp-use-qualification",
+  "requirements": [
+    "RM39",
+    "AC35"
+  ],
+  "status": "blocked",
+  "reason": "person_setup_unavailable",
+  "mcp_use": {
+    "exact_route": {
+      "status": "unsupported",
+      "reason": "no_qualified_exact_use_receipt_resolver"
+    },
+    "approval_driver": "not_run",
+    "approval_automation": "automated_ui",
+    "human_approval": "not_run",
+    "approvals": [
+      {
+        "name": "allow-once",
+        "status": "not_run",
+        "reason": "exact_route_unqualified"
+      },
+      {
+        "name": "deny",
+        "status": "not_run",
+        "reason": "exact_route_unqualified"
+      }
+    ],
+    "negative_controls": [
+      {
+        "name": "schema_change",
+        "status": "not_run",
+        "reason": "exact_route_unqualified"
+      },
+      {
+        "name": "server_removal",
+        "status": "not_run",
+        "reason": "exact_route_unqualified"
+      },
+      {
+        "name": "session_reset",
+        "status": "not_run",
+        "reason": "exact_route_unqualified"
+      },
+      {
+        "name": "policy_denied",
+        "status": "not_run",
+        "reason": "exact_route_unqualified"
+      },
+      {
+        "name": "disconnected",
+        "status": "not_run",
+        "reason": "exact_route_unqualified"
+      },
+      {
+        "name": "foreign_requester",
+        "status": "not_run",
+        "reason": "exact_route_unqualified"
+      },
+      {
+        "name": "approval_replay",
+        "status": "not_run",
+        "reason": "exact_route_unqualified"
+      },
+      {
+        "name": "cancelled",
+        "status": "not_run",
+        "reason": "exact_route_unqualified"
+      },
+      {
+        "name": "timeout",
+        "status": "not_run",
+        "reason": "exact_route_unqualified"
+      },
+      {
+        "name": "arguments_changed",
+        "status": "not_run",
+        "reason": "exact_route_unqualified"
+      },
+      {
+        "name": "choice_expired",
+        "status": "not_run",
+        "reason": "exact_route_unqualified"
+      },
+      {
+        "name": "registration_revoked",
+        "status": "not_run",
+        "reason": "exact_route_unqualified"
+      }
+    ],
+    "provider_baseline": {
+      "status": "not_run",
+      "reason": "exact_route_unqualified"
+    },
+    "inventories": [],
+    "server_events": [],
+    "sandbox_files": {}
+  },
+  "ordinary_capture": {
+    "kind": "openclaw-native-person-ingress",
+    "host_version": "2026.10.7",
+    "fixture": "disposable local identity-provider accounts; no human qualification",
+    "status": "setup_unavailable",
+    "reason": "private_network_unavailable",
+    "steps": [
+      {
+        "name": "network_peer",
+        "status": "not_run"
+      },
+      {
+        "name": "proxy_signature_controls",
+        "status": "not_run"
+      },
+      {
+        "name": "account_a_login",
+        "status": "not_run"
+      },
+      {
+        "name": "account_a_pairing",
+        "status": "not_run"
+      },
+      {
+        "name": "account_a_session",
+        "status": "not_run"
+      },
+      {
+        "name": "account_a_person_rpc",
+        "status": "not_run"
+      },
+      {
+        "name": "account_b_login",
+        "status": "not_run"
+      },
+      {
+        "name": "account_b_pairing",
+        "status": "not_run"
+      },
+      {
+        "name": "account_b_session",
+        "status": "not_run"
+      },
+      {
+        "name": "account_b_person_rpc",
+        "status": "not_run"
+      },
+      {
+        "name": "cross_account_denied",
+        "status": "not_run"
+      },
+      {
+        "name": "revocation_denied",
+        "status": "not_run"
+      }
+    ],
+    "login_progress": [],
+    "accounts": [],
+    "network": null,
+    "checks": {
+      "person_composition": false,
+      "production_adapter_qualified": false,
+      "ordinary_actions": false,
+      "ordinary_skill": false
+    },
+    "observed_ms": 5.046745005529374
+  },
+  "person_setup_reason": "private_network_unavailable",
+  "ordinary_exit_code": 2,
+  "built_archive_sha256": "63c2c660ed69e2c3006c14053d583eec7b32ea0072d0d5d69b50b6295e0224a3",
+  "source_inventory": [
+    {
+      "path": "integrations/openclaw/dist/attempts.js",
+      "sha256": "5eed398f4a82bb1a09bd5715cbcf0a985b9d6ec431f887b1c199922846283023"
+    },
+    {
+      "path": "integrations/openclaw/dist/catalog.js",
+      "sha256": "3e8a77313fb680bc8d43ba7bf2f659001f0b4708ad19acd9357f1511709af1d9"
+    },
+    {
+      "path": "integrations/openclaw/dist/compat.js",
+      "sha256": "0c6bb2a983459816bfc07b251dff01e6b408e0660a92754c39474d11f77a8fe6"
+    },
+    {
+      "path": "integrations/openclaw/dist/config.js",
+      "sha256": "2321ac48c9875315b3eaebb1ac2de38dc456a86b9a45437f0f07140fc673349d"
+    },
+    {
+      "path": "integrations/openclaw/dist/control-ui.js",
+      "sha256": "3e295d24dcdd0520c105042a7800263dd557217d0704ac31eb0e6b1afd67f3ed"
+    },
+    {
+      "path": "integrations/openclaw/dist/control-ui/control-ui.js",
+      "sha256": "3e295d24dcdd0520c105042a7800263dd557217d0704ac31eb0e6b1afd67f3ed"
+    },
+    {
+      "path": "integrations/openclaw/dist/control-ui/recommendation-json.js",
+      "sha256": "4e348f374ae84eb26f5b8d2996972260ff4aa538f727170b4e9353947f3cfc91"
+    },
+    {
+      "path": "integrations/openclaw/dist/diagnostics.js",
+      "sha256": "319597210c8284ba5b47755096b242011409ac125dfdea57f00ed8e986535a18"
+    },
+    {
+      "path": "integrations/openclaw/dist/errors.js",
+      "sha256": "6f249f66155cf3330c63cfc012abaa21ba1dd8b9d19b10aaade5792b044ea829"
+    },
+    {
+      "path": "integrations/openclaw/dist/idempotency.js",
+      "sha256": "39b9fe716e0e1cde4b22d9a43a6ef2206546d16f00bdf25c6799a8e59428bc45"
+    },
+    {
+      "path": "integrations/openclaw/dist/index.js",
+      "sha256": "5bee1019b0af495bf50a3829476dc703647968c42003169686d090821e2f095a"
+    },
+    {
+      "path": "integrations/openclaw/dist/input-guard.js",
+      "sha256": "0e13ec8cbb9440cfa49ad882c69531d30592417b69e0376d6a05c73710a7cc9f"
+    },
+    {
+      "path": "integrations/openclaw/dist/provider.js",
+      "sha256": "4f88e25d65e36d32da12c7c4adfd1c3badddce406c5673efa783de871775d899"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-contract.js",
+      "sha256": "c939a4749b38421b742165132da454190028b6e478da6911273bfeef85b97ac0"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-controller.js",
+      "sha256": "7d40cd408dbd0cb368ee089daef8868fbc222e5f099bd4e5479cb9a6f6791a84"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-host.js",
+      "sha256": "83b5070e941680a130c6569ab2be7a43d51b5b53e1590d2503f585f820147e3f"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-json.js",
+      "sha256": "4e348f374ae84eb26f5b8d2996972260ff4aa538f727170b4e9353947f3cfc91"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-native-actions.js",
+      "sha256": "4a29da0b95b8781b42d840b7ffcde1f5e19648aaab875ea958874908e8ecc988"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-native-authority.js",
+      "sha256": "17aa51c5f808c1f109039ce585e01ff57bef6f3b17b839ae3adee5d52f50fb15"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-native-config.js",
+      "sha256": "fbeb621bf953a28e391be7a3b15ec87fe6894a552f02a67fe18a9dba4e54382a"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-native-ledger.js",
+      "sha256": "ad25ce042dd8dfc3a03136634899d9a9b29af3938236fd697a3d2f2c3c85350d"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-native-mcp.js",
+      "sha256": "9f3bf6f3fb38893975ae8bb62faa1ff372706c5a739cd992ed92f8fd3642932d"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-native-qualification.js",
+      "sha256": "ae06643c0ca0b9769393deb609fc32dc4c3e97cf4be7808358a3bff5ce9079cd"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-native-registry.js",
+      "sha256": "d518450af309c55abe6750e5bb72add713f125ed9688d73f278271c21a24c1a6"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-native-skill.js",
+      "sha256": "3376a87f10fbf58816aeeaeade784c9b0a90a52abdc970be95dc270572adbe1f"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-native-use.js",
+      "sha256": "eb4ef647fc150939e6da5ac8558844f8e04021de83c0eebdff7f8ecc8a9db4e0"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-native.js",
+      "sha256": "4db36c4b1f49571ed33e9f29607eb0a38e4a165c9f6f4e67199febffeec9bf1d"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-render.js",
+      "sha256": "646737c7a92a38549bc8f7146a84a21c99e8819143cf699f4d3fc475ecbb0fe9"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-schema.js",
+      "sha256": "307bda6935c4abccf3e7d820df854e3463e7046808bc6cee3994d8e8d62f12b0"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-schemas/action_evidence.js",
+      "sha256": "7560e835c0e0257c196deffa3e15d0bf2bc57d5598b2dbb78816be01ede1c845"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-schemas/asset_record.js",
+      "sha256": "848c690b5c4937c77dd48d04c82b85a7e8d861a1d878664f15b060786b8e8695"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-schemas/feedback_record.js",
+      "sha256": "059ed95b69f7786ed3dd0663ac5a8fdfbeb27081656889c8dd95693e4ed699e4"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-schemas/recommendation_event.js",
+      "sha256": "0f7b9e5c255a82c78393816a8e1e7e996cee489fdafad62f662009a9a7d56afc"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-schemas/recommendation_readiness.js",
+      "sha256": "b97c36ad5746a3e80d9d1532c69ba89e2bb483e2902974bbb3e8c71fbbbad1d5"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-schemas/recommendation_result.js",
+      "sha256": "c6bf3e6c8c692d5377f89259602974958596bc1802a905c7c70800c4c704e3ad"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-schemas/recommendation_view.js",
+      "sha256": "aa4b89c8367b4b179cde8346a757080a3f72c3b019d02835f9b4af6b53a9fe0b"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-transport.js",
+      "sha256": "b0068b891fa87287263387575dcbe24063c563ae238fc0339c9ef593d23b305f"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendation-types.js",
+      "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+    },
+    {
+      "path": "integrations/openclaw/dist/recommendations.js",
+      "sha256": "7c7a45d6feb7e2ff376ffb57a35add659629ef25c326307096d961879598dce5"
+    },
+    {
+      "path": "integrations/openclaw/dist/redaction.js",
+      "sha256": "e4eaeb111fb7be971b5925a4eb53c55c91b74c5a65e9b87f5b97a11658e4f15d"
+    },
+    {
+      "path": "integrations/openclaw/dist/stream.js",
+      "sha256": "9141e04345c1643d955eaa56ff90685e88c29795924ea8e34ab7aacba6b63bbf"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/@modelcontextprotocol/sdk/package.json",
+      "sha256": "e2978955f1e20cce7a22ed5daea0bed7e7d8e0a0e1b8fe170773dd15787a51b3"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/agent-bundle-mcp-harness-kUhhT14m.mjs",
+      "sha256": "1d658e64e72fe3a92d67b15d6bb1f60514e0e48309495baef1fd9e26d373617c"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/agent-bundle-mcp-manager-api-MgM2jUv6.mjs",
+      "sha256": "ee3d397f9de02e7fa8ddc22d51aa517b9fb9625ebcaff30ba263e83090274896"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/agent-bundle-mcp-materialize-DD5Z5Ssq.mjs",
+      "sha256": "ca7277db86aeee5447a65102d50e6142de6dba559c707b3840d1c78a5b8c7dc4"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/agent-bundle-mcp-names-CFVETBL6.mjs",
+      "sha256": "f5a5c361a4a32999577d19f3483af672b6c704bd658c6f04cea0e1a6ed9c8b17"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/agent-bundle-mcp-request-context-nUnVNj8B.mjs",
+      "sha256": "dcd7a95ddf8d7de8c3f8c989f7d13b24aa712b7a9ebe22577b52d999819da279"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/agent-bundle-mcp-requester-connect-my6f6Yvd.mjs",
+      "sha256": "e7df456eb4a9c137723d6c2b65e6d21bcd3ebe04b7a2fb2a3b717719e1eb12d4"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/agent-bundle-mcp-runtime-config-BdUFwexf.mjs",
+      "sha256": "13f9cedbf273e071cbe91f8dab492949ceb2a9b0180c0bc47838ef4dee9c36bf"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/agent-bundle-mcp-runtime-config-Dir3gPWe.mjs",
+      "sha256": "bd247c76df54b5e783b1eea983e7b7e3d79b284e4e47682ca61932398f677e76"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/agent-bundle-mcp-runtime-shared-BFBNCZj0.mjs",
+      "sha256": "546133eb5fd3f57a2e8abf9711f8e2951c638d7ef4a34fd56b7d2a50d6db5283"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/agent-bundle-mcp-tools-Mmdbii5X.mjs",
+      "sha256": "dd48bd1a72878f0c2c933a34d5a421dccf8c044c123fc14fdfe31329ad81cc84"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/agent-bundle-mcp-tools-vXBendnu.mjs",
+      "sha256": "4839679e89848784b27094d1d60b8ab651977581468755b8d9e22eea901203b0"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-DRRDUDxP.mjs",
+      "sha256": "fa254a637d0e13bbbf7f5d19130249253dd8abf9eeebc3afb91deb8c7dd275c5"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-extension-metadata-moidhg1Q.mjs",
+      "sha256": "e7cd7606bb0e24e0df653577441a76e6a4769a9d3b4218a3acbed02a274512f8"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-extensions-abaft4XG.mjs",
+      "sha256": "a89da5dc63edfadd2f50e3391cbc0a9ab10b2c76084811967e17917e1b43d75c"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-form-resources-CLDsFhit.mjs",
+      "sha256": "8dc7f976e43639df5f54ac654bfa5fe423c8194e9356af0827e1a94af26ff37f"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-host-files-C6DCXVUW.mjs",
+      "sha256": "6c96b52a657cd72b0fd60b9e59e65f14c5b823d3c39a1ce3ea313b4d2b652800"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-host-files-CYEqGNXR.mjs",
+      "sha256": "29bb9a03b3c559dacf52b7807c0ad2963abe5ff1b53e1812252e86bf2ea377d6"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-model-context-CLHkOW5U.mjs",
+      "sha256": "256fc8be7906f49d1822dd307e9bbe214fe9288e328c6a24919310641d042927"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-onboarding-C8NUT28c.mjs",
+      "sha256": "9c8fbbe099f23adfceac0e773865d5fd6b92cb08c18707aad9388b9f09c54571"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-operations-1DuSfeoO.mjs",
+      "sha256": "a7b156852a6fbb6b2c6b8940414f73b793feb379bf1fa59a1313e6e0ae9bf8c9"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-operations-BCgC972C.mjs",
+      "sha256": "28f653944f275536d95c0335c65ad4edf374a8911f070cbaa9afc388294f55a6"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-standalone-BtTU56E5.mjs",
+      "sha256": "f1ca4f7cc8f55bf1705eb74c5f98e62be26a51b600ca3d6558559360be8c4f57"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-standalone-D8OpF3cI.mjs",
+      "sha256": "bebb1c2db122053ba3de44bc0a531a91b179e095d1f6ade42143d56e62cd3c57"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-tool-approval-BsPc5eQR.mjs",
+      "sha256": "c4989c209937288e3a6b2f2150268ea2c8c2f89046c034397106028553ca3133"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-tool-approval-CFMYM2SE.mjs",
+      "sha256": "dc16ff8f2ab83f463d284a4426ace8f6c12dfbf845cffb62cc47b4ee9afecf13"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/mcp-app-transcript-BBbH7G40.mjs",
+      "sha256": "f4dde4318e856c849f67c233d9ff9e35bd15fbf829ba9d95e062c0379c4cb2d6"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/agent-harness-runtime.js",
+      "sha256": "98d12f921f5b1724de6625b0143f153170726b650ab28a6c0b2f2444ad5c41ca"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/gateway-method-runtime.js",
+      "sha256": "47836459dc2586ce35099773121ad3eb0a40eb7fd38f458272d613415d312ce3"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/tools-effective-DRoSpE_Y.mjs",
+      "sha256": "4b0d63a3e4a71540b8851e63f34ea68a971f09e752691ed01fef1cc2b543fe1b"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/tools-effective-inventory-D_n_e8wP.mjs",
+      "sha256": "d4abae36d9b555d842c6f91dd624ccfcf9d32b852594546b019683a5906e66c4"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/tools-effective-inventory-build-B1qxO9Oc.mjs",
+      "sha256": "fcd0cd22ad17618347a30c41482f7f69e9be1c16e8d4247535d103eacc677553"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/openclaw.mjs",
+      "sha256": "98caf565334400768d4a8ee54f7f9302c4b2c79881552c79785ed7d66da6a996"
+    },
+    {
+      "path": "integrations/openclaw/node_modules/openclaw/package.json",
+      "sha256": "362f8c0fda7b71a116e0ca2f812e896bfe9cfec41e64b6b66243f95703aaf7b8"
+    },
+    {
+      "path": "integrations/openclaw/package-lock.json",
+      "sha256": "f4722ebb94de2b8200890ba3247dbc42a2118325d110df7154c1a9a53cb39709"
+    },
+    {
+      "path": "integrations/openclaw/src/attempts.ts",
+      "sha256": "39e6469c5ba8ad5aa68251c24099019f4094cfc80c58b08fe2fc594b30e57990"
+    },
+    {
+      "path": "integrations/openclaw/src/catalog.ts",
+      "sha256": "66a3746822365f98c56cf8d1216fa3746417128c1b2d8c14bae56618904f1363"
+    },
+    {
+      "path": "integrations/openclaw/src/compat.ts",
+      "sha256": "126506c916d6b633282673228b83d1e5c072884af92fc806336e234c44f19845"
+    },
+    {
+      "path": "integrations/openclaw/src/config.ts",
+      "sha256": "0260c2a84d121c42f3da06ee9e674aed2f54518b620233aa5b669d96b2d913c3"
+    },
+    {
+      "path": "integrations/openclaw/src/control-ui.ts",
+      "sha256": "c674fae25ad85f9f855446dd11c22ed0bca66086ff78123ab346e7c2e13c12cf"
+    },
+    {
+      "path": "integrations/openclaw/src/diagnostics.ts",
+      "sha256": "99af2d5717470319d12a68fbc77224bf1e03f2003de945e8d91772f1bff598d2"
+    },
+    {
+      "path": "integrations/openclaw/src/errors.ts",
+      "sha256": "5ab313c74efeed2d9985d4163eaee0de1ed4ef627d08d364014fd2aafa073d9e"
+    },
+    {
+      "path": "integrations/openclaw/src/idempotency.ts",
+      "sha256": "e854bd08830501f1c8b2c6af0bcd2e42a6d00c6d2a3378dc4663d4d7900a9214"
+    },
+    {
+      "path": "integrations/openclaw/src/index.ts",
+      "sha256": "c0a1f06a3f90b2dc008bd0f4c8932acf07235e556445dcf6ccfe5b4abb79a0cd"
+    },
+    {
+      "path": "integrations/openclaw/src/input-guard.ts",
+      "sha256": "970c97b8b9010a0817c1c868166afd67703dd39b7ea84b6313249dcdcf788fad"
+    },
+    {
+      "path": "integrations/openclaw/src/provider.ts",
+      "sha256": "103339a044cc20645b95f629726c4b5d4510539750f6e15132378ce814a4d8eb"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-contract.ts",
+      "sha256": "95a55124e1c029832baca0d4238f420f203a704dc2d4a7aed0f356393434c017"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-controller.ts",
+      "sha256": "b2c6c609ddf6cf513d1788dccc9bfa48ec80e0aa773133ec191ae5731cd8c9a2"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-host.ts",
+      "sha256": "01ef4ba67fbbac8e57522492380d698303d990b5254461a5b273bf64871689bb"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-json.ts",
+      "sha256": "8ff6a34fb2f971264d2dac00504f09233b8197859d11e6d4fc5b7417c2e1d285"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-native-actions.ts",
+      "sha256": "611ac3651742fc05347d15a7980caf7648584197b8bc3470182e5753be109ce9"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-native-authority.ts",
+      "sha256": "4938dd3912ad3509d8fbd7617ae100bf85b9803f99a36651bb89681aebf23971"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-native-config.ts",
+      "sha256": "102c67fb75f41f20dc9aa972003c5ea3bf426b6dbb36cebfd2a8f96cbe1f1cb1"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-native-ledger.ts",
+      "sha256": "0d040764fd93bd59ed1420ce09fd665aa4767f7ef017c38b231fa47753cebe51"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-native-mcp.ts",
+      "sha256": "514a0ae2a2a79e1db3a56b59f2e7e912f8090c9a3ff36286159ec90439d756eb"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-native-qualification.ts",
+      "sha256": "ac8aa401f982cde5e7ea38f0de074eb75d83d7d33717489d53eb08f0b35fc986"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-native-registry.ts",
+      "sha256": "00f4a9b8feedac25bb898eba2e3fb53c2d4678c8988304e172925bead34e74a3"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-native-skill.ts",
+      "sha256": "f31cb7e4bdc1e4ac67a9f90992991ef2aa3100d42a9e335d025d8ec33f1fd1ad"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-native-use.ts",
+      "sha256": "0fe20b7467659c3b949132e7dd77da87c0e71e62114e8ca8b6009ff991521ced"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-native.ts",
+      "sha256": "94398591dbf20b218a472a9669282bb7870b59aa7bf10fb524d3fe52add6309c"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-render.ts",
+      "sha256": "7b293eb9d4647d438a1f7413278f18f687b021d3339faf5ceb6dface5666d39f"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-schema.ts",
+      "sha256": "ea7c4b0822b53ccf322cdf1bcb0fecad43c54dcfbb493bbc4942c80ed1106296"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-schemas/action_evidence.ts",
+      "sha256": "5687e7a9004634657abd448ab873122cc245e09b9db157d15046226fdfad82fa"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-schemas/asset_record.ts",
+      "sha256": "8db8c82fd9069a140073e389cafc67d13743d1c3659e57afc67cf2ce7e9615d2"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-schemas/feedback_record.ts",
+      "sha256": "7c90f22c2f2fa7a6dbd427d5767a85f1b055c406b61d7cdf175f66d11e445d92"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-schemas/recommendation_event.ts",
+      "sha256": "3278629b322e0eddc0c0bbd33b6c76136339ca23f860637fa68396e5f7c9f0b4"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-schemas/recommendation_readiness.ts",
+      "sha256": "8a8e504a4d5c49293264982db7de7a9f6bbd4bff81e317413857b7acbca4b0c9"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-schemas/recommendation_result.ts",
+      "sha256": "4e724080bfa6f86706619365d7a6bfc2ae35495214f1cb43b8590bf92267e10e"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-schemas/recommendation_view.ts",
+      "sha256": "9dc14bec143cc34648aa8a5bce052938a926f2b1017b3bd599f1b8fd02119067"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-transport.ts",
+      "sha256": "eb18a59b6edb5c22a598250d66202722e6b9210790c6e7ebfecf380a2ea47682"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendation-types.ts",
+      "sha256": "0b650aabc76dcf7d204a6ee5672a99472dc86f6bb0023ec48af29fee68091796"
+    },
+    {
+      "path": "integrations/openclaw/src/recommendations.ts",
+      "sha256": "f423a924c0c8f85603bc39f6af13fe9dc7f95040d0b60a0af7db8a9714dfc094"
+    },
+    {
+      "path": "integrations/openclaw/src/redaction.ts",
+      "sha256": "a96120d654cc30938083a4eb19fc1394494e3c5eac8d4cf607ca04e3c6fa82e8"
+    },
+    {
+      "path": "integrations/openclaw/src/sdk-llm.d.ts",
+      "sha256": "e53416d1d846f242d2966034ac729d018354d36a74b7746b10f8945ec4b0ddf3"
+    },
+    {
+      "path": "integrations/openclaw/src/stream.ts",
+      "sha256": "709a68384438606aa026f3577ad61ffaa9130fef8136af87c72b6645943ccab4"
+    },
+    {
+      "path": "integrations/openclaw/test/host-mcp-use-qualification/approval_ui.py",
+      "sha256": "317fe9e9ce7005e200ac8d0c0d0b6f7dc63b0fa7b814f893f54b6bf955ac3136"
+    },
+    {
+      "path": "integrations/openclaw/test/host-mcp-use-qualification/grade.py",
+      "sha256": "625b8eae24eb8fc0ba7a6fe2dbf07d8ccb466160cfc1dd8761386d34850f5ac3"
+    },
+    {
+      "path": "integrations/openclaw/test/host-mcp-use-qualification/openclaw.plugin.json",
+      "sha256": "753e0375dd10336e702c31290aa5811042bfd3068414a321991dad026b0cffe1"
+    },
+    {
+      "path": "integrations/openclaw/test/host-mcp-use-qualification/package.json",
+      "sha256": "b72cec85c680044b2cdcfc0376968d410836d1a4b5f63466f01d99873ba2402c"
+    },
+    {
+      "path": "integrations/openclaw/test/host-mcp-use-qualification/probe.mjs",
+      "sha256": "46d98ffbc0a495aa660cb979844c51ae528682e027d9fa4c50c2523c8649be5d"
+    },
+    {
+      "path": "integrations/openclaw/test/host-mcp-use-qualification/qualify.py",
+      "sha256": "e84b4e7da8cfffe3c6a5ec93895e75c4ca634db1bd84ab7a6080dd24e5777ba8"
+    },
+    {
+      "path": "integrations/openclaw/test/host-mcp-use-qualification/server.mjs",
+      "sha256": "42cdde8f847159e324ad6e10efaf3667819588337a8e40ac7548b30075dd0c2e"
+    }
+  ],
+  "checks": {
+    "pinned_bytes": false,
+    "genuine_person_ingress": false,
+    "current_registered_scope": false,
+    "retained_explicit_choice": false,
+    "exact_native_binding": false,
+    "live_session_runtime_requester_binding": false,
+    "policy_before_and_after_approval": false,
+    "currentness_at_final_io": false,
+    "native_approval_receipt": false,
+    "intended_effect_and_result": false,
+    "zero_gateway_execution": false,
+    "negative_controls": false,
+    "preserved_baseline": false
+  },
+  "functional_exact_use": false,
+  "fixture_discovery_pass": false
+}
