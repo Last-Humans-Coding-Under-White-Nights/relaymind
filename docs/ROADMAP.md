@@ -1110,17 +1110,24 @@ neutralizes control characters, and wraps long evidence and feedback values.
 Source locators remain the exact offered record: spec sections 4.6.1 and 7.6
 define local locators as resolved `SKILL.md` paths and return that record in
 the scoped view; no home-path abbreviation/redaction rule is specified.
-The adapter revision is repinned to the built bytes that combine these
-changes with the #256 review and ledger fixes
-(`ddeb3c70d69c3d6de61902b41b05008853c777b1e13c04ec9d7cc827db01b894`).
-The ordinary installed-host run of these exact bytes (pinned OpenClaw
+In text mode a source backslash is doubled and the quote inside the quoted
+description is escaped, so source text cannot imitate a neutralized control
+or a field; one locale rule (`zh`, `zh-CN`, `zh_CN`, `zh-Hans`) serves the
+panel and its evidence, and a receipt that cannot be displayed leaves the
+shown recommendation and its actions in place.
+The adapter revision is repinned to the built bytes that include these review
+fixes (`6ec24fd1bbbd786f50c6b5ad2208439aabc60b5efff4372172ddf24ffa0b9480`).
+The committed capture below ran the earlier bytes
+(`ddeb3c70d69c3d6de61902b41b05008853c777b1e13c04ec9d7cc827db01b894`), so it
+must be recaptured from CI for the new revision before merge.
+The ordinary installed-host run of those earlier bytes (pinned OpenClaw
 2026.10.7, Ubuntu runner, CI run 41322604609, commit bb9ed3e, PR merge
 checkout a7eebb8) passed the ordinary-pass and ordinary-skill-pass predicates
 with all 15 harness sources matching the #247 harness. Its unmodified capture
 replaces
 [openclaw-native-actions-20261101-adapter.json](evidence/m10/openclaw-native-actions-20261101-adapter.json)
 (SHA-256 `428d02899eb84b1bb374b415e4ddfbdefe2a73c831d4178527c41b182301d17b`),
-which the registry's evidence revision now names. Browser fixtures alone do
+which the registry's evidence revision names. Browser fixtures alone do
 not establish native host qualification for those bytes; as before, this is
 Linux functional evidence with disposable accounts.
 

@@ -6,6 +6,7 @@ import type {
 } from "openclaw/plugin-sdk/control-ui";
 import { decodeJson } from "./recommendation-json.ts";
 import {
+  chineseLocale,
   formatRecommendation,
   neutralizeControls,
 } from "./recommendation-display.ts";
@@ -88,7 +89,7 @@ function mountPanel(
 ) {
   let context = initial;
   const host = context.host;
-  const labels = /^zh\b/i.test(host.locale) ? chinese : english;
+  const labels = chineseLocale(host.locale) ? chinese : english;
   let busy = false,
     generation = 0;
   let view: Record<string, any> | null = null;
@@ -331,12 +332,15 @@ function mountPanel(
       if (typeof value.feedback_revision === "bigint")
         feedbackRevision = String(value.feedback_revision);
       if (result.label === "recommendation") {
-        view = value;
-        selectedAsset = null;
-        evidence.textContent = formatRecommendation(value as RecommendationViewV1, {
+        // Format first: a receipt that cannot be displayed must not replace
+        // the recommendation that the visible evidence and actions bind to.
+        const text = formatRecommendation(value as RecommendationViewV1, {
           locale: host.locale,
           format: "text",
         });
+        view = value;
+        selectedAsset = null;
+        evidence.textContent = text;
         status.textContent = "";
         renderChoices();
       } else {
@@ -547,7 +551,7 @@ const mountPage: ControlUiView = (container, initial) => {
     mounted = undefined;
     selected = key;
     if (!key) {
-      container.textContent = context.host.locale.startsWith("zh")
+      container.textContent = chineseLocale(context.host.locale)
         ? "请先在宿主中打开一个个人会话，再打开 RelayMind。"
         : "Open a personal session in the host, then open RelayMind.";
       return;
@@ -572,12 +576,12 @@ export default {
   activate(host) {
     const panel = host.ui.registerPanel({
       id: "relaymind-recommendations",
-      label: host.locale.startsWith("zh") ? "RelayMind 推荐" : "RelayMind",
+      label: chineseLocale(host.locale) ? "RelayMind 推荐" : "RelayMind",
       mount: mountPanel,
     });
     const action = host.ui.registerAction({
       id: "relaymind-recommendations",
-      label: host.locale.startsWith("zh")
+      label: chineseLocale(host.locale)
         ? "RelayMind 推荐"
         : "RelayMind recommendations",
       placement: "session",
@@ -589,14 +593,14 @@ export default {
     });
     const page = host.ui.registerPage({
       id: "recommendations",
-      label: host.locale.startsWith("zh")
+      label: chineseLocale(host.locale)
         ? "RelayMind 推荐"
         : "RelayMind recommendations",
       mount: mountPage,
     });
     const navigation = host.ui.registerNavigation({
       id: "relaymind-recommendations",
-      label: host.locale.startsWith("zh")
+      label: chineseLocale(host.locale)
         ? "RelayMind 推荐"
         : "RelayMind recommendations",
       page: { id: "recommendations" },
