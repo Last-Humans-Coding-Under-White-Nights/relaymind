@@ -1,76 +1,76 @@
 {
- "schema_version": 1,
- "record_id": "m10-negative-skill-loaded-use-openclaw-2026.10.7",
- "profile": "owner_run",
- "outcome": "negative",
- "scope": "host_operation",
- "labelling": "not_applicable",
- "annotators": null,
- "agreement": null,
- "prompt_authorship": "not_applicable",
- "drafter": null,
- "corpus_review": null,
- "preregistration": null,
- "runs_started_at": null,
- "machine": {
-  "role": "linux_host",
-  "os": "Linux",
-  "os_version": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
-  "os_build": "Ubuntu 26.04.1 LTS 7.0.0-38-generic",
-  "architecture": "x86_64",
-  "cpu_model": "Intel Xeon Processor (Skylake, IBRS)",
-  "ram_bytes": 11998482432,
-  "hostname_sha256": "bafcdd4933633f2d8c15bec38b13546e4d879cd8b65095a56e713b8336cedd01"
- },
- "revisions": {
-  "repository_commit": "62c4dcd248065ee2017cf38433184da81c821899",
-  "adapter_revision": "653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f",
-  "harness_sha256": "a00a438c912cad8c9321bd7bbe38d9b5b0ccd5c9ff305611cf0bdc5bcb006a9b"
- },
- "operation": {
-  "name": "skill_loaded_use",
-  "host": "openclaw",
-  "host_version": "2026.10.7",
-  "finding": "stop_point_absent",
-  "disabled": true
- },
- "subjects": [
-  {
-   "role": "inventory",
-   "path": "openclaw-host-use-search-20261101-vps.json",
-   "sha256": "50271d4e98ed564f2f8672d3920b305c5e213636aaa6ec185bdad28d590d7ec6",
-   "bytes": 17932
+  "schema_version": 1,
+  "record_id": "m10-negative-skill-loaded-use-openclaw-2026.10.7",
+  "profile": "owner_run",
+  "outcome": "negative",
+  "scope": "host_operation",
+  "labelling": "not_applicable",
+  "annotators": null,
+  "agreement": null,
+  "prompt_authorship": "not_applicable",
+  "drafter": null,
+  "corpus_review": null,
+  "preregistration": null,
+  "runs_started_at": null,
+  "machine": {
+    "role": "linux_host",
+    "os": "Linux",
+    "os_version": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+    "os_build": "Ubuntu 26.04.1 LTS 7.0.0-38-generic",
+    "architecture": "x86_64",
+    "cpu_model": "Intel Xeon Processor (Skylake, IBRS)",
+    "ram_bytes": 11998482432,
+    "hostname_sha256": "bafcdd4933633f2d8c15bec38b13546e4d879cd8b65095a56e713b8336cedd01"
   },
-  {
-   "role": "capture",
-   "path": "openclaw-loaded-use-observation-20261101-ci.json",
-   "sha256": "0c30e645a25b62a954875c0f9c19ed1068bda42d68e8275eb555e9fb64ba7980",
-   "bytes": 432796
+  "revisions": {
+    "repository_commit": "62c4dcd248065ee2017cf38433184da81c821899",
+    "adapter_revision": "653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f",
+    "harness_sha256": "a00a438c912cad8c9321bd7bbe38d9b5b0ccd5c9ff305611cf0bdc5bcb006a9b"
   },
-  {
-   "role": "capture",
-   "path": "openclaw-loaded-use-observation-20261101-vps.json",
-   "sha256": "0c61867f5f22728988975f9daa7b64eb040ec140002329f3db561da9a2a37c5f",
-   "bytes": 1502
+  "operation": {
+    "name": "skill_loaded_use",
+    "host": "openclaw",
+    "host_version": "2026.10.7",
+    "finding": "stop_point_absent",
+    "disabled": true
   },
-  {
-   "role": "capture",
-   "path": "openclaw-loaded-use-observation-20261101-vps2.json",
-   "sha256": "231e23e204b2d9d91775c543815f4bd3eb4d500183b9f53d02889b97f1072038",
-   "bytes": 449667
+  "subjects": [
+    {
+      "role": "inventory",
+      "path": "openclaw-host-use-search-20261101-vps.json",
+      "sha256": "cea5178f3190e03d422c5123012349a211d86afea6242dedf5eeae51ea4595c4",
+      "bytes": 19315
+    },
+    {
+      "role": "capture",
+      "path": "openclaw-loaded-use-observation-20261101-ci.json",
+      "sha256": "0c30e645a25b62a954875c0f9c19ed1068bda42d68e8275eb555e9fb64ba7980",
+      "bytes": 432796
+    },
+    {
+      "role": "capture",
+      "path": "openclaw-loaded-use-observation-20261101-vps.json",
+      "sha256": "0c61867f5f22728988975f9daa7b64eb040ec140002329f3db561da9a2a37c5f",
+      "bytes": 1502
+    },
+    {
+      "role": "capture",
+      "path": "openclaw-loaded-use-observation-20261101-vps2.json",
+      "sha256": "231e23e204b2d9d91775c543815f4bd3eb4d500183b9f53d02889b97f1072038",
+      "bytes": 449667
+    },
+    {
+      "role": "capture",
+      "path": "openclaw-person-ingress-20261101-vps2.json",
+      "sha256": "d86c55893da81c046b18139422f355cbf938d4b948f853b9a20f4b9a8f1ed683",
+      "bytes": 168964
+    }
+  ],
+  "review": {
+    "owner_login": "devnullexile",
+    "pull_request": null,
+    "reviewer_logins": [],
+    "approved_at": null
   },
-  {
-   "role": "capture",
-   "path": "openclaw-person-ingress-20261101-vps2.json",
-   "sha256": "d86c55893da81c046b18139422f355cbf938d4b948f853b9a20f4b9a8f1ed683",
-   "bytes": 168964
-  }
- ],
- "review": {
-  "owner_login": "devnullexile",
-  "pull_request": null,
-  "reviewer_logins": [],
-  "approved_at": null
- },
- "recorded_at": "2026-11-01T09:16:37Z"
+  "recorded_at": "2026-11-01T14:58:19Z"
 }
