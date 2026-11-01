@@ -756,7 +756,7 @@ and `grade-adaptation`, which are already the one-command final grade.
 | `label-template --catalog K --cases C --annotator A --output T` | One annotator's blind template (section 12.6.1): only each case's prompt (`lane`, `task_text`, `conversation`, `requested_kinds`, `language_tags`, `code_switched`), bound to the cases and catalog digests. No labels, families, splits, authors, other judgments or algorithm outputs. The annotator must be a declared `annotator` who is not a `tuner`. |
 | `label-worksheet --catalog K --cases C --judgments T1 T2 … --output W` | Checks the returned templates (unchanged binding and prompts, every case judged, exactly two distinct annotators per case) and writes the adjudicator's worksheet: both raw judgments, per-answer agreement and the recomputed agreement groups |
 | `label-freeze --catalog K --cases C --judgments T1 T2 … --worksheet W --output L` | Assembles `AssetLabelsV1` from the raw judgments and the completed adjudications. Raw judgments cannot change in the worksheet, agreement is recomputed, and the unchanged release validator checks roles, coverage and inclusion |
-| `preregister-host --tasks T --freeze F --output P` | Verifies the task set against its freeze and records the input, freeze and plan digests, task and lane counts, and acceptance eligibility (`kind_not_acceptance`, `below_minimum_tasks`). Missing required lanes are listed only: the spec states no per-lane host-task minimum |
+| `preregister-host --tasks T --freeze F --output P` | Verifies the task set against its freeze and records the input, freeze and plan digests, task and lane counts, and acceptance eligibility (`kind_not_acceptance`, `below_minimum_tasks`, `missing_required_lanes`). AC36 pairs the whole tasks with the five required lanes, so a set without at least one task in each is not eligible; the spec states no larger per-lane host-task count |
 | `preregister-episodes --episodes E --freeze F [--lock L --evidence-root R] --output P` | The same for `AssetEpisodesV1`. With the corpus it also binds the episodes to it and counts probes outside the `held_out` split, probes with no included adjudication and correction targets missing from the pool. Reasons include `below_minimum_episodes`, `corpus_not_acceptance`, `corpus_not_frozen`, `unlabelled_probes` and, without the corpus, `corpus_unverified` |
 | `run-host --tasks T --freeze F --journal J --inputs M --environment E [--artifacts A] [--executor-timeout S] --qualification fixture\|provisional --output R -- PROGRAM ARGS…` | Executes the frozen plan through your host executor program and writes the `AssetHostReportV1` (see below). Exit `0` when every planned row has an outcome, `3` after an interruption |
 | `capture-costs --events V --provider P --attempt-prefix X --evidence-id I [--token-relationship R --relationship-evidence I2] [--first-ordinal N] --output O` | Turns RelayMind trace events (a JSON array of TraceEvent objects) into `HostAttempt` objects for the external model calls of the provider arms |
@@ -771,9 +771,14 @@ independent judgment possible; they do not prove it. Custodian review of the
 people, their competence and independence is still required (section 12.6.1).
 
 **Run journal.** `run-host` (and `run_adaptation_episodes(..., journal=PATH)`
-in Python) keeps progress in a private JSON-lines journal. It is not evidence.
-Its header binds the preregistered input, freeze and plan digests, so a journal
-cannot resume with changed inputs (`journal_binding`). Each row is recorded as
+in Python) keeps progress in a private JSON-lines journal. It is not evidence,
+but it holds rows and reset evidence, so it is created owner-only (`0600`, in a
+new `0700` directory) and set back to `0600` on resume. Its header binds the
+preregistered input, freeze and plan digests and the digest of the run's
+execution identity: environment, artifacts, input manifest and qualification
+label. A journal cannot resume with changed inputs or under another identity
+(`journal_binding`), so rows run on one machine or package are never reported
+under another; start a new journal for a new identity. Each row is recorded as
 `started` before work begins and `finished` with its outcome, flushed to disk
 each time.
 
@@ -807,7 +812,9 @@ Only the host executes tools and grants approvals.
 not a task budget: a program still running after `S` seconds is killed and its
 row is `failed` (`executor_error`) with unknown consumption, never a host
 `timeout`. Set it above the frozen task budgets. Only the direct child process
-is killed, so the program must stop its own children.
+is killed, so the program must stop its own children. Standard output is read
+in bounded chunks; a program that writes more than the 256 MiB report bound is
+killed and its row fails with `executor_error`.
 
 **External cost capture.** For the `provider_only` and `recommendations` arms,
 the RelayMind gateway records each external model call
@@ -816,8 +823,17 @@ one attempt per call:
 
 - The provider-reported counts are copied with `usage_provenance: reported`.
   A missing count stays null, never zero, and `total_tokens` stays null.
-- `calls` is `1` only for a finished call. An unfinished call, or one that
-  never reached the provider (`provider_unreachable`), has null calls.
+- Each call keeps its own outcome. `cancelled` stays `cancelled`; the
+  gateway's own bounds (`deadline_exceeded`, `time_budget`) and
+  `provider_timeout` are `timeout`; other errors are `failed`.
+- `calls` is `1` only when dispatch is evidenced: a successful call, a
+  provider error or response, or `provider_timeout`. A gateway-side stop
+  (`cancelled`, `deadline_exceeded`, `time_budget`, `interrupted`) counts only
+  if a token or usage arrived. An unfinished call, or one that never left the
+  gateway (`provider_unreachable`, `missing_credentials`), has null calls.
+- `--events` and `--artifacts` are read with the same bounded strict reader as
+  every other input: a symlink, an oversized file, duplicate keys or
+  non-finite numbers reject.
 - The relationship between counts is `unknown` unless you name evidence for
   it with `--relationship-evidence`.
 - A finish without an earlier start of the same call (`trace_order`), or a
@@ -969,7 +985,12 @@ so ordinary pull requests stay fast. Each platform runs:
 4. `asset_platform_run.py platform`, which writes the runner's `environment.json`,
    a fixture companion bundle locked to it, and `platform.json`. The bundle is
    built from the test fixtures of `tests/test_asset_whole_task_inputs.py`, not
-   genuine host tasks;
+   genuine host tasks. Without an install-check record it writes
+   `platform-not-built.json` (`install_check_missing`) instead, exits 2, and
+   `verify` reports that record as a failure. An output directory that already
+   holds a `bundle/` is refused (`platform_out_dir_exists`). Input and write
+   errors, and an ordinary-step timeout (`ordinary_timeout`), exit 2 with the
+   reason instead of a traceback;
 5. `asset_platform_run.py verify`, which grades everything again with the
    existing graders. Each operations summary is recomputed by
    `summarize_operations` from the stored samples. Each platform report is
@@ -1146,7 +1167,11 @@ operator guide's lifecycle (`integrations/openclaw/README.md`, step 4):
 install, configure, enable, inspect. The pinned host installs the plugin
 disabled until it is configured, so the kit sets `baseUrl` (`--base-url`,
 default `http://127.0.0.1:8080/v1`, the gateway's default loopback listener)
-and then runs `plugins enable relaymind` (#269). Each step is recorded with
+and then runs `plugins enable relaymind` (#269). The URL must meet the
+plugin's own `baseUrl` rules (http or https, a loopback host, the `/v1` root,
+no credentials, query or fragment); any other value is refused with
+`invalid_base_url` before any host command runs, and is never written to a
+record or an error message. Each step is recorded with
 its exit code; a failed step stops the rest, which are `not_run`. Each step's
 host standard output and standard error stay in separate private logs
 (`<step>.log` and `<step>.stderr.log`, for `install`, `configure`, `enable`

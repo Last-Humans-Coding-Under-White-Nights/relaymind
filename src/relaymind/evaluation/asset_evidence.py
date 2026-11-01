@@ -191,6 +191,9 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.66 merged: machine_dual labelling with the precise
+            # negative-finding definitions.
+            ("df3124836f7689198d3f94ad85d54d49dfb0d91443323698b86a78b89cbb6f84", 629920),
             # Reviewed 0.66 merged: machine-drafted prompts, machine_dual labelling and
             # the #266 record input, scope and identity rules.
             ("089ac28256320b916d0305efe4b307cdd836a9e6eb79947f06b2380de47d2a76", 629593),
@@ -199,11 +202,16 @@ _GENERATOR_ANCHORS = {
             ("6e84ff5a1df955fa81be5b23ad9d7ea9dd6ac9fbd8bf5757dc37f47b559a7889", 628842),
             # Reviewed 0.66 machine-drafted prompts and machine_dual labelling.
             ("e7d32fbff7848920acf30dbf6a91e3ba86231e10eb50b5d0c5ba670edc0907d5", 626858),
+            # Reviewed 0.66 with the #268 amendment, the precise negative-finding
+            # definitions and the LHCWN rename (merged stack).
+            ("b77227bdf2ca4d4f59451ff3165ab24fb37a2c47f2f41063b8584d0eeed56310", 625266),
             # Reviewed 0.66 with the #268 amendment, the #266 record input, scope and
             # identity rules and the LHCWN repository rename (merged stack).
             ("3393af66c79f18922d8493f56f81d41d1fd1e4ae52c2cc5c1ce56b764e6d7421", 624939),
             # Reviewed 0.66 with the #268 amendment and the LHCWN repository rename.
             ("72d3815fe8c304c04ece8f4a3ec2a669c2a4d2a119f882036617f7e3c15749f2", 624188),
+            # Reviewed 0.66 with the precise negative-finding definitions.
+            ("8c00f5154b64da1f1ad00352aadea9cee419e4b96e24f757ec1cd812259abf13", 623250),
             # Reviewed 0.66 with the #266 record input, scope and identity rules.
             ("f4f70b0640207baf78442bd8c7596f23461c9319920adfd37effa29e1148ed51", 622923),
             # Reviewed 0.66 with the LHCWN repository rename.

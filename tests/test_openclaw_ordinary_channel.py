@@ -2,6 +2,7 @@
 
 import hashlib
 import importlib.util
+import json
 import threading
 from pathlib import Path
 
@@ -280,7 +281,14 @@ def skill_fixture(api):
             ),
         ),
         library_list=dict(
-            ok=True, payload=dict(entries=[dict(skillId=SKILL_ID, revision=REVISION)])
+            ok=True,
+            payload=dict(
+                entries=[dict(skillId=SKILL_ID, revision=REVISION)],
+                session=dict(
+                    sessionKey=capture["accounts"][0]["session_key"],
+                    selections=[dict(skillId=SKILL_ID, revision=REVISION)],
+                ),
+            ),
         ),
         ui_status="selected",
         negatives=[
@@ -295,6 +303,17 @@ def skill_fixture(api):
 def test_exact_skill_selection_evidence_passes():
     api = module()
     assert api.ordinary_skill_pass(skill_fixture(api))
+
+
+def test_committed_real_skill_capture_passes_the_session_selection_check():
+    """RM16/RM39 AC30: the committed host capture shows the exact revision selected in the
+    authenticated target session, not only listed in the person's library."""
+    api = module()
+    path = ROOT / "docs/evidence/m10/openclaw-native-actions-20261101-skill.json"
+    capture = json.loads(path.read_text(encoding="utf-8"))
+    session = capture["ordinary_skill"]["library_list"]["payload"]["session"]
+    assert session["sessionKey"] == capture["accounts"][0]["session_key"]
+    assert api.ordinary_skill_pass(capture)
 
 
 @pytest.mark.parametrize(
@@ -336,9 +355,21 @@ def test_exact_skill_selection_evidence_passes():
         "mapping_missing_source_version",
         "mapping_other_source_version",
         "library_entry_removed",
+        "list_session_missing",
+        "list_session_null",
+        "list_selections_missing",
+        "list_selections_empty",
+        "list_session_other_key",
+        "list_session_foreign_key",
+        "list_selection_other_revision",
+        "list_selection_other_skill",
+        "list_selection_extra",
+        "list_selection_duplicate",
     ],
 )
 def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
+    """RM16/RM39 AC30: a listing proves selection only when the authenticated target
+    session holds exactly the selected skill at the selected revision."""
     api = module()
     capture = skill_fixture(api)
     value = capture["ordinary_skill"]
@@ -357,6 +388,30 @@ def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
         value["mapping"]["sourceVersion"] = "v2"
     elif change == "library_entry_removed":
         value["library_list"]["payload"]["entries"][0]["removed"] = True
+    elif change.startswith(("list_session_", "list_selection")):
+        session = value["library_list"]["payload"]["session"]
+        if change == "list_session_missing":
+            value["library_list"]["payload"].pop("session")
+        elif change == "list_session_null":
+            value["library_list"]["payload"]["session"] = None
+        elif change == "list_selections_missing":
+            session.pop("selections")
+        elif change == "list_selections_empty":
+            session["selections"] = []
+        elif change == "list_session_other_key":
+            session["sessionKey"] = "agent:main:person-other"
+        elif change == "list_session_foreign_key":
+            session["sessionKey"] = capture["accounts"][1]["session_key"]
+        elif change == "list_selection_other_revision":
+            session["selections"][0]["revision"] = "b" * 64
+        elif change == "list_selection_other_skill":
+            session["selections"][0]["skillId"] = "1b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a"
+        elif change == "list_selection_extra":
+            session["selections"].append(
+                dict(skillId="1b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a", revision="b" * 64)
+            )
+        else:
+            session["selections"].append(dict(session["selections"][0]))
     elif change.startswith("mapping_") and change.endswith("_asset"):
         value["mapping"]["assetId"] = {
             "mapping_empty_asset": "",
@@ -1960,7 +2015,13 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
         elif method == "rmqualification.person":
             payload = person
         elif method == "skills.library.list":
-            payload = dict(entries=[dict(skillId=SKILL_ID, revision=REVISION)])
+            payload = dict(
+                entries=[dict(skillId=SKILL_ID, revision=REVISION)],
+                session=dict(
+                    sessionKey=params["sessionKey"],
+                    selections=[dict(skillId=SKILL_ID, revision=REVISION)],
+                ),
+            )
         elif method == "relaymind.skill" and (
             page is pages[1] or params.get("skillId") != SKILL_ID
         ):
@@ -2199,6 +2260,88 @@ def test_late_foreign_hook_does_not_poison_next_case(tmp_path, monkeypatch):
     assert case["subscription"] == expected["subscription"]
     assert case["provider_attempts"] == expected["provider_attempts"]
     assert case["observed"] == "loaded_pinned_revision"
+
+
+def refusing_turn(rpc, activity):
+    """A chat.send refusal after the host may already have dispatched part of the turn."""
+
+    def send(page, method, params):
+        if method != "chat.send" or activity:
+            reply = rpc(page, method, params)
+        if method != "chat.send":
+            return reply
+        return dict(
+            socket_id="socket",
+            frame=dict(ok=False, error=dict(code="UNAVAILABLE", message="refused")),
+        )
+
+    return send
+
+
+@pytest.mark.parametrize("activity", ["request", "tool", "all"])
+def test_refused_send_retains_and_rejects_partial_dispatch(tmp_path, monkeypatch, activity):
+    """RM16/RM39/AC30: a refused chat.send never discards activity the host already began.
+
+    Requests in the window, provider records correlated by request keys and
+    native hooks of the submitted idempotency key are retained; any of them
+    contradicts the refusal, so the case fails closed and the observation
+    capture exits non-zero.
+    """
+    import json
+
+    api = module()
+    extension, case, rpc, page, expected = turn_fixture(api, tmp_path, monkeypatch, deliver=True)
+
+    def dispatched(page, method, params):
+        reply = rpc(page, method, params)
+        if method == "chat.send" and activity == "request":
+            extension.event_file.write_text("")
+            extension.provider_attempt_file.write_text("")
+            del extension.observation.requests[1:]
+        elif method == "chat.send" and activity == "tool":
+            extension.provider_attempt_file.write_text("")
+            extension.observation.requests.clear()
+        return reply
+
+    with pytest.raises(ValueError, match="^ordinary_skill_refusal_contradicted$"):
+        extension.loaded_use_turn(refusing_turn(dispatched, True), page, {}, case)
+    assert case["observed"] == "incomplete"
+    if activity == "request":
+        assert case["requests"] == expected["requests"][:1]
+        assert case["tools"] == []
+        assert case["provider_attempts"] == []
+    elif activity == "tool":
+        assert case["requests"] == []
+        assert case["tools"] == expected["tools"]
+    else:
+        assert case["requests"] == expected["requests"]
+        assert case["tools"] == expected["tools"]
+        assert case["provider_attempts"] == expected["provider_attempts"]
+    assert "ordinary_skill_refusal_contradicted" in extension.failure_reasons()
+    # The step failure is recorded as observe_loaded_use records it.
+    case["failure_reason"] = "ordinary_skill_refusal_contradicted"
+    capture = loaded_fixture(api)
+    capture["ordinary_skill_loaded_use"]["cases"][0] = json.loads(json.dumps(case))
+    assert api.finish_capture(capture, 0, observe=True) == 2
+    assert capture["checks"]["ordinary_skill_observation_complete"] is False
+    # Even without the step failure, retained activity contradicts a refusal.
+    capture["ordinary_skill_loaded_use"]["cases"][0].update(failure_reason=None, observed="refused")
+    assert api.finish_capture(capture, 0, observe=True) == 2
+
+
+def test_activity_free_refused_send_remains_a_complete_observation(tmp_path, monkeypatch):
+    """RM16/RM39/AC30: a genuine refusal with no dispatched activity stays observed."""
+    api = module()
+    extension, case, rpc, page, _ = turn_fixture(api, tmp_path, monkeypatch, deliver=True)
+    extension.loaded_use_turn(refusing_turn(rpc, False), page, {}, case)
+    assert case["observed"] == "refused"
+    assert case["requests"] == case["tools"] == case["provider_attempts"] == []
+    assert case["terminal"] == {}
+    capture = loaded_fixture(api)
+    capture["ordinary_skill_loaded_use"]["cases"][0] = case
+    assert api.finish_capture(capture, 0, observe=True) == 0
+    assert capture["checks"]["ordinary_skill_observation_complete"] is True
+    assert capture["checks"]["ordinary_skill_loaded_use_observation"] is False
 
 
 def test_one_turn_request_overflow_does_not_starve_later_controls(tmp_path):
@@ -2891,6 +3034,7 @@ def selection_fixture(api, tmp_path, monkeypatch):
         dict(sessionKey="person-a", expectedSessionId="id-a", expectedLifecycleRevision="rev-a"),
         dict(sessionKey="person-b", expectedSessionId="id-b", expectedLifecycleRevision="rev-b"),
     ]
+    capture["ordinary_skill"]["library_list"]["payload"]["session"]["sessionKey"] = "person-a"
     return extension, capture["ordinary_skill"], pages, sessions
 
 
@@ -2910,30 +3054,53 @@ def test_library_selection_stops_after_primary_rpc_refusal(tmp_path, monkeypatch
     assert skill["receipt"]["ok"] is False
 
 
-@pytest.mark.parametrize("listing", ["failed", "empty", "other_revision", "removed", "saved"])
+@pytest.mark.parametrize(
+    "listing",
+    [
+        "failed",
+        "empty",
+        "other_revision",
+        "removed",
+        "no_session",
+        "no_selection",
+        "other_session",
+        "selection_other_revision",
+        "selection_other_skill",
+        "saved",
+    ],
+)
 def test_library_selection_requires_the_saved_revision_in_listing(tmp_path, monkeypatch, listing):
-    """RM16/RM39 AC30: record selection only with a successful exact native listing."""
+    """RM16/RM39 AC30: record selection only with a successful exact native listing whose
+    authenticated target session holds exactly the selected skill at the selected revision."""
     api = module()
     extension, skill, pages, sessions = selection_fixture(api, tmp_path, monkeypatch)
 
     def rpc(page, method, params):
         if method == "skills.library.list":
-            return dict(
-                frame=dict(
-                    ok=listing != "failed",
-                    payload=dict(
-                        entries=[]
-                        if listing == "empty"
-                        else [
-                            dict(
-                                skillId=SKILL_ID,
-                                revision="b" * 64 if listing == "other_revision" else REVISION,
-                                removed=listing == "removed",
-                            )
-                        ]
-                    ),
-                )
+            selection = dict(
+                skillId="1b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a"
+                if listing == "selection_other_skill"
+                else SKILL_ID,
+                revision="b" * 64 if listing == "selection_other_revision" else REVISION,
             )
+            payload = dict(
+                entries=[]
+                if listing == "empty"
+                else [
+                    dict(
+                        skillId=SKILL_ID,
+                        revision="b" * 64 if listing == "other_revision" else REVISION,
+                        removed=listing == "removed",
+                    )
+                ],
+                session=dict(
+                    sessionKey="person-b" if listing == "other_session" else params["sessionKey"],
+                    selections=[] if listing == "no_selection" else [selection],
+                ),
+            )
+            if listing == "no_session":
+                payload.pop("session")
+            return dict(frame=dict(ok=listing != "failed", payload=payload))
         if page is pages[1] or params.get("skillId") != SKILL_ID:
             return dict(frame=dict(ok=False, error=dict(code="INVALID_REQUEST")))
         return dict(frame=dict(ok=True, payload=skill["receipt"]["payload"]))

@@ -437,3 +437,23 @@ def test_a_non_object_worksheet_item_is_a_binding_error(tmp_path, item):
     worksheet["items"][0] = item
     with pytest.raises(AssetCorpusError, match="worksheet_binding"):
         freeze_labels(catalog, cases, judgments, worksheet)
+
+
+def test_a_template_needs_matching_catalog_and_cases_releases(tmp_path):
+    catalog, cases, _ = corpus(tmp_path)
+    catalog["release"] = 2
+    with pytest.raises(AssetCorpusError, match="release_mismatch"):
+        label_template(catalog, cases, "judge-a")
+
+
+@pytest.mark.parametrize("field", ["cases_digest", "catalog_digest", "format", "release"])
+def test_a_worksheet_for_other_documents_is_a_binding_error(tmp_path, field):
+    catalog, cases, labels = corpus(tmp_path)
+    templates = [
+        filled(label_template(catalog, cases, a), labels, a) for a in ("judge-a", "judge-b")
+    ]
+    judgments = raw_judgments(catalog, cases, templates)
+    worksheet = adjudicated(adjudication_worksheet(catalog, cases, judgments), labels)
+    worksheet[field] = 9 if field == "release" else "a" * 64
+    with pytest.raises(AssetCorpusError, match="worksheet_binding"):
+        freeze_labels(catalog, cases, judgments, worksheet)

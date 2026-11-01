@@ -1390,7 +1390,10 @@ selections are refused: an unmapped skill (`INVALID_REQUEST`), a cross-session
 foreign person (`FORBIDDEN`) and a foreign person on its own session, refused by
 RelayMind's own authority check (`INVALID_REQUEST`). The predicate also binds
 the asset ID, content hash and source version, and requires the saved revision
-in `skills.library.list`. The ordinary installed-host run (OpenClaw 2026.10.7,
+in `skills.library.list`, whose `session` must be the authenticated target
+session with exactly that skill and revision as its selection. The committed
+capture below satisfies this stricter check, but it was recorded with the
+earlier harness, so its harness digests need a recapture. The ordinary installed-host run (OpenClaw 2026.10.7,
 Ubuntu runner, CI run 41295359455, commit de6d5d9, PR merge checkout
 f5e3e39) passed both the
 ordinary-pass and ordinary-skill-pass predicates, with all 15 harness sources
@@ -1431,12 +1434,25 @@ native UI allow/deny is functional evidence only; genuine human approval,
 actual Apple M1/macOS and native Windows, and whole-task gates remain open.
 No adapter/registry activation or host-use measurement is supplied by this
 revision; its only code change adds the reviewed specification evidence anchor.
+The #204 harness now projects the pinned host's grouped `tools.effective`
+inventory; its fixture discovery check requires both colliding fixture tools in
+the session inventory, so an empty or malformed inventory fails the run. Earlier
+captures recorded an empty list because of the old flat projection. The person
+probe first starts the session MCP runtime with public `mcp.app.discover`. One
+uncommitted Linux x86-64 VPS run listed both colliding tools; it is discovery
+evidence only, and exact MCP use remains blocked.
 
 #250 implements bounded native configuration preflight with the installed
 OpenClaw 2026.10.7 validator under Node, including strict/plugin checks and
 native default handling, with a Python timeout and closed verdicts recording
-the host version and validator file SHA-256. Valid/invalid, Unicode-pattern,
-plugin-schema and unavailable-host fixtures run in the OpenClaw CI job.
+the host version and validator file SHA-256. The child state is a disposable
+directory without operator credentials; when the config names `relaymind` it
+holds only the packaged RelayMind plugin (the built integration, or the
+unpacked release passed as `plugin_root`), so installed-plugin discovery checks
+its settings. A referenced plugin without an inspected schema is `unavailable`
+(`plugin_schema_not_inspected`), not `valid`. Valid/invalid, Unicode-pattern,
+plugin-schema, installed RelayMind, unknown/uninspected plugin and
+unavailable-host fixtures run in the OpenClaw CI job.
 `resolve_whole_task_inputs(..., host_config_checker=check_host_config)` opts
 into native preflight; `host_config_validation={digest: verdict}` instead
 supplies captured closed verdicts without a process launch. Both reject
