@@ -37,6 +37,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parents[2] / "src"))
+
+from relaymind.canonical import canonical_digest  # noqa: E402
+
 PROMPTS = HERE / "prompts"
 DATASET = "relaymind-owner-run-260"
 RELEASE = 1
@@ -78,10 +82,14 @@ def read(path) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def dump(value) -> str:
+    return json.dumps(value, ensure_ascii=False, indent=1) + "\n"
+
+
 def write(path, value) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    path.write_text(dump(value), encoding="utf-8")
 
 
 def sha256(payload: bytes) -> str:
@@ -110,7 +118,7 @@ def durable_write(path, value) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")
     with open(temporary, "w", encoding="utf-8") as handle:
-        handle.write(json.dumps(value, ensure_ascii=False, indent=1) + "\n")
+        handle.write(dump(value))
         handle.flush()
         os.fsync(handle.fileno())
     os.replace(temporary, path)
@@ -119,6 +127,19 @@ def durable_write(path, value) -> None:
         os.fsync(directory)
     finally:
         os.close(directory)
+
+
+def open_ledger(path: Path, held: str) -> dict:
+    """The ledger document at ``path`` (a fresh one at zero), with its ``held`` table."""
+    data = read(path) if path.exists() else dict(total_input=0, total_output=0, calls=0, stages={})
+    data.setdefault(held, {})
+    return data
+
+
+def ledger_total(data: dict, held: str) -> int:
+    """Spent tokens plus every ``held`` reservation that is not settled."""
+    pending = sum(r["amount"] for r in data[held].values() if r["state"] != "settled")
+    return data["total_input"] + data["total_output"] + data.get("unlogged_estimate", 0) + pending
 
 
 class Ledger:
@@ -132,24 +153,11 @@ class Ledger:
 
     def __init__(self, path: Path, cap: int):
         self.path, self.cap = Path(path), cap
-        self.data = (
-            read(self.path)
-            if self.path.exists()
-            else dict(total_input=0, total_output=0, calls=0, stages={})
-        )
-        self.data.setdefault("reservations", {})
+        self.data = open_ledger(self.path, "reservations")
 
     @property
     def total(self) -> int:
-        held = sum(
-            r["amount"] for r in self.data["reservations"].values() if r["state"] != "settled"
-        )
-        return (
-            self.data["total_input"]
-            + self.data["total_output"]
-            + self.data.get("unlogged_estimate", 0)
-            + held
-        )
+        return ledger_total(self.data, "reservations")
 
     def check(self, estimate: int) -> None:
         if self.total + estimate > self.cap:
@@ -386,6 +394,11 @@ def cmd_plan(args) -> None:
     print(json.dumps(dict(items=len(items), zh_left=len(zh), en_left=len(en))))
 
 
+def prompt_count(item: dict) -> int:
+    """One prompt for a host task, five (three corrections, two paraphrases) for an episode."""
+    return 1 if item["cohort"] == "host" else 5
+
+
 LANE_TEXT = {
     "zh_hans_to_zh_hans": "Simplified Chinese",
     "zh_hans_to_en": "Simplified Chinese",
@@ -408,13 +421,12 @@ def cmd_draft(args) -> None:
         batch = items[start : start + args.batch]
         lines = []
         for item in batch:
-            count = 1 if item["cohort"] == "host" else 5
             lines.append(
                 json.dumps(
                     dict(
                         item_id=item["item_id"],
                         kind="host_task" if item["cohort"] == "host" else "episode",
-                        prompts=count,
+                        prompts=prompt_count(item),
                         language=LANE_TEXT[item["lane"]],
                         capability=projection(by_id[item["target"]], 700),
                     ),
@@ -434,8 +446,7 @@ def cmd_draft(args) -> None:
             continue
         for item in batch:
             row = result.get(item["item_id"])
-            want = 1 if item["cohort"] == "host" else 5
-            if row is None or len(row.get("prompts", [])) != want:
+            if row is None or len(row.get("prompts", [])) != prompt_count(item):
                 print("incomplete", item["item_id"], file=sys.stderr)
                 continue
             out[item["item_id"]] = dict(row, log=name)
@@ -719,9 +730,6 @@ def cmd_adjudicate(args) -> None:
 
 
 def cmd_lock(args) -> None:
-    sys.path.insert(0, str(HERE.parents[2] / "src"))
-    from relaymind.canonical import canonical_digest
-
     root = args.root
     catalog, cases, labels = (read(root / f"{n}.json") for n in ("catalog", "cases", "labels"))
     lock = dict(
@@ -764,6 +772,7 @@ def cmd_log(args) -> None:
         name = request.name.removesuffix(".request.json")
         response = args.log / f"{name}.response.json"
         payload = response.read_bytes()
+        sent = request.read_bytes()
         body = json.loads(payload)
         served = body.get("model")
         created = datetime.fromtimestamp(body.get("created", 0), UTC).strftime("%Y-%m-%d")
@@ -771,8 +780,8 @@ def cmd_log(args) -> None:
         calls.append(
             dict(
                 name=name,
-                request_sha256=sha256(request.read_bytes()),
-                request_bytes=len(request.read_bytes()),
+                request_sha256=sha256(sent),
+                request_bytes=len(sent),
                 response_sha256=sha256(payload),
                 response_bytes=len(payload),
                 served_model=served,
@@ -882,9 +891,6 @@ def host_configs(catalog: dict) -> dict[str, dict]:
 
 def cmd_host(args) -> None:
     """HostFreezeV1 and AssetHostTasksV1 over the frozen release (spec 12.6.5)."""
-    sys.path.insert(0, str(HERE.parents[2] / "src"))
-    from relaymind.canonical import canonical_digest
-
     root, out = args.root, args.output
     catalog = read(root / "catalog.json")
     lock = read(root / "lock.json")
@@ -986,9 +992,6 @@ def cmd_host(args) -> None:
 
 def cmd_episodes(args) -> None:
     """AssetEpisodesV1 over the frozen release and the prepared EpisodeFreezeV1."""
-    sys.path.insert(0, str(HERE.parents[2] / "src"))
-    from relaymind.canonical import canonical_digest
-
     root = args.root
     catalog, lock = read(root / "catalog.json"), read(root / "lock.json")
     plan = read(root / "cohort-plan.json")

@@ -43,7 +43,6 @@ closed reason (``FreezeMismatch``).
 """
 
 import argparse
-import hashlib
 import http.server
 import json
 import os
@@ -52,6 +51,7 @@ import signal
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -69,6 +69,7 @@ sys.path.insert(0, str(HERE))
 import harness  # noqa: E402
 import live_acceptance  # noqa: E402
 import openclaw_install_check as install_check  # noqa: E402
+from harness import read  # noqa: E402
 
 from relaymind.canonical import canonical_digest, canonical_json  # noqa: E402
 from relaymind.evaluation.asset_host_runner import (  # noqa: E402
@@ -86,10 +87,6 @@ SECRETS_KEY = "omitted_secret_fields"
 MIN_PATH_TAIL = 16
 
 
-def read(path):
-    return json.loads(Path(path).read_text(encoding="utf-8"))
-
-
 class CorpusMismatch(ValueError):
     """The corpus on disk is not the one the preregistered tasks and freeze name."""
 
@@ -103,7 +100,6 @@ def verified_prompts(tasks, freeze, lock_path: Path, evidence_root: Path) -> dic
     bind to its frozen case. An edited cases file therefore rejects, whether or
     not it was relocked, on the first start and on every resume.
     """
-    from relaymind.canonical import canonical_digest
     from relaymind.evaluation.asset_corpus import load_asset_release
     from relaymind.evaluation.asset_whole_task_corpus import bind_host_tasks
 
@@ -222,17 +218,10 @@ class Budget:
         self.path, self.cap = Path(ledger), cap
         self.row_budget, self.max_output = row_budget, max_output
         # A fresh ledger starts at zero; an existing one carries its spending.
-        self.data = (
-            read(self.path)
-            if self.path.exists()
-            else dict(total_input=0, total_output=0, calls=0, stages={})
-        )
-        self.data.setdefault("rows", {})
+        self.data = harness.open_ledger(self.path, "rows")
 
     def spent(self) -> int:
-        d = self.data
-        held = sum(r["amount"] for r in d["rows"].values() if r["state"] != "settled")
-        return d["total_input"] + d["total_output"] + d.get("unlogged_estimate", 0) + held
+        return harness.ledger_total(self.data, "rows")
 
     def can_start(self) -> bool:
         return self.spent() + self.row_budget <= self.cap
@@ -464,9 +453,6 @@ def run_bounded(command, *, env, timeout, usage, limit_reached, poll=1.0) -> dic
     Returns the same fields as the M9 ``Host.run`` plus ``row_tokens_at_stop``.
     ``status`` is ``completed``, ``failed``, ``timed_out`` or ``budget_stopped``.
     """
-    import subprocess
-    import tempfile
-
     started = time.monotonic()
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
         try:
@@ -529,7 +515,18 @@ def _stop(process) -> None:
 def write_bytes(path: Path, payload: bytes) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(payload)
-    return dict(sha256=hashlib.sha256(payload).hexdigest(), bytes=len(payload))
+    return dict(sha256=harness.sha256(payload), bytes=len(payload))
+
+
+def last_json(stdout: str):
+    """The whole output as JSON, else its last line that parses; ``None`` when none does."""
+    text = stdout.strip()
+    for candidate in (text, *reversed(text.splitlines())):
+        try:
+            return json.loads(candidate)
+        except ValueError:
+            continue
+    return None
 
 
 def now() -> str:
@@ -701,29 +698,28 @@ class Run:
                     text = subprocess.run(
                         ["zstd", "-dc"], input=packed, capture_output=True, check=True
                     ).stdout.decode("utf-8")
-                for cell in (text,):
-                    if not isinstance(cell, str) or '"usage"' not in cell:
-                        continue
-                    try:
-                        value = json.loads(cell)
-                    except ValueError:
-                        continue
-                    stack = [value]
-                    while stack:
-                        item = stack.pop()
-                        if isinstance(item, dict):
-                            if isinstance(item.get("usage"), dict) and "input" in item["usage"]:
-                                found.append(
-                                    dict(
-                                        responseId=item.get("responseId"),
-                                        timestamp=item.get("timestamp"),
-                                        model=item.get("model"),
-                                        usage=item["usage"],
-                                    )
+                if not isinstance(text, str) or '"usage"' not in text:
+                    continue
+                try:
+                    value = json.loads(text)
+                except ValueError:
+                    continue
+                stack = [value]
+                while stack:
+                    item = stack.pop()
+                    if isinstance(item, dict):
+                        if isinstance(item.get("usage"), dict) and "input" in item["usage"]:
+                            found.append(
+                                dict(
+                                    responseId=item.get("responseId"),
+                                    timestamp=item.get("timestamp"),
+                                    model=item.get("model"),
+                                    usage=item["usage"],
                                 )
-                            stack.extend(item.values())
-                        elif isinstance(item, list):
-                            stack.extend(item)
+                            )
+                        stack.extend(item.values())
+                    elif isinstance(item, list):
+                        stack.extend(item)
         unique, seen = [], set()
         for item in found:
             key = item["responseId"] or json.dumps(item, sort_keys=True)
@@ -814,17 +810,7 @@ class Run:
         )
         ended = now()
         refs: list = []
-        report = None
-        for line in reversed(result["stdout"].strip().splitlines() or [""]):
-            try:
-                report = json.loads(result["stdout"].strip())
-                break
-            except ValueError:
-                try:
-                    report = json.loads(line)
-                    break
-                except ValueError:
-                    continue
+        report = last_json(result["stdout"])
         host_id = self.evidence(
             key,
             "host-result.json",
@@ -904,7 +890,7 @@ class Run:
             cpu_ms=None,
             peak_bytes=None,
             recommendation_ids=[],
-            host_session_id=(report or {}).get("sessionId") if isinstance(report, dict) else None,
+            host_session_id=report.get("sessionId") if isinstance(report, dict) else None,
             evidence_ids=sorted({host_id, *(i for a in attempts for i in a["evidence_ids"])}),
             reason={"completed": None, "cancelled": "budget_cap"}.get(status, "host_failed"),
         )
