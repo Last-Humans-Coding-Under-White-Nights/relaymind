@@ -5,6 +5,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
+import { RecommendationClientError } from "../src/recommendation-transport.js";
 import { createFileUseLedger } from "../src/recommendation-native-ledger.js";
 import { fixture } from "./recommendation-native-fixture.js";
 import {
@@ -247,21 +248,33 @@ it.each([
     (f: any) => {
       f.deps.actionClient = async () => ({
         listFeedback: async () => {
-          throw Error("user_action_required");
+          throw new RecommendationClientError("user_action_required", 403);
         },
       });
     },
   ],
-  ["retired native authority", (f: any) => f.retire()],
   [
-    "a reset session (new incarnation)",
+    "native authority retired while the exact read is awaited",
     (f: any) => {
-      f.options.sessionAccessAuthority.target.lifecycleRevision =
-        "native-life-2";
-      f.options.params.expectedLifecycleRevision = "native-life-2";
+      const read = f.deps.dispatch;
+      f.deps.dispatch = async (...args: any[]) => {
+        const value = await read(...args);
+        f.retire();
+        return value;
+      };
     },
   ],
-  ["a changed workspace", (f: any) => f.changeWorkspace()],
+  [
+    "the workspace changed while the exact read is awaited",
+    (f: any) => {
+      const read = f.deps.dispatch;
+      f.deps.dispatch = async (...args: any[]) => {
+        const value = await read(...args);
+        f.changeWorkspace();
+        return value;
+      };
+    },
+  ],
 ])(
   "blocks delivery after %s and keeps that conversation blocked",
   async (_label, change) => {
@@ -356,3 +369,91 @@ it("refuses managed use without a durable ledger before any call", async () => {
   expect(f.calls).toHaveLength(0);
   expect(f.gateway).toHaveLength(0);
 });
+
+/**
+ * Review 4435447978. Spec 0.65 7.6.1 blocks further managed use after the
+ * fence's own failures (authority, session, registration, choice, mapping,
+ * entry or bytes). A durable block needs a failure attributable to the use's
+ * verified person and session incarnation: a transient gateway or host error,
+ * or a caller whose authority does not even verify (which could otherwise
+ * block someone else's conversation), refuses that attempt only.
+ */
+it.each([
+  [
+    "a gateway transport error on registration",
+    "unavailable",
+    (f: any) => {
+      f.deps.actionClient = async () => ({
+        listFeedback: async () => {
+          throw new RecommendationClientError("transport_error");
+        },
+      });
+    },
+  ],
+  [
+    "a gateway 503 while reading the choice",
+    "unavailable",
+    (f: any) => {
+      f.deps.recommendationClient = async () => ({
+        get: async () => {
+          throw new RecommendationClientError("overloaded", 503);
+        },
+      });
+    },
+  ],
+  [
+    "a gateway deadline while reading the choice",
+    "unavailable",
+    (f: any) => {
+      f.deps.recommendationClient = async () => ({
+        get: async () => {
+          throw new RecommendationClientError("deadline_exceeded");
+        },
+      });
+    },
+  ],
+  [
+    "a failed native dispatch",
+    "unavailable",
+    (f: any) => {
+      f.deps.dispatch = async () => {
+        throw Error("socket hang up");
+      };
+    },
+  ],
+  [
+    "authority retired before this turn",
+    "unauthorized",
+    (f: any) => f.retire(),
+  ],
+  [
+    "a caller for another session incarnation",
+    "unauthorized",
+    (f: any) => {
+      f.options.sessionAccessAuthority.target.lifecycleRevision =
+        "native-life-2";
+      f.options.params.expectedLifecycleRevision = "native-life-2";
+    },
+  ],
+  [
+    "a synthetic caller",
+    "unauthorized",
+    (f: any) => {
+      f.options.client.internal.syntheticClient = true;
+    },
+  ],
+])(
+  "refuses %s without blocking the conversation",
+  async (_label, code, change) => {
+    const path = ledgerPath();
+    const f = setup(true, path);
+    change(f);
+    expect(await refused(f.fence.load(f.options, f.use))).toBe(code);
+    const healthy = setup(true, path);
+    expect(
+      await healthy.fence.load(healthy.options, healthy.use),
+    ).toMatchObject({
+      revision: R0,
+    });
+  },
+);

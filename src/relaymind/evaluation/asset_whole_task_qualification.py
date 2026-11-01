@@ -74,15 +74,23 @@ def assess_qualification(
         fixture = True
     elif corpus_status != "qualified":
         reasons.add("corpus_unqualified")
-    if any(item["provenance"] == "fixture" for item in evidence):
+    if any(_provenance(item) == "fixture" for item in evidence):
         reasons.add("fixture_evidence")
         fixture = True
-    if any(item["provenance"] == "unknown" for item in artifacts):
+    if any(_provenance(item) in {"unknown", None} for item in artifacts):
         reasons.add("artifact_provenance_unknown")
-    if kind == "platform" and (platform["os"], platform["architecture"]) not in TARGET_PLATFORMS:
+    if kind == "platform" and (
+        not isinstance(platform, Mapping)
+        or (platform.get("os"), platform.get("architecture")) not in TARGET_PLATFORMS
+    ):
         reasons.add("platform_not_target")
     assessed = "fixture" if fixture else ("provisional" if reasons else "qualified")
     return WholeTaskQualification(kind, claimed, assessed, tuple(sorted(reasons)))
+
+
+def _provenance(item) -> str | None:
+    """The entry's provenance, or None when the entry is malformed."""
+    return item.get("provenance") if isinstance(item, Mapping) else None
 
 
 def check_claim(assessment: WholeTaskQualification) -> None:

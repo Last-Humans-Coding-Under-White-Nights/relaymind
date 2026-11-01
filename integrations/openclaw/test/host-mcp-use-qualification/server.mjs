@@ -6,7 +6,17 @@ import {StdioServerTransport} from "@modelcontextprotocol/sdk/server/stdio.js";
 import {CallToolRequestSchema, ListToolsRequestSchema} from "@modelcontextprotocol/sdk/types.js";
 
 const [controlPath, eventsPath, sandboxPath] = process.argv.slice(2);
-const control = () => JSON.parse(readFileSync(controlPath, "utf8"));
+// A concurrent rewrite can expose a partial or absent file. Keep the last good
+// state so a transient read never terminates the process or invents a state.
+let lastControl;
+const control = () => {
+  try {
+    lastControl = JSON.parse(readFileSync(controlPath, "utf8"));
+  } catch {
+    if (lastControl === undefined) throw Error("control_unavailable");
+  }
+  return lastControl;
+};
 const initial = control();
 const record = value => {
   if (existsSync(eventsPath) && statSync(eventsPath).size > 1048576) throw Error("capture_bound");
@@ -15,7 +25,7 @@ const record = value => {
 };
 const schema = state => ({type: "object", properties: {
   text: {type: "string", minLength: 1, maxLength: 256},
-  ...(state.revision > 1 ? {tag: {type: "string"}} : {}),
+  ...(state.revision > 1 ? {tag: {type: "string", maxLength: 256}} : {}),
 }, required: ["text"], additionalProperties: false});
 const server = new Server({name: "relaymind-disposable-append", version: "1.0.0"}, {
   capabilities: {tools: {listChanged: true}},
@@ -35,7 +45,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
   if (request.params.name !== "append" || typeof args?.text !== "string" ||
       !args.text.length || args.text.length > 256 ||
       Object.keys(args).some(key => !["text", ...(state.revision > 1 ? ["tag"] : [])].includes(key)) ||
-      args.tag !== undefined && typeof args.tag !== "string") {
+      args.tag !== undefined && (typeof args.tag !== "string" || args.tag.length > 256)) {
     return {isError: true, content: [{type: "text", text: "invalid sandbox arguments"}]};
   }
   const prior = existsSync(sandboxPath) ? readFileSync(sandboxPath, "utf8") : "";
