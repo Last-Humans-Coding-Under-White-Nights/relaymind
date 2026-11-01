@@ -984,3 +984,57 @@ def test_verify_fails_a_platform_run_from_other_runner_files(tmp_path):
     path.unlink()
     assert module._check_runner_files(run / "platform") == "platform_runner_files_missing"
     assert module.verify_platform(run / "platform") is not None
+
+
+# --- review 264 (third review): workflow ordering, timeouts and checkout bytes ---------
+
+
+def _step(job, prefix: str) -> dict:
+    (step,) = [s for s in job["steps"] if s.get("name", "").startswith(prefix)]
+    return step
+
+
+def test_an_operations_harness_error_never_skips_the_packaged_lifecycle():
+    """RM38/RM39, AC29/AC37: the lifecycle evidence is built even after an
+    operations harness error, and that error still fails the job at the end."""
+    (job,) = _workflow()["jobs"].values()
+    names = [s.get("name", s.get("uses", "")) for s in job["steps"]]
+    operations = _step(job, "Operations workload")
+    script = operations["run"]
+    assert "set +e" in script and "operations.exit" in script
+    # The exit code is kept, and a later always-run step fails on it.
+    (final,) = [
+        s for s in job["steps"] if "operations.exit" in s.get("run", "") and s is not operations
+    ]
+    assert final.get("if") == "always()"
+    assert names.index(final["name"]) > names.index(_step(job, "Pinned host lifecycle")["name"])
+
+
+def test_the_ordinary_timeout_fires_inside_its_step():
+    """RM39/AC37: the script's own ordinary_timeout is reached before the step limit."""
+    import re
+
+    (job,) = _workflow()["jobs"].values()
+    step = _step(job, "Ordinary installed-host actions")
+    match = re.search(r"--timeout\s+(\d+)", step["run"])
+    seconds = float(match.group(1)) if match else 900.0
+    assert seconds + 60 <= step["timeout-minutes"] * 60
+
+
+def test_every_platform_runner_file_checks_out_with_lf_line_endings():
+    """RM44/AC37: a Windows checkout binds the same runner file bytes as any other,
+    so a downloaded windows-latest report verifies on a macOS or Linux checkout."""
+    import shutil
+    import subprocess
+
+    if shutil.which("git") is None or not (ROOT / ".git").exists():
+        pytest.skip("needs a git checkout")
+    files = _script().platform_runner_files()
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "check-attr", "eol", "--", *files],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    unset = [line for line in result.stdout.splitlines() if not line.endswith(": eol: lf")]
+    assert not unset, unset

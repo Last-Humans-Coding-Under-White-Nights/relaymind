@@ -23,6 +23,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/platform-runs.yml
+      - .gitattributes
       - pyproject.toml
       - docs/SPECIFICATION.md
       - src/relaymind/**
@@ -58,7 +59,7 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
-    # Every step has its own limit, and their sum (115) stays below the job's,
+    # Every step has its own limit, and their sum (120) stays below the job's,
     # so a long step that reaches its own limit still leaves time for the
     # always-run report, verify and upload steps.
     timeout-minutes: 125
@@ -99,12 +100,20 @@ jobs:
       # generated catalog, the gateway without recommendations as memory
       # baseline, and the 60-second 2 req/s workload with four 25-record
       # import batches during a derived rebuild. Exit 2 only for a harness error.
+      # The exit code is kept in operations.exit and the step passes, so a
+      # harness error here never skips the packaged lifecycle steps below; the
+      # Harness result step fails the job on it at the end.
       - name: Operations workload (AC29)
         timeout-minutes: 20
-        run: >
-          python scripts/asset_operations_run.py operations
-          --work "$WORK/operations" --assets 300 --label "$LABEL"
-          --output "$EVIDENCE/operations.json"
+        run: |
+          set +e
+          python scripts/asset_operations_run.py operations \
+            --work "$WORK/operations" --assets 300 --label "$LABEL" \
+            --output "$EVIDENCE/operations.json"
+          code=$?
+          set -e
+          echo "$code" > "$EVIDENCE/operations.exit"
+          echo "operations exit $code"
 
       - name: Release artifact
         timeout-minutes: 10
@@ -145,10 +154,11 @@ jobs:
       - name: Ordinary installed-host actions
         timeout-minutes: 15
         run: |
+          # 780 s, so the script's own ordinary_timeout fires before the step limit.
           python scripts/asset_platform_run.py ordinary \
             --tarball "release/openclaw/$(node -p "require('./release/openclaw/release.json').filename")" \
             --work-dir "${RUNNER_TEMP}/relaymind-platform-ordinary" \
-            --out "$EVIDENCE/ordinary.json"
+            --out "$EVIDENCE/ordinary.json" --timeout 780
 
       # Also after an earlier failed step, so the evidence that exists is
       # reported; the earlier failure still fails the job. Without
@@ -185,3 +195,13 @@ jobs:
             platform-work/**/*.log
           if-no-files-found: warn
           retention-days: 30
+
+      # Last, after the evidence is uploaded: an operations harness error (or a
+      # run that never recorded its exit code) fails the job.
+      - name: Harness result
+        if: always()
+        timeout-minutes: 5
+        run: |
+          code=$(cat "$EVIDENCE/operations.exit" 2>/dev/null || echo missing)
+          echo "operations exit $code"
+          [ "$code" = 0 ]

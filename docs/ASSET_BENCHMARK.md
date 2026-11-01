@@ -969,7 +969,9 @@ fixtures the bundle and the ordinary harness load, `pyproject.toml` and the
 specification. Other pull requests stay fast. Each platform runs:
 
 1. `asset_operations_run.py operations`, the lexical AC29 fixture run above,
-   first, while the runner is quiet;
+   first, while the runner is quiet. Its exit code goes to `operations.exit`
+   and the step passes, so a harness error never skips the steps below; the
+   last step, `Harness result`, fails the job when that code is not 0;
 2. the release artifact (`npm run pack:release`) and the pinned host's
    install-to-uninstall lifecycle (`scripts/openclaw_install_check.py`). A failed
    lifecycle step is kept in the export and its exit code in
