@@ -165,7 +165,9 @@ def _trial(args) -> int:
             print(json.dumps(dict(passed=record["passed"], checks=record["checks"])))
             return 0 if record["passed"] else 3
         if args.command == "trial-install":
-            record = asset_trial_kit.install_plugin(_host(args), args.tarball, args.work)
+            record = asset_trial_kit.install_plugin(
+                _host(args), args.tarball, args.work, base_url=args.base_url
+            )
             atomic_bytes(args.output, json_bytes(record))
             print(json.dumps(dict(passed=record["passed"])))
             return 0 if record["passed"] else 3
@@ -178,7 +180,7 @@ def _trial(args) -> int:
             # A provisional trial stops at a failed preflight; nothing is installed.
             if preflight["passed"] or args.qualification == "fixture":
                 install = asset_trial_kit.install_plugin(
-                    _host(args), args.tarball, work / "install"
+                    _host(args), args.tarball, work / "install", base_url=args.base_url
                 )
             tarball = args.tarball
         else:
@@ -217,6 +219,13 @@ def _trial_parsers(sub) -> None:
             "host", nargs=argparse.REMAINDER, help="-- then the OpenClaw command, e.g. openclaw"
         )
 
+    def base_url(parser):
+        parser.add_argument(
+            "--base-url",
+            default=asset_trial_kit.DEFAULT_BASE_URL,
+            help="the gateway's loopback URL for the plugin's baseUrl (default %(default)s)",
+        )
+
     def run(parser):
         parser.add_argument("--inputs", type=Path, required=True, help="frozen input manifest")
         parser.add_argument("--observations", type=Path, required=True)
@@ -236,6 +245,7 @@ def _trial_parsers(sub) -> None:
     install.add_argument("--tarball", type=Path, required=True)
     install.add_argument("--work", type=Path, required=True)
     install.add_argument("--output", type=Path, required=True)
+    base_url(install)
     host(install)
     trial_run = sub.add_parser("trial-run", help="run, bundle and grade the early trial")
     run(trial_run)
@@ -246,6 +256,7 @@ def _trial_parsers(sub) -> None:
     run(trial)
     trial.add_argument("--tarball", type=Path, required=True)
     trial.add_argument("--work", type=Path, required=True, help="new private work directory")
+    base_url(trial)
     host(trial)
 
 

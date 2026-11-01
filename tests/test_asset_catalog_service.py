@@ -779,3 +779,38 @@ def test_periodic_sources_are_scheduled_oldest_due_first(tmp_path):
             now += 31  # the scan takes longer than the 30-second interval
             service._next[key] = now + 30
         assert order == ["a", "b", "c", "a", "b", "c"]
+
+
+def test_one_rejected_skill_publishes_the_others_as_a_partial_generation(tmp_path):
+    """RM34/AC25 (#268, spec 0.66 section 4.6.1): a bad file never hides its siblings."""
+    root = tmp_path / "source"
+    skill(root / "good")
+    skill(root / "other", description="Other skill")
+    (root / "bad").mkdir()
+    (root / "bad" / "SKILL.md").write_text("---\nname: bad\n---\nno description\n")
+    clock = FakeClock()
+    with RunStore(clock=clock) as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(root), catalog, clock=clock)
+
+        async def run():
+            await service.tick()
+            await service.stop()
+            snapshot = catalog.snapshot()
+            assert sorted(a.description for a in snapshot.assets) == [
+                "Greeting skill",
+                "Other skill",
+            ]
+            source = snapshot.sources[0]
+            assert not source["complete"] and not source["stale"]
+            assert source["rejected_count"] == 1
+            assert [e["reason"] for e in source["exclusions"]] == ["invalid_data"]
+            outcome = catalog.job_outcomes()[0]
+            assert outcome["state"] == "succeeded"
+            published = [
+                e for e in catalog.job_events(outcome["job_id"]) if e["event_type"] == "published"
+            ]
+            assert published[0]["payload"]["rejected_count"] == 1
+            assert published[0]["payload"]["accepted_count"] == 2
+
+        asyncio.run(run())

@@ -26,6 +26,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `scripts/asset_whole_task.py trial-install` (and `trial`) failed on a fresh
+  OpenClaw 2026.10.7 host, which installs the plugin disabled until it is
+  configured (#269; RM39/RM44; AC30/AC36 tooling). The kit now follows the
+  operator guide's lifecycle: install, configure `baseUrl` (`--base-url`,
+  default `http://127.0.0.1:8080/v1`), enable, inspect. It records each step,
+  and inspect must report the plugin loaded and enabled. Verified with a host
+  double that models the disabled fresh install; not yet rerun on the
+  owner's M1 (#259).
+- Ordinary local skill discovery (#268; RM34/AC25; spec 0.66 section 4.6.1)
+  admitted only 8 of OpenClaw 2026.10.7's 49 bundled skills: 32 bodies were
+  rejected for `<placeholder>` text or HTML examples and 9 for more than three
+  code-fence lines, and one rejected file failed the whole folder. Bodies now
+  keep only the encoding, control and size checks, and a rejected candidate is
+  excluded on its own with a fixed reason. All 49 bundled skills are admitted
+  by a local scan of the pinned package. Five verbatim copies are test
+  fixtures (`tests/fixtures/openclaw-bundled-skills/`, MIT).
 - The loaded-use observation harness records the exact person-scope
   `sessions.reset` refusal (`operator.admin` required on the pinned host) as
   `control_refused`, with no turn, instead of raising
@@ -232,7 +248,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   negative record closes the loaded-use or MCP-use gate on the pinned host with
   the operation disabled as a known host limitation (sections 7.6.1, 7.6.2).
   "Customer" wording about who runs trials becomes owner/operator. No metric,
-  threshold or budget changes.
+  threshold or budget changes. Amended before release (#268; RM34/AC25;
+  sections 4.6, 4.6.1, 14.5): each ordinary local SKILL.md candidate is
+  admitted or rejected on its own. A rejected file records one
+  `{asset_id,reason}` exclusion and makes the scan a partial generation
+  (complete=false, rejected/omitted records kept stale, no removals) instead
+  of failing the whole folder; path safety, read errors, budgets and
+  cancellation still fail the whole scan. The markup and repeated-line rules
+  apply to offered record fields; the internal instruction body keeps only the
+  NFC, encoding, control and size rules.
 - Specification 0.64 → 0.65 (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;
   AC25/AC28/AC30/AC31/AC35–AC37): defines native skill loaded-byte delivery,
   immutable-pin versus removal semantics and the later-use authority fence;

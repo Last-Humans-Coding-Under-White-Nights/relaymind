@@ -192,8 +192,9 @@ _GENERATOR_ANCHORS = {
     "docs/SPECIFICATION.md": frozenset(
         {
             # Reviewed 0.66 owner-run acceptance profile and qualification record
-            # (with the 0.65 review clarifications of 7.6.2 and 14.5).
-            ("a5893a7de59a796319ba96788f0d4002174413acc3049b34e88ce1ac8741f1cc", 622204),
+            # (with the 0.65 review clarifications of 7.6.2 and 14.5), amended by
+            # per-candidate local skill admission and body text rules (#268).
+            ("ef811d0de29e715823987dcd5e21fd78990a28c1f38c019920f9ca78d452afc7", 624220),
             # Reviewed 0.65 skill-use/MCP fences and native configuration evidence.
             ("a7e5e29b47223cc58037b438a57cf29c458dd4088258664e7401ed2110f07e16", 610472),
             # Reviewed 0.64 reset evidence document for section 12.6.5.

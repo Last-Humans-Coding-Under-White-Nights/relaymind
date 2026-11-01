@@ -1082,9 +1082,9 @@ result.
 | Command | What it does |
 | --- | --- |
 | `trial-preflight --inputs M --tarball T --output P -- openclaw` | Checks the machine and the release, writes the record, and exits `0` only when every check passed, otherwise `3` |
-| `trial-install --tarball T --work W --output I -- openclaw` | `plugins install npm-pack:T --force --accept-capabilities`, then `plugins inspect relaymind --runtime --json` |
+| `trial-install --tarball T --work W --output I [--base-url U] -- openclaw` | `plugins install npm-pack:T --force --accept-capabilities`, `config set plugins.entries.relaymind.config.baseUrl U`, `plugins enable relaymind`, then `plugins inspect relaymind --runtime --json` |
 | `trial-run --inputs M --observations O --bundle B --preflight P [--install I] [--tarball T] [--resolver X] --qualification fixture\|provisional [--interactive]` | Runs the frozen plan over row observations, bundles every file and grades the bundle |
-| `trial --inputs M --tarball T --observations O --bundle B --work W [--resolver X] --qualification fixture\|provisional [--interactive] -- openclaw` | All of the above, in order |
+| `trial --inputs M --tarball T --observations O --bundle B --work W [--base-url U] [--resolver X] --qualification fixture\|provisional [--interactive] -- openclaw` | All of the above, in order |
 
 **Preflight.** Seven checks, each `passed` or `failed`; an unknown value fails:
 
@@ -1099,11 +1099,19 @@ result.
 - `frozen_package`: exactly one frozen package has the tarball's SHA-256 and
   size, and its version is the release version.
 
-**Install.** The install changes the operator's actual host (the same command
-as the operator guide). Host output stays in private `install.log` and
+**Install.** The install changes the operator's actual host. It follows the
+operator guide's lifecycle (`integrations/openclaw/README.md`, step 4):
+install, configure, enable, inspect. The pinned host installs the plugin
+disabled until it is configured, so the kit sets `baseUrl` (`--base-url`,
+default `http://127.0.0.1:8080/v1`, the gateway's default loopback listener)
+and then runs `plugins enable relaymind` (#269). Each step is recorded with
+its exit code; a failed step stops the rest, which are `not_run`. Host output
+stays in private `install.log`, `configure.log`, `enable.log` and
 `inspect.log` under the work directory. The record keeps only placeholders
-(`<openclaw>`, `<artifact>`), exit codes and SHA-256 digests. Inspect passes
-when the plugin is `loaded` at the release version with no diagnostics.
+(`<openclaw>`, `<artifact>`), the configured `base_url`, exit codes and
+SHA-256 digests. Inspect passes when the plugin is `loaded` and enabled at
+the release version with no diagnostics. The gateway token is not stored
+here (operator guide step 5).
 Configuring each arm's frozen host configuration is the operator's step;
 see the operator guide in `integrations/openclaw/README.md`.
 
@@ -1186,8 +1194,17 @@ pass predicates. For each language it:
 playwright install --with-deps --only-shell chromium
 python integrations/openclaw/test/host-walkthrough/record.py record \
   --tarball /abs/relaymind-openclaw-provider-0.1.0.tgz \
-  --work-root /abs/new-private-work --out-dir /abs/new-walkthrough
+  --work-root /abs/new-private-work --out-dir /abs/new-walkthrough \
+  [--font-dir /abs/cjk-fonts]
 ```
+
+The harness starts the browser with `HOME` inside the work directory, so it
+sees only system fonts. On a host without a CJK font, the Chinese labels still
+match but render as empty boxes. `--font-dir` copies the `.otf`, `.ttf` and
+`.ttc` files of a directory into that isolated home before the host is
+installed. The manifest lists their names and digests under `fonts`. Use a
+work root whose path holds no user name, because the source locator and the
+capture show it.
 
 The output directory holds, per language, `capture.json` (the harness's
 sanitized capture), `screens/`, `screens.json` and `video/`. `manifest.json`
@@ -1211,8 +1228,11 @@ The tier is `functional_fixture`, with a deterministic gateway and disposable
 fixture accounts. It is not an owner, human or live-model walkthrough and
 not platform acceptance. Blocked steps are never attempted. Screenshots and
 video can show fixture account names; keep them private until reviewed, and
-never publish the work directory. Whether the pinned host's Control UI
-follows the browser locale has not been observed yet; if it does not, the
-Chinese run fails on its first label rather than recording English screens.
+never publish the work directory. On the owner's VPS (1 November 2026), the
+pinned host's Control UI and the plugin's controls followed the `zh-CN` browser
+locale. The recommendation detail block and the identity provider's sign-in
+pages stayed in English, and the host's community banner stays visible because
+the harness never dismisses it. An unknown label still fails the Chinese run
+on that label rather than recording English screens.
 The recorder is not part of CI. Its fixture tests
 (`tests/test_openclaw_walkthrough.py`) run in the default `pytest`.
