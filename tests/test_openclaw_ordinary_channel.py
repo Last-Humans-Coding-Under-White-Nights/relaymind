@@ -800,6 +800,174 @@ def test_controls_are_observations_without_rejection_requirement(observed):
     assert api.ordinary_skill_loaded_use_pass(capture)
 
 
+# The pinned 2026.10.7 refusal of `sessions.reset` for the configured person
+# policy (CI run 41286397320): the method needs operator.admin, which the person
+# policy does not grant; the native Control UI itself falls back to
+# sessions.create without that scope.
+RESET_SCOPE_REFUSAL = dict(
+    type="res",
+    id="reset",
+    ok=False,
+    error=dict(
+        code="FORBIDDEN",
+        message="missing scope: operator.admin",
+        details=dict(
+            code="MISSING_SCOPE",
+            missingScope="operator.admin",
+            requiredScopes=["operator.admin"],
+        ),
+    ),
+)
+
+
+def refused_reset(case):
+    """A reset control the host refused before any turn: no turn evidence at all."""
+    import copy
+
+    case["intervention"]["frame"] = copy.deepcopy(RESET_SCOPE_REFUSAL)
+    case["current"] = dict(case["before"])
+    case.update(
+        chat={},
+        tools=[],
+        requests=[],
+        terminal={},
+        subscription={},
+        provider_attempts=[],
+        advertised_revision=None,
+        observed="control_refused",
+    )
+
+
+@pytest.mark.parametrize("require_positive", [True, False])
+def test_reset_refused_for_person_scope_is_a_complete_observation(require_positive):
+    """RM16/RM39 AC30 (#255): the host's person-scope reset refusal is recorded, not an error."""
+    api = module()
+    capture = loaded_fixture(api)
+    refused_reset(capture["ordinary_skill_loaded_use"]["cases"][3])
+    assert api.ordinary_skill_loaded_use_pass(capture, require_positive=require_positive)
+    assert capture["ordinary_skill_loaded_use"]["qualification"] == "unavailable"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "other_error_code",
+        "other_missing_scope",
+        "extra_detail",
+        "ok_true",
+        "session_changed",
+        "turn_evidence",
+        "tool_evidence",
+        "claims_loaded",
+        "stale_refused",
+        "deleted_refused",
+        "positive_refused",
+    ],
+)
+def test_only_the_exact_reset_scope_refusal_skips_the_turn(change):
+    """RM16/RM39 AC30 (#255): no other refusal, mutation or claim is a refused control."""
+    import copy
+
+    api = module()
+    capture = loaded_fixture(api)
+    cases = capture["ordinary_skill_loaded_use"]["cases"]
+    reset = cases[3]
+    refused_reset(reset)
+    error = reset["intervention"]["frame"]["error"]
+    if change == "other_error_code":
+        error["code"] = "UNAVAILABLE"
+    elif change == "other_missing_scope":
+        error["details"]["missingScope"] = "operator.write"
+    elif change == "extra_detail":
+        error["details"]["granted"] = True
+    elif change == "ok_true":
+        reset["intervention"]["frame"]["ok"] = True
+    elif change == "session_changed":
+        reset["current"]["lifecycleRevision"] = "L1"
+    elif change == "turn_evidence":
+        reset["chat"] = copy.deepcopy(cases[2]["chat"])
+    elif change == "tool_evidence":
+        reset["tools"] = copy.deepcopy(cases[2]["tools"])
+    elif change == "claims_loaded":
+        reset["observed"] = "loaded_pinned_revision"
+    elif change in ("stale_refused", "deleted_refused"):
+        target = cases[1 if change == "stale_refused" else 2]
+        target["intervention"]["frame"] = copy.deepcopy(RESET_SCOPE_REFUSAL)
+        target.update(
+            chat={},
+            tools=[],
+            requests=[],
+            terminal={},
+            subscription={},
+            provider_attempts=[],
+            observed="control_refused",
+        )
+    elif change == "positive_refused":
+        cases[0]["observed"] = "control_refused"
+    assert not api.ordinary_skill_loaded_use_pass(capture, require_positive=False)
+
+
+def test_driver_records_a_person_scope_reset_refusal_without_a_turn(tmp_path, monkeypatch):
+    """RM16/RM39 AC30 (#255): CI run 41286397320 raised here; record the refusal instead."""
+    api = module()
+    capture = loaded_fixture(api)
+    expected = capture["ordinary_skill_loaded_use"]["cases"]
+    refused_reset(expected[3])
+    extension = extension_fixture(api, tmp_path)
+    current = [0]
+    visited = []
+
+    def rpc(page, method, params):
+        if method == "sessions.create":
+            current[0] += 1
+        case = expected[current[0]]
+        selected = case["selected"]
+        if method == "sessions.create":
+            scope = case["before"]
+            return dict(
+                id="create",
+                socket_id="socket",
+                frame=dict(
+                    id="create",
+                    ok=True,
+                    payload=dict(
+                        key=scope["sessionKey"],
+                        sessionId=scope["sessionId"],
+                        entry=dict(lifecycleRevision=scope["lifecycleRevision"]),
+                    ),
+                ),
+            )
+        if method == "rmqualification.person":
+            return dict(frame=dict(ok=True, payload=case["before"]))
+        if method == "skills.library.read":
+            selected["read"]["payload"]["entry"]["slug"] = "fixture"
+            return dict(frame=selected["read"])
+        if method == "skills.library.save" and params["expectedRevision"] is None:
+            return dict(
+                frame=dict(ok=True, payload=dict(entry=selected["read"]["payload"]["entry"]))
+            )
+        if method == "skills.library.list":
+            pin = dict(skillId=selected["skillId"], revision=REVISION, name=selected["name"])
+            return dict(frame=dict(ok=True, payload=dict(session=dict(selections=[pin]))))
+        if method == "skills.library.activate":
+            return dict(frame=case["selection"])
+        return dict(frame=case["intervention"]["frame"])
+
+    def turn(rpc, page, session, case):
+        visited.append(case["case"])
+        case.update(expected[current[0]])
+
+    monkeypatch.setattr(extension, "loaded_use_turn", turn)
+    extension.observe_loaded_use(rpc, None, {}, capture)
+    assert visited == ["positive", "stale", "deleted"]
+    reset = capture["ordinary_skill_loaded_use"]["cases"][3]
+    assert reset["observed"] == "control_refused"
+    assert reset["failure_reason"] is None
+    assert reset["intervention"]["frame"] == RESET_SCOPE_REFUSAL
+    assert reset["chat"] == {} and reset["requests"] == [] and reset["tools"] == []
+    assert api.ordinary_skill_loaded_use_pass(capture)
+
+
 def native_wrapped_task(task):
     # Real 2026.10.7 webchat shape from the Ubuntu observation capture;
     # disposable identities replace the original run's metadata.
