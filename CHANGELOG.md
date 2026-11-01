@@ -43,9 +43,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   operation is in the shipped registry, no production MCP route exists, and
   `relaymind.mcp` is not registered; the tests use injected fixture resolvers
   and routes only. The shipped direct-action/exact-selection entry is re-pinned
-  to the new adapter revision `653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`; its evidence revision still names the
-  capture of the earlier bytes, and the fresh ordinary installed-host capture of
-  this revision is the open pre-merge gate. A release-artifact test now fails
+  to the new adapter revision `653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`; its evidence revision names the
+  fresh ordinary installed-host capture of this revision (CI run 41286397320,
+  SHA-256 `933fb4e7c8b3…`). A release-artifact test now fails
   when the registry and the built adapter digest drift.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
