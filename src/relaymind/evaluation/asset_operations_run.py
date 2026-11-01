@@ -200,11 +200,11 @@ async def _read_token(process: asyncio.subprocess.Process, deadline: float, log:
                 raise TimeoutError("gateway_token_unavailable")
             text = line.decode("utf-8", "replace")
             if text.startswith(_TOKEN_PREFIX):
-                if time.monotonic() < deadline:
-                    return text.removeprefix(_TOKEN_PREFIX).strip()
-            else:
-                target.write(line)
-                target.flush()
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("gateway_token_unavailable")
+                return text.removeprefix(_TOKEN_PREFIX).strip()
+            target.write(line)
+            target.flush()
 
 
 async def _drain(stream: asyncio.StreamReader, log: Path) -> None:
@@ -279,12 +279,13 @@ async def serve(
     """
     work = Path(work).absolute()
     work.mkdir(parents=True, exist_ok=True)
-    (work / "stdout.log").unlink(missing_ok=True)
-    (work / "stderr.log").unlink(missing_ok=True)
+    stdout_log, stderr_log = work / "stdout.log", work / "stderr.log"
+    stdout_log.unlink(missing_ok=True)
+    stderr_log.unlink(missing_ok=True)
     port = _free_port()
     config = _config(work, base_config, Path(catalog).absolute(), port)
     deadline = time.monotonic() + timeout
-    with (work / "stderr.log").open("ab") as stderr:
+    with stderr_log.open("ab") as stderr:
         process = await asyncio.create_subprocess_exec(
             *_child_argv(config),
             stdout=asyncio.subprocess.PIPE,
@@ -293,8 +294,8 @@ async def serve(
         )
     drain = None
     try:
-        token = await _read_token(process, deadline, work / "stdout.log")
-        drain = asyncio.create_task(_drain(process.stdout, work / "stdout.log"))
+        token = await _read_token(process, deadline, stdout_log)
+        drain = asyncio.create_task(_drain(process.stdout, stdout_log))
         async with httpx.AsyncClient(
             base_url=f"http://127.0.0.1:{port}",
             headers={"Authorization": "Bearer " + token},
@@ -320,8 +321,13 @@ async def serve(
 # --- platform report -----------------------------------------------------------------
 
 
-def _evidence(path: Path, evidence_id: str, served_path: str) -> dict:
+def _read_json(path: Path) -> tuple[object, bytes]:
+    """The parsed document and the exact bytes it was parsed from (one read)."""
     payload = Path(path).read_bytes()
+    return json.loads(payload.decode("utf-8")), payload
+
+
+def _evidence(payload: bytes, evidence_id: str, served_path: str) -> dict:
     return dict(
         id=evidence_id,
         path=served_path,
@@ -342,11 +348,14 @@ _ORDINARY_ACTIONS = ("recommend", "choose", "feedback", "delete", "reset")
 _FAILED = ("failed", "timed_out")
 
 
-def _lifecycle_status(check: Mapping, names: tuple[str, ...]) -> str:
+def _lifecycle_statuses(check: Mapping) -> dict:
     steps = check.get("steps")
     if not isinstance(steps, list) or not all(isinstance(s, dict) for s in steps):
         raise ValueError("install_check_invalid")
-    statuses = {s.get("name"): s.get("status") for s in steps}
+    return {s.get("name"): s.get("status") for s in steps}
+
+
+def _lifecycle_status(statuses: Mapping, names: tuple[str, ...]) -> str:
     observed = [statuses.get(name, "not_run") for name in names]
     if any(status in _FAILED for status in observed):
         return "failed"
@@ -379,20 +388,21 @@ def platform_report(
         raise ValueError("measured_requires_acceptance_platform")
     if ordinary is not None and ordinary_check is None:
         raise ValueError("ordinary_check_required")
-    check = json.loads(Path(install_check).read_text(encoding="utf-8"))
+    check, payload = _read_json(install_check)
     if not isinstance(check, dict):
         raise ValueError("install_check_invalid")
-    evidence = [_evidence(install_check, "install-check", evidence_paths["install-check"])]
+    evidence = [_evidence(payload, "install-check", evidence_paths["install-check"])]
     ordinary_ok = False
     if ordinary is not None:
-        capture = json.loads(Path(ordinary).read_text(encoding="utf-8"))
+        capture, payload = _read_json(ordinary)
         ordinary_ok = isinstance(capture, dict) and ordinary_check(capture) is True
-        evidence.append(_evidence(ordinary, "ordinary-capture", evidence_paths["ordinary-capture"]))
+        evidence.append(_evidence(payload, "ordinary-capture", evidence_paths["ordinary-capture"]))
+    statuses = _lifecycle_statuses(check)
     steps = []
     for name in PLATFORM_STEPS:
         status, ids, reason = "not_run", [], f"{name}_not_run"
         if name in _LIFECYCLE:
-            status = _lifecycle_status(check, _LIFECYCLE[name])
+            status = _lifecycle_status(statuses, _LIFECYCLE[name])
             ids = [] if status == "not_run" else ["install-check"]
             reason = None if status == "passed" else f"{name}_{status}"
         elif name in _ORDINARY_ACTIONS:
