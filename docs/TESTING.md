@@ -2715,3 +2715,31 @@ embedding qualification registry contains only the two exact reviewed Linux CPU
 identities; every other artifact remains unqualified pending independent
 exact-identity review. No 512 MiB memory gate or universal 50 ms cancellation SLA
 is introduced.
+
+## Disposable MCP use capability tier (#204; RM39/AC35)
+
+The separate [MCP use harness](../integrations/openclaw/test/host-mcp-use-qualification/README.md)
+reuses the ordinary installed-entry/person browser setup and adds two host-owned
+stdio servers with colliding names and bounded sandbox append counters. Its
+Ubuntu CI step has a four-minute timeout around a 180-second person trial and
+uploads a separate capture. Typical person captures took 43–65 seconds, plus up
+to 30 seconds for MCP probing. Harness/fixture errors and missing artifacts fail
+CI; understood environmental blocks and healthy discovery with an unsupported
+exact-use route return zero. A failed run names what failed: `person_setup_failed` when setup failed before discovery, `fixture_failed` when discovery failed, and `person_proof_failed` when discovery was healthy but the person proof failed. The nested capture keeps its own reason.
+The local host smoke test is enabled with `RELAYMIND_OPENCLAW_NODE=1`; the default
+Python suite includes evidence mutation and browser driver tests.
+
+This is capability tooling. `mcp_use_pass` regrades available raw evidence and
+keeps unsupported exact-use/currentness/approval/baseline terms false. A process
+exit of zero can mean a faithfully recorded `blocked` result. The current driver
+does not dispatch a mutation without a qualified exact-use receipt. Native
+allow/deny and stale-use trials consequently remain `not_run`; the available
+Playwright click driver labels its actions `automated_ui`, never human approval.
+An unused driver is labeled `not_run`. The grader derives tool event types from
+the published trace schema, but this tier exports no run traces, so the
+`zero_gateway_execution` term remains false. Source hashes bind nested person
+evidence to this fixture; they do not authenticate native execution or exclude
+replay with identical bytes. The final wrapper is scanned for the original
+person/gateway secrets after all additions, and inventory exports omit raw
+parameters and response bodies.
+No production MCP operation, runtime snapshot or AC35 acceptance is enabled.

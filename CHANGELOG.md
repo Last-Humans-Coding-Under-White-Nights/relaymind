@@ -18,6 +18,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   pin names, advertised revisions, socket receipts and independent provider/run
   records are checked, and incomplete hooks cannot label a turn `not_loaded`.
   Request and content retention limits preserve later control windows.
+- Add a disposable MCP use capability tier (#204; RM39/AC35), raw-evidence
+  accounting tests, bounded sandbox servers and an optional CI capture. Exact
+  use, native approval trials and human acceptance remain blocked/not_run.
+- Harden the MCP capability tier (#204; RM39/AC35): fail CI on harness or
+  discovery errors, bind source/artifact evidence, join real server call/effect
+  records, observe approval identity and resolution, and rescan final captures
+  for secrets. The CI timeout is four minutes; missing run traces and native
+  exact-use receipts still prevent qualification.
+- Fix the MCP capability tier's `tools.effective` projection (#204; RM39/AC35):
+  the pinned host returns grouped entries (`groups[].tools[].id`), so the old
+  flat `payload.tools` projection always recorded an empty list. The probe now
+  records an explicit `listed`/`empty`/`malformed` outcome, the host's MCP
+  server/original mapping and notice IDs, and discovery requires both colliding
+  fixture tools in the session inventory. Earlier captures' empty
+  `tools.effective` lists came from the projection, not the host. The person
+  probe now starts the session's MCP runtime with public `mcp.app.discover`
+  before the read (MCP Apps enabled, the shipped RelayMind model selected, zero
+  heartbeat). A Linux x86-64 VPS run of the CI command (not committed) listed
+  both colliding tools; exact use stays blocked.
   A refused `chat.send` retains its request window, correlated provider records
   and native hooks; any such activity fails the case closed
   (`ordinary_skill_refusal_contradicted`) instead of an activity-free refusal.
