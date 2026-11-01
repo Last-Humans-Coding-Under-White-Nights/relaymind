@@ -20,7 +20,7 @@ class RemoteSourceProfile:
 PUBLIC_SKILLS = RemoteSourceProfile(
     "github.relaymind-skills.v1",
     "github_git_skills.v1",
-    "Last-Humans-Coding-Under-White-Nights/relaymind",
+    "LHCWN/relaymind",
     "heads/master",
     "skills",
     "2022-11-28",
