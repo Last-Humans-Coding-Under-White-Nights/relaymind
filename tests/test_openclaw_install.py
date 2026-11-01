@@ -470,19 +470,145 @@ def test_a_driver_knows_it_is_the_entry_point_on_every_supported_platform(driver
     assert "import.meta.url === pathToFileURL(process.argv[1]).href" in source
 
 
-def test_ci_reruns_the_matrix_when_a_stacked_pr_is_retargeted():
+def _github_expression(text: str, context: dict):
+    """Evaluate the small GitHub Actions expression subset the CI workflow uses.
+
+    Supports property paths, single-quoted strings, ``!``, ``==``, ``!=``,
+    ``&&`` and ``||`` with the documented value-returning semantics; a missing
+    property is null.
+    """
+    import re
+
+    tokens = re.findall(r"\|\||&&|==|!=|!|\(|\)|'[^']*'|[A-Za-z_][\w.-]*", text)
+    assert "".join(tokens) == re.sub(r"\s+", "", text), text
+    pos = 0
+
+    def peek():
+        return tokens[pos] if pos < len(tokens) else None
+
+    def take():
+        nonlocal pos
+        pos += 1
+        return tokens[pos - 1]
+
+    def primary():
+        token = take()
+        if token == "(":
+            value = either()
+            assert take() == ")"
+            return value
+        if token == "!":
+            return not primary()
+        if token.startswith("'"):
+            return token[1:-1]
+        value = context
+        for part in token.split("."):
+            value = value.get(part) if isinstance(value, dict) else None
+        return value
+
+    def compare():
+        left = primary()
+        while peek() in ("==", "!="):
+            op, right = take(), primary()
+            left = (left == right) if op == "==" else (left != right)
+        return left
+
+    def both():
+        left = compare()
+        while peek() == "&&":
+            take()
+            right = compare()
+            left = right if left else left
+        return left
+
+    def either():
+        left = both()
+        while peek() == "||":
+            take()
+            right = both()
+            left = left if left else right
+        return left
+
+    value = either()
+    assert pos == len(tokens), text
+    return value
+
+
+def _interpolate(template: str, context: dict) -> str:
+    import re
+
+    def one(match):
+        value = _github_expression(match.group(1), context)
+        return "" if value is None else str(value)
+
+    return re.sub(r"\$\{\{(.*?)\}\}", one, template)
+
+
+@pytest.mark.parametrize(
+    "action, changes, plans, edit_group",
+    [
+        # Retargeting a stacked PR to master changes its base: plan again.
+        ("edited", {"base": {"ref": {"from": "devnull/stack"}}}, True, False),
+        # A title or body edit starts no jobs and never cancels a running check.
+        ("edited", {"title": {"from": "old"}}, False, True),
+        ("edited", {"body": {"from": "old"}}, False, True),
+        ("synchronize", None, True, False),
+        ("opened", None, True, False),
+    ],
+)
+def test_ci_reruns_the_matrix_when_a_stacked_pr_is_retargeted(
+    action, changes, plans, edit_group, tmp_path
+):
     """RM33/AC24: a stacked PR retargeted to master gets the full matrix before merge.
 
-    Retargeting sends a pull_request ``edited`` event; only base changes may
-    start the jobs, and a title or body edit must not cancel a running check.
+    Retargeting sends a pull_request ``edited`` event. The plan job's condition
+    and the concurrency group are evaluated for each event shape; a planned
+    retarget then runs the plan step against the new base.
     """
     import yaml
 
     workflow = yaml.safe_load(CI_FILE.read_text("utf-8"))
     triggers = workflow.get("on", workflow.get(True))
     assert set(triggers["pull_request"]["types"]) == {"opened", "synchronize", "reopened", "edited"}
-    plan_if = workflow["jobs"]["plan"]["if"]
-    assert "github.event.action != 'edited'" in plan_if
-    assert "github.event.changes.base" in plan_if
-    group = workflow["concurrency"]["group"]
-    assert "github.event.changes.base" in group and "-edit" in group
+    event = {"action": action, "pull_request": {"number": 7}}
+    if changes is not None:
+        event["changes"] = changes
+    context = {
+        "github": {
+            "workflow": "CI",
+            "event_name": "pull_request",
+            "ref": "refs/pull/7/merge",
+            "event": event,
+        }
+    }
+    assert bool(_github_expression(workflow["jobs"]["plan"]["if"], context)) is plans
+    group = _interpolate(workflow["concurrency"]["group"], context)
+    assert group == ("ci-CI-7-edit" if edit_group else "ci-CI-7")
+    if not plans:
+        return
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash is required to run the plan step")
+    (step,) = workflow["jobs"]["plan"]["steps"]
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_gh = bin_dir / "gh"
+    fake_gh.write_text("#!/usr/bin/env bash\necho master\n", encoding="utf-8")
+    fake_gh.chmod(0o755)
+    output = tmp_path / "github_output"
+    env = dict(
+        os.environ,
+        EVENT="pull_request",
+        BASE="devnull/stack-bottom",
+        PR="7",
+        REPO="owner/repo",
+        GITHUB_OUTPUT=str(output),
+        PATH=str(bin_dir) + os.pathsep + os.environ["PATH"],
+    )
+    subprocess.run([bash, "-c", step["run"]], env=env, check=True, capture_output=True)
+    (line,) = output.read_text("utf-8").splitlines()
+    assert json.loads(line.split("=", 1)[1]) == [
+        "ubuntu-latest",
+        "macos-latest",
+        "windows-latest",
+    ]
