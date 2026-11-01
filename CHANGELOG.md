@@ -32,8 +32,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   records an explicit `listed`/`empty`/`malformed` outcome, the host's MCP
   server/original mapping and notice IDs, and discovery requires both colliding
   fixture tools in the session inventory. Earlier captures' empty
-  `tools.effective` lists came from the projection, not the host; no new
-  real-host run exists yet.
+  `tools.effective` lists came from the projection, not the host. The person
+  probe now starts the session's MCP runtime with public `mcp.app.discover`
+  before the read (MCP Apps enabled, the shipped RelayMind model selected, zero
+  heartbeat). A Linux x86-64 VPS run of the CI command (not committed) listed
+  both colliding tools; exact use stays blocked.
 
 - Operations and platform run kit (#242, toward #241, #235, #234; RM38, RM39, RM44; AC29, AC37):
   - `scripts/asset_operations_run.py startup` measures ten real `relaymind serve` startups over a generated 300-skill bilingual catalog, using the existing AC29 driver. It waits for recommendations to be ready and samples memory on POSIX and Windows.

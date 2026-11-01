@@ -143,6 +143,13 @@ def composition_type(ordinary, *, forbidden=None):
             # MCP Apps enable public mcp.app.discover, which the person probe
             # uses to start this session's MCP runtime before tools.effective.
             config["mcp"] = dict(servers=servers, apps=dict(enabled=True))
+            # The default openai model selects an unregistered harness, and
+            # discover refuses it. The shipped RelayMind provider selects the
+            # built-in openclaw harness; a zero heartbeat starts no run.
+            config["agents"]["defaults"].update(
+                model=dict(primary="relaymind/relaymind-client-tools"),
+                heartbeat=dict(every="0m"),
+            )
 
         def prepare_host(self, host, environment, work, config_path):
             super().prepare_host(host, environment, work, config_path)

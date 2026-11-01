@@ -37,9 +37,18 @@ counter/result in a separate `effect` record joined to the `call` by `call_id`.
 Host-only exposed-name/schema/session/requester fields come from a separate
 `host_calls` receipt, never from the server. Revision 2 adds a bounded optional field, so stale-schema tests can
 distinguish exact authorization from argument validity. No input accepts a path.
-The host CLI probes both servers; the person probe calls
-`tools.effective` through `dispatchGatewayMethod` in its original authenticated
-request. The pinned host returns `{groups: [{tools: [entry]}], notices?}`, with
+The host CLI probes both servers. The pinned host lists MCP tools in
+`tools.effective` only from the session's own MCP runtime; without one it
+returns an `mcp-not-yet-connected` notice. So, in its original authenticated
+request, the person probe first calls public `mcp.app.discover` with the same
+session target. That acquires the session's MCP runtime and awaits its catalog;
+it creates no App view and calls no tool. The probe records the outcome, with
+only fixed host refusal messages, and a refusal never stops the inventory read.
+For this route the fixture host enables MCP Apps and selects the shipped
+`relaymind/relaymind-client-tools` model (the default `openai` model selects an
+unregistered harness, which `mcp.app.discover` refuses), with a zero heartbeat.
+No approval or tool policy changes. The person probe then calls
+`tools.effective` through `dispatchGatewayMethod`. The pinned host returns `{groups: [{tools: [entry]}], notices?}`, with
 entries keyed by `id` and MCP entries carrying `mcpServer`/`mcpToolName`. The
 probe records only method, status, an explicit `inventory` outcome (`listed`,
 `empty`, `malformed` or `none`), bounded tool IDs, the host's own MCP

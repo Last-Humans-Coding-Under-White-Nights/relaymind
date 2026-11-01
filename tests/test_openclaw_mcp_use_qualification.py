@@ -916,6 +916,12 @@ def test_configure_keeps_provider_policy_and_installs_two_colliding_host_owned_s
     # MCP Apps enabled; no approval or tool policy changes.
     assert config["mcp"]["apps"] == {"enabled": True}
     assert set(config["mcp"]) == {"servers", "apps"}
+    # The host's default openai model selects an unregistered harness, which
+    # refuses mcp.app.discover; the shipped RelayMind provider selects the
+    # built-in openclaw harness. A zero heartbeat starts no unrequested run.
+    defaults = config["agents"]["defaults"]
+    assert defaults["model"] == {"primary": "relaymind/relaymind-client-tools"}
+    assert defaults["heartbeat"] == {"every": "0m"}
     assert str(DIRECTORY) in config["plugins"]["load"]["paths"]
     assert extension.config["recommendations"]["bindings"] == []
     assert "relaymind-action-qualification" not in config["plugins"]["allow"]
