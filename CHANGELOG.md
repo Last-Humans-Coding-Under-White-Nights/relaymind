@@ -55,6 +55,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Spec 0.66 section 12.6.6 owner-run checks (review of #276; RM40, RM44; AC31,
+  AC36): a `same_family` machine_dual record now needs two different template
+  digests even when its two model IDs differ. The release validator now
+  requires every `machine_drafted_owner_approved` case to name one drafter, the
+  same for the whole release, with role `author` only and no competencies, so a
+  tuner, annotator or adjudicator can no longer pass as the drafter
+  (`drafter_role`). The committed #259 trial evidence passes both rules
+  unchanged.
+
 - `scripts/asset_whole_task.py trial-install` (and `trial`) failed on a fresh
   OpenClaw 2026.10.7 host, which installs the plugin disabled until it is
   configured (#269; RM39/RM44; AC30/AC36 tooling). The kit now follows the

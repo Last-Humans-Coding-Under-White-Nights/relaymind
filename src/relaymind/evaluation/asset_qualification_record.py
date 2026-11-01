@@ -173,13 +173,15 @@ def _label_ids(annotators: Mapping | None) -> set[str]:
 
 
 def _check_machine_dual(annotators: Mapping) -> None:
-    """Spec 12.6.6: three distinct machine IDs; one model is one family, two templates."""
+    """Spec 12.6.6: three distinct machine IDs; one model is one family; two templates."""
     a, b = annotators["machine_a"], annotators["machine_b"]
     if len(_label_ids(annotators)) != 3:
         _reject("labelling_profile")
-    if a["model_id"] == b["model_id"] and (
-        annotators["family_relation"] != "same_family" or a["prompt_sha256"] == b["prompt_sha256"]
-    ):
+    # One model ID is one family; the same_family fallback always needs two
+    # independently written templates, whether or not the model IDs differ.
+    if a["model_id"] == b["model_id"] and annotators["family_relation"] != "same_family":
+        _reject("labelling_profile")
+    if annotators["family_relation"] == "same_family" and a["prompt_sha256"] == b["prompt_sha256"]:
         _reject("labelling_profile")
 
 

@@ -497,6 +497,25 @@ def test_contradictory_machine_dual_records_reject(tmp_path, mutate, reason):
         load_record(save(tmp_path, record))
 
 
+def test_same_family_annotators_need_two_templates_even_with_two_model_ids(tmp_path):
+    """Spec 12.6.6: the same_family fallback needs two independently written templates.
+
+    Two different model IDs of one family do not lift that rule (review of #276).
+    """
+    record = dual_record(tmp_path)
+    record["annotators"]["machine_b"].update(
+        model_id="example-model-2026-10-02", prompt_sha256="1" * 64
+    )
+    with pytest.raises(WholeTaskRejected, match="labelling_profile"):
+        load_record(save(tmp_path, record))
+
+
+def test_same_family_annotators_with_two_models_and_two_templates_load(tmp_path):
+    record = dual_record(tmp_path)
+    record["annotators"]["machine_b"].update(model_id="example-model-2026-10-02")
+    assert load_record(save(tmp_path, record)).labelling == "machine_dual_owner_approved"
+
+
 def test_owner_machine_shape_cannot_carry_machine_dual_annotators(tmp_path):
     record = host_record(
         tmp_path,

@@ -295,3 +295,55 @@ def test_machine_dual_annotators_hold_the_annotator_role_only(tmp_path):
     next(p for p in catalog["people"] if p["id"] == "judge-b")["roles"] = ["annotator", "author"]
     with pytest.raises(AssetCorpusError, match="role_conflict"):
         _dual_round_trip(catalog, cases, labels)
+
+
+# --- spec 0.66 section 12.6.6 machine-drafted prompts: the drafter (review of #276) --
+
+
+def _drafted(tmp_path, roles=("author",), competencies=()):
+    """machine_dual labels over cases written by one recorded drafting model."""
+    catalog, cases, labels = _machine_dual(tmp_path)
+    catalog["people"].append(
+        dict(
+            id="machine-drafter",
+            roles=sorted(roles),
+            competencies=sorted(competencies),
+            evidence_ids=["authorship"],
+        )
+    )
+    catalog["people"].sort(key=lambda p: p["id"].encode())
+    for case in cases["cases"]:
+        case.update(authorship="machine_drafted_owner_approved", author_ids=["machine-drafter"])
+    labels["cases_digest"] = canonical_digest(cases)
+    return catalog, cases, labels
+
+
+def test_machine_drafted_cases_freeze_with_an_author_only_drafter(tmp_path):
+    """Spec 12.6.6: the drafter has role author only and empty competencies."""
+    frozen = _dual_round_trip(*_drafted(tmp_path))
+    assert frozen["agreement"]["method"] == "machine_dual.v1"
+
+
+@pytest.mark.parametrize("roles", [("author", "tuner"), ("annotator", "author")])
+def test_machine_drafter_holds_no_other_role(tmp_path, roles):
+    """A tuner, annotator or adjudicator is never the drafter."""
+    with pytest.raises(AssetCorpusError, match="drafter_role"):
+        _dual_round_trip(*_drafted(tmp_path, roles=roles))
+
+
+def test_machine_drafter_has_no_competencies(tmp_path):
+    with pytest.raises(AssetCorpusError, match="drafter_role"):
+        _dual_round_trip(*_drafted(tmp_path, competencies=("proficient_en",)))
+
+
+def test_machine_drafted_cases_name_exactly_one_drafter(tmp_path):
+    """One recorded drafting model writes every drafted prompt of the release."""
+    catalog, cases, labels = _drafted(tmp_path)
+    catalog["people"].append(
+        dict(id="machine-drafter-2", roles=["author"], competencies=[], evidence_ids=["authorship"])
+    )
+    catalog["people"].sort(key=lambda p: p["id"].encode())
+    cases["cases"][0]["author_ids"] = ["machine-drafter", "machine-drafter-2"]
+    labels["cases_digest"] = canonical_digest(cases)
+    with pytest.raises(AssetCorpusError, match="drafter_role"):
+        _dual_round_trip(catalog, cases, labels)

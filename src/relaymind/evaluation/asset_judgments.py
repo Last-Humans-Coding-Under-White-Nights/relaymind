@@ -83,6 +83,30 @@ def check_machine_dual(annotator_ids, adjudicator_ids, people: Mapping) -> None:
         raise AssetCorpusError("role_conflict")
 
 
+DRAFTED = "machine_drafted_owner_approved"
+
+
+def check_drafted_cases(cases, people: Mapping) -> None:
+    """Spec 12.6.6: one recorded drafter writes every drafted prompt of the release.
+
+    The drafter is a Person with role ``author`` only and empty competencies,
+    never an annotator, adjudicator or tuner; each drafted case names it alone.
+    """
+    drafters = set()
+    for case in cases:
+        if case["authorship"] != DRAFTED:
+            continue
+        if len(case["author_ids"]) != 1:
+            raise AssetCorpusError("drafter_role")
+        drafters.update(case["author_ids"])
+    if len(drafters) > 1:
+        raise AssetCorpusError("drafter_role")
+    for drafter in drafters:
+        check_references([drafter], people)
+        if people[drafter]["roles"] != ["author"] or people[drafter]["competencies"]:
+            raise AssetCorpusError("drafter_role")
+
+
 def check_owner_machine_pair(annotator_ids, people: Mapping) -> None:
     """Spec 12.6.6: exactly the owner and one machine annotator, never both tuners."""
     ids = set(annotator_ids)
@@ -126,6 +150,7 @@ def validate_judgments(catalog: dict, cases: dict, labels: dict) -> dict:
                 raise AssetCorpusError("target_family_coverage")
         for author in case["author_ids"]:
             check_person(author, people, "author")
+    check_drafted_cases(case_map.values(), people)
     if owner_machine:
         check_owner_machine_pair((j["annotator_id"] for j in labels["judgments"]), people)
     if labels["agreement"]["method"] == MACHINE_DUAL:
