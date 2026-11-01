@@ -12,7 +12,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   journaled `run-host` over an operator executor program, and journaled
   episode runs; `capture-costs` from RelayMind trace events. Runs are only
   `fixture` or `provisional`; no real episode, host run or gate result is
-  claimed.
+  claimed. Review fixes: the worksheet requires two distinct annotators,
+  malformed worksheets, unwritable outputs and a lone `--evidence-root`
+  reject with exit 2, traces with out-of-order or repeated call events reject,
+  and `run-host --executor-timeout` bounds a hung executor program.
 - Early installed-skill trial kit (#234; RM39, RM44; AC30, AC36; spec 0.65
   section 12.6.5): `scripts/asset_whole_task.py trial-preflight`,
   `trial-install`, `trial-run` and `trial`.

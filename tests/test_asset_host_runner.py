@@ -429,3 +429,41 @@ def test_an_invalid_trace_event_rejects():
     events = [started(1, "c1"), dict(finished(2, "c1", USAGE), seq=1)]
     with pytest.raises(ValueError):
         attempts_from_trace(events, provider="p", attempt_prefix="a-", evidence_id="t")
+
+
+def test_a_finish_before_its_start_rejects():
+    """Review 4435556049: a finish must follow its own start."""
+    events = [finished(1, "c1", USAGE), started(2, "c1")]
+    with pytest.raises(ValueError, match="trace_order"):
+        attempts_from_trace(events, provider="p", attempt_prefix="a-", evidence_id="t")
+
+
+@pytest.mark.parametrize(
+    "events",
+    [
+        lambda: [started(1, "c1"), started(2, "c1"), finished(3, "c1", USAGE)],
+        lambda: [started(1, "c1"), finished(2, "c1", USAGE), finished(3, "c1", USAGE)],
+    ],
+)
+def test_a_repeated_call_event_rejects(events):
+    """Review 4435556054: one call is one attempt; repeats are not new attempts."""
+    with pytest.raises(ValueError, match="trace_duplicate_call"):
+        attempts_from_trace(events(), provider="p", attempt_prefix="a-", evidence_id="t")
+
+
+def test_a_hung_executor_times_out_as_executor_failed(tmp_path):
+    """Review 4435556059: an optional harness timeout ends a hung program."""
+    freeze, tasks = setup(1)
+    argv = write_executor(tmp_path, "import time; time.sleep(30)")
+    execute = command_executor(argv, tasks, timeout=0.5)
+    with pytest.raises(ExecutorFailed, match="executor_timeout"):
+        execute(tasks["tasks"][0], "native", freeze["configurations"][0])
+
+
+def test_a_timed_out_row_is_failed_with_unknown_consumption(tmp_path):
+    freeze, tasks = setup(1)
+    argv = write_executor(tmp_path, "import time; time.sleep(30)")
+    report = run(tasks, freeze, command_executor(argv, tasks, timeout=0.2), tmp_path / "j.jsonl")
+    assert {r["status"] for r in report["rows"]} == {"failed"}
+    assert {r["reason"] for r in report["rows"]} == {"executor_error"}
+    assert all(r["attempts"] == [] and r["success"] is None for r in report["rows"])

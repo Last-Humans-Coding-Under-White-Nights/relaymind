@@ -726,10 +726,12 @@ and `grade-adaptation`, which are already the one-command final grade.
 | `label-freeze --catalog K --cases C --judgments T1 T2 … --worksheet W --output L` | Assembles `AssetLabelsV1` from the raw judgments and the completed adjudications. Raw judgments cannot change in the worksheet, agreement is recomputed, and the unchanged release validator checks roles, coverage and inclusion |
 | `preregister-host --tasks T --freeze F --output P` | Verifies the task set against its freeze and records the input, freeze and plan digests, task and lane counts, and acceptance eligibility (`kind_not_acceptance`, `below_minimum_tasks`). Missing required lanes are listed only: the spec states no per-lane host-task minimum |
 | `preregister-episodes --episodes E --freeze F [--lock L --evidence-root R] --output P` | The same for `AssetEpisodesV1`. With the corpus it also binds the episodes to it and counts probes outside the `held_out` split, probes with no included adjudication and correction targets missing from the pool. Reasons include `below_minimum_episodes`, `corpus_not_acceptance`, `corpus_not_frozen`, `unlabelled_probes` and, without the corpus, `corpus_unverified` |
-| `run-host --tasks T --freeze F --journal J --inputs M --environment E [--artifacts A] --qualification fixture\|provisional --output R -- PROGRAM ARGS…` | Executes the frozen plan through your host executor program and writes the `AssetHostReportV1` (see below). Exit `0` when every planned row has an outcome, `3` after an interruption |
+| `run-host --tasks T --freeze F --journal J --inputs M --environment E [--artifacts A] [--executor-timeout S] --qualification fixture\|provisional --output R -- PROGRAM ARGS…` | Executes the frozen plan through your host executor program and writes the `AssetHostReportV1` (see below). Exit `0` when every planned row has an outcome, `3` after an interruption |
 | `capture-costs --events V --provider P --attempt-prefix X --evidence-id I [--token-relationship R --relationship-evidence I2] [--first-ordinal N] --output O` | Turns RelayMind trace events (a JSON array of TraceEvent objects) into `HostAttempt` objects for the external model calls of the provider arms |
 
-Other exits: `2` rejected input, with a fixed reason on standard error.
+Other exits: `2` rejected input, with a fixed reason on standard error. This
+includes an output path that cannot be written safely, and `--evidence-root`
+given without `--lock`.
 
 **Blinding is a process.** Give each annotator only their own template and the
 catalog. Only the adjudicator sees the worksheet. Separate files make blind,
@@ -769,6 +771,12 @@ recorded as `failed` with reason `executor_invalid_row` or `executor_error`,
 with no attempts and a null verdict. The host's output is never repaired.
 Only the host executes tools and grants approvals.
 
+`--executor-timeout S` is optional and off by default. It is a harness bound,
+not a task budget: a program still running after `S` seconds is killed and its
+row is `failed` (`executor_error`) with unknown consumption, never a host
+`timeout`. Set it above the frozen task budgets. Only the direct child process
+is killed, so the program must stop its own children.
+
 **External cost capture.** For the `provider_only` and `recommendations` arms,
 the RelayMind gateway records each external model call
 (`model.started`/`model.finished`, actor `external`). `capture-costs` makes
@@ -780,6 +788,9 @@ one attempt per call:
   never reached the provider (`provider_unreachable`), has null calls.
 - The relationship between counts is `unknown` unless you name evidence for
   it with `--relationship-evidence`.
+- A finish without an earlier start of the same call (`trace_order`), or a
+  repeated start or finish of one call (`trace_duplicate_call`), rejects the
+  trace: a repeated receipt is never a new attempt.
 
 Local model calls are not attempts. The native arm calls its provider
 directly, so its usage must come from the host itself: this kit has no capture

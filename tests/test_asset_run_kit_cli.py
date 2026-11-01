@@ -187,3 +187,112 @@ def test_preregister_episodes_with_the_corpus(tmp_path):
     record = read(out)
     assert code == 0 and record["episodes"] == 1
     assert "corpus_not_acceptance" in record["reasons"]
+
+
+def test_a_malformed_worksheet_exits_2(tmp_path, capsys):
+    """Review 4435556027: no traceback, a structured rejection."""
+    root = expanded_release(tmp_path / "release", 2)
+    args = ["--catalog", str(root / "catalog.json"), "--cases", str(root / "cases.json")]
+    frozen = read(root / "labels.json")
+    returned = []
+    for annotator in ("judge-a", "judge-b"):
+        out = tmp_path / f"{annotator}.json"
+        assert main(["label-template", *args, "--annotator", annotator, "--output", str(out)]) == 0
+        template = read(out)
+        raw = {j["case_id"]: j for j in frozen["judgments"] if j["annotator_id"] == annotator}
+        for item in template["items"]:
+            judgment = dict(raw[item["case_id"]])
+            judgment.pop("case_id"), judgment.pop("annotator_id")
+            item["judgment"] = judgment
+        returned.append(str(write(out, template)))
+    sheet = tmp_path / "sheet.json"
+    common = [*args, "--judgments", *returned]
+    assert main(["label-worksheet", *common, "--output", str(sheet)]) == 0
+    worksheet = read(sheet)
+    worksheet["items"][0] = None
+    write(sheet, worksheet)
+    capsys.readouterr()
+    out = tmp_path / "labels.json"
+    code = main(["label-freeze", *common, "--worksheet", str(sheet), "--output", str(out)])
+    assert code == 2 and not out.exists()
+    assert json.loads(capsys.readouterr().err) == dict(
+        status="rejected", reason="worksheet_binding"
+    )
+
+
+def test_an_unwritable_output_is_a_structured_rejection(tmp_path, capsys):
+    """Review 4435556037: output failures exit 2 like every other rejection."""
+    freeze, tasks = setup()
+    target = tmp_path / "elsewhere.json"
+    target.write_text("{}", encoding="utf-8")
+    link = tmp_path / "prereg.json"
+    link.symlink_to(target)
+    code = main(
+        [
+            "preregister-host",
+            "--tasks",
+            str(write(tmp_path / "tasks.json", tasks)),
+            "--freeze",
+            str(write(tmp_path / "freeze.json", freeze)),
+            "--output",
+            str(link),
+        ]
+    )
+    assert code == 2 and target.read_text(encoding="utf-8") == "{}"
+    assert json.loads(capsys.readouterr().err) == dict(status="rejected", reason="unsafe_file")
+
+
+def test_an_evidence_root_without_its_lock_rejects(tmp_path, capsys):
+    """Review 4435556042: the paired corpus flags are never silently ignored."""
+    from test_asset_episode_driver import setup as episode_setup
+
+    _, freeze, episodes, _ = episode_setup(tmp_path)
+    out = tmp_path / "prereg.json"
+    code = main(
+        [
+            "preregister-episodes",
+            "--episodes",
+            str(write(tmp_path / "episodes.json", episodes)),
+            "--freeze",
+            str(write(tmp_path / "freeze.json", freeze)),
+            "--evidence-root",
+            str(tmp_path / "release"),
+            "--output",
+            str(out),
+        ]
+    )
+    assert code == 2 and not out.exists()
+    assert json.loads(capsys.readouterr().err) == dict(status="rejected", reason="lock")
+
+
+def test_run_host_executor_timeout_fails_the_row(tmp_path):
+    """Review 4435556059: --executor-timeout bounds a hung executor program."""
+    freeze, tasks = setup(1)
+    code = main(
+        [
+            "run-host",
+            "--tasks",
+            str(write(tmp_path / "tasks.json", tasks)),
+            "--freeze",
+            str(write(tmp_path / "freeze.json", freeze)),
+            "--journal",
+            str(tmp_path / "run.jsonl"),
+            "--inputs",
+            str(write(tmp_path / "inputs.json", dict(documents=[], evidence=[]))),
+            "--environment",
+            str(write(tmp_path / "environment.json", ENVIRONMENT)),
+            "--qualification",
+            "fixture",
+            "--executor-timeout",
+            "0.2",
+            "--output",
+            str(tmp_path / "report.json"),
+            "--",
+            sys.executable,
+            "-c",
+            "import time; time.sleep(30)",
+        ]
+    )
+    report = read(tmp_path / "report.json")
+    assert code == 0
+    assert {(r["status"], r["reason"]) for r in report["rows"]} == {("failed", "executor_error")}

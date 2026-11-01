@@ -75,6 +75,11 @@ def add_commands(sub) -> None:
     run.add_argument("--artifacts", type=Path, help="JSON array of ArtifactIdentity")
     run.add_argument("--qualification", choices=RUN_QUALIFICATIONS, required=True)
     run.add_argument("--output", type=Path, required=True)
+    run.add_argument(
+        "--executor-timeout",
+        type=float,
+        help="seconds before a hung executor program is killed (harness bound, not a budget)",
+    )
     run.add_argument("executor", nargs=argparse.REMAINDER)
 
     costs = sub.add_parser("capture-costs", help="HostAttempts from RelayMind trace events")
@@ -115,6 +120,8 @@ def _episodes(args) -> dict:
     from relaymind.evaluation.asset_episode_export import episode_preregistration
 
     release = None
+    if args.evidence_root is not None and args.lock is None:
+        raise ValueError("lock")
     if args.lock is not None:
         if args.evidence_root is None:
             raise ValueError("evidence_root")
@@ -148,7 +155,7 @@ def _run_host(args) -> tuple[dict, int]:
         report = run_host_plan(
             tasks,
             freeze,
-            command_executor(executor, tasks),
+            command_executor(executor, tasks, timeout=args.executor_timeout),
             args.journal,
             environment=_read(args.environment),
             artifacts=artifacts,
@@ -201,6 +208,7 @@ def run(args) -> int:
             result, code = _run_host(args)
         else:
             result = _costs(args)
+        atomic_bytes(args.output, json_bytes(result))
     except WholeTaskBlocked as exc:
         print(json.dumps(dict(status="blocked", reason=exc.reason)), file=sys.stderr)
         return 3
@@ -216,6 +224,5 @@ def run(args) -> int:
         reason = str(exc) if str(exc).isidentifier() else "invalid_input"
         print(json.dumps(dict(status="rejected", reason=reason)), file=sys.stderr)
         return 2
-    atomic_bytes(args.output, json_bytes(result))
     print(json.dumps(dict(status="incomplete" if code else "written", output=str(args.output))))
     return code

@@ -204,7 +204,9 @@ def run_host_plan(
     return report
 
 
-def command_executor(argv: Sequence[str], tasks: Mapping) -> Executor:
+def command_executor(
+    argv: Sequence[str], tasks: Mapping, *, timeout: float | None = None
+) -> Executor:
     """A host executor program: one planned row per invocation.
 
     The program reads ``{format, ordinal, task, arm, arm_config}`` as JSON on
@@ -212,6 +214,12 @@ def command_executor(argv: Sequence[str], tasks: Mapping) -> Executor:
     ``{row, evidence}`` (a HostRow and its EvidenceRefs) on standard output.
     Standard error is passed through. A nonzero exit or unusable output is
     ExecutorFailed: the row is then recorded as failed with unknown consumption.
+
+    ``timeout`` (seconds, default none) is a harness bound, not a task budget:
+    a program still running when it expires is killed and the row is failed
+    with unknown consumption, never recorded as a host task timeout. Set it
+    above the frozen task budgets; it never replaces or changes them. Only the
+    direct child process is killed; the program must stop its own children.
     """
     argv = [str(a) for a in argv]
     ordinals = {(p["task_id"], p["arm"]): p["ordinal"] for p in plan_host_trial(tasks)}
@@ -226,8 +234,14 @@ def command_executor(argv: Sequence[str], tasks: Mapping) -> Executor:
         )
         try:
             done = subprocess.run(  # noqa: S603 - the operator's own executor program
-                argv, input=json_bytes(request), stdout=subprocess.PIPE, check=False
+                argv,
+                input=json_bytes(request),
+                stdout=subprocess.PIPE,
+                check=False,
+                timeout=timeout,
             )
+        except subprocess.TimeoutExpired:
+            raise ExecutorFailed("executor_timeout") from None
         except OSError:
             raise ExecutorFailed("executor_start") from None
         if done.returncode != 0:
@@ -300,11 +314,20 @@ def attempts_from_trace(
             raise ValueError("trace_order")
         last[data["run_id"]] = data["seq"]
         checked.append(data)
-    finished = {
-        (e["run_id"], e["payload"]["call_id"]): e
-        for e in checked
-        if e["event_type"] == "model.finished" and e["actor"] == "external"
-    }
+    started_calls: dict[tuple, Mapping] = {}
+    finished: dict[tuple, Mapping] = {}
+    for e in checked:
+        if e["actor"] != "external" or e["event_type"] not in ("model.started", "model.finished"):
+            continue
+        call = (e["run_id"], e["payload"]["call_id"])
+        own = started_calls if e["event_type"] == "model.started" else finished
+        if call in own:
+            # A repeated receipt is not a new attempt; the trace is contradictory.
+            raise ValueError("trace_duplicate_call")
+        if own is finished and call not in started_calls:
+            # A finish must follow its own start in the same run.
+            raise ValueError("trace_order")
+        own[call] = e
     evidence_ids = sorted({evidence_id, relationship_evidence_id} - {None}, key=_utf8)
     attempts = []
     for start in checked:

@@ -173,7 +173,10 @@ def adjudication_worksheet(catalog: Mapping, cases: Mapping, judgments: Sequence
     """The adjudicator's view: both raw judgments, their agreement, one final per case."""
     _, case_map = _documents(catalog, cases)
     rows = _by_case(judgments)
-    if set(rows) != set(case_map) or any(len(r) != 2 for r in rows.values()):
+    # Two distinct annotators per case, exactly as the release validator requires.
+    if set(rows) != set(case_map) or any(
+        len(r) != 2 or r[0]["annotator_id"] == r[1]["annotator_id"] for r in rows.values()
+    ):
         raise AssetCorpusError("raw_judgment_coverage")
     items = []
     for case_id in case_map:
@@ -216,6 +219,7 @@ def freeze_labels(
         or worksheet.get("format") != WORKSHEET_FORMAT
         or any(worksheet.get(k) != v for k, v in binding.items())
         or not isinstance(worksheet.get("items"), list)
+        or not all(isinstance(item, Mapping) for item in worksheet["items"])
     ):
         raise AssetCorpusError("worksheet_binding")
     rows = _by_case(judgments)
