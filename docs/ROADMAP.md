@@ -1114,7 +1114,9 @@ manifest. Loaded skill use, MCP use and host MCP approval are recorded as
 
 #270 (RM12/RM39; AC30) localizes all recommendation-detail labels for `en-US`
 and `zh-CN`, displays ordinary characters through text-only DOM rendering,
-neutralizes control characters, and wraps long evidence and feedback values.
+neutralizes control characters (in the evidence, the privacy data and the
+host skill labels of the native skill select), and wraps long evidence and
+feedback values.
 Source locators remain the exact offered record: spec sections 4.6.1 and 7.6
 define local locators as resolved `SKILL.md` paths and return that record in
 the scoped view; no home-path abbreviation/redaction rule is specified.
@@ -1125,7 +1127,7 @@ panel and its evidence, and a receipt that cannot be displayed leaves the
 shown recommendation and its actions in place.
 The adapter revision is repinned to the built bytes that include these review
 fixes and the #256 ledger and fence fixes
-(`3fc77018c85ed3bae757427365d71089b692d647194f8c67bde5e31f21bb8ced`).
+(`d47d07640a0280a37580ca015a4a83a151d5ac9bdfd0500b69010edbf64e53c8`).
 The committed capture below ran the earlier bytes
 (`ddeb3c70d69c3d6de61902b41b05008853c777b1e13c04ec9d7cc827db01b894`), so it
 must be recaptured from CI for the new revision before merge.
