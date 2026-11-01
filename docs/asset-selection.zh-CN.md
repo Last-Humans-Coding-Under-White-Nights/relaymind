@@ -248,14 +248,14 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 | `label-template` | 为一名标注者导出盲标模板：只含每个用例的提示内容，绑定用例与目录摘要；不含标签、其他判断或算法输出。标注者必须是已声明的 `annotator` 且不是 `tuner` |
 | `label-worksheet` | 校验交回的模板（每个用例恰好两名不同标注者），为裁决者写出含两份原始判断和一致性的工作表 |
 | `label-freeze` | 由原始判断和已完成的裁决组装并校验 `AssetLabelsV1`；原始判断不可改动，一致性重新计算 |
-| `preregister-host` / `preregister-episodes` | 校验冻结输入并记录输入、冻结与计划摘要及验收资格原因（如少于 100 个任务或回合、语料不是已冻结的验收版本） |
+| `preregister-host` / `preregister-episodes` | 校验冻结输入并记录输入、冻结与计划摘要及验收资格原因（如少于 100 个任务或回合、语料不是已冻结的验收版本、探针不在 `held_out` 划分） |
 | `run-host … -- 程序 参数…` | 通过操作员提供的宿主执行程序按冻结计划执行，进度写入可恢复的日志；退出码 `0` 表示每个计划行都有结果，`3` 表示被中断；可选的 `--executor-timeout 秒数` 是测试框架上限而非任务预算，超时的程序被终止，该行记为 `failed`（`executor_error`） |
 | `capture-costs` | 把 RelayMind 追踪事件中的外部模型调用转为 `HostAttempt`（提供方报告的计数，缺失计数保持为 null） |
 
 运行日志不是证据，但含有行与重置证据，因此仅所有者可读写（`0600`，新建目录为 `0700`）。日志头绑定预注册的摘要以及运行身份
 （环境、制品、输入清单与资格标签）的摘要，输入或身份改变后不能续跑（`journal_binding`）。
 `preregister-host` 要求五个必需车道各至少一个任务（`missing_required_lanes`）。外部调用保留各自结果：
-`cancelled` 仍为取消，网关自身时限为 `timeout`；网关侧中止只有在收到令牌或用量时才计为一次调用。已完成的行不会重新执行；崩溃时已开始但未记录的行
+`cancelled` 仍为取消，网关自身时限为 `timeout`；网关侧中止或传输错误（`provider_unreachable`）只有在收到令牌或至少一个已知用量计数时才计为一次调用。第二次 SIGINT/SIGTERM 会立即停止并终止执行程序的进程组，已开始的行在续跑时记为 `cancelled`。已完成的行不会重新执行；崩溃时已开始但未记录的行
 导出为 `cancelled`（原因 `interrupted_unrecorded`），没有尝试记录，因此该组成本覆盖未知，门槛为阻塞。
 执行程序返回无效行、非零退出或无法使用的输出时，该行记为 `failed`（`executor_invalid_row` 或 `executor_error`），
 宿主输出不会被修补。原生组直接调用提供方，其用量必须来自宿主本身，本工具不负责采集。盲标只是流程：

@@ -212,8 +212,10 @@ def _trial(args) -> int:
             tarball = args.tarball
     except (WholeTaskBlocked, WholeTaskRejected, AssetCorpusError, OSError, ValueError) as exc:
         reason = getattr(exc, "reason", str(exc))
-        print(json.dumps(dict(status="rejected", reason=reason)), file=sys.stderr)
-        return 3 if isinstance(exc, WholeTaskBlocked) else 2
+        blocked = isinstance(exc, WholeTaskBlocked)
+        status = "blocked" if blocked else "rejected"
+        print(json.dumps(dict(status=status, reason=reason)), file=sys.stderr)
+        return 3 if blocked else 2
     stop = []
     previous = signal.signal(signal.SIGINT, lambda *_: stop.append(True))
     try:

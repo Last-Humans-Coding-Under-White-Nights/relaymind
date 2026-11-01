@@ -429,7 +429,9 @@ async def run_adaptation_episodes(
     evidence registry.
 
     With ``journal``, progress is kept in a crash-safe run journal bound to the
-    preregistered episode, freeze and plan digests: a finished episode (in any
+    preregistered episode, freeze and plan digests and to the execution
+    identity (environment, input manifest, qualification and the corpus
+    release lock): a finished episode (in any
     status) is restored, never rerun; an episode started before a crash and
     never recorded is ``cancelled`` with reason ``interrupted_unrecorded``.
     """
@@ -442,8 +444,13 @@ async def run_adaptation_episodes(
     results = []
     bound = contextlib.nullcontext()
     if journal is not None:
+        # The release (its lock binds catalog, cases and labels) is part of the
+        # identity: restored results are never mixed with another release's.
         identity = dict(
-            environment=environment, input_manifest=input_manifest, qualification=qualification
+            environment=environment,
+            input_manifest=input_manifest,
+            qualification=qualification,
+            release_lock_digest=canonical_digest(dict(release.lock)),
         )
         header = bound_header("adaptation", episode_preregistration(episodes, freeze), identity)
         bound = RunJournal(journal, header)

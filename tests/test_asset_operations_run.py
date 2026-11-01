@@ -1213,3 +1213,102 @@ def test_an_unbound_job_is_a_harness_error_not_the_first_listed_job(tmp_path):
     asyncio.run(go())
     assert plan.identities() == {"rebuild_job_id": "later", "batch_job_ids": {"batch-0": "mine"}}
     assert plan.channel_errors == ["rescan_job_ambiguous"]
+
+
+# --- review 264 (third review): control channel and evidence shape ---------------------
+
+
+def _control_child(tmp_path, monkeypatch, body: str) -> None:
+    """A controlled child that reports its PID and token, then runs ``body``."""
+    script = tmp_path / "control_child.py"
+    script.write_text(
+        "import os, sys\n"
+        "print('Gateway-Pid: ' + str(os.getpid()), flush=True)\n"
+        "print('Application token: t', flush=True)\n" + body
+    )
+    monkeypatch.setattr(kit, "_controlled_argv", lambda config: [sys.executable, str(script)])
+
+    async def ready(client, deadline, process):
+        return None
+
+    monkeypatch.setattr(kit, "_wait_ready", ready)
+
+
+def test_a_control_reply_longer_than_the_default_stream_limit_still_arrives(tmp_path, monkeypatch):
+    """RM38/AC29: a reply carrying many job event chains is not a closed channel."""
+    _control_child(
+        tmp_path,
+        monkeypatch,
+        "import json\n"
+        "command = json.loads(sys.stdin.readline())\n"
+        "reply = {'id': command['id'], 'ok': True, 'pad': 'x' * (200 * 1024)}\n"
+        "print('Control-Reply: ' + json.dumps(reply), flush=True)\n"
+        "sys.stdin.readline()\n",
+    )
+    base = _base(tmp_path, monkeypatch)
+
+    async def go():
+        async with kit._gateway(
+            tmp_path / "work", None, base_config=base, env=None, timeout=20, controlled=True
+        ) as gateway:
+            reply = await gateway.control("rebuild")
+            assert reply["ok"] is True and len(reply["pad"]) == 200 * 1024
+
+    asyncio.run(go())
+
+
+def test_a_control_call_after_the_reply_stream_ended_fails_at_once(tmp_path, monkeypatch):
+    """RM38/AC29: a closed reply stream is control_closed now, not after the window."""
+    _control_child(
+        tmp_path,
+        monkeypatch,
+        "import time\nos.close(1)\ntime.sleep(30)\n",
+    )
+    monkeypatch.setattr(kit, "_CONTROL_SECONDS", 10.0)
+    base = _base(tmp_path, monkeypatch)
+
+    async def go():
+        async with kit._gateway(
+            tmp_path / "work", None, base_config=base, env=None, timeout=20, controlled=True
+        ) as gateway:
+            await asyncio.sleep(0.5)  # The reply stream ends and its reader stops.
+            began = time.monotonic()
+            with pytest.raises(ConnectionError, match="control_closed"):
+                await gateway.control("rebuild")
+            assert time.monotonic() - began < 2
+
+    asyncio.run(go())
+
+
+def test_memory_phases_list_only_phases_with_a_known_sample():
+    """RM38/AC29: an unknown counter never claims the workload phases were sampled."""
+    observation = kit.memory_observation(1, [None] * 10, [None, None])
+    assert observation.phases == ()
+    assert observation.peak_bytes is None and observation.complete is False
+    known = kit.memory_observation(1, [2] * 10, [None, 5])
+    assert known.phases == ("startup", "rebuild", "import", "query")
+
+
+def test_a_job_reported_again_replaces_its_earlier_record(tmp_path):
+    """RM38/AC29: one job is one evidence record, its latest state."""
+    running = {"job_id": "p", "source_id": kit.IMPORT_SOURCE_ID, "state": "running", "events": []}
+    finished = dict(running, state="succeeded", events=[{"seq": 1}])
+    mine = {"job_id": "m", "source_id": kit.IMPORT_SOURCE_ID, "state": "succeeded", "events": []}
+    replies = [
+        {"id": 1, "ok": True, "revision": 1, "changed": True, "jobs": [running, mine],
+         "job_id": "m"},
+        {"id": 2, "ok": True, "revision": 2, "changed": True, "jobs": [finished],
+         "job_id": "p"},
+    ]  # fmt: skip
+
+    async def control(op, **fields):
+        return replies.pop(0)
+
+    plan = kit.workload_plan(tmp_path / "imports", control)
+
+    async def go():
+        await plan.batches[0].rescan()
+        await plan.batches[1].rescan()
+
+    asyncio.run(go())
+    assert plan.job_evidence() == [finished, mine]

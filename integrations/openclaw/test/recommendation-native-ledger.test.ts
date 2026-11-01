@@ -440,3 +440,72 @@ it("refuses and acknowledges nothing when a write makes no progress", () => {
   expect(() => ledger.consumeApproval("a")).toThrow("ledger_unavailable");
   ledger.close();
 });
+
+/**
+ * Spec 0.65 7.6.2 condition 1 (RM39; AC35): durable dispatch history must
+ * stay usable across a restart. A restarted gateway can get the PID of its
+ * crashed predecessor (PID 1 in a container, or PID reuse): a lock naming this
+ * process's PID that this process never created belongs to an exited owner
+ * and is taken over, while a lock this process holds still refuses.
+ */
+it("takes over a lock left by an exited owner that had this process's PID", () => {
+  const live = new Set([1]);
+  for (const [suffix, content] of [
+    [".lock.1.0b6a1c1e-stale", ""],
+    [".lock", "1\n"],
+  ] as const) {
+    const file = path();
+    writeFileSync(file + suffix, content);
+    const restarted = createFileUseLedger(file, {}, double(1, live));
+    expect(usable(restarted), suffix).toBe(true);
+    expect(existsSync(file + suffix)).toBe(false);
+    // This process's own live lock still refuses a second owner.
+    const second = createFileUseLedger(file, {}, double(1, live));
+    expect(usable(second), suffix).toBe(false);
+    second.close();
+    expect(usable(restarted), suffix).toBe(true);
+    restarted.close();
+    expect(
+      readdirSync(join(file, "..")).filter((n) => n.includes(".lock")),
+    ).toEqual([]);
+  }
+});
+
+/**
+ * Spec 0.65 7.6.2 condition 1 (RM39; AC35): a full ledger refuses rather than
+ * evicting history, so its byte cap must hold for every record a binding may
+ * still write. A claim reserves the exact room for its dispatch marker and its
+ * longest possible receipt (bounded native IDs, JSON escaping included).
+ */
+it("keeps the byte cap when a binding's marker and receipt are long", () => {
+  const control = "\u0001".repeat(256);
+  const key = JSON.stringify(["user", "workspace", control, control, control]);
+  const longBase = { ...base, assetId: "\u0001".repeat(256) };
+  const settled = {
+    ...longBase,
+    outcome: "indeterminate",
+    code: "transport_unknown",
+    nativeRunId: control,
+    nativeCallId: control,
+  } as const;
+  const claimLine = JSON.stringify({ t: "claim", k: key, d: D, b: longBase });
+  for (const extra of [0, 4096, 16384]) {
+    const file = path();
+    const maxBytes = Buffer.byteLength(claimLine) + 1 + 2048 + extra;
+    const ledger = createFileUseLedger(file, { maxBytes });
+    let claimed = true;
+    try {
+      ledger.claim(key, D, longBase);
+    } catch {
+      claimed = false;
+    }
+    if (claimed) {
+      ledger.markDispatched(key);
+      ledger.settle(key, settled);
+    }
+    ledger.close();
+    expect(statSync(file).size, `cap ${maxBytes}`).toBeLessThanOrEqual(
+      maxBytes,
+    );
+  }
+});
