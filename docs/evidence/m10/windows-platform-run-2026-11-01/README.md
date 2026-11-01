@@ -1,8 +1,23 @@
-﻿# Native Windows platform run — 1 November 2026
+# Native Windows platform run — 1 November 2026
 
 Issue #274; RM38, AC29, AC37; specification 0.66 sections 12.6.5–12.6.6.
 Native AMD64 Windows, Python 3.12.10, Node 24.22.1, OpenClaw 2026.10.7.
 `machine.json` records the machine identity with only a hashed hostname.
+
+## Known defects in the raw captured files
+
+`machine.json`, `platform.json` and `verify.txt` are raw captured output,
+bound by digest in the release archive, and are kept byte for byte:
+
+- `machine.json` has no `os_version`, and its `cpu_model` carries the 14
+  trailing spaces Windows pads the CPU name with. The committed review record
+  therefore cannot copy it verbatim: it takes `os_version` and the trimmed CPU
+  name from `platform.json`.
+- `platform.json` declares `input_manifest.path` as `inputs.json`, which does
+  not exist beside it; see "Evidence and reproduction" below.
+- `verify.txt` starts with a UTF-8 byte order mark (`EF BB BF`), written by
+  the Windows PowerShell capture. Read it as `utf-8-sig`. This README and the
+  other files authored here have no byte order mark.
 
 ## Findings after review
 
@@ -36,8 +51,9 @@ Native AMD64 Windows, Python 3.12.10, Node 24.22.1, OpenClaw 2026.10.7.
   platform gate remains `not_applicable`; final acceptance is not claimed.
 - The captured lifecycle redacts the host's private `default_model` as
   `<default-model>`. The sanitizer now also covers colon and spaced-equals
-  assignments, double/single/backtick-quoted values, and JSON string forms
-  of both `default_model` and `defaultModel`.
+  assignments, double/single/backtick-quoted values, JSON string forms,
+  single-quoted keys (Python, JS and YAML forms) and values containing
+  escaped quotes, of both `default_model` and `defaultModel`.
 
 ## Evidence and reproduction
 

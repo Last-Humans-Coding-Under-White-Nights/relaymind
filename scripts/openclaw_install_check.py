@@ -83,14 +83,82 @@ PROFILE_ID = "relaymind:manual"
 NOT_RECORDED = qualification.NOT_RECORDED
 HOST_HOME = "<host-home>"
 DEFAULT_MODEL = "<default-model>"
-# The host's private default model, as `key: value` / `key = value` text
-# (including quoted values) or as a quoted JSON string value; the quote may
-# itself be escaped inside a JSON-encoded string.
-_DEFAULT_MODEL_KEY = r"(default_model|defaultModel)"
-_DEFAULT_MODEL_ASSIGNED = re.compile(
-    rf"""\b{_DEFAULT_MODEL_KEY}(\s*[:=]\s*)(?:(\\*["'`])(?:(?!\3)[^\n])*\3|[^\s|\\"'`]+)"""
+# The host's private default model, as `key: value` / `key = value` text, as a
+# quoted key (JSON, Python/JS, YAML: `"key": ...`, `'key': ...`) with a quoted
+# or bare value, or inside a JSON-encoded string, where the quotes themselves
+# carry backslash escapes. Quoted values are scanned by `_quoted_end`, which
+# honours escaped quotes, so the whole value is replaced and JSON stays JSON.
+_DEFAULT_MODEL = re.compile(
+    r"""(?:(?P<kq>\\*["'`])|(?<![\w]))(?:default_model|defaultModel)"""
+    r"""(?(kq)(?P=kq))\s*[:=]\s*(?:(?P<vq>\\*["'`])|(?P<bare>[^\s|\\"'`]+))"""
 )
-_DEFAULT_MODEL_QUOTED = re.compile(rf'(\\*"){_DEFAULT_MODEL_KEY}\1(\s*:\s*)\1(?:(?!\1)[^\n])*\1')
+# A bare value after a quoted key is left alone when it is a JSON literal.
+_JSON_LITERAL = re.compile(r"null|true|false|-?\d[\d.eE+-]*")
+
+
+def _quoted_end(text: str, start: int, prefix: int, quote: str) -> tuple[int, bool]:
+    """Where a quoted value ends, and whether its closing delimiter was found.
+
+    The opening delimiter was `prefix` backslashes and `quote`. At escape level
+    `prefix` (0 raw, 1 inside one JSON string, 3 inside two), a quote ends the
+    value when the backslash run `k` before it satisfies `k - prefix` being a
+    multiple of `2 * (prefix + 1)`: the remaining backslashes are escaped
+    backslashes of the inner text. Fewer than `prefix` backslashes belong to an
+    outer string, and a raw newline ends the line: neither closes the value,
+    so an unterminated value ends at that point (just past a closing
+    delimiter otherwise).
+    """
+    i = start
+    while i < len(text):
+        run = i
+        while i < len(text) and text[i] == "\\":
+            i += 1
+        k = i - run
+        if i == len(text) or text[i] == "\n":
+            return run, False
+        if text[i] == quote:
+            if k < prefix:
+                return run, False
+            if (k - prefix) % (2 * (prefix + 1)) == 0:
+                return i + 1, True
+        i += 1
+    return len(text), False
+
+
+def _redact_default_model(text: str) -> str:
+    out: list[str] = []
+    pos = 0
+    for match in _DEFAULT_MODEL.finditer(text):
+        if match.start() < pos:
+            continue
+        quoted_key = match["kq"] is not None
+        if match["bare"] is not None:
+            bare = match["bare"]
+            if quoted_key:
+                # A structured (JSON/JS/YAML) value ends at its container's
+                # punctuation, and a literal such as null is not a model name.
+                bare = re.split(r"[,}\]]", bare, maxsplit=1)[0]
+                if not bare or _JSON_LITERAL.fullmatch(bare):
+                    continue
+            out += [text[pos : match.start("bare")], DEFAULT_MODEL]
+            pos = match.start("bare") + len(bare)
+            continue
+        delimiter = match["vq"]
+        end, closed = _quoted_end(text, match.end("vq"), len(delimiter) - 1, delimiter[-1])
+        # A quoted key keeps its value quoted, so structured text still parses;
+        # plain `key=value` text shows the placeholder bare. An unterminated
+        # value is redacted to where it stops, adding no delimiter.
+        if not closed:
+            out += [text[pos : match.end("vq")], DEFAULT_MODEL]
+        elif quoted_key:
+            out += [text[pos : match.end("vq")], DEFAULT_MODEL, delimiter]
+        else:
+            out += [text[pos : match.start("vq")], DEFAULT_MODEL]
+        pos = end
+    out.append(text[pos:])
+    return "".join(out)
+
+
 ARTIFACT_DIR = "<artifact-dir>"
 REPO = "<repo>"
 USER_HOME = "<home>"
@@ -450,8 +518,7 @@ def _exec(ctx: Context, step: str, prompt: str) -> list[str]:
 
 def _sanitize(text: str, ctx: Context) -> str:
     text = text.replace(ctx.token, NOT_RECORDED)
-    text = _DEFAULT_MODEL_ASSIGNED.sub(rf"\1\2{DEFAULT_MODEL}", text)
-    text = _DEFAULT_MODEL_QUOTED.sub(rf"\1\2\1\3\1{DEFAULT_MODEL}\1", text)
+    text = _redact_default_model(text)
     # Most specific first: the host home and the artifact may sit under the others.
     places = (
         (ctx.home, HOST_HOME),
