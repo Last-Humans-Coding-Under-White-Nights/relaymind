@@ -28,6 +28,7 @@ import os
 import shutil
 import signal
 import sqlite3
+import subprocess
 import sys
 import time
 from datetime import UTC, datetime
@@ -194,11 +195,18 @@ class Run:
         for db in state_dir.rglob("openclaw-agent.sqlite"):
             conn = sqlite3.connect(db.resolve().as_uri() + "?mode=ro", uri=True)
             try:
-                rows = conn.execute("SELECT * FROM transcript_events").fetchall()
+                rows = conn.execute(
+                    "SELECT event_json, event_zstd FROM transcript_events ORDER BY seq"
+                ).fetchall()
             finally:
                 conn.close()
-            for row in rows:
-                for cell in row:
+            for text, packed in rows:
+                if text is None and packed is not None:
+                    # Large events are stored zstd-compressed by the pinned host.
+                    text = subprocess.run(
+                        ["zstd", "-dc"], input=packed, capture_output=True, check=True
+                    ).stdout.decode("utf-8")
+                for cell in (text,):
                     if not isinstance(cell, str) or '"usage"' not in cell:
                         continue
                     try:
@@ -221,7 +229,13 @@ class Run:
                             stack.extend(item.values())
                         elif isinstance(item, list):
                             stack.extend(item)
-        return found
+        unique, seen = [], set()
+        for item in found:
+            key = item["responseId"] or json.dumps(item, sort_keys=True)
+            if key not in seen:
+                seen.add(key)
+                unique.append(item)
+        return unique
 
     def not_run(self, task, arm, reason):
         return dict(

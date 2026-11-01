@@ -8,6 +8,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- #260 host run, stopped and not graded (`docs/evidence/m10/owner-run-260/host/`;
+  RM16, RM44; AC36): 14 of the 100 preregistered tasks ran on the MacBook
+  through `run_host_plan` with an in-process OpenClaw 2026.10.7 executor
+  (`evaluation/assets/owner-run-260/run_host.py`). Native: 11 completed, 2
+  failed, 1 timeout; provider_only: 3 completed, 11 failed (mostly the
+  gateway's default 30 s `external_seconds`); recommendations: `not_run`
+  (`person_choice_unavailable`). The private run directory was deleted during
+  the run, so per-row evidence and final answers are lost; only the in-memory
+  report survives, nothing was judged or graded, and no host record exists.
+  About 3.18M of the 5M external-token budget was used.
+- #260 adaptation run (`docs/evidence/m10/owner-run-260/adaptation/`; RM42,
+  RM44; AC33): the 100 preregistered episodes ran on the VPS through the
+  journaled episode driver. `grade-adaptation`: graded, gate `not_applicable`,
+  assessed `provisional` (`corpus_unqualified`, `adaptation_config_semantics`,
+  `qualified_evidence_review`). Corrected paraphrase top-1 was 51/200 (0.255;
+  the target is 0.90), control top-1 38/100 off and 36/100 on (loss 0.02), and
+  100/100 resets were byte-identical. Corrections used the driver's
+  evaluation-only registration, not the native feedback RPC. The pending record
+  `m10-owner-run-260-adaptation` lifts nothing until it is reviewed.
 - Owner-run #260 cohort, frozen and preregistered
   (`evaluation/assets/owner-run-260/`; RM40, RM42, RM44; AC31, AC33, AC36;
   spec 0.66 section 12.6.6): 600 held-out machine-drafted cases over the
