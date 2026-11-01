@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h017",
+ "criteria": [
+  "Correctly explains @Builder parameter rules relevant to the compile error",
+  "Accurately describes @ObservedV2/@Track usage and V1 vs V2 differences",
+  "Provides accurate API version availability info",
+  "Does not generate or rewrite user code, only retrieves/explains knowledge"
+ ]
+}

@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h042",
+ "criteria": [
+  "Provides a custom distance function implementing the two stated rules (time gap and category overlap).",
+  "Shows how to pass the metric to DBSCAN (e.g., metric=callable or precomputed matrix).",
+  "Includes the sample users A, B, C in a runnable example."
+ ]
+}

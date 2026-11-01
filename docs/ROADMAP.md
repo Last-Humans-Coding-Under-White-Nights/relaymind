@@ -1058,6 +1058,11 @@ A later 0.66 addition for #260 adds `machine_drafted_owner_approved`
 prompts and `machine_dual_owner_approved` labels (two machine annotators and a
 machine adjudicator; the owner approves by PR review). Their verifier support
 is fixture-tested only.
+#260 froze and preregistered its cohort in `evaluation/assets/owner-run-260/`:
+600 machine-drafted held-out cases on the 412-asset development catalog (100
+host tasks, 20 per lane; 100 episodes) with `machine_dual.v1` labels. The
+corpus is `development`, not the 300-asset acceptance catalog, so no report
+over it can be qualified.
 #255 has committed two **pending** negative `host_operation` records for the
 pinned 2026.10.7 host: `m10-negative-skill-loaded-use-openclaw-2026.10.7`
 (`stop_point_absent`) and `m10-negative-mcp-use-openclaw-2026.10.7`

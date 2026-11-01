@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h056",
+ "criteria": [
+  "A Python-based approach (e.g., scapy/dpkt) for parsing PCAP files is described",
+  "TCP connection count via handshake matching is computed",
+  "Handshake latency and retransmission statistics are included",
+  "Runnable code or tested utility functions are provided"
+ ]
+}

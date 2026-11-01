@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h025",
+ "criteria": [
+  "Produces a cross-platform technical design covering all three platforms",
+  "Provides implementation plans per platform",
+  "Delivers working code for HarmonyOS, Android, and iOS",
+  "Includes build and verification steps"
+ ]
+}

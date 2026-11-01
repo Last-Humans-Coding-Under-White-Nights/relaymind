@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h009",
+ "criteria": [
+  "ArkTS syntax errors are detected and classified by severity",
+  "Fixable errors are automatically fixed and the build is retried until success or a retry limit",
+  "The final build artifact path is reported"
+ ]
+}

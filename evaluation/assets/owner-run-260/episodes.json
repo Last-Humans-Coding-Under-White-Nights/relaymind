@@ -1,0 +1,3607 @@
+{
+ "schema_version": 1,
+ "dataset_lock_digest": "bc215cc0c321a09f810b4476da1f7a2d5d19c44a349952b89680fca1bafac3d4",
+ "config_digest": "5e75a8208cb9df287f9e4806fc5912033ea691304ae938f34c5318951ee46312",
+ "episodes": [
+  {
+   "id": "e001",
+   "intent_family_ids": [
+    "intent:e001"
+   ],
+   "corrections": [
+    {
+     "case_id": "e001-c1",
+     "target_asset_id": "matrix:6aabc80b51cbbf2538efd4df",
+     "content_hash": "a408d21122a87b729d85b2a3b59e0bd1be409ca413f0619084113a2080fad57b",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e001-c2",
+     "target_asset_id": "matrix:6aabc80b51cbbf2538efd4df",
+     "content_hash": "a408d21122a87b729d85b2a3b59e0bd1be409ca413f0619084113a2080fad57b",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e001-c3",
+     "target_asset_id": "matrix:6aabc80b51cbbf2538efd4df",
+     "content_hash": "a408d21122a87b729d85b2a3b59e0bd1be409ca413f0619084113a2080fad57b",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e001-p1",
+    "e001-p2"
+   ],
+   "control_case_ids": [
+    "h056-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h004-prompt"
+   ]
+  },
+  {
+   "id": "e002",
+   "intent_family_ids": [
+    "intent:e002"
+   ],
+   "corrections": [
+    {
+     "case_id": "e002-c1",
+     "target_asset_id": "matrix:6a574362210fe27bd246fcf5",
+     "content_hash": "c7a8ff83d7f90697caf7c911278f372a91121b7309eaa6309091e53dd40543b8",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e002-c2",
+     "target_asset_id": "matrix:6a574362210fe27bd246fcf5",
+     "content_hash": "c7a8ff83d7f90697caf7c911278f372a91121b7309eaa6309091e53dd40543b8",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e002-c3",
+     "target_asset_id": "matrix:6a574362210fe27bd246fcf5",
+     "content_hash": "c7a8ff83d7f90697caf7c911278f372a91121b7309eaa6309091e53dd40543b8",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e002-p1",
+    "e002-p2"
+   ],
+   "control_case_ids": [
+    "h023-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h005-prompt"
+   ]
+  },
+  {
+   "id": "e003",
+   "intent_family_ids": [
+    "intent:e003"
+   ],
+   "corrections": [
+    {
+     "case_id": "e003-c1",
+     "target_asset_id": "matrix:6a5eece1185a872748336ec7",
+     "content_hash": "06ba318b3c6ac5300ed0ee7811cb0d926e492cb3b4956e9caf78dc8820b8e4fa",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e003-c2",
+     "target_asset_id": "matrix:6a5eece1185a872748336ec7",
+     "content_hash": "06ba318b3c6ac5300ed0ee7811cb0d926e492cb3b4956e9caf78dc8820b8e4fa",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e003-c3",
+     "target_asset_id": "matrix:6a5eece1185a872748336ec7",
+     "content_hash": "06ba318b3c6ac5300ed0ee7811cb0d926e492cb3b4956e9caf78dc8820b8e4fa",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e003-p1",
+    "e003-p2"
+   ],
+   "control_case_ids": [
+    "h070-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h089-prompt"
+   ]
+  },
+  {
+   "id": "e004",
+   "intent_family_ids": [
+    "intent:e004"
+   ],
+   "corrections": [
+    {
+     "case_id": "e004-c1",
+     "target_asset_id": "matrix:6a108019071d0d29982eec74",
+     "content_hash": "db00698dd5e62fc29f0b538e4ad29ed82960bb47ebcee0f1fc39accb2b542565",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e004-c2",
+     "target_asset_id": "matrix:6a108019071d0d29982eec74",
+     "content_hash": "db00698dd5e62fc29f0b538e4ad29ed82960bb47ebcee0f1fc39accb2b542565",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e004-c3",
+     "target_asset_id": "matrix:6a108019071d0d29982eec74",
+     "content_hash": "db00698dd5e62fc29f0b538e4ad29ed82960bb47ebcee0f1fc39accb2b542565",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e004-p1",
+    "e004-p2"
+   ],
+   "control_case_ids": [
+    "h076-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h034-prompt"
+   ]
+  },
+  {
+   "id": "e005",
+   "intent_family_ids": [
+    "intent:e005"
+   ],
+   "corrections": [
+    {
+     "case_id": "e005-c1",
+     "target_asset_id": "matrix:69e1df16a8edf53fea151e71",
+     "content_hash": "f22580d0e98acf24ca94be5bd925b9af9b4beeb7064279396e80bc62fc616a90",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e005-c2",
+     "target_asset_id": "matrix:69e1df16a8edf53fea151e71",
+     "content_hash": "f22580d0e98acf24ca94be5bd925b9af9b4beeb7064279396e80bc62fc616a90",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e005-c3",
+     "target_asset_id": "matrix:69e1df16a8edf53fea151e71",
+     "content_hash": "f22580d0e98acf24ca94be5bd925b9af9b4beeb7064279396e80bc62fc616a90",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e005-p1",
+    "e005-p2"
+   ],
+   "control_case_ids": [
+    "h024-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h099-prompt"
+   ]
+  },
+  {
+   "id": "e006",
+   "intent_family_ids": [
+    "intent:e006"
+   ],
+   "corrections": [
+    {
+     "case_id": "e006-c1",
+     "target_asset_id": "matrix:6a10848e071d0d29982eec77",
+     "content_hash": "3887ab08a0d88913487db3be6b2cca8995237fd135c80138330f4739d905928c",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e006-c2",
+     "target_asset_id": "matrix:6a10848e071d0d29982eec77",
+     "content_hash": "3887ab08a0d88913487db3be6b2cca8995237fd135c80138330f4739d905928c",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e006-c3",
+     "target_asset_id": "matrix:6a10848e071d0d29982eec77",
+     "content_hash": "3887ab08a0d88913487db3be6b2cca8995237fd135c80138330f4739d905928c",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e006-p1",
+    "e006-p2"
+   ],
+   "control_case_ids": [
+    "h086-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h034-prompt"
+   ]
+  },
+  {
+   "id": "e007",
+   "intent_family_ids": [
+    "intent:e007"
+   ],
+   "corrections": [
+    {
+     "case_id": "e007-c1",
+     "target_asset_id": "matrix:6a215e9b8428f219b71f84a2",
+     "content_hash": "b53fb10ec83fa18c378405b7b9fc588fdc13dc656a0e697f79b72582ec018b85",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e007-c2",
+     "target_asset_id": "matrix:6a215e9b8428f219b71f84a2",
+     "content_hash": "b53fb10ec83fa18c378405b7b9fc588fdc13dc656a0e697f79b72582ec018b85",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e007-c3",
+     "target_asset_id": "matrix:6a215e9b8428f219b71f84a2",
+     "content_hash": "b53fb10ec83fa18c378405b7b9fc588fdc13dc656a0e697f79b72582ec018b85",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e007-p1",
+    "e007-p2"
+   ],
+   "control_case_ids": [
+    "h051-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h060-prompt"
+   ]
+  },
+  {
+   "id": "e008",
+   "intent_family_ids": [
+    "intent:e008"
+   ],
+   "corrections": [
+    {
+     "case_id": "e008-c1",
+     "target_asset_id": "skillsbench:cbbaab2e5d00942d3d0497c4",
+     "content_hash": "9e145fd19a2c4e7c20cda3343a7156caecb7b7660592c8f655de83d8e814b351",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e008-c2",
+     "target_asset_id": "skillsbench:cbbaab2e5d00942d3d0497c4",
+     "content_hash": "9e145fd19a2c4e7c20cda3343a7156caecb7b7660592c8f655de83d8e814b351",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e008-c3",
+     "target_asset_id": "skillsbench:cbbaab2e5d00942d3d0497c4",
+     "content_hash": "9e145fd19a2c4e7c20cda3343a7156caecb7b7660592c8f655de83d8e814b351",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e008-p1",
+    "e008-p2"
+   ],
+   "control_case_ids": [
+    "h055-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h031-prompt"
+   ]
+  },
+  {
+   "id": "e009",
+   "intent_family_ids": [
+    "intent:e009"
+   ],
+   "corrections": [
+    {
+     "case_id": "e009-c1",
+     "target_asset_id": "skillsbench:fc9daf422e738c60e24792ab",
+     "content_hash": "bba82e4a401fefe9cd040ff6ba9ccaaed6062876264e358c306089fdb7a13cee",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e009-c2",
+     "target_asset_id": "skillsbench:fc9daf422e738c60e24792ab",
+     "content_hash": "bba82e4a401fefe9cd040ff6ba9ccaaed6062876264e358c306089fdb7a13cee",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e009-c3",
+     "target_asset_id": "skillsbench:fc9daf422e738c60e24792ab",
+     "content_hash": "bba82e4a401fefe9cd040ff6ba9ccaaed6062876264e358c306089fdb7a13cee",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e009-p1",
+    "e009-p2"
+   ],
+   "control_case_ids": [
+    "h032-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h024-prompt"
+   ]
+  },
+  {
+   "id": "e010",
+   "intent_family_ids": [
+    "intent:e010"
+   ],
+   "corrections": [
+    {
+     "case_id": "e010-c1",
+     "target_asset_id": "github:projects_write",
+     "content_hash": "a32d30d4ac98ba7f1e55617525c7f8d96fe647854335b131694168d3b3a32f3c",
+     "schema_hash": "73acbb8ab413a5098293fc940caa9d0c49357c9060ddd476a72b972ced5b7e6a"
+    },
+    {
+     "case_id": "e010-c2",
+     "target_asset_id": "github:projects_write",
+     "content_hash": "a32d30d4ac98ba7f1e55617525c7f8d96fe647854335b131694168d3b3a32f3c",
+     "schema_hash": "73acbb8ab413a5098293fc940caa9d0c49357c9060ddd476a72b972ced5b7e6a"
+    },
+    {
+     "case_id": "e010-c3",
+     "target_asset_id": "github:projects_write",
+     "content_hash": "a32d30d4ac98ba7f1e55617525c7f8d96fe647854335b131694168d3b3a32f3c",
+     "schema_hash": "73acbb8ab413a5098293fc940caa9d0c49357c9060ddd476a72b972ced5b7e6a"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e010-p1",
+    "e010-p2"
+   ],
+   "control_case_ids": [
+    "h083-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h034-prompt"
+   ]
+  },
+  {
+   "id": "e011",
+   "intent_family_ids": [
+    "intent:e011"
+   ],
+   "corrections": [
+    {
+     "case_id": "e011-c1",
+     "target_asset_id": "skillsbench:3257656b3c1123329999daad",
+     "content_hash": "3370ef7f3f47f86c9ea84a336c90706da4bc8c1a95daf5801e2c4fc133e0aefc",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e011-c2",
+     "target_asset_id": "skillsbench:3257656b3c1123329999daad",
+     "content_hash": "3370ef7f3f47f86c9ea84a336c90706da4bc8c1a95daf5801e2c4fc133e0aefc",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e011-c3",
+     "target_asset_id": "skillsbench:3257656b3c1123329999daad",
+     "content_hash": "3370ef7f3f47f86c9ea84a336c90706da4bc8c1a95daf5801e2c4fc133e0aefc",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e011-p1",
+    "e011-p2"
+   ],
+   "control_case_ids": [
+    "h056-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h016-prompt"
+   ]
+  },
+  {
+   "id": "e012",
+   "intent_family_ids": [
+    "intent:e012"
+   ],
+   "corrections": [
+    {
+     "case_id": "e012-c1",
+     "target_asset_id": "skillsbench:62ab7427fc33897b43df354c",
+     "content_hash": "4eb4e3e82f5044b38e934dee98cf66735bb3fa54ee0896e1369188354dda349f",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e012-c2",
+     "target_asset_id": "skillsbench:62ab7427fc33897b43df354c",
+     "content_hash": "4eb4e3e82f5044b38e934dee98cf66735bb3fa54ee0896e1369188354dda349f",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e012-c3",
+     "target_asset_id": "skillsbench:62ab7427fc33897b43df354c",
+     "content_hash": "4eb4e3e82f5044b38e934dee98cf66735bb3fa54ee0896e1369188354dda349f",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e012-p1",
+    "e012-p2"
+   ],
+   "control_case_ids": [
+    "h011-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h037-prompt"
+   ]
+  },
+  {
+   "id": "e013",
+   "intent_family_ids": [
+    "intent:e013"
+   ],
+   "corrections": [
+    {
+     "case_id": "e013-c1",
+     "target_asset_id": "matrix:699fb9d75a554d66cf5a3740",
+     "content_hash": "e9f8e9ca8e05626a67807ad07227c21cbadb46b40d157d3967a389ac791052a9",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e013-c2",
+     "target_asset_id": "matrix:699fb9d75a554d66cf5a3740",
+     "content_hash": "e9f8e9ca8e05626a67807ad07227c21cbadb46b40d157d3967a389ac791052a9",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e013-c3",
+     "target_asset_id": "matrix:699fb9d75a554d66cf5a3740",
+     "content_hash": "e9f8e9ca8e05626a67807ad07227c21cbadb46b40d157d3967a389ac791052a9",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e013-p1",
+    "e013-p2"
+   ],
+   "control_case_ids": [
+    "h030-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h089-prompt"
+   ]
+  },
+  {
+   "id": "e014",
+   "intent_family_ids": [
+    "intent:e014"
+   ],
+   "corrections": [
+    {
+     "case_id": "e014-c1",
+     "target_asset_id": "github:projects_get",
+     "content_hash": "00f4b2332e232f1aaf319b558f2e36c83d2be7b4c6f84c49c317cd2ea424fc4d",
+     "schema_hash": "a68ef0923dae78c257764b2b2c6d5062a3105b60258dff17a140edd14ac72586"
+    },
+    {
+     "case_id": "e014-c2",
+     "target_asset_id": "github:projects_get",
+     "content_hash": "00f4b2332e232f1aaf319b558f2e36c83d2be7b4c6f84c49c317cd2ea424fc4d",
+     "schema_hash": "a68ef0923dae78c257764b2b2c6d5062a3105b60258dff17a140edd14ac72586"
+    },
+    {
+     "case_id": "e014-c3",
+     "target_asset_id": "github:projects_get",
+     "content_hash": "00f4b2332e232f1aaf319b558f2e36c83d2be7b4c6f84c49c317cd2ea424fc4d",
+     "schema_hash": "a68ef0923dae78c257764b2b2c6d5062a3105b60258dff17a140edd14ac72586"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e014-p1",
+    "e014-p2"
+   ],
+   "control_case_ids": [
+    "h004-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h056-prompt"
+   ]
+  },
+  {
+   "id": "e015",
+   "intent_family_ids": [
+    "intent:e015"
+   ],
+   "corrections": [
+    {
+     "case_id": "e015-c1",
+     "target_asset_id": "github:merge_pull_request",
+     "content_hash": "fe55df3cc4e1ae91407edcde47455af7f2053de65af0f5994e506a0921bb6c9b",
+     "schema_hash": "d0b8c7d7a9c004ba3d7261ada4ec5c0f6e4575ad6bf47cd204f82c5fd9f4a667"
+    },
+    {
+     "case_id": "e015-c2",
+     "target_asset_id": "github:merge_pull_request",
+     "content_hash": "fe55df3cc4e1ae91407edcde47455af7f2053de65af0f5994e506a0921bb6c9b",
+     "schema_hash": "d0b8c7d7a9c004ba3d7261ada4ec5c0f6e4575ad6bf47cd204f82c5fd9f4a667"
+    },
+    {
+     "case_id": "e015-c3",
+     "target_asset_id": "github:merge_pull_request",
+     "content_hash": "fe55df3cc4e1ae91407edcde47455af7f2053de65af0f5994e506a0921bb6c9b",
+     "schema_hash": "d0b8c7d7a9c004ba3d7261ada4ec5c0f6e4575ad6bf47cd204f82c5fd9f4a667"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e015-p1",
+    "e015-p2"
+   ],
+   "control_case_ids": [
+    "h003-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h020-prompt"
+   ]
+  },
+  {
+   "id": "e016",
+   "intent_family_ids": [
+    "intent:e016"
+   ],
+   "corrections": [
+    {
+     "case_id": "e016-c1",
+     "target_asset_id": "github:hide_pull_request_review_comment",
+     "content_hash": "a16f410a48aa15e83487c677798d4fddcd2c4afce78100f06c33097c80a80739",
+     "schema_hash": "dce99a8f86fbfa806e170088a98f451eb4a35d9c48d17ab7d4283f0edf89501e"
+    },
+    {
+     "case_id": "e016-c2",
+     "target_asset_id": "github:hide_pull_request_review_comment",
+     "content_hash": "a16f410a48aa15e83487c677798d4fddcd2c4afce78100f06c33097c80a80739",
+     "schema_hash": "dce99a8f86fbfa806e170088a98f451eb4a35d9c48d17ab7d4283f0edf89501e"
+    },
+    {
+     "case_id": "e016-c3",
+     "target_asset_id": "github:hide_pull_request_review_comment",
+     "content_hash": "a16f410a48aa15e83487c677798d4fddcd2c4afce78100f06c33097c80a80739",
+     "schema_hash": "dce99a8f86fbfa806e170088a98f451eb4a35d9c48d17ab7d4283f0edf89501e"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e016-p1",
+    "e016-p2"
+   ],
+   "control_case_ids": [
+    "h091-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h064-prompt"
+   ]
+  },
+  {
+   "id": "e017",
+   "intent_family_ids": [
+    "intent:e017"
+   ],
+   "corrections": [
+    {
+     "case_id": "e017-c1",
+     "target_asset_id": "skillsbench:009dba7c67e9425905defa98",
+     "content_hash": "eec026677dd73c7407170d01fc2358ba10dacfd4b8b3b9bf669b8f922491514f",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e017-c2",
+     "target_asset_id": "skillsbench:009dba7c67e9425905defa98",
+     "content_hash": "eec026677dd73c7407170d01fc2358ba10dacfd4b8b3b9bf669b8f922491514f",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e017-c3",
+     "target_asset_id": "skillsbench:009dba7c67e9425905defa98",
+     "content_hash": "eec026677dd73c7407170d01fc2358ba10dacfd4b8b3b9bf669b8f922491514f",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e017-p1",
+    "e017-p2"
+   ],
+   "control_case_ids": [
+    "h071-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h090-prompt"
+   ]
+  },
+  {
+   "id": "e018",
+   "intent_family_ids": [
+    "intent:e018"
+   ],
+   "corrections": [
+    {
+     "case_id": "e018-c1",
+     "target_asset_id": "skillsbench:0457eeed402b6f48ad124ec3",
+     "content_hash": "0cc93cde9cc7cfd0d5af62edce6cedab6395f24b60de883cf5eb36a994e94b78",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e018-c2",
+     "target_asset_id": "skillsbench:0457eeed402b6f48ad124ec3",
+     "content_hash": "0cc93cde9cc7cfd0d5af62edce6cedab6395f24b60de883cf5eb36a994e94b78",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e018-c3",
+     "target_asset_id": "skillsbench:0457eeed402b6f48ad124ec3",
+     "content_hash": "0cc93cde9cc7cfd0d5af62edce6cedab6395f24b60de883cf5eb36a994e94b78",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e018-p1",
+    "e018-p2"
+   ],
+   "control_case_ids": [
+    "h060-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h016-prompt"
+   ]
+  },
+  {
+   "id": "e019",
+   "intent_family_ids": [
+    "intent:e019"
+   ],
+   "corrections": [
+    {
+     "case_id": "e019-c1",
+     "target_asset_id": "skillsbench:adb4c06d6554f25dd337133c",
+     "content_hash": "93df8526bfaa429af0770e9c8483ba4d183e6ab259dfb26c60ca4dcd5fcc0b0f",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e019-c2",
+     "target_asset_id": "skillsbench:adb4c06d6554f25dd337133c",
+     "content_hash": "93df8526bfaa429af0770e9c8483ba4d183e6ab259dfb26c60ca4dcd5fcc0b0f",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e019-c3",
+     "target_asset_id": "skillsbench:adb4c06d6554f25dd337133c",
+     "content_hash": "93df8526bfaa429af0770e9c8483ba4d183e6ab259dfb26c60ca4dcd5fcc0b0f",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e019-p1",
+    "e019-p2"
+   ],
+   "control_case_ids": [
+    "h005-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h073-prompt"
+   ]
+  },
+  {
+   "id": "e020",
+   "intent_family_ids": [
+    "intent:e020"
+   ],
+   "corrections": [
+    {
+     "case_id": "e020-c1",
+     "target_asset_id": "skillsbench:196e8ba4c6ac56b56bcb02f6",
+     "content_hash": "c22b277c5a72e4f3ae5e23daedee1b354b59c97cb9375e3874e29214e9e2c5e5",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e020-c2",
+     "target_asset_id": "skillsbench:196e8ba4c6ac56b56bcb02f6",
+     "content_hash": "c22b277c5a72e4f3ae5e23daedee1b354b59c97cb9375e3874e29214e9e2c5e5",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e020-c3",
+     "target_asset_id": "skillsbench:196e8ba4c6ac56b56bcb02f6",
+     "content_hash": "c22b277c5a72e4f3ae5e23daedee1b354b59c97cb9375e3874e29214e9e2c5e5",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e020-p1",
+    "e020-p2"
+   ],
+   "control_case_ids": [
+    "h071-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h099-prompt"
+   ]
+  },
+  {
+   "id": "e021",
+   "intent_family_ids": [
+    "intent:e021"
+   ],
+   "corrections": [
+    {
+     "case_id": "e021-c1",
+     "target_asset_id": "skillsbench:a75620f87cf3d5e932d0077e",
+     "content_hash": "82f0ec56e7bbfdeadac0bf05a51683d3e90e183d9b27165923f70860183a825e",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e021-c2",
+     "target_asset_id": "skillsbench:a75620f87cf3d5e932d0077e",
+     "content_hash": "82f0ec56e7bbfdeadac0bf05a51683d3e90e183d9b27165923f70860183a825e",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e021-c3",
+     "target_asset_id": "skillsbench:a75620f87cf3d5e932d0077e",
+     "content_hash": "82f0ec56e7bbfdeadac0bf05a51683d3e90e183d9b27165923f70860183a825e",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e021-p1",
+    "e021-p2"
+   ],
+   "control_case_ids": [
+    "h038-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h058-prompt"
+   ]
+  },
+  {
+   "id": "e022",
+   "intent_family_ids": [
+    "intent:e022"
+   ],
+   "corrections": [
+    {
+     "case_id": "e022-c1",
+     "target_asset_id": "skillsbench:ff3b525ba8393898c195cec7",
+     "content_hash": "65c3442f51953a6b987e8aefa9abcb458f110344e80cc16c7c7efb931a13efea",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e022-c2",
+     "target_asset_id": "skillsbench:ff3b525ba8393898c195cec7",
+     "content_hash": "65c3442f51953a6b987e8aefa9abcb458f110344e80cc16c7c7efb931a13efea",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e022-c3",
+     "target_asset_id": "skillsbench:ff3b525ba8393898c195cec7",
+     "content_hash": "65c3442f51953a6b987e8aefa9abcb458f110344e80cc16c7c7efb931a13efea",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e022-p1",
+    "e022-p2"
+   ],
+   "control_case_ids": [
+    "h022-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h061-prompt"
+   ]
+  },
+  {
+   "id": "e023",
+   "intent_family_ids": [
+    "intent:e023"
+   ],
+   "corrections": [
+    {
+     "case_id": "e023-c1",
+     "target_asset_id": "skillsbench:31ccdcadc77284bca61f6e9a",
+     "content_hash": "34ab1c8cd80ab01f65ad7287776994efeceb15fe454c36216d7d4ba2fee442f7",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e023-c2",
+     "target_asset_id": "skillsbench:31ccdcadc77284bca61f6e9a",
+     "content_hash": "34ab1c8cd80ab01f65ad7287776994efeceb15fe454c36216d7d4ba2fee442f7",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e023-c3",
+     "target_asset_id": "skillsbench:31ccdcadc77284bca61f6e9a",
+     "content_hash": "34ab1c8cd80ab01f65ad7287776994efeceb15fe454c36216d7d4ba2fee442f7",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e023-p1",
+    "e023-p2"
+   ],
+   "control_case_ids": [
+    "h093-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h076-prompt"
+   ]
+  },
+  {
+   "id": "e024",
+   "intent_family_ids": [
+    "intent:e024"
+   ],
+   "corrections": [
+    {
+     "case_id": "e024-c1",
+     "target_asset_id": "github:update_pull_request_state",
+     "content_hash": "f59cc4c4a912aca14616c49679e5a07d6230ed6bcb4fa28be0ff235c4ce9e71f",
+     "schema_hash": "af1b8133322fc8d671013bbd59d67b369a92d27b99334be2dbf91e5dd09add11"
+    },
+    {
+     "case_id": "e024-c2",
+     "target_asset_id": "github:update_pull_request_state",
+     "content_hash": "f59cc4c4a912aca14616c49679e5a07d6230ed6bcb4fa28be0ff235c4ce9e71f",
+     "schema_hash": "af1b8133322fc8d671013bbd59d67b369a92d27b99334be2dbf91e5dd09add11"
+    },
+    {
+     "case_id": "e024-c3",
+     "target_asset_id": "github:update_pull_request_state",
+     "content_hash": "f59cc4c4a912aca14616c49679e5a07d6230ed6bcb4fa28be0ff235c4ce9e71f",
+     "schema_hash": "af1b8133322fc8d671013bbd59d67b369a92d27b99334be2dbf91e5dd09add11"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e024-p1",
+    "e024-p2"
+   ],
+   "control_case_ids": [
+    "h021-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h045-prompt"
+   ]
+  },
+  {
+   "id": "e025",
+   "intent_family_ids": [
+    "intent:e025"
+   ],
+   "corrections": [
+    {
+     "case_id": "e025-c1",
+     "target_asset_id": "skillsbench:264374199415f42c4aeae5bc",
+     "content_hash": "33d90344f81f15d1da43d8b41231167c39c8f8d5f3a929d41ce051992b415148",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e025-c2",
+     "target_asset_id": "skillsbench:264374199415f42c4aeae5bc",
+     "content_hash": "33d90344f81f15d1da43d8b41231167c39c8f8d5f3a929d41ce051992b415148",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e025-c3",
+     "target_asset_id": "skillsbench:264374199415f42c4aeae5bc",
+     "content_hash": "33d90344f81f15d1da43d8b41231167c39c8f8d5f3a929d41ce051992b415148",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e025-p1",
+    "e025-p2"
+   ],
+   "control_case_ids": [
+    "h020-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h054-prompt"
+   ]
+  },
+  {
+   "id": "e026",
+   "intent_family_ids": [
+    "intent:e026"
+   ],
+   "corrections": [
+    {
+     "case_id": "e026-c1",
+     "target_asset_id": "matrix:698d453c45bef56c57b4360f",
+     "content_hash": "71cfc398ee05221f21fddc797ea5523a59278feb3447c681db92fa9130ad2da3",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e026-c2",
+     "target_asset_id": "matrix:698d453c45bef56c57b4360f",
+     "content_hash": "71cfc398ee05221f21fddc797ea5523a59278feb3447c681db92fa9130ad2da3",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e026-c3",
+     "target_asset_id": "matrix:698d453c45bef56c57b4360f",
+     "content_hash": "71cfc398ee05221f21fddc797ea5523a59278feb3447c681db92fa9130ad2da3",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e026-p1",
+    "e026-p2"
+   ],
+   "control_case_ids": [
+    "h020-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h043-prompt"
+   ]
+  },
+  {
+   "id": "e027",
+   "intent_family_ids": [
+    "intent:e027"
+   ],
+   "corrections": [
+    {
+     "case_id": "e027-c1",
+     "target_asset_id": "github:sub_issue_write",
+     "content_hash": "dae46468b0d256e367cd0f7df8d1f5b07b554943399f474b4a9a686c565c5f2e",
+     "schema_hash": "2deab41e74fee3e9633058d88bcbd7e2722cec6d82da2c8c4324870d0aae6fba"
+    },
+    {
+     "case_id": "e027-c2",
+     "target_asset_id": "github:sub_issue_write",
+     "content_hash": "dae46468b0d256e367cd0f7df8d1f5b07b554943399f474b4a9a686c565c5f2e",
+     "schema_hash": "2deab41e74fee3e9633058d88bcbd7e2722cec6d82da2c8c4324870d0aae6fba"
+    },
+    {
+     "case_id": "e027-c3",
+     "target_asset_id": "github:sub_issue_write",
+     "content_hash": "dae46468b0d256e367cd0f7df8d1f5b07b554943399f474b4a9a686c565c5f2e",
+     "schema_hash": "2deab41e74fee3e9633058d88bcbd7e2722cec6d82da2c8c4324870d0aae6fba"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e027-p1",
+    "e027-p2"
+   ],
+   "control_case_ids": [
+    "h096-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h035-prompt"
+   ]
+  },
+  {
+   "id": "e028",
+   "intent_family_ids": [
+    "intent:e028"
+   ],
+   "corrections": [
+    {
+     "case_id": "e028-c1",
+     "target_asset_id": "github:add_sub_issue",
+     "content_hash": "f60e9ba477e11da3aaa28d317cf786b6e436cc17a138c6df6e31d0386a9b43fe",
+     "schema_hash": "2e4ad893ac67356349b6b854c3e76317d82f109265ed65ed7f883d4ce78e3f1d"
+    },
+    {
+     "case_id": "e028-c2",
+     "target_asset_id": "github:add_sub_issue",
+     "content_hash": "f60e9ba477e11da3aaa28d317cf786b6e436cc17a138c6df6e31d0386a9b43fe",
+     "schema_hash": "2e4ad893ac67356349b6b854c3e76317d82f109265ed65ed7f883d4ce78e3f1d"
+    },
+    {
+     "case_id": "e028-c3",
+     "target_asset_id": "github:add_sub_issue",
+     "content_hash": "f60e9ba477e11da3aaa28d317cf786b6e436cc17a138c6df6e31d0386a9b43fe",
+     "schema_hash": "2e4ad893ac67356349b6b854c3e76317d82f109265ed65ed7f883d4ce78e3f1d"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e028-p1",
+    "e028-p2"
+   ],
+   "control_case_ids": [
+    "h079-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h029-prompt"
+   ]
+  },
+  {
+   "id": "e029",
+   "intent_family_ids": [
+    "intent:e029"
+   ],
+   "corrections": [
+    {
+     "case_id": "e029-c1",
+     "target_asset_id": "skillsbench:8a93cdb0dd2a86a23b0f2d9e",
+     "content_hash": "6a33f2c46d214f14ad02ad0c47613d2cf4ce816a3aaf41adc1ac549c755780d6",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e029-c2",
+     "target_asset_id": "skillsbench:8a93cdb0dd2a86a23b0f2d9e",
+     "content_hash": "6a33f2c46d214f14ad02ad0c47613d2cf4ce816a3aaf41adc1ac549c755780d6",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e029-c3",
+     "target_asset_id": "skillsbench:8a93cdb0dd2a86a23b0f2d9e",
+     "content_hash": "6a33f2c46d214f14ad02ad0c47613d2cf4ce816a3aaf41adc1ac549c755780d6",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e029-p1",
+    "e029-p2"
+   ],
+   "control_case_ids": [
+    "h066-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h096-prompt"
+   ]
+  },
+  {
+   "id": "e030",
+   "intent_family_ids": [
+    "intent:e030"
+   ],
+   "corrections": [
+    {
+     "case_id": "e030-c1",
+     "target_asset_id": "github:remove_pull_request_review_comment_reaction",
+     "content_hash": "7426f28495237d6cb49cf6e938abd3dc73153eaebfc7c9ca5ac93f956c6259ed",
+     "schema_hash": "d8b7642b5d614420dc749e818dd1d329f3981ea401195403f606fcef1cef96d4"
+    },
+    {
+     "case_id": "e030-c2",
+     "target_asset_id": "github:remove_pull_request_review_comment_reaction",
+     "content_hash": "7426f28495237d6cb49cf6e938abd3dc73153eaebfc7c9ca5ac93f956c6259ed",
+     "schema_hash": "d8b7642b5d614420dc749e818dd1d329f3981ea401195403f606fcef1cef96d4"
+    },
+    {
+     "case_id": "e030-c3",
+     "target_asset_id": "github:remove_pull_request_review_comment_reaction",
+     "content_hash": "7426f28495237d6cb49cf6e938abd3dc73153eaebfc7c9ca5ac93f956c6259ed",
+     "schema_hash": "d8b7642b5d614420dc749e818dd1d329f3981ea401195403f606fcef1cef96d4"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e030-p1",
+    "e030-p2"
+   ],
+   "control_case_ids": [
+    "h095-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h089-prompt"
+   ]
+  },
+  {
+   "id": "e031",
+   "intent_family_ids": [
+    "intent:e031"
+   ],
+   "corrections": [
+    {
+     "case_id": "e031-c1",
+     "target_asset_id": "skillsbench:009f3ff58ead0966ecf63ce4",
+     "content_hash": "32923bed92731f01669a29f9f3db964efc052a0ee5f4b6fc0115573fc99657e1",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e031-c2",
+     "target_asset_id": "skillsbench:009f3ff58ead0966ecf63ce4",
+     "content_hash": "32923bed92731f01669a29f9f3db964efc052a0ee5f4b6fc0115573fc99657e1",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e031-c3",
+     "target_asset_id": "skillsbench:009f3ff58ead0966ecf63ce4",
+     "content_hash": "32923bed92731f01669a29f9f3db964efc052a0ee5f4b6fc0115573fc99657e1",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e031-p1",
+    "e031-p2"
+   ],
+   "control_case_ids": [
+    "h052-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h027-prompt"
+   ]
+  },
+  {
+   "id": "e032",
+   "intent_family_ids": [
+    "intent:e032"
+   ],
+   "corrections": [
+    {
+     "case_id": "e032-c1",
+     "target_asset_id": "skillsbench:cf2ef7bd742228882e8b4bca",
+     "content_hash": "0e1aa2b96b164e0cb06045b8d6b3fdd56d693c002a7dbbf8fb093bca3216c514",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e032-c2",
+     "target_asset_id": "skillsbench:cf2ef7bd742228882e8b4bca",
+     "content_hash": "0e1aa2b96b164e0cb06045b8d6b3fdd56d693c002a7dbbf8fb093bca3216c514",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e032-c3",
+     "target_asset_id": "skillsbench:cf2ef7bd742228882e8b4bca",
+     "content_hash": "0e1aa2b96b164e0cb06045b8d6b3fdd56d693c002a7dbbf8fb093bca3216c514",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e032-p1",
+    "e032-p2"
+   ],
+   "control_case_ids": [
+    "h005-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h010-prompt"
+   ]
+  },
+  {
+   "id": "e033",
+   "intent_family_ids": [
+    "intent:e033"
+   ],
+   "corrections": [
+    {
+     "case_id": "e033-c1",
+     "target_asset_id": "github:search_users",
+     "content_hash": "652a2b0c15e3bfeeeb0ae69ef185c4d0975fc8efa56a287f763d08ef73d0753b",
+     "schema_hash": "0d70495994a01ade18b09dfbb88db34bc96064af9d47b51a610bb87654babc0d"
+    },
+    {
+     "case_id": "e033-c2",
+     "target_asset_id": "github:search_users",
+     "content_hash": "652a2b0c15e3bfeeeb0ae69ef185c4d0975fc8efa56a287f763d08ef73d0753b",
+     "schema_hash": "0d70495994a01ade18b09dfbb88db34bc96064af9d47b51a610bb87654babc0d"
+    },
+    {
+     "case_id": "e033-c3",
+     "target_asset_id": "github:search_users",
+     "content_hash": "652a2b0c15e3bfeeeb0ae69ef185c4d0975fc8efa56a287f763d08ef73d0753b",
+     "schema_hash": "0d70495994a01ade18b09dfbb88db34bc96064af9d47b51a610bb87654babc0d"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e033-p1",
+    "e033-p2"
+   ],
+   "control_case_ids": [
+    "h082-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h024-prompt"
+   ]
+  },
+  {
+   "id": "e034",
+   "intent_family_ids": [
+    "intent:e034"
+   ],
+   "corrections": [
+    {
+     "case_id": "e034-c1",
+     "target_asset_id": "skillsbench:01ee724e52364a91101b983a",
+     "content_hash": "341dd818dfc713e5413bb74923c905f9990996c0876037a3918bce826b6a0c8d",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e034-c2",
+     "target_asset_id": "skillsbench:01ee724e52364a91101b983a",
+     "content_hash": "341dd818dfc713e5413bb74923c905f9990996c0876037a3918bce826b6a0c8d",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e034-c3",
+     "target_asset_id": "skillsbench:01ee724e52364a91101b983a",
+     "content_hash": "341dd818dfc713e5413bb74923c905f9990996c0876037a3918bce826b6a0c8d",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e034-p1",
+    "e034-p2"
+   ],
+   "control_case_ids": [
+    "h042-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h076-prompt"
+   ]
+  },
+  {
+   "id": "e035",
+   "intent_family_ids": [
+    "intent:e035"
+   ],
+   "corrections": [
+    {
+     "case_id": "e035-c1",
+     "target_asset_id": "skillsbench:38ab22523fdb083953f7d96c",
+     "content_hash": "bf85562526377b25585f66c85f6ac4edc40fb446bd7185a1323c9c1664e45377",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e035-c2",
+     "target_asset_id": "skillsbench:38ab22523fdb083953f7d96c",
+     "content_hash": "bf85562526377b25585f66c85f6ac4edc40fb446bd7185a1323c9c1664e45377",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e035-c3",
+     "target_asset_id": "skillsbench:38ab22523fdb083953f7d96c",
+     "content_hash": "bf85562526377b25585f66c85f6ac4edc40fb446bd7185a1323c9c1664e45377",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e035-p1",
+    "e035-p2"
+   ],
+   "control_case_ids": [
+    "h090-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h100-prompt"
+   ]
+  },
+  {
+   "id": "e036",
+   "intent_family_ids": [
+    "intent:e036"
+   ],
+   "corrections": [
+    {
+     "case_id": "e036-c1",
+     "target_asset_id": "github:update_issue_labels",
+     "content_hash": "ed3447e012245a4f3b24f0e4dc178a2ad1815b5d8a852fcc804fa1f6f35c2f62",
+     "schema_hash": "98ae9308e376e9ca1bc083c0c0d2a909f456b0d5170b1e61b353251630e41329"
+    },
+    {
+     "case_id": "e036-c2",
+     "target_asset_id": "github:update_issue_labels",
+     "content_hash": "ed3447e012245a4f3b24f0e4dc178a2ad1815b5d8a852fcc804fa1f6f35c2f62",
+     "schema_hash": "98ae9308e376e9ca1bc083c0c0d2a909f456b0d5170b1e61b353251630e41329"
+    },
+    {
+     "case_id": "e036-c3",
+     "target_asset_id": "github:update_issue_labels",
+     "content_hash": "ed3447e012245a4f3b24f0e4dc178a2ad1815b5d8a852fcc804fa1f6f35c2f62",
+     "schema_hash": "98ae9308e376e9ca1bc083c0c0d2a909f456b0d5170b1e61b353251630e41329"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e036-p1",
+    "e036-p2"
+   ],
+   "control_case_ids": [
+    "h031-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h071-prompt"
+   ]
+  },
+  {
+   "id": "e037",
+   "intent_family_ids": [
+    "intent:e037"
+   ],
+   "corrections": [
+    {
+     "case_id": "e037-c1",
+     "target_asset_id": "skillsbench:81e6756aadbf5ae4e344418d",
+     "content_hash": "531e4f484546b24db8a2aa76143e488b487ce4619f9f331bedb5d84751da6907",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e037-c2",
+     "target_asset_id": "skillsbench:81e6756aadbf5ae4e344418d",
+     "content_hash": "531e4f484546b24db8a2aa76143e488b487ce4619f9f331bedb5d84751da6907",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e037-c3",
+     "target_asset_id": "skillsbench:81e6756aadbf5ae4e344418d",
+     "content_hash": "531e4f484546b24db8a2aa76143e488b487ce4619f9f331bedb5d84751da6907",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e037-p1",
+    "e037-p2"
+   ],
+   "control_case_ids": [
+    "h034-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h076-prompt"
+   ]
+  },
+  {
+   "id": "e038",
+   "intent_family_ids": [
+    "intent:e038"
+   ],
+   "corrections": [
+    {
+     "case_id": "e038-c1",
+     "target_asset_id": "matrix:69fd41df6f6f956d81b73b52",
+     "content_hash": "cee464fa3eee66b98a2087167baf0cfe7faf9767735290dad6287a27265b558b",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e038-c2",
+     "target_asset_id": "matrix:69fd41df6f6f956d81b73b52",
+     "content_hash": "cee464fa3eee66b98a2087167baf0cfe7faf9767735290dad6287a27265b558b",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e038-c3",
+     "target_asset_id": "matrix:69fd41df6f6f956d81b73b52",
+     "content_hash": "cee464fa3eee66b98a2087167baf0cfe7faf9767735290dad6287a27265b558b",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e038-p1",
+    "e038-p2"
+   ],
+   "control_case_ids": [
+    "h049-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h094-prompt"
+   ]
+  },
+  {
+   "id": "e039",
+   "intent_family_ids": [
+    "intent:e039"
+   ],
+   "corrections": [
+    {
+     "case_id": "e039-c1",
+     "target_asset_id": "skillsbench:9623c6c4eb516ccc4d81afad",
+     "content_hash": "669584da3b2f685dc8939449b6f8c09dc9e857ed335154739aaf78f03b9a67df",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e039-c2",
+     "target_asset_id": "skillsbench:9623c6c4eb516ccc4d81afad",
+     "content_hash": "669584da3b2f685dc8939449b6f8c09dc9e857ed335154739aaf78f03b9a67df",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e039-c3",
+     "target_asset_id": "skillsbench:9623c6c4eb516ccc4d81afad",
+     "content_hash": "669584da3b2f685dc8939449b6f8c09dc9e857ed335154739aaf78f03b9a67df",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e039-p1",
+    "e039-p2"
+   ],
+   "control_case_ids": [
+    "h006-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h022-prompt"
+   ]
+  },
+  {
+   "id": "e040",
+   "intent_family_ids": [
+    "intent:e040"
+   ],
+   "corrections": [
+    {
+     "case_id": "e040-c1",
+     "target_asset_id": "github:search_issues",
+     "content_hash": "f7ce861fd1f85caf9e220237ab4e711d955aa6c96347574253e5c93657b68d82",
+     "schema_hash": "baafd7780ee68faac7dcd32ee6726d0509e0a25a051c6e3c61c7c89c14d6632c"
+    },
+    {
+     "case_id": "e040-c2",
+     "target_asset_id": "github:search_issues",
+     "content_hash": "f7ce861fd1f85caf9e220237ab4e711d955aa6c96347574253e5c93657b68d82",
+     "schema_hash": "baafd7780ee68faac7dcd32ee6726d0509e0a25a051c6e3c61c7c89c14d6632c"
+    },
+    {
+     "case_id": "e040-c3",
+     "target_asset_id": "github:search_issues",
+     "content_hash": "f7ce861fd1f85caf9e220237ab4e711d955aa6c96347574253e5c93657b68d82",
+     "schema_hash": "baafd7780ee68faac7dcd32ee6726d0509e0a25a051c6e3c61c7c89c14d6632c"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e040-p1",
+    "e040-p2"
+   ],
+   "control_case_ids": [
+    "h006-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h078-prompt"
+   ]
+  },
+  {
+   "id": "e041",
+   "intent_family_ids": [
+    "intent:e041"
+   ],
+   "corrections": [
+    {
+     "case_id": "e041-c1",
+     "target_asset_id": "github:create_issue",
+     "content_hash": "d6a6e3b53b31dbb42e5c59cb09f4247855d1c6be63d5dcb6ec423bb33b003e89",
+     "schema_hash": "7f0812bd07614eb6e1207a5f095e5b3db8f2725497d534bb0b3b3059e9dcbbd9"
+    },
+    {
+     "case_id": "e041-c2",
+     "target_asset_id": "github:create_issue",
+     "content_hash": "d6a6e3b53b31dbb42e5c59cb09f4247855d1c6be63d5dcb6ec423bb33b003e89",
+     "schema_hash": "7f0812bd07614eb6e1207a5f095e5b3db8f2725497d534bb0b3b3059e9dcbbd9"
+    },
+    {
+     "case_id": "e041-c3",
+     "target_asset_id": "github:create_issue",
+     "content_hash": "d6a6e3b53b31dbb42e5c59cb09f4247855d1c6be63d5dcb6ec423bb33b003e89",
+     "schema_hash": "7f0812bd07614eb6e1207a5f095e5b3db8f2725497d534bb0b3b3059e9dcbbd9"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e041-p1",
+    "e041-p2"
+   ],
+   "control_case_ids": [
+    "h091-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h087-prompt"
+   ]
+  },
+  {
+   "id": "e042",
+   "intent_family_ids": [
+    "intent:e042"
+   ],
+   "corrections": [
+    {
+     "case_id": "e042-c1",
+     "target_asset_id": "skillsbench:ee90b1c0180064716c2fb79e",
+     "content_hash": "28428c421676d35e1342ff2240e08ccbe54ce5df6326424b35a9fa02bc270cca",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e042-c2",
+     "target_asset_id": "skillsbench:ee90b1c0180064716c2fb79e",
+     "content_hash": "28428c421676d35e1342ff2240e08ccbe54ce5df6326424b35a9fa02bc270cca",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e042-c3",
+     "target_asset_id": "skillsbench:ee90b1c0180064716c2fb79e",
+     "content_hash": "28428c421676d35e1342ff2240e08ccbe54ce5df6326424b35a9fa02bc270cca",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e042-p1",
+    "e042-p2"
+   ],
+   "control_case_ids": [
+    "h031-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h062-prompt"
+   ]
+  },
+  {
+   "id": "e043",
+   "intent_family_ids": [
+    "intent:e043"
+   ],
+   "corrections": [
+    {
+     "case_id": "e043-c1",
+     "target_asset_id": "github:get_teams",
+     "content_hash": "60fd9b12a7d523b5d727b679c5ef5d21744e2302466b161b46f482c25aeaee35",
+     "schema_hash": "e9b47da278526190aee1429f2c68de4589b0a63265c94a07f7fccae096f29fec"
+    },
+    {
+     "case_id": "e043-c2",
+     "target_asset_id": "github:get_teams",
+     "content_hash": "60fd9b12a7d523b5d727b679c5ef5d21744e2302466b161b46f482c25aeaee35",
+     "schema_hash": "e9b47da278526190aee1429f2c68de4589b0a63265c94a07f7fccae096f29fec"
+    },
+    {
+     "case_id": "e043-c3",
+     "target_asset_id": "github:get_teams",
+     "content_hash": "60fd9b12a7d523b5d727b679c5ef5d21744e2302466b161b46f482c25aeaee35",
+     "schema_hash": "e9b47da278526190aee1429f2c68de4589b0a63265c94a07f7fccae096f29fec"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e043-p1",
+    "e043-p2"
+   ],
+   "control_case_ids": [
+    "h094-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h037-prompt"
+   ]
+  },
+  {
+   "id": "e044",
+   "intent_family_ids": [
+    "intent:e044"
+   ],
+   "corrections": [
+    {
+     "case_id": "e044-c1",
+     "target_asset_id": "matrix:6a115871071d0d29982eec7e",
+     "content_hash": "686097b66a8edb3aaceb1b84f26131d715c178d2fd7f88dccbc57e2295a8b76f",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e044-c2",
+     "target_asset_id": "matrix:6a115871071d0d29982eec7e",
+     "content_hash": "686097b66a8edb3aaceb1b84f26131d715c178d2fd7f88dccbc57e2295a8b76f",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e044-c3",
+     "target_asset_id": "matrix:6a115871071d0d29982eec7e",
+     "content_hash": "686097b66a8edb3aaceb1b84f26131d715c178d2fd7f88dccbc57e2295a8b76f",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e044-p1",
+    "e044-p2"
+   ],
+   "control_case_ids": [
+    "h025-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h086-prompt"
+   ]
+  },
+  {
+   "id": "e045",
+   "intent_family_ids": [
+    "intent:e045"
+   ],
+   "corrections": [
+    {
+     "case_id": "e045-c1",
+     "target_asset_id": "github:unresolve_review_thread",
+     "content_hash": "981edd525947f603419e27d4c2a337c018487482273887c83607ff80009c11b5",
+     "schema_hash": "9bfb5e89832828b4a29ac4a0ef259cf11a29b2c7a31e8decf40249d37276b110"
+    },
+    {
+     "case_id": "e045-c2",
+     "target_asset_id": "github:unresolve_review_thread",
+     "content_hash": "981edd525947f603419e27d4c2a337c018487482273887c83607ff80009c11b5",
+     "schema_hash": "9bfb5e89832828b4a29ac4a0ef259cf11a29b2c7a31e8decf40249d37276b110"
+    },
+    {
+     "case_id": "e045-c3",
+     "target_asset_id": "github:unresolve_review_thread",
+     "content_hash": "981edd525947f603419e27d4c2a337c018487482273887c83607ff80009c11b5",
+     "schema_hash": "9bfb5e89832828b4a29ac4a0ef259cf11a29b2c7a31e8decf40249d37276b110"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e045-p1",
+    "e045-p2"
+   ],
+   "control_case_ids": [
+    "h073-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h001-prompt"
+   ]
+  },
+  {
+   "id": "e046",
+   "intent_family_ids": [
+    "intent:e046"
+   ],
+   "corrections": [
+    {
+     "case_id": "e046-c1",
+     "target_asset_id": "skillsbench:984012927e159e7351fbb01e",
+     "content_hash": "e547c7f2b5ae65f6543d34c58d5b5db71145ee9f8dc8683a845671258937282e",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e046-c2",
+     "target_asset_id": "skillsbench:984012927e159e7351fbb01e",
+     "content_hash": "e547c7f2b5ae65f6543d34c58d5b5db71145ee9f8dc8683a845671258937282e",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e046-c3",
+     "target_asset_id": "skillsbench:984012927e159e7351fbb01e",
+     "content_hash": "e547c7f2b5ae65f6543d34c58d5b5db71145ee9f8dc8683a845671258937282e",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e046-p1",
+    "e046-p2"
+   ],
+   "control_case_ids": [
+    "h055-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h058-prompt"
+   ]
+  },
+  {
+   "id": "e047",
+   "intent_family_ids": [
+    "intent:e047"
+   ],
+   "corrections": [
+    {
+     "case_id": "e047-c1",
+     "target_asset_id": "skillsbench:4fb66d7d40d3c12ff28172e4",
+     "content_hash": "f39ddb6700d3a0c4626b3764c3921fba7e0557433690294d852f9127b5c7c870",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e047-c2",
+     "target_asset_id": "skillsbench:4fb66d7d40d3c12ff28172e4",
+     "content_hash": "f39ddb6700d3a0c4626b3764c3921fba7e0557433690294d852f9127b5c7c870",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e047-c3",
+     "target_asset_id": "skillsbench:4fb66d7d40d3c12ff28172e4",
+     "content_hash": "f39ddb6700d3a0c4626b3764c3921fba7e0557433690294d852f9127b5c7c870",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e047-p1",
+    "e047-p2"
+   ],
+   "control_case_ids": [
+    "h095-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h088-prompt"
+   ]
+  },
+  {
+   "id": "e048",
+   "intent_family_ids": [
+    "intent:e048"
+   ],
+   "corrections": [
+    {
+     "case_id": "e048-c1",
+     "target_asset_id": "skillsbench:4cafbe56e66e34993ad0f3f8",
+     "content_hash": "ea480298751ea55effee4535b16b67ec79fd9540b971a89712e6f5b9ce8cd663",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e048-c2",
+     "target_asset_id": "skillsbench:4cafbe56e66e34993ad0f3f8",
+     "content_hash": "ea480298751ea55effee4535b16b67ec79fd9540b971a89712e6f5b9ce8cd663",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e048-c3",
+     "target_asset_id": "skillsbench:4cafbe56e66e34993ad0f3f8",
+     "content_hash": "ea480298751ea55effee4535b16b67ec79fd9540b971a89712e6f5b9ce8cd663",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e048-p1",
+    "e048-p2"
+   ],
+   "control_case_ids": [
+    "h019-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h074-prompt"
+   ]
+  },
+  {
+   "id": "e049",
+   "intent_family_ids": [
+    "intent:e049"
+   ],
+   "corrections": [
+    {
+     "case_id": "e049-c1",
+     "target_asset_id": "skillsbench:c85bd9ad3f8f10a05324471d",
+     "content_hash": "31e664a2fadbaf7506eef21d6faaeca95953453159c24f05cbee82be9dfdcf90",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e049-c2",
+     "target_asset_id": "skillsbench:c85bd9ad3f8f10a05324471d",
+     "content_hash": "31e664a2fadbaf7506eef21d6faaeca95953453159c24f05cbee82be9dfdcf90",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e049-c3",
+     "target_asset_id": "skillsbench:c85bd9ad3f8f10a05324471d",
+     "content_hash": "31e664a2fadbaf7506eef21d6faaeca95953453159c24f05cbee82be9dfdcf90",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e049-p1",
+    "e049-p2"
+   ],
+   "control_case_ids": [
+    "h048-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h065-prompt"
+   ]
+  },
+  {
+   "id": "e050",
+   "intent_family_ids": [
+    "intent:e050"
+   ],
+   "corrections": [
+    {
+     "case_id": "e050-c1",
+     "target_asset_id": "skillsbench:6747e2eb588a654dd86b130a",
+     "content_hash": "b4d84f0d8f5ca68d6d9da711041be8208d509a8137c01cd7edcb9726b03a9e81",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e050-c2",
+     "target_asset_id": "skillsbench:6747e2eb588a654dd86b130a",
+     "content_hash": "b4d84f0d8f5ca68d6d9da711041be8208d509a8137c01cd7edcb9726b03a9e81",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e050-c3",
+     "target_asset_id": "skillsbench:6747e2eb588a654dd86b130a",
+     "content_hash": "b4d84f0d8f5ca68d6d9da711041be8208d509a8137c01cd7edcb9726b03a9e81",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e050-p1",
+    "e050-p2"
+   ],
+   "control_case_ids": [
+    "h025-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h022-prompt"
+   ]
+  },
+  {
+   "id": "e051",
+   "intent_family_ids": [
+    "intent:e051"
+   ],
+   "corrections": [
+    {
+     "case_id": "e051-c1",
+     "target_asset_id": "github:list_secret_scanning_alerts",
+     "content_hash": "aaa687798c5536c230b5c42ad937a050f3376a07a5b60088bfc24e745ac82a2b",
+     "schema_hash": "90797db04cec25415dc9911c37ce186d083bc1cfda8229630ca9609211366bb3"
+    },
+    {
+     "case_id": "e051-c2",
+     "target_asset_id": "github:list_secret_scanning_alerts",
+     "content_hash": "aaa687798c5536c230b5c42ad937a050f3376a07a5b60088bfc24e745ac82a2b",
+     "schema_hash": "90797db04cec25415dc9911c37ce186d083bc1cfda8229630ca9609211366bb3"
+    },
+    {
+     "case_id": "e051-c3",
+     "target_asset_id": "github:list_secret_scanning_alerts",
+     "content_hash": "aaa687798c5536c230b5c42ad937a050f3376a07a5b60088bfc24e745ac82a2b",
+     "schema_hash": "90797db04cec25415dc9911c37ce186d083bc1cfda8229630ca9609211366bb3"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e051-p1",
+    "e051-p2"
+   ],
+   "control_case_ids": [
+    "h028-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h070-prompt"
+   ]
+  },
+  {
+   "id": "e052",
+   "intent_family_ids": [
+    "intent:e052"
+   ],
+   "corrections": [
+    {
+     "case_id": "e052-c1",
+     "target_asset_id": "github:list_issue_fields",
+     "content_hash": "a3cd4d5bfc8e4a49b73d6e93ab6267fb6800f94ae91ee76b1e0d7052d7c9ed34",
+     "schema_hash": "4fc7aae5a0dcea2862766849bfc3c97a4a37dd21a598a90b9e9364f7e7224802"
+    },
+    {
+     "case_id": "e052-c2",
+     "target_asset_id": "github:list_issue_fields",
+     "content_hash": "a3cd4d5bfc8e4a49b73d6e93ab6267fb6800f94ae91ee76b1e0d7052d7c9ed34",
+     "schema_hash": "4fc7aae5a0dcea2862766849bfc3c97a4a37dd21a598a90b9e9364f7e7224802"
+    },
+    {
+     "case_id": "e052-c3",
+     "target_asset_id": "github:list_issue_fields",
+     "content_hash": "a3cd4d5bfc8e4a49b73d6e93ab6267fb6800f94ae91ee76b1e0d7052d7c9ed34",
+     "schema_hash": "4fc7aae5a0dcea2862766849bfc3c97a4a37dd21a598a90b9e9364f7e7224802"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e052-p1",
+    "e052-p2"
+   ],
+   "control_case_ids": [
+    "h065-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h093-prompt"
+   ]
+  },
+  {
+   "id": "e053",
+   "intent_family_ids": [
+    "intent:e053"
+   ],
+   "corrections": [
+    {
+     "case_id": "e053-c1",
+     "target_asset_id": "github:delete_file",
+     "content_hash": "bde38a9b06606718dcc6b16600bd0d1b8f839fcb384e8ecffeb564a4b69f00ab",
+     "schema_hash": "af29cf413864c65dee4ac821b10d15f9bb0673e2977d2298918b1317d160d4ba"
+    },
+    {
+     "case_id": "e053-c2",
+     "target_asset_id": "github:delete_file",
+     "content_hash": "bde38a9b06606718dcc6b16600bd0d1b8f839fcb384e8ecffeb564a4b69f00ab",
+     "schema_hash": "af29cf413864c65dee4ac821b10d15f9bb0673e2977d2298918b1317d160d4ba"
+    },
+    {
+     "case_id": "e053-c3",
+     "target_asset_id": "github:delete_file",
+     "content_hash": "bde38a9b06606718dcc6b16600bd0d1b8f839fcb384e8ecffeb564a4b69f00ab",
+     "schema_hash": "af29cf413864c65dee4ac821b10d15f9bb0673e2977d2298918b1317d160d4ba"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e053-p1",
+    "e053-p2"
+   ],
+   "control_case_ids": [
+    "h057-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h047-prompt"
+   ]
+  },
+  {
+   "id": "e054",
+   "intent_family_ids": [
+    "intent:e054"
+   ],
+   "corrections": [
+    {
+     "case_id": "e054-c1",
+     "target_asset_id": "matrix:698d47a72d90f030958947c7",
+     "content_hash": "9f78b8359fbd4943ad260a7a1e436e5a96503406d6c34e99f69223d647d85b9c",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e054-c2",
+     "target_asset_id": "matrix:698d47a72d90f030958947c7",
+     "content_hash": "9f78b8359fbd4943ad260a7a1e436e5a96503406d6c34e99f69223d647d85b9c",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e054-c3",
+     "target_asset_id": "matrix:698d47a72d90f030958947c7",
+     "content_hash": "9f78b8359fbd4943ad260a7a1e436e5a96503406d6c34e99f69223d647d85b9c",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e054-p1",
+    "e054-p2"
+   ],
+   "control_case_ids": [
+    "h002-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h026-prompt"
+   ]
+  },
+  {
+   "id": "e055",
+   "intent_family_ids": [
+    "intent:e055"
+   ],
+   "corrections": [
+    {
+     "case_id": "e055-c1",
+     "target_asset_id": "github:manage_repository_notification_subscription",
+     "content_hash": "31d28066a9ad0a5600783a0db98f917bec157953549d041c7fb27555d1242781",
+     "schema_hash": "fbbe0d2f46f63d903778595f858225c020196c4854f306bb2eae49cb610d875b"
+    },
+    {
+     "case_id": "e055-c2",
+     "target_asset_id": "github:manage_repository_notification_subscription",
+     "content_hash": "31d28066a9ad0a5600783a0db98f917bec157953549d041c7fb27555d1242781",
+     "schema_hash": "fbbe0d2f46f63d903778595f858225c020196c4854f306bb2eae49cb610d875b"
+    },
+    {
+     "case_id": "e055-c3",
+     "target_asset_id": "github:manage_repository_notification_subscription",
+     "content_hash": "31d28066a9ad0a5600783a0db98f917bec157953549d041c7fb27555d1242781",
+     "schema_hash": "fbbe0d2f46f63d903778595f858225c020196c4854f306bb2eae49cb610d875b"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e055-p1",
+    "e055-p2"
+   ],
+   "control_case_ids": [
+    "h056-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h098-prompt"
+   ]
+  },
+  {
+   "id": "e056",
+   "intent_family_ids": [
+    "intent:e056"
+   ],
+   "corrections": [
+    {
+     "case_id": "e056-c1",
+     "target_asset_id": "github:list_issues",
+     "content_hash": "e89db4668ef6c20901d7d91cac8485b4c1f8f2eb4afc6f244f79ae79032cf403",
+     "schema_hash": "1d427f2b909e671b75ccd4e8e81434d32d1755da686c6e43b7bbf1d039201e0f"
+    },
+    {
+     "case_id": "e056-c2",
+     "target_asset_id": "github:list_issues",
+     "content_hash": "e89db4668ef6c20901d7d91cac8485b4c1f8f2eb4afc6f244f79ae79032cf403",
+     "schema_hash": "1d427f2b909e671b75ccd4e8e81434d32d1755da686c6e43b7bbf1d039201e0f"
+    },
+    {
+     "case_id": "e056-c3",
+     "target_asset_id": "github:list_issues",
+     "content_hash": "e89db4668ef6c20901d7d91cac8485b4c1f8f2eb4afc6f244f79ae79032cf403",
+     "schema_hash": "1d427f2b909e671b75ccd4e8e81434d32d1755da686c6e43b7bbf1d039201e0f"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e056-p1",
+    "e056-p2"
+   ],
+   "control_case_ids": [
+    "h006-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h013-prompt"
+   ]
+  },
+  {
+   "id": "e057",
+   "intent_family_ids": [
+    "intent:e057"
+   ],
+   "corrections": [
+    {
+     "case_id": "e057-c1",
+     "target_asset_id": "skillsbench:3c85273d8cd7e3f2c914be0b",
+     "content_hash": "38d8559d4899602f82f3560052132aa0c40cfca80203037729756bdb4fb8e0cb",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e057-c2",
+     "target_asset_id": "skillsbench:3c85273d8cd7e3f2c914be0b",
+     "content_hash": "38d8559d4899602f82f3560052132aa0c40cfca80203037729756bdb4fb8e0cb",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e057-c3",
+     "target_asset_id": "skillsbench:3c85273d8cd7e3f2c914be0b",
+     "content_hash": "38d8559d4899602f82f3560052132aa0c40cfca80203037729756bdb4fb8e0cb",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e057-p1",
+    "e057-p2"
+   ],
+   "control_case_ids": [
+    "h074-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h044-prompt"
+   ]
+  },
+  {
+   "id": "e058",
+   "intent_family_ids": [
+    "intent:e058"
+   ],
+   "corrections": [
+    {
+     "case_id": "e058-c1",
+     "target_asset_id": "github:hide_pull_request_review",
+     "content_hash": "7772db81eb530c053f2ae73dcab1dfee1d67308898fcee3dde33561e072a06d4",
+     "schema_hash": "627cac47feb78eb0cd97f8d96b4ea042f5f1f3cc5b8d1f608a1b1d1403004aca"
+    },
+    {
+     "case_id": "e058-c2",
+     "target_asset_id": "github:hide_pull_request_review",
+     "content_hash": "7772db81eb530c053f2ae73dcab1dfee1d67308898fcee3dde33561e072a06d4",
+     "schema_hash": "627cac47feb78eb0cd97f8d96b4ea042f5f1f3cc5b8d1f608a1b1d1403004aca"
+    },
+    {
+     "case_id": "e058-c3",
+     "target_asset_id": "github:hide_pull_request_review",
+     "content_hash": "7772db81eb530c053f2ae73dcab1dfee1d67308898fcee3dde33561e072a06d4",
+     "schema_hash": "627cac47feb78eb0cd97f8d96b4ea042f5f1f3cc5b8d1f608a1b1d1403004aca"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e058-p1",
+    "e058-p2"
+   ],
+   "control_case_ids": [
+    "h066-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h080-prompt"
+   ]
+  },
+  {
+   "id": "e059",
+   "intent_family_ids": [
+    "intent:e059"
+   ],
+   "corrections": [
+    {
+     "case_id": "e059-c1",
+     "target_asset_id": "github:pull_request_read",
+     "content_hash": "744aeed015f0271fa6854952c2d41d2115057dcb3119cab507f5be75ba8fa5e8",
+     "schema_hash": "a2fd758d85e86f6eef9cb88db27e530108080740be65b13ef83fcb1b76e10fbd"
+    },
+    {
+     "case_id": "e059-c2",
+     "target_asset_id": "github:pull_request_read",
+     "content_hash": "744aeed015f0271fa6854952c2d41d2115057dcb3119cab507f5be75ba8fa5e8",
+     "schema_hash": "a2fd758d85e86f6eef9cb88db27e530108080740be65b13ef83fcb1b76e10fbd"
+    },
+    {
+     "case_id": "e059-c3",
+     "target_asset_id": "github:pull_request_read",
+     "content_hash": "744aeed015f0271fa6854952c2d41d2115057dcb3119cab507f5be75ba8fa5e8",
+     "schema_hash": "a2fd758d85e86f6eef9cb88db27e530108080740be65b13ef83fcb1b76e10fbd"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e059-p1",
+    "e059-p2"
+   ],
+   "control_case_ids": [
+    "h052-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h049-prompt"
+   ]
+  },
+  {
+   "id": "e060",
+   "intent_family_ids": [
+    "intent:e060"
+   ],
+   "corrections": [
+    {
+     "case_id": "e060-c1",
+     "target_asset_id": "skillsbench:9916718a673f31583b1358fa",
+     "content_hash": "707848935613f497d9d4a8992ec4184695ba2c9a1ac46b0a05ee7fd5d0067483",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e060-c2",
+     "target_asset_id": "skillsbench:9916718a673f31583b1358fa",
+     "content_hash": "707848935613f497d9d4a8992ec4184695ba2c9a1ac46b0a05ee7fd5d0067483",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e060-c3",
+     "target_asset_id": "skillsbench:9916718a673f31583b1358fa",
+     "content_hash": "707848935613f497d9d4a8992ec4184695ba2c9a1ac46b0a05ee7fd5d0067483",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e060-p1",
+    "e060-p2"
+   ],
+   "control_case_ids": [
+    "h066-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h046-prompt"
+   ]
+  },
+  {
+   "id": "e061",
+   "intent_family_ids": [
+    "intent:e061"
+   ],
+   "corrections": [
+    {
+     "case_id": "e061-c1",
+     "target_asset_id": "skillsbench:5f78f32b17315b4426fcd3b7",
+     "content_hash": "0cc7e763ebc97e1fda8f41f9ae28a1c0ff0de2911450654505f11b13b41762a1",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e061-c2",
+     "target_asset_id": "skillsbench:5f78f32b17315b4426fcd3b7",
+     "content_hash": "0cc7e763ebc97e1fda8f41f9ae28a1c0ff0de2911450654505f11b13b41762a1",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e061-c3",
+     "target_asset_id": "skillsbench:5f78f32b17315b4426fcd3b7",
+     "content_hash": "0cc7e763ebc97e1fda8f41f9ae28a1c0ff0de2911450654505f11b13b41762a1",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e061-p1",
+    "e061-p2"
+   ],
+   "control_case_ids": [
+    "h096-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h051-prompt"
+   ]
+  },
+  {
+   "id": "e062",
+   "intent_family_ids": [
+    "intent:e062"
+   ],
+   "corrections": [
+    {
+     "case_id": "e062-c1",
+     "target_asset_id": "skillsbench:5c84c77bfef1a68b56d7828f",
+     "content_hash": "30227192653488b41c91c5824d0b4a62bf780e9e9040600172687ab563d21c57",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e062-c2",
+     "target_asset_id": "skillsbench:5c84c77bfef1a68b56d7828f",
+     "content_hash": "30227192653488b41c91c5824d0b4a62bf780e9e9040600172687ab563d21c57",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e062-c3",
+     "target_asset_id": "skillsbench:5c84c77bfef1a68b56d7828f",
+     "content_hash": "30227192653488b41c91c5824d0b4a62bf780e9e9040600172687ab563d21c57",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e062-p1",
+    "e062-p2"
+   ],
+   "control_case_ids": [
+    "h098-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h033-prompt"
+   ]
+  },
+  {
+   "id": "e063",
+   "intent_family_ids": [
+    "intent:e063"
+   ],
+   "corrections": [
+    {
+     "case_id": "e063-c1",
+     "target_asset_id": "skillsbench:acec52e1918bb165f324249c",
+     "content_hash": "aab0e5fdfc3331397ce6a679f7efc4882d39919b437407eb95798e5df066a374",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e063-c2",
+     "target_asset_id": "skillsbench:acec52e1918bb165f324249c",
+     "content_hash": "aab0e5fdfc3331397ce6a679f7efc4882d39919b437407eb95798e5df066a374",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e063-c3",
+     "target_asset_id": "skillsbench:acec52e1918bb165f324249c",
+     "content_hash": "aab0e5fdfc3331397ce6a679f7efc4882d39919b437407eb95798e5df066a374",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e063-p1",
+    "e063-p2"
+   ],
+   "control_case_ids": [
+    "h072-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h050-prompt"
+   ]
+  },
+  {
+   "id": "e064",
+   "intent_family_ids": [
+    "intent:e064"
+   ],
+   "corrections": [
+    {
+     "case_id": "e064-c1",
+     "target_asset_id": "github:list_commits",
+     "content_hash": "72a89a08ee118ce162227d12eb52afd5d1d35de6be6f23144abdf3f993fc3a9e",
+     "schema_hash": "591090af37df44793d29ce44be3afe0ec122e3ac2db6edc4e5db62d330b0a35c"
+    },
+    {
+     "case_id": "e064-c2",
+     "target_asset_id": "github:list_commits",
+     "content_hash": "72a89a08ee118ce162227d12eb52afd5d1d35de6be6f23144abdf3f993fc3a9e",
+     "schema_hash": "591090af37df44793d29ce44be3afe0ec122e3ac2db6edc4e5db62d330b0a35c"
+    },
+    {
+     "case_id": "e064-c3",
+     "target_asset_id": "github:list_commits",
+     "content_hash": "72a89a08ee118ce162227d12eb52afd5d1d35de6be6f23144abdf3f993fc3a9e",
+     "schema_hash": "591090af37df44793d29ce44be3afe0ec122e3ac2db6edc4e5db62d330b0a35c"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e064-p1",
+    "e064-p2"
+   ],
+   "control_case_ids": [
+    "h065-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h044-prompt"
+   ]
+  },
+  {
+   "id": "e065",
+   "intent_family_ids": [
+    "intent:e065"
+   ],
+   "corrections": [
+    {
+     "case_id": "e065-c1",
+     "target_asset_id": "skillsbench:4903dc267af1aefea42798da",
+     "content_hash": "20ff09362d2154c6424b3b533238440bcfcf6d81f1de97d6903197577a9a174a",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e065-c2",
+     "target_asset_id": "skillsbench:4903dc267af1aefea42798da",
+     "content_hash": "20ff09362d2154c6424b3b533238440bcfcf6d81f1de97d6903197577a9a174a",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e065-c3",
+     "target_asset_id": "skillsbench:4903dc267af1aefea42798da",
+     "content_hash": "20ff09362d2154c6424b3b533238440bcfcf6d81f1de97d6903197577a9a174a",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e065-p1",
+    "e065-p2"
+   ],
+   "control_case_ids": [
+    "h031-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h054-prompt"
+   ]
+  },
+  {
+   "id": "e066",
+   "intent_family_ids": [
+    "intent:e066"
+   ],
+   "corrections": [
+    {
+     "case_id": "e066-c1",
+     "target_asset_id": "github:search_orgs",
+     "content_hash": "661110ae5b1cba5c45b7ced293e6f4796aac8053ecbb73986d18e778fe67a738",
+     "schema_hash": "85c11d0f92f4dd086bcdd5494104a917e332c05028bc055598298b327643d9f9"
+    },
+    {
+     "case_id": "e066-c2",
+     "target_asset_id": "github:search_orgs",
+     "content_hash": "661110ae5b1cba5c45b7ced293e6f4796aac8053ecbb73986d18e778fe67a738",
+     "schema_hash": "85c11d0f92f4dd086bcdd5494104a917e332c05028bc055598298b327643d9f9"
+    },
+    {
+     "case_id": "e066-c3",
+     "target_asset_id": "github:search_orgs",
+     "content_hash": "661110ae5b1cba5c45b7ced293e6f4796aac8053ecbb73986d18e778fe67a738",
+     "schema_hash": "85c11d0f92f4dd086bcdd5494104a917e332c05028bc055598298b327643d9f9"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e066-p1",
+    "e066-p2"
+   ],
+   "control_case_ids": [
+    "h052-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h006-prompt"
+   ]
+  },
+  {
+   "id": "e067",
+   "intent_family_ids": [
+    "intent:e067"
+   ],
+   "corrections": [
+    {
+     "case_id": "e067-c1",
+     "target_asset_id": "skillsbench:5f6db3c84260155a777bc3b6",
+     "content_hash": "77fc4c820ce8689c90bdbaa364e9e9b50f26fd0c285b869588f9b0a16dc8d054",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e067-c2",
+     "target_asset_id": "skillsbench:5f6db3c84260155a777bc3b6",
+     "content_hash": "77fc4c820ce8689c90bdbaa364e9e9b50f26fd0c285b869588f9b0a16dc8d054",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e067-c3",
+     "target_asset_id": "skillsbench:5f6db3c84260155a777bc3b6",
+     "content_hash": "77fc4c820ce8689c90bdbaa364e9e9b50f26fd0c285b869588f9b0a16dc8d054",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e067-p1",
+    "e067-p2"
+   ],
+   "control_case_ids": [
+    "h078-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h074-prompt"
+   ]
+  },
+  {
+   "id": "e068",
+   "intent_family_ids": [
+    "intent:e068"
+   ],
+   "corrections": [
+    {
+     "case_id": "e068-c1",
+     "target_asset_id": "github:get_global_security_advisory",
+     "content_hash": "e64d3f5306a5073fea2395fa98cf2c0ba1b0e7b4a215f62799c007f2c5f30b84",
+     "schema_hash": "7cf7dd41ec56694e4789f5c912970c9edc306f2f1a99ca269f05ef9f01517c41"
+    },
+    {
+     "case_id": "e068-c2",
+     "target_asset_id": "github:get_global_security_advisory",
+     "content_hash": "e64d3f5306a5073fea2395fa98cf2c0ba1b0e7b4a215f62799c007f2c5f30b84",
+     "schema_hash": "7cf7dd41ec56694e4789f5c912970c9edc306f2f1a99ca269f05ef9f01517c41"
+    },
+    {
+     "case_id": "e068-c3",
+     "target_asset_id": "github:get_global_security_advisory",
+     "content_hash": "e64d3f5306a5073fea2395fa98cf2c0ba1b0e7b4a215f62799c007f2c5f30b84",
+     "schema_hash": "7cf7dd41ec56694e4789f5c912970c9edc306f2f1a99ca269f05ef9f01517c41"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e068-p1",
+    "e068-p2"
+   ],
+   "control_case_ids": [
+    "h008-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h079-prompt"
+   ]
+  },
+  {
+   "id": "e069",
+   "intent_family_ids": [
+    "intent:e069"
+   ],
+   "corrections": [
+    {
+     "case_id": "e069-c1",
+     "target_asset_id": "matrix:69e1dea2c4357076d28ecb48",
+     "content_hash": "1b2b281319c6bb9a175e4ec2d9d2d1b05db3ec3e94f761fe88f15d8722f6492c",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e069-c2",
+     "target_asset_id": "matrix:69e1dea2c4357076d28ecb48",
+     "content_hash": "1b2b281319c6bb9a175e4ec2d9d2d1b05db3ec3e94f761fe88f15d8722f6492c",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e069-c3",
+     "target_asset_id": "matrix:69e1dea2c4357076d28ecb48",
+     "content_hash": "1b2b281319c6bb9a175e4ec2d9d2d1b05db3ec3e94f761fe88f15d8722f6492c",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e069-p1",
+    "e069-p2"
+   ],
+   "control_case_ids": [
+    "h023-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h046-prompt"
+   ]
+  },
+  {
+   "id": "e070",
+   "intent_family_ids": [
+    "intent:e070"
+   ],
+   "corrections": [
+    {
+     "case_id": "e070-c1",
+     "target_asset_id": "matrix:6a6aeac2210fe27bd24702d9",
+     "content_hash": "73b49bae56bfd5f8a908b588c3e94c917b277344be986ae3c4c9cf7dfc37d49d",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e070-c2",
+     "target_asset_id": "matrix:6a6aeac2210fe27bd24702d9",
+     "content_hash": "73b49bae56bfd5f8a908b588c3e94c917b277344be986ae3c4c9cf7dfc37d49d",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e070-c3",
+     "target_asset_id": "matrix:6a6aeac2210fe27bd24702d9",
+     "content_hash": "73b49bae56bfd5f8a908b588c3e94c917b277344be986ae3c4c9cf7dfc37d49d",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e070-p1",
+    "e070-p2"
+   ],
+   "control_case_ids": [
+    "h061-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h008-prompt"
+   ]
+  },
+  {
+   "id": "e071",
+   "intent_family_ids": [
+    "intent:e071"
+   ],
+   "corrections": [
+    {
+     "case_id": "e071-c1",
+     "target_asset_id": "github:add_pull_request_review_comment_reaction",
+     "content_hash": "c4a919df7c31dff035d133f747ebb31d2672bb3e6488f64ef897875798bf2ff3",
+     "schema_hash": "c17874d7fb03f2fe36d15aacfba18fe93d4f414426a1113c7c1f4c26f6ca1d6f"
+    },
+    {
+     "case_id": "e071-c2",
+     "target_asset_id": "github:add_pull_request_review_comment_reaction",
+     "content_hash": "c4a919df7c31dff035d133f747ebb31d2672bb3e6488f64ef897875798bf2ff3",
+     "schema_hash": "c17874d7fb03f2fe36d15aacfba18fe93d4f414426a1113c7c1f4c26f6ca1d6f"
+    },
+    {
+     "case_id": "e071-c3",
+     "target_asset_id": "github:add_pull_request_review_comment_reaction",
+     "content_hash": "c4a919df7c31dff035d133f747ebb31d2672bb3e6488f64ef897875798bf2ff3",
+     "schema_hash": "c17874d7fb03f2fe36d15aacfba18fe93d4f414426a1113c7c1f4c26f6ca1d6f"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e071-p1",
+    "e071-p2"
+   ],
+   "control_case_ids": [
+    "h018-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h058-prompt"
+   ]
+  },
+  {
+   "id": "e072",
+   "intent_family_ids": [
+    "intent:e072"
+   ],
+   "corrections": [
+    {
+     "case_id": "e072-c1",
+     "target_asset_id": "github:search_code",
+     "content_hash": "0fd1b423d55810000f3262fac44dd481bc3c7f4f7ffbe0ee36fe9cd643bfe06c",
+     "schema_hash": "4ad473c9570e3a825e6d60c9869b87324e0a5d371cf293ffb70fd2b840358cf7"
+    },
+    {
+     "case_id": "e072-c2",
+     "target_asset_id": "github:search_code",
+     "content_hash": "0fd1b423d55810000f3262fac44dd481bc3c7f4f7ffbe0ee36fe9cd643bfe06c",
+     "schema_hash": "4ad473c9570e3a825e6d60c9869b87324e0a5d371cf293ffb70fd2b840358cf7"
+    },
+    {
+     "case_id": "e072-c3",
+     "target_asset_id": "github:search_code",
+     "content_hash": "0fd1b423d55810000f3262fac44dd481bc3c7f4f7ffbe0ee36fe9cd643bfe06c",
+     "schema_hash": "4ad473c9570e3a825e6d60c9869b87324e0a5d371cf293ffb70fd2b840358cf7"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e072-p1",
+    "e072-p2"
+   ],
+   "control_case_ids": [
+    "h030-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h085-prompt"
+   ]
+  },
+  {
+   "id": "e073",
+   "intent_family_ids": [
+    "intent:e073"
+   ],
+   "corrections": [
+    {
+     "case_id": "e073-c1",
+     "target_asset_id": "skillsbench:a86af835e36cf54d8997b194",
+     "content_hash": "594389f6d5d0d58c1c7714592bfce7f871154827a4b65f948d9829f2af3108a3",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e073-c2",
+     "target_asset_id": "skillsbench:a86af835e36cf54d8997b194",
+     "content_hash": "594389f6d5d0d58c1c7714592bfce7f871154827a4b65f948d9829f2af3108a3",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e073-c3",
+     "target_asset_id": "skillsbench:a86af835e36cf54d8997b194",
+     "content_hash": "594389f6d5d0d58c1c7714592bfce7f871154827a4b65f948d9829f2af3108a3",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e073-p1",
+    "e073-p2"
+   ],
+   "control_case_ids": [
+    "h033-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h068-prompt"
+   ]
+  },
+  {
+   "id": "e074",
+   "intent_family_ids": [
+    "intent:e074"
+   ],
+   "corrections": [
+    {
+     "case_id": "e074-c1",
+     "target_asset_id": "github:get_dependabot_alert",
+     "content_hash": "ce39d4f1f38bc86ae9830f3045c810f846d9a51863b99d3426032b6c60021908",
+     "schema_hash": "31e89f7a2261faf97fdd72c5e5b06f3caa0bfe1718e1e4697b407303c0c50131"
+    },
+    {
+     "case_id": "e074-c2",
+     "target_asset_id": "github:get_dependabot_alert",
+     "content_hash": "ce39d4f1f38bc86ae9830f3045c810f846d9a51863b99d3426032b6c60021908",
+     "schema_hash": "31e89f7a2261faf97fdd72c5e5b06f3caa0bfe1718e1e4697b407303c0c50131"
+    },
+    {
+     "case_id": "e074-c3",
+     "target_asset_id": "github:get_dependabot_alert",
+     "content_hash": "ce39d4f1f38bc86ae9830f3045c810f846d9a51863b99d3426032b6c60021908",
+     "schema_hash": "31e89f7a2261faf97fdd72c5e5b06f3caa0bfe1718e1e4697b407303c0c50131"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e074-p1",
+    "e074-p2"
+   ],
+   "control_case_ids": [
+    "h035-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h067-prompt"
+   ]
+  },
+  {
+   "id": "e075",
+   "intent_family_ids": [
+    "intent:e075"
+   ],
+   "corrections": [
+    {
+     "case_id": "e075-c1",
+     "target_asset_id": "skillsbench:5b698fef19dd387a82bd8b64",
+     "content_hash": "17f98241df7040646ec6a5ba7285aa3337b99cb5a03efa0c38f65e6ebadb3ff2",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e075-c2",
+     "target_asset_id": "skillsbench:5b698fef19dd387a82bd8b64",
+     "content_hash": "17f98241df7040646ec6a5ba7285aa3337b99cb5a03efa0c38f65e6ebadb3ff2",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e075-c3",
+     "target_asset_id": "skillsbench:5b698fef19dd387a82bd8b64",
+     "content_hash": "17f98241df7040646ec6a5ba7285aa3337b99cb5a03efa0c38f65e6ebadb3ff2",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e075-p1",
+    "e075-p2"
+   ],
+   "control_case_ids": [
+    "h051-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h004-prompt"
+   ]
+  },
+  {
+   "id": "e076",
+   "intent_family_ids": [
+    "intent:e076"
+   ],
+   "corrections": [
+    {
+     "case_id": "e076-c1",
+     "target_asset_id": "skillsbench:2ee4cd3639f4002d1aef2e46",
+     "content_hash": "c5e4e03d8eb94edffbc0ddf09df7a07260d349041408dd12204d2d5b67a309ef",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e076-c2",
+     "target_asset_id": "skillsbench:2ee4cd3639f4002d1aef2e46",
+     "content_hash": "c5e4e03d8eb94edffbc0ddf09df7a07260d349041408dd12204d2d5b67a309ef",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e076-c3",
+     "target_asset_id": "skillsbench:2ee4cd3639f4002d1aef2e46",
+     "content_hash": "c5e4e03d8eb94edffbc0ddf09df7a07260d349041408dd12204d2d5b67a309ef",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e076-p1",
+    "e076-p2"
+   ],
+   "control_case_ids": [
+    "h081-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h042-prompt"
+   ]
+  },
+  {
+   "id": "e077",
+   "intent_family_ids": [
+    "intent:e077"
+   ],
+   "corrections": [
+    {
+     "case_id": "e077-c1",
+     "target_asset_id": "skillsbench:bf5f91a3e20f1ebcd2f3344b",
+     "content_hash": "8d65a5ace544deb6beafebe9275eaa9f0673ac1286899c7f7ddecd3dfce03974",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e077-c2",
+     "target_asset_id": "skillsbench:bf5f91a3e20f1ebcd2f3344b",
+     "content_hash": "8d65a5ace544deb6beafebe9275eaa9f0673ac1286899c7f7ddecd3dfce03974",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e077-c3",
+     "target_asset_id": "skillsbench:bf5f91a3e20f1ebcd2f3344b",
+     "content_hash": "8d65a5ace544deb6beafebe9275eaa9f0673ac1286899c7f7ddecd3dfce03974",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e077-p1",
+    "e077-p2"
+   ],
+   "control_case_ids": [
+    "h067-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h019-prompt"
+   ]
+  },
+  {
+   "id": "e078",
+   "intent_family_ids": [
+    "intent:e078"
+   ],
+   "corrections": [
+    {
+     "case_id": "e078-c1",
+     "target_asset_id": "github:dismiss_notification",
+     "content_hash": "7cd497cc35bfa92ecf38fa796a1d9ca9a32d46e686e5fb6e3b3426e801dbc777",
+     "schema_hash": "05f50e5d8cca3d5fb031489e7f07936ca33aeca2fe23974a7ab93f475f5ceec0"
+    },
+    {
+     "case_id": "e078-c2",
+     "target_asset_id": "github:dismiss_notification",
+     "content_hash": "7cd497cc35bfa92ecf38fa796a1d9ca9a32d46e686e5fb6e3b3426e801dbc777",
+     "schema_hash": "05f50e5d8cca3d5fb031489e7f07936ca33aeca2fe23974a7ab93f475f5ceec0"
+    },
+    {
+     "case_id": "e078-c3",
+     "target_asset_id": "github:dismiss_notification",
+     "content_hash": "7cd497cc35bfa92ecf38fa796a1d9ca9a32d46e686e5fb6e3b3426e801dbc777",
+     "schema_hash": "05f50e5d8cca3d5fb031489e7f07936ca33aeca2fe23974a7ab93f475f5ceec0"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e078-p1",
+    "e078-p2"
+   ],
+   "control_case_ids": [
+    "h019-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h096-prompt"
+   ]
+  },
+  {
+   "id": "e079",
+   "intent_family_ids": [
+    "intent:e079"
+   ],
+   "corrections": [
+    {
+     "case_id": "e079-c1",
+     "target_asset_id": "skillsbench:de3925c22dd9b9174548b93b",
+     "content_hash": "03d711b93219cec1cd70d823d595e7c5adffc058c5910b94886fe6cc374f08d8",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e079-c2",
+     "target_asset_id": "skillsbench:de3925c22dd9b9174548b93b",
+     "content_hash": "03d711b93219cec1cd70d823d595e7c5adffc058c5910b94886fe6cc374f08d8",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e079-c3",
+     "target_asset_id": "skillsbench:de3925c22dd9b9174548b93b",
+     "content_hash": "03d711b93219cec1cd70d823d595e7c5adffc058c5910b94886fe6cc374f08d8",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e079-p1",
+    "e079-p2"
+   ],
+   "control_case_ids": [
+    "h024-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h038-prompt"
+   ]
+  },
+  {
+   "id": "e080",
+   "intent_family_ids": [
+    "intent:e080"
+   ],
+   "corrections": [
+    {
+     "case_id": "e080-c1",
+     "target_asset_id": "skillsbench:eb4539015b98d473a49ca7d4",
+     "content_hash": "843682ecc8b8230245fa52e3e1f00f48bec3df2e669516fb7a0ac3ead62ebb98",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e080-c2",
+     "target_asset_id": "skillsbench:eb4539015b98d473a49ca7d4",
+     "content_hash": "843682ecc8b8230245fa52e3e1f00f48bec3df2e669516fb7a0ac3ead62ebb98",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e080-c3",
+     "target_asset_id": "skillsbench:eb4539015b98d473a49ca7d4",
+     "content_hash": "843682ecc8b8230245fa52e3e1f00f48bec3df2e669516fb7a0ac3ead62ebb98",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e080-p1",
+    "e080-p2"
+   ],
+   "control_case_ids": [
+    "h081-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h089-prompt"
+   ]
+  },
+  {
+   "id": "e081",
+   "intent_family_ids": [
+    "intent:e081"
+   ],
+   "corrections": [
+    {
+     "case_id": "e081-c1",
+     "target_asset_id": "skillsbench:a696f3c92e65ddf02083dc32",
+     "content_hash": "d5a95c61cb189750beafbd7fea8e8ca8159ccf905d90974637b0a3e5495c7846",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e081-c2",
+     "target_asset_id": "skillsbench:a696f3c92e65ddf02083dc32",
+     "content_hash": "d5a95c61cb189750beafbd7fea8e8ca8159ccf905d90974637b0a3e5495c7846",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e081-c3",
+     "target_asset_id": "skillsbench:a696f3c92e65ddf02083dc32",
+     "content_hash": "d5a95c61cb189750beafbd7fea8e8ca8159ccf905d90974637b0a3e5495c7846",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e081-p1",
+    "e081-p2"
+   ],
+   "control_case_ids": [
+    "h048-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h058-prompt"
+   ]
+  },
+  {
+   "id": "e082",
+   "intent_family_ids": [
+    "intent:e082"
+   ],
+   "corrections": [
+    {
+     "case_id": "e082-c1",
+     "target_asset_id": "skillsbench:9ded7e6edb5f489a3628ef6a",
+     "content_hash": "85c71e75e63966eb06a72dc0a7ed2046c45c38bb5574d748603917c4a3801878",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e082-c2",
+     "target_asset_id": "skillsbench:9ded7e6edb5f489a3628ef6a",
+     "content_hash": "85c71e75e63966eb06a72dc0a7ed2046c45c38bb5574d748603917c4a3801878",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e082-c3",
+     "target_asset_id": "skillsbench:9ded7e6edb5f489a3628ef6a",
+     "content_hash": "85c71e75e63966eb06a72dc0a7ed2046c45c38bb5574d748603917c4a3801878",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e082-p1",
+    "e082-p2"
+   ],
+   "control_case_ids": [
+    "h050-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h018-prompt"
+   ]
+  },
+  {
+   "id": "e083",
+   "intent_family_ids": [
+    "intent:e083"
+   ],
+   "corrections": [
+    {
+     "case_id": "e083-c1",
+     "target_asset_id": "github:mark_all_notifications_read",
+     "content_hash": "a93de4d53b4487dcae3ce482129ed58529f0ddb1fa8cc0777080e7b096d13364",
+     "schema_hash": "8bb7e9f2af2ec57f2ac088fed1bbd1dc29a1516b38278e2597934c59a2416171"
+    },
+    {
+     "case_id": "e083-c2",
+     "target_asset_id": "github:mark_all_notifications_read",
+     "content_hash": "a93de4d53b4487dcae3ce482129ed58529f0ddb1fa8cc0777080e7b096d13364",
+     "schema_hash": "8bb7e9f2af2ec57f2ac088fed1bbd1dc29a1516b38278e2597934c59a2416171"
+    },
+    {
+     "case_id": "e083-c3",
+     "target_asset_id": "github:mark_all_notifications_read",
+     "content_hash": "a93de4d53b4487dcae3ce482129ed58529f0ddb1fa8cc0777080e7b096d13364",
+     "schema_hash": "8bb7e9f2af2ec57f2ac088fed1bbd1dc29a1516b38278e2597934c59a2416171"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e083-p1",
+    "e083-p2"
+   ],
+   "control_case_ids": [
+    "h046-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h084-prompt"
+   ]
+  },
+  {
+   "id": "e084",
+   "intent_family_ids": [
+    "intent:e084"
+   ],
+   "corrections": [
+    {
+     "case_id": "e084-c1",
+     "target_asset_id": "skillsbench:a1876bb811e5cfdb49d8c6a2",
+     "content_hash": "456e491ca6f033a77e871005f913d04a119992ad8ea834669b145ddc66d0de86",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e084-c2",
+     "target_asset_id": "skillsbench:a1876bb811e5cfdb49d8c6a2",
+     "content_hash": "456e491ca6f033a77e871005f913d04a119992ad8ea834669b145ddc66d0de86",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e084-c3",
+     "target_asset_id": "skillsbench:a1876bb811e5cfdb49d8c6a2",
+     "content_hash": "456e491ca6f033a77e871005f913d04a119992ad8ea834669b145ddc66d0de86",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e084-p1",
+    "e084-p2"
+   ],
+   "control_case_ids": [
+    "h011-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h059-prompt"
+   ]
+  },
+  {
+   "id": "e085",
+   "intent_family_ids": [
+    "intent:e085"
+   ],
+   "corrections": [
+    {
+     "case_id": "e085-c1",
+     "target_asset_id": "github:create_or_update_file",
+     "content_hash": "1628c5dd3c1fbf577bd608bb70c2d352d973bd74ce07293ef4926332c6239508",
+     "schema_hash": "4bbfd9f8df3736e4897c2a0466b2131764d414c3075e3691711282eae7dc209e"
+    },
+    {
+     "case_id": "e085-c2",
+     "target_asset_id": "github:create_or_update_file",
+     "content_hash": "1628c5dd3c1fbf577bd608bb70c2d352d973bd74ce07293ef4926332c6239508",
+     "schema_hash": "4bbfd9f8df3736e4897c2a0466b2131764d414c3075e3691711282eae7dc209e"
+    },
+    {
+     "case_id": "e085-c3",
+     "target_asset_id": "github:create_or_update_file",
+     "content_hash": "1628c5dd3c1fbf577bd608bb70c2d352d973bd74ce07293ef4926332c6239508",
+     "schema_hash": "4bbfd9f8df3736e4897c2a0466b2131764d414c3075e3691711282eae7dc209e"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e085-p1",
+    "e085-p2"
+   ],
+   "control_case_ids": [
+    "h068-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h097-prompt"
+   ]
+  },
+  {
+   "id": "e086",
+   "intent_family_ids": [
+    "intent:e086"
+   ],
+   "corrections": [
+    {
+     "case_id": "e086-c1",
+     "target_asset_id": "matrix:698d807f2d90f030958947df",
+     "content_hash": "9b11e018d5bf604d24f7ec69ebbcce5f999d6e90c541912df580bf3b34abc95b",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e086-c2",
+     "target_asset_id": "matrix:698d807f2d90f030958947df",
+     "content_hash": "9b11e018d5bf604d24f7ec69ebbcce5f999d6e90c541912df580bf3b34abc95b",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e086-c3",
+     "target_asset_id": "matrix:698d807f2d90f030958947df",
+     "content_hash": "9b11e018d5bf604d24f7ec69ebbcce5f999d6e90c541912df580bf3b34abc95b",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e086-p1",
+    "e086-p2"
+   ],
+   "control_case_ids": [
+    "h094-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h097-prompt"
+   ]
+  },
+  {
+   "id": "e087",
+   "intent_family_ids": [
+    "intent:e087"
+   ],
+   "corrections": [
+    {
+     "case_id": "e087-c1",
+     "target_asset_id": "matrix:698d48a02d90f030958947cd",
+     "content_hash": "d57b6e3a44535b9c0ef454dad5c86f5df78185fc80a65c7092885b4b5e10f81b",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e087-c2",
+     "target_asset_id": "matrix:698d48a02d90f030958947cd",
+     "content_hash": "d57b6e3a44535b9c0ef454dad5c86f5df78185fc80a65c7092885b4b5e10f81b",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e087-c3",
+     "target_asset_id": "matrix:698d48a02d90f030958947cd",
+     "content_hash": "d57b6e3a44535b9c0ef454dad5c86f5df78185fc80a65c7092885b4b5e10f81b",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e087-p1",
+    "e087-p2"
+   ],
+   "control_case_ids": [
+    "h056-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h041-prompt"
+   ]
+  },
+  {
+   "id": "e088",
+   "intent_family_ids": [
+    "intent:e088"
+   ],
+   "corrections": [
+    {
+     "case_id": "e088-c1",
+     "target_asset_id": "skillsbench:97b65b8645442cffa4882f57",
+     "content_hash": "a7952b16cfda72bd0576f0f1ff1c222a0c05d5343195d00013e81ed56b8eddc4",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e088-c2",
+     "target_asset_id": "skillsbench:97b65b8645442cffa4882f57",
+     "content_hash": "a7952b16cfda72bd0576f0f1ff1c222a0c05d5343195d00013e81ed56b8eddc4",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e088-c3",
+     "target_asset_id": "skillsbench:97b65b8645442cffa4882f57",
+     "content_hash": "a7952b16cfda72bd0576f0f1ff1c222a0c05d5343195d00013e81ed56b8eddc4",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e088-p1",
+    "e088-p2"
+   ],
+   "control_case_ids": [
+    "h063-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h046-prompt"
+   ]
+  },
+  {
+   "id": "e089",
+   "intent_family_ids": [
+    "intent:e089"
+   ],
+   "corrections": [
+    {
+     "case_id": "e089-c1",
+     "target_asset_id": "github:update_pull_request",
+     "content_hash": "13a31e178bc1a898b901928ace0f51800df4217479301517d19dc4d6a9b2d2e2",
+     "schema_hash": "9ab7a8c42b87969ff71fc83d00888add6f1be7b00c4abf5e8f463bfba88d90a8"
+    },
+    {
+     "case_id": "e089-c2",
+     "target_asset_id": "github:update_pull_request",
+     "content_hash": "13a31e178bc1a898b901928ace0f51800df4217479301517d19dc4d6a9b2d2e2",
+     "schema_hash": "9ab7a8c42b87969ff71fc83d00888add6f1be7b00c4abf5e8f463bfba88d90a8"
+    },
+    {
+     "case_id": "e089-c3",
+     "target_asset_id": "github:update_pull_request",
+     "content_hash": "13a31e178bc1a898b901928ace0f51800df4217479301517d19dc4d6a9b2d2e2",
+     "schema_hash": "9ab7a8c42b87969ff71fc83d00888add6f1be7b00c4abf5e8f463bfba88d90a8"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e089-p1",
+    "e089-p2"
+   ],
+   "control_case_ids": [
+    "h071-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h092-prompt"
+   ]
+  },
+  {
+   "id": "e090",
+   "intent_family_ids": [
+    "intent:e090"
+   ],
+   "corrections": [
+    {
+     "case_id": "e090-c1",
+     "target_asset_id": "github:resolve_review_thread",
+     "content_hash": "44ffe74d40ba139aa844fe2aaa93e901789bd99d7892828bad8440f083d45372",
+     "schema_hash": "17009dcbc20500e1daf8e7f980a9364bc7a10326c437fcec4a681b2d7b7b6c3c"
+    },
+    {
+     "case_id": "e090-c2",
+     "target_asset_id": "github:resolve_review_thread",
+     "content_hash": "44ffe74d40ba139aa844fe2aaa93e901789bd99d7892828bad8440f083d45372",
+     "schema_hash": "17009dcbc20500e1daf8e7f980a9364bc7a10326c437fcec4a681b2d7b7b6c3c"
+    },
+    {
+     "case_id": "e090-c3",
+     "target_asset_id": "github:resolve_review_thread",
+     "content_hash": "44ffe74d40ba139aa844fe2aaa93e901789bd99d7892828bad8440f083d45372",
+     "schema_hash": "17009dcbc20500e1daf8e7f980a9364bc7a10326c437fcec4a681b2d7b7b6c3c"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e090-p1",
+    "e090-p2"
+   ],
+   "control_case_ids": [
+    "h035-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h059-prompt"
+   ]
+  },
+  {
+   "id": "e091",
+   "intent_family_ids": [
+    "intent:e091"
+   ],
+   "corrections": [
+    {
+     "case_id": "e091-c1",
+     "target_asset_id": "github:create_repository_ruleset",
+     "content_hash": "f5659ba19892b696620cccc15358d8679968a1ed30942fc929f58537dd1d6bac",
+     "schema_hash": "52fd3b9bdd6a6df2371f9565c9a4bfde2a97487493d4d5fd816992b5a3536621"
+    },
+    {
+     "case_id": "e091-c2",
+     "target_asset_id": "github:create_repository_ruleset",
+     "content_hash": "f5659ba19892b696620cccc15358d8679968a1ed30942fc929f58537dd1d6bac",
+     "schema_hash": "52fd3b9bdd6a6df2371f9565c9a4bfde2a97487493d4d5fd816992b5a3536621"
+    },
+    {
+     "case_id": "e091-c3",
+     "target_asset_id": "github:create_repository_ruleset",
+     "content_hash": "f5659ba19892b696620cccc15358d8679968a1ed30942fc929f58537dd1d6bac",
+     "schema_hash": "52fd3b9bdd6a6df2371f9565c9a4bfde2a97487493d4d5fd816992b5a3536621"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e091-p1",
+    "e091-p2"
+   ],
+   "control_case_ids": [
+    "h014-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h036-prompt"
+   ]
+  },
+  {
+   "id": "e092",
+   "intent_family_ids": [
+    "intent:e092"
+   ],
+   "corrections": [
+    {
+     "case_id": "e092-c1",
+     "target_asset_id": "github:list_code_scanning_alerts",
+     "content_hash": "00b3ddb25c84d9ae13d32c5ec01e62413ae1b227b6e68359293809e5f42a3b17",
+     "schema_hash": "bf651575b08560c3e733c503ea845483ca8367ead11762f196da4a2e17e91b69"
+    },
+    {
+     "case_id": "e092-c2",
+     "target_asset_id": "github:list_code_scanning_alerts",
+     "content_hash": "00b3ddb25c84d9ae13d32c5ec01e62413ae1b227b6e68359293809e5f42a3b17",
+     "schema_hash": "bf651575b08560c3e733c503ea845483ca8367ead11762f196da4a2e17e91b69"
+    },
+    {
+     "case_id": "e092-c3",
+     "target_asset_id": "github:list_code_scanning_alerts",
+     "content_hash": "00b3ddb25c84d9ae13d32c5ec01e62413ae1b227b6e68359293809e5f42a3b17",
+     "schema_hash": "bf651575b08560c3e733c503ea845483ca8367ead11762f196da4a2e17e91b69"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e092-p1",
+    "e092-p2"
+   ],
+   "control_case_ids": [
+    "h084-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h038-prompt"
+   ]
+  },
+  {
+   "id": "e093",
+   "intent_family_ids": [
+    "intent:e093"
+   ],
+   "corrections": [
+    {
+     "case_id": "e093-c1",
+     "target_asset_id": "skillsbench:29408c1629e4d1877faaf36c",
+     "content_hash": "e2f325e78f3f31db9d39857d2f7a6e87cacb81c7d60d570a250e7c576495a19f",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e093-c2",
+     "target_asset_id": "skillsbench:29408c1629e4d1877faaf36c",
+     "content_hash": "e2f325e78f3f31db9d39857d2f7a6e87cacb81c7d60d570a250e7c576495a19f",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e093-c3",
+     "target_asset_id": "skillsbench:29408c1629e4d1877faaf36c",
+     "content_hash": "e2f325e78f3f31db9d39857d2f7a6e87cacb81c7d60d570a250e7c576495a19f",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e093-p1",
+    "e093-p2"
+   ],
+   "control_case_ids": [
+    "h041-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h048-prompt"
+   ]
+  },
+  {
+   "id": "e094",
+   "intent_family_ids": [
+    "intent:e094"
+   ],
+   "corrections": [
+    {
+     "case_id": "e094-c1",
+     "target_asset_id": "github:hide_issue_comment",
+     "content_hash": "b1772d05753f03baed035daa7b1662f4687276c2a983530d6d55499efe919b10",
+     "schema_hash": "87fb23ef0995916ee62600cdb37dfdb029a07423e64835d03c2c758b8723a8e6"
+    },
+    {
+     "case_id": "e094-c2",
+     "target_asset_id": "github:hide_issue_comment",
+     "content_hash": "b1772d05753f03baed035daa7b1662f4687276c2a983530d6d55499efe919b10",
+     "schema_hash": "87fb23ef0995916ee62600cdb37dfdb029a07423e64835d03c2c758b8723a8e6"
+    },
+    {
+     "case_id": "e094-c3",
+     "target_asset_id": "github:hide_issue_comment",
+     "content_hash": "b1772d05753f03baed035daa7b1662f4687276c2a983530d6d55499efe919b10",
+     "schema_hash": "87fb23ef0995916ee62600cdb37dfdb029a07423e64835d03c2c758b8723a8e6"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e094-p1",
+    "e094-p2"
+   ],
+   "control_case_ids": [
+    "h082-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h028-prompt"
+   ]
+  },
+  {
+   "id": "e095",
+   "intent_family_ids": [
+    "intent:e095"
+   ],
+   "corrections": [
+    {
+     "case_id": "e095-c1",
+     "target_asset_id": "github:ui_get",
+     "content_hash": "6d2604152330ff8e3ddf9852935c2678c52a27c0ca1370d38b6f6a1bf5be0302",
+     "schema_hash": "613ca52cc5c005387e667466c10dd760fcd18a6fb6899f1d1c0a7349f9fd4387"
+    },
+    {
+     "case_id": "e095-c2",
+     "target_asset_id": "github:ui_get",
+     "content_hash": "6d2604152330ff8e3ddf9852935c2678c52a27c0ca1370d38b6f6a1bf5be0302",
+     "schema_hash": "613ca52cc5c005387e667466c10dd760fcd18a6fb6899f1d1c0a7349f9fd4387"
+    },
+    {
+     "case_id": "e095-c3",
+     "target_asset_id": "github:ui_get",
+     "content_hash": "6d2604152330ff8e3ddf9852935c2678c52a27c0ca1370d38b6f6a1bf5be0302",
+     "schema_hash": "613ca52cc5c005387e667466c10dd760fcd18a6fb6899f1d1c0a7349f9fd4387"
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e095-p1",
+    "e095-p2"
+   ],
+   "control_case_ids": [
+    "h086-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h061-prompt"
+   ]
+  },
+  {
+   "id": "e096",
+   "intent_family_ids": [
+    "intent:e096"
+   ],
+   "corrections": [
+    {
+     "case_id": "e096-c1",
+     "target_asset_id": "skillsbench:a8e21cc06a0d0359b6d7176b",
+     "content_hash": "26530fb95a70059f6071734cca709db018dcc00ade4fe34011a7229d82bf1187",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e096-c2",
+     "target_asset_id": "skillsbench:a8e21cc06a0d0359b6d7176b",
+     "content_hash": "26530fb95a70059f6071734cca709db018dcc00ade4fe34011a7229d82bf1187",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e096-c3",
+     "target_asset_id": "skillsbench:a8e21cc06a0d0359b6d7176b",
+     "content_hash": "26530fb95a70059f6071734cca709db018dcc00ade4fe34011a7229d82bf1187",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e096-p1",
+    "e096-p2"
+   ],
+   "control_case_ids": [
+    "h043-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h093-prompt"
+   ]
+  },
+  {
+   "id": "e097",
+   "intent_family_ids": [
+    "intent:e097"
+   ],
+   "corrections": [
+    {
+     "case_id": "e097-c1",
+     "target_asset_id": "skillsbench:5ac11e8e71ba81f2c9920799",
+     "content_hash": "f2dca9d7b54d80cd7bb173f98d73db31f723e0ba800dc606d5a50da90e37a450",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e097-c2",
+     "target_asset_id": "skillsbench:5ac11e8e71ba81f2c9920799",
+     "content_hash": "f2dca9d7b54d80cd7bb173f98d73db31f723e0ba800dc606d5a50da90e37a450",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e097-c3",
+     "target_asset_id": "skillsbench:5ac11e8e71ba81f2c9920799",
+     "content_hash": "f2dca9d7b54d80cd7bb173f98d73db31f723e0ba800dc606d5a50da90e37a450",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e097-p1",
+    "e097-p2"
+   ],
+   "control_case_ids": [
+    "h039-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h002-prompt"
+   ]
+  },
+  {
+   "id": "e098",
+   "intent_family_ids": [
+    "intent:e098"
+   ],
+   "corrections": [
+    {
+     "case_id": "e098-c1",
+     "target_asset_id": "skillsbench:40dd16017c9861084250599b",
+     "content_hash": "317046cac52d42837875d1d4a24d30b3597f4bcfd67ab42fde25aaf2bf4a26f9",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e098-c2",
+     "target_asset_id": "skillsbench:40dd16017c9861084250599b",
+     "content_hash": "317046cac52d42837875d1d4a24d30b3597f4bcfd67ab42fde25aaf2bf4a26f9",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e098-c3",
+     "target_asset_id": "skillsbench:40dd16017c9861084250599b",
+     "content_hash": "317046cac52d42837875d1d4a24d30b3597f4bcfd67ab42fde25aaf2bf4a26f9",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e098-p1",
+    "e098-p2"
+   ],
+   "control_case_ids": [
+    "h036-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h010-prompt"
+   ]
+  },
+  {
+   "id": "e099",
+   "intent_family_ids": [
+    "intent:e099"
+   ],
+   "corrections": [
+    {
+     "case_id": "e099-c1",
+     "target_asset_id": "skillsbench:cdc55a86f14f49978c04166c",
+     "content_hash": "455734cb845620f57b39341a6f4372d28a084e70c741ce277a6a6f4323d46e06",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e099-c2",
+     "target_asset_id": "skillsbench:cdc55a86f14f49978c04166c",
+     "content_hash": "455734cb845620f57b39341a6f4372d28a084e70c741ce277a6a6f4323d46e06",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e099-c3",
+     "target_asset_id": "skillsbench:cdc55a86f14f49978c04166c",
+     "content_hash": "455734cb845620f57b39341a6f4372d28a084e70c741ce277a6a6f4323d46e06",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e099-p1",
+    "e099-p2"
+   ],
+   "control_case_ids": [
+    "h016-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h042-prompt"
+   ]
+  },
+  {
+   "id": "e100",
+   "intent_family_ids": [
+    "intent:e100"
+   ],
+   "corrections": [
+    {
+     "case_id": "e100-c1",
+     "target_asset_id": "skillsbench:bd580235d2c0204656ac63aa",
+     "content_hash": "bc320079e421dfea427609d9e369283a8a74c5aa520204300bd70dad1c40f1cb",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e100-c2",
+     "target_asset_id": "skillsbench:bd580235d2c0204656ac63aa",
+     "content_hash": "bc320079e421dfea427609d9e369283a8a74c5aa520204300bd70dad1c40f1cb",
+     "schema_hash": null
+    },
+    {
+     "case_id": "e100-c3",
+     "target_asset_id": "skillsbench:bd580235d2c0204656ac63aa",
+     "content_hash": "bc320079e421dfea427609d9e369283a8a74c5aa520204300bd70dad1c40f1cb",
+     "schema_hash": null
+    }
+   ],
+   "paraphrase_case_ids": [
+    "e100-p1",
+    "e100-p2"
+   ],
+   "control_case_ids": [
+    "h021-prompt"
+   ],
+   "reset_probe_case_ids": [
+    "h054-prompt"
+   ]
+  }
+ ]
+}

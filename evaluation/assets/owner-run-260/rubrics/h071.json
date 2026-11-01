@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h071",
+ "criteria": [
+  "Correctly identifies the dominated options (A, C, E) and the non-dominated ones (B and D)",
+  "Explains that a point is dominated when another option is at least as good on both objectives and better on one",
+  "Final answer is consistent with the data provided"
+ ]
+}

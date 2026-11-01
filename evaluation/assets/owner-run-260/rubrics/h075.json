@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h075",
+ "criteria": [
+  "Proposes a clear folder structure grouping the listed files logically",
+  "Identifies the likely duplicate pairs (resume files, vacation photos, final/report docs)",
+  "Provides rename suggestions removing the messy naming patterns"
+ ]
+}

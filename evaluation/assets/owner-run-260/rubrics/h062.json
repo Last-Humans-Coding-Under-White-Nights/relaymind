@@ -1,0 +1,8 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h062",
+ "criteria": [
+  "Provides the tag name, the commit SHA it points to, and the creation date for v2.4.1 in curl/curl",
+  "Produces a short formatted release-notes blurb containing that tag data"
+ ]
+}

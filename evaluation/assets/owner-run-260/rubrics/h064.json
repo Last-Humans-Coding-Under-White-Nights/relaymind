@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h064",
+ "criteria": [
+  "Calculates scores using a recognized coefficient formula (DOTS, Wilks, or similar) with correct bodyweight inputs",
+  "Ranks the three lifters by the computed score",
+  "Shows the individual scores, not just the ranking"
+ ]
+}

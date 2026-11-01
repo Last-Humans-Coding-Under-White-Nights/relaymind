@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h096",
+ "criteria": [
+  "Checks turning space (e.g., 1500mm circle) within the 2200x2000mm room",
+  "Evaluates door clear width and toilet centerline distance against ADA-derived thresholds",
+  "Reviews grab bar placement/length and lavatory knee/toe clearance dimensions",
+  "Provides itemized pass/fail results with concrete correction suggestions"
+ ]
+}

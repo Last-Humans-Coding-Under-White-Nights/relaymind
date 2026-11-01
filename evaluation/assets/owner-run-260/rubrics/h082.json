@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h082",
+ "criteria": [
+  "Mentions rawheap conversion and clustering analysis of the snapshots",
+  "Produces or describes a two-version growth comparison and lists suspect leaked objects",
+  "References the provided directories (./heap/v12, ./heap/v13) and companion logs",
+  "Answer is based only on the described inline scenario, no credentials or paid services required"
+ ]
+}

@@ -1,0 +1,10 @@
+{
+ "enabled": true,
+ "user_id": "owner",
+ "workspace_id": "owner-run-260",
+ "total_ms": 500,
+ "primary_ms": 150,
+ "fallback": true,
+ "primary": "lexical",
+ "catalog_dataset": "relaymind-owner-run-260"
+}

@@ -1,0 +1,8 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h041",
+ "criteria": [
+  "The assistant indicates a Copilot code review was requested for PR #128.",
+  "The response mentions gathering automated feedback before human review."
+ ]
+}

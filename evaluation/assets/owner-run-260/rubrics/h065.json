@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h065",
+ "criteria": [
+  "Identifies the relevant adaptation areas: screen/window size handling, fold-state changes, and avoid areas at minimum",
+  "Breaks the problem into distinct scenarios or checks rather than one vague checklist",
+  "Addresses the foldable-specific layout reflow and the avoid-area overlap described by the user"
+ ]
+}

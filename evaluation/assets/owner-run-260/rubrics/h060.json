@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h060",
+ "criteria": [
+  "The tool used lists pull requests from the tensorflow/tensorflow repository",
+  "The response contains a list of open PRs with titles/numbers or a summary count",
+  "No search-based tool is used since no author filter was specified"
+ ]
+}

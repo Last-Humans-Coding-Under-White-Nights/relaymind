@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h020",
+ "criteria": [
+  "Describes building and deploying the app to a real device via hdc/uitest",
+  "Covers scripted UI operations to capture each page screenshot",
+  "Produces posters in three specs: 1080x1920, 1920x1280, 1920x1080",
+  "States outputs go to store-posters/ and are added to .gitignore"
+ ]
+}

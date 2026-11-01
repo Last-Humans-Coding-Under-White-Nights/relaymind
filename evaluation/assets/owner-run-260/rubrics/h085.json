@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h085",
+ "criteria": [
+  "Covers the full flow: reproduce, root cause analysis, minimal fix, build/run verification",
+  "Addresses the crash when tapping the add-to-cart button on the product detail page",
+  "Fix is minimal and does not introduce unrelated changes",
+  "Mentions or applies build retry/circuit-breaker limits"
+ ]
+}

@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h092",
+ "criteria": [
+  "The request explicitly identifies the repository, parent issue, sub-issue to move, and the target position (front of the list)",
+  "No credentials or private accounts are required beyond the GitHub MCP connection",
+  "The task is a single self-contained reorder operation with other sub-issue order preserved"
+ ]
+}

@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h008",
+ "criteria": [
+  "The app's home page is driven across default, loading, and empty-data states with deterministic operations",
+  "Differences between design, requirements, and actual app UI are identified per state",
+  "A structured conclusion with evidence screenshots and suspicious issues is produced"
+ ]
+}

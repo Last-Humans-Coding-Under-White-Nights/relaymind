@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h086",
+ "criteria": [
+  "Executes the described UI steps on a HarmonyOS device via HDC",
+  "Locates controls via control tree or visual recognition",
+  "Includes screenshot verification at steps",
+  "Reports outcome of the toggle off/on sequence"
+ ]
+}

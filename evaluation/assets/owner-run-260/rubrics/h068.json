@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h068",
+ "criteria": [
+  "Correctly reports holdings count per quarter (3 then 4)",
+  "Identifies NVDA increase, AAPL decrease, MSFT increase, and new TSLA position",
+  "Offers a brief interpretation of what the changes suggest"
+ ]
+}

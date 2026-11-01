@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h088",
+ "criteria": [
+  "Analyzes the hilog/HiviewDFX logs and maps the 801 error code",
+  "Provides root cause candidates correlated with source code",
+  "Outputs a structured diagnostic report with fix suggestions",
+  "Handles the freeze symptom as part of the diagnosis"
+ ]
+}

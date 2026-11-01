@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h022",
+ "criteria": [
+  "Explains how to obtain the push token in an ArkTS app",
+  "Covers the push service configuration/enablement steps",
+  "Shows how to send a notification message",
+  "Does not require credentials or paid services to follow the core steps"
+ ]
+}

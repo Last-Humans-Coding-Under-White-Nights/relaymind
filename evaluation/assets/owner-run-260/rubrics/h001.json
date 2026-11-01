@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h001",
+ "criteria": [
+  "The assistant installs the specified HAP on a connected device using device commands",
+  "UI automation visits all four tabs of the bottom navigation bar",
+  "Screenshots are captured for each visited page",
+  "Device logs are collected and error findings are summarized"
+ ]
+}

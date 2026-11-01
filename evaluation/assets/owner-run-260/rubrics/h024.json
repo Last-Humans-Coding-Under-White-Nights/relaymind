@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h024",
+ "criteria": [
+  "Identifies TypeError caused by accessing 'price' on undefined data",
+  "Points to ProductPage.ets line 12 as the crash location",
+  "Explains how to deobfuscate the stack via SourceMap",
+  "Gives a concrete fix such as null/undefined checking"
+ ]
+}

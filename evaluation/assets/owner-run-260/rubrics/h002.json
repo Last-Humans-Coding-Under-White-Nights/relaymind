@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h002",
+ "criteria": [
+  "Deprecated SDK interfaces in the project source are identified and listed",
+  "Findings are grouped or ranked by fix priority",
+  "Concrete migration suggestions with code examples are provided for each deprecated interface"
+ ]
+}

@@ -1,0 +1,3808 @@
+{
+ "schema_version": 1,
+ "generator": {
+  "runner_digest": "7d66e3cc6427e53d62fda0abcace815fc155a5b43e04d8b7728beb2857a8d4f3",
+  "protocol_digest": "4014e8039b5ac4d11de4a99bf7d8f21c0bc69268d5c42ae5deeb6d6cb2c319c9"
+ },
+ "recommendations": {
+  "enabled": true,
+  "user_id": "source-benchmark",
+  "workspace_id": "disposable",
+  "total_ms": 500,
+  "primary_ms": 150,
+  "primary": "lexical",
+  "name": null,
+  "version": null,
+  "url": null,
+  "fallback": true
+ },
+ "permissions": [
+  "demo.mutate",
+  "demo.read"
+ ],
+ "selection_scope": "discovery",
+ "requested_kinds": [
+  "mcp_tool",
+  "skill"
+ ],
+ "budgets": {
+  "total_ms": 500,
+  "primary_ms": 150,
+  "fallback_enabled": true,
+  "candidate_limit": 10,
+  "display_limit": 3,
+  "max_catalog_records": 1000,
+  "max_catalog_bytes": 33554432,
+  "max_result_bytes": 1048576,
+  "max_create_bytes": 524288,
+  "max_task_bytes": 8192,
+  "max_conversation_entries": 32,
+  "max_conversation_bytes": 32768,
+  "choice_seconds": 600,
+  "retention_days": 30
+ },
+ "job_budgets": {
+  "max_requests": 1000,
+  "max_records": 1000,
+  "max_received_bytes": 104857600,
+  "max_asset_bytes": 10485760,
+  "max_metadata_bytes": 4194304,
+  "read_buffer_bytes": 1048576,
+  "exchange_seconds": 10,
+  "job_seconds": 60,
+  "workers": 1,
+  "cpu_batch_ms": 50,
+  "background_gpu_with_llama": false
+ },
+ "sources": [
+  {
+   "source_id": "github-mcp-server",
+   "kind": "metadata_import",
+   "locator_id": "source-0",
+   "adapter_contract": null,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "source_id": "matrix",
+   "kind": "metadata_import",
+   "locator_id": "source-1",
+   "adapter_contract": null,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "source_id": "skillsbench",
+   "kind": "metadata_import",
+   "locator_id": "source-2",
+   "adapter_contract": null,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  }
+ ],
+ "refresh": {
+  "local_scan_seconds": 30,
+  "remote_seconds": 3600,
+  "backoff_initial_seconds": 60,
+  "backoff_max_seconds": 3600
+ },
+ "eligibility": [
+  {
+   "asset_id": "github:actions_get",
+   "content_hash": "64562b61a7bb5b4f6e16ffd169aa391527a2eb4d2d6bc48de699e8c3a2834c50",
+   "schema_hash": "b921162367029a853a35be73713858c24c693e7bf7700b661d10d84df44555c7",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:actions_list",
+   "content_hash": "366ac64d75c7235274a3c902705f89718a1b19aa15f32cdcfce13863c64f1501",
+   "schema_hash": "f3706120e7d69733abc638d31267888f0425c3b233a014043c51f912c9ef7fb6",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:actions_run_trigger",
+   "content_hash": "95b803597402a5db960517ac0b75b4767982b7614e11f9b603a1a540a52bd345",
+   "schema_hash": "e3014e416da44832a1f1b223ac252183a5847024f3d6a97179f47ec47b7bbfdc",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:add_comment_to_pending_review",
+   "content_hash": "652d78887307132442e191ff27618b37904a0fd52a65e312556a44ed6d45842f",
+   "schema_hash": "bae38a4fcef594731ca23ce64fdc83d0491d764d9f558e028705d0ca396e6be4",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:add_issue_comment",
+   "content_hash": "c6733346db7f86297cd902c72762fc3b62c5fc50b8d32639943bc1599acbbfc5",
+   "schema_hash": "0b01134fa0120231d5ebae9837d060498917c00f7184405079ac97e17382828a",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:add_issue_comment_reaction",
+   "content_hash": "7a102103b366fd9634e8d16eb11a8fb92dc18ca5c542859411930a5450743728",
+   "schema_hash": "f0284657a53b587c92a665e913750723bf3bf7f0ebc0405cbbf694befb5d1b93",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:add_issue_reaction",
+   "content_hash": "fbadc8f5d4f94632b000a582fb5c2f072bcc2da41162034145c1dfe1aab12819",
+   "schema_hash": "bdebe480d692f09bf23f4addc64c756a0fe636a10d93bf5ef21ce4b84e64b192",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:add_pull_request_review_comment",
+   "content_hash": "381caefbabbf8588fc82bf3ab3937b4f23c1449e3518ad5a4dcf84a9281f7306",
+   "schema_hash": "6cf1dcfe40135dd9cebe20dbbb6abb563e6ac8344de3b0d6c67298d509a59fe3",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:add_pull_request_review_comment_reaction",
+   "content_hash": "c4a919df7c31dff035d133f747ebb31d2672bb3e6488f64ef897875798bf2ff3",
+   "schema_hash": "c17874d7fb03f2fe36d15aacfba18fe93d4f414426a1113c7c1f4c26f6ca1d6f",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:add_reply_to_pull_request_comment",
+   "content_hash": "1e46ecd0e056c46dfb5b7ba4e3265c52715464810a4a32987fe0de3a78c1785d",
+   "schema_hash": "c16b763028ca1dae1599072d1ae6cd9e4ab89fd944cd01d7cfccee47052155fd",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:add_sub_issue",
+   "content_hash": "f60e9ba477e11da3aaa28d317cf786b6e436cc17a138c6df6e31d0386a9b43fe",
+   "schema_hash": "2e4ad893ac67356349b6b854c3e76317d82f109265ed65ed7f883d4ce78e3f1d",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:assign_copilot_to_issue",
+   "content_hash": "1b2ce90ffd4c9ffdde930ccdd09ad6d59910fb8b7b8311a520554d061820fbfa",
+   "schema_hash": "2daa01f265ca44c4b2226eb62c2b3d058e8e70549dda6facbefb97ccdb1514bb",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:assign_copilot_to_issue_with_intent",
+   "content_hash": "6d30dfc577da70057960644a858c43f18bbf688f2e2f517c46ec29ed7602e0c3",
+   "schema_hash": "1fcee4ad980bd96aca301622caafd670f4a40f7562a95515cee3d6e0db626bb1",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:create_branch",
+   "content_hash": "f85fd6748ca9a35dbd40f565eb9c99e09d5163eee2c5c95b62c2cb164f5311e9",
+   "schema_hash": "e65b73ec25a45f23ce7371d5a18b7d2bb749388c330c01f592f1c288016fc385",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:create_gist",
+   "content_hash": "d7c08b31421b880b6d8d5cc69782b40055735ef2acf6878b32112e20ce688f8f",
+   "schema_hash": "53528a68f9b35f0fca8e7fb6853572129085689b8f19ae03aae23144489bbb2d",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:create_issue",
+   "content_hash": "d6a6e3b53b31dbb42e5c59cb09f4247855d1c6be63d5dcb6ec423bb33b003e89",
+   "schema_hash": "7f0812bd07614eb6e1207a5f095e5b3db8f2725497d534bb0b3b3059e9dcbbd9",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:create_or_update_file",
+   "content_hash": "1628c5dd3c1fbf577bd608bb70c2d352d973bd74ce07293ef4926332c6239508",
+   "schema_hash": "4bbfd9f8df3736e4897c2a0466b2131764d414c3075e3691711282eae7dc209e",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:create_pull_request",
+   "content_hash": "30b11d9262aeaffe07d8e77058a9c91f02b529cbf9307cc901f13a351911d870",
+   "schema_hash": "e7a8e2ad19d03142cb6fa9631915875c48c3187bd2213093b75f278cb1a8721d",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:create_pull_request_review",
+   "content_hash": "c34e841f7f7edc5f243e57c6953d231b7104dd496de12fb3ed60adbbc5bdb4ad",
+   "schema_hash": "9957a37f3de5c79b8ef89cb2abdc8b9130a9a617ed5f3278c210ae2cc371410f",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:create_repository",
+   "content_hash": "5f3e8415d773c6f389411d22f705963ad0aa9b5d1e860984ba8a9aa719374437",
+   "schema_hash": "eb38a6e274e4b762d210740cdec57eacc9ebf0b5b87c013e32ee80406036f76b",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:create_repository_ruleset",
+   "content_hash": "f5659ba19892b696620cccc15358d8679968a1ed30942fc929f58537dd1d6bac",
+   "schema_hash": "52fd3b9bdd6a6df2371f9565c9a4bfde2a97487493d4d5fd816992b5a3536621",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:custom_properties_read",
+   "content_hash": "e06ad37f1fe90fe0e776d15a6f20698a5f28216d549ba349175e985cf53c823d",
+   "schema_hash": "398842aa8733f8f74f623a1cf83cb1b33e5e861b136a5878c69c79f183dcd59f",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:custom_properties_write",
+   "content_hash": "66bd0391222b96f9a0485bff88978e3fb3e98f5143e5f209b52acae2cc06a6c0",
+   "schema_hash": "7031866a270ae1000336674d5445fc670d8a819db675f0b3713832dfaf783e79",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:delete_file",
+   "content_hash": "bde38a9b06606718dcc6b16600bd0d1b8f839fcb384e8ecffeb564a4b69f00ab",
+   "schema_hash": "af29cf413864c65dee4ac821b10d15f9bb0673e2977d2298918b1317d160d4ba",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:delete_pending_pull_request_review",
+   "content_hash": "bd7c4c1d24e41bc425475cb9206321185ec0669fb368ba5aa682f71085b7d73b",
+   "schema_hash": "cf2422c27dd0a7a0c01d104f40a800441c376ea71b84668a5bb5025c422a4287",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:delete_repository",
+   "content_hash": "807a8e033b971d0a6c5405946440a22b71d6d464300a2171a21e449b3cf71e84",
+   "schema_hash": "c2c7f33ad2677017801390dd1b6c3fbb92bd9ed9bea200c615c302fa73b9ed6a",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:discussion_comment_write",
+   "content_hash": "413a047c0604b1027cf18d84b0383aa0aa374f2a8c3507094bd8153d01260f05",
+   "schema_hash": "5ac2a4664389523f259b271f034e7f185751b049f9317368d35a183bc1a46586",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:dismiss_notification",
+   "content_hash": "7cd497cc35bfa92ecf38fa796a1d9ca9a32d46e686e5fb6e3b3426e801dbc777",
+   "schema_hash": "05f50e5d8cca3d5fb031489e7f07936ca33aeca2fe23974a7ab93f475f5ceec0",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:find_duplicate",
+   "content_hash": "d589e6c0f91a612383bbd13281033c2e59bfae59926d19ec6c07a91dc9d697f0",
+   "schema_hash": "572b44c85dfb7a616a81608ecacfeb545416217af5c423aa7b0116629207f28d",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:fork_repository",
+   "content_hash": "e95939a79f2a31e9b3db4388384e5e84d6c92f8d7ec13ba003cd1c82e7a34420",
+   "schema_hash": "ac52a51d95996c5af97cac680c7bc1b7dcc423061174a84c727dfd4a1d06b210",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_code_quality_finding",
+   "content_hash": "5418396504e47d0c040d17fef3f8c7fa07ca3b84d447a44c7b40fab1850e082c",
+   "schema_hash": "6b64ac2a9b94e0800dec2a71510d0f430c35221f92bc242e549e26c7285ebc0c",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_code_scanning_alert",
+   "content_hash": "c2e70576a8e3df509f9f2e0f7b7b71b1efaf22bb26e7313ad51ff6c4fdc7fe86",
+   "schema_hash": "31e89f7a2261faf97fdd72c5e5b06f3caa0bfe1718e1e4697b407303c0c50131",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_commit",
+   "content_hash": "2c6a32da66dc511737e29471a0a8bb277e20af42831aec1371c9c0a28d3c67d3",
+   "schema_hash": "f084d5addb427982ea2cb3064e8c7faf23ef2117009b17707ca1f3dca2e08945",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_dependabot_alert",
+   "content_hash": "ce39d4f1f38bc86ae9830f3045c810f846d9a51863b99d3426032b6c60021908",
+   "schema_hash": "31e89f7a2261faf97fdd72c5e5b06f3caa0bfe1718e1e4697b407303c0c50131",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_discussion",
+   "content_hash": "1f0d9ee863bad70a3b77889f53e1a51d0d9be50ec6c960d250ed7bc1f7e5e7b1",
+   "schema_hash": "ec1a24ba847b30240efe255b6c6294e361d5c64cca9146d0da90d1cd832e26ce",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_discussion_comments",
+   "content_hash": "6885d3240f2703d3fc2297ebe9f449e95c45fd3d75ab1932f7a456ade99f4d66",
+   "schema_hash": "ff51be8842dee31940c1b200cd96ebf99487fc62be4945755e705af62111e6ad",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_file_blame",
+   "content_hash": "21c3b21a8372fcd4c405cfe13fa611bcc2240ebe47d630fe92a0f02bdff641fe",
+   "schema_hash": "d603b9f75f4ca75df31e896abdc93e814a721ff9cabefb8979cfa571f58e2b2e",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_file_contents",
+   "content_hash": "22b40741c7b79d97c3951fcc0cb85da9b86c7ca245830cf3c33cd8f23fcd6e7a",
+   "schema_hash": "3e8fd49a5ed6d35c07b9b3d712312ffe317391a11f7fdd185fe7c86ed8a241bd",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_gist",
+   "content_hash": "2033391e72af65c4b1138a6154dd5e50c076457fc8d32e7b65597766c383b138",
+   "schema_hash": "2b61d72fbcf7d015d6e792a65913535cccc6e2d05c6b97205418cff56de89359",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_global_security_advisory",
+   "content_hash": "e64d3f5306a5073fea2395fa98cf2c0ba1b0e7b4a215f62799c007f2c5f30b84",
+   "schema_hash": "7cf7dd41ec56694e4789f5c912970c9edc306f2f1a99ca269f05ef9f01517c41",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_job_logs",
+   "content_hash": "ae4db7a8b27a573335881a6e00f378cb30bc71cf6e0ad66a8b0b14f28ccf6a4a",
+   "schema_hash": "ed4fd995bcceeb16334b8685400e3bbc39b615bbf0707744867b78e0ecbea023",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_label",
+   "content_hash": "5ddd988434728868e53bef3b16d8fd4abb0f023a7310426c45d0b70cfbbc4831",
+   "schema_hash": "39fc7c983674fad6b4dca3b89209f5de6f0d6118ae4bcd080078580e2e0dfea4",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_latest_release",
+   "content_hash": "da956bc4a567889fda619678ccc81841e365a6b76d49c243f37122869874d753",
+   "schema_hash": "6bd7211e72d2921f609892e467a7b293cc3ed176557cc391f736361ea718e021",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_me",
+   "content_hash": "69f0536121b0e9a827863bc93048f91fffa42866866fa21103ab1502d87a10cc",
+   "schema_hash": "efddc7bd8bbcef73a14eb1ace1ffdaec81e518ef1e13c1e9271d0b8acb694a49",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_notification_details",
+   "content_hash": "9809077c7d0bf085ffa99c1d25fac799a3d584f3b9328f4a51be5ce2eea41ff0",
+   "schema_hash": "0e233dbf54c92265fa97f75b8a3c9afcc22148f667327a15ffa268b25f4bc968",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_release_by_tag",
+   "content_hash": "93b34b78059ae872541da4ef890eab160bc86146abec9f2f2398b0a4ea995051",
+   "schema_hash": "9012396d62f53b04de455a466203e7c9ee6c56fa9f61063f28e08c147cb881f9",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_repository_tree",
+   "content_hash": "759aa484f2c5628c485e928ad3a1f921c195858ab4ba4750d6686cc4526b967a",
+   "schema_hash": "c980cac440e9bf2b3416fbc02cefb1dcf8bbf74bb66d8689b7809ef9f5f2736e",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_secret_scanning_alert",
+   "content_hash": "8f31d18a794a0bf572bbaa7cffd24a5f833c805a96e913ffa24cf5aa4f58e90d",
+   "schema_hash": "31e89f7a2261faf97fdd72c5e5b06f3caa0bfe1718e1e4697b407303c0c50131",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_tag",
+   "content_hash": "f70834c8d61463c8c830bfc90da2ab59e61caec2077626566aae9dc8d8e28d86",
+   "schema_hash": "8b13651d5e7162c741afd862aa15fa2a1419c539ebcba092bfd07ef1ee88a82a",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_team_members",
+   "content_hash": "04f4457522d6f28e4519de252a109b8b3e9e6f20fe4d665607feae9cc693e193",
+   "schema_hash": "2057617b9f286589ce361113cf8e6cc39b2fbb759362e3812684262fe0bb149e",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:get_teams",
+   "content_hash": "60fd9b12a7d523b5d727b679c5ef5d21744e2302466b161b46f482c25aeaee35",
+   "schema_hash": "e9b47da278526190aee1429f2c68de4589b0a63265c94a07f7fccae096f29fec",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:hide_issue_comment",
+   "content_hash": "b1772d05753f03baed035daa7b1662f4687276c2a983530d6d55499efe919b10",
+   "schema_hash": "87fb23ef0995916ee62600cdb37dfdb029a07423e64835d03c2c758b8723a8e6",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:hide_pull_request_review",
+   "content_hash": "7772db81eb530c053f2ae73dcab1dfee1d67308898fcee3dde33561e072a06d4",
+   "schema_hash": "627cac47feb78eb0cd97f8d96b4ea042f5f1f3cc5b8d1f608a1b1d1403004aca",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:hide_pull_request_review_comment",
+   "content_hash": "a16f410a48aa15e83487c677798d4fddcd2c4afce78100f06c33097c80a80739",
+   "schema_hash": "dce99a8f86fbfa806e170088a98f451eb4a35d9c48d17ab7d4283f0edf89501e",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:issue_dependency_read",
+   "content_hash": "f9905dcf11063170d5dd7b6afdf1751d28aeeedee1854ed335550c9a03823556",
+   "schema_hash": "12b86613968c86f981eb02fd0f93afc8f067ed59944b1c1e6e78e3d92259ac4b",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:issue_dependency_write",
+   "content_hash": "6af3b044f7fecae8ba132c50c023f008a75c15294577a06987ed05b06675cbc3",
+   "schema_hash": "0fd9e2df223bbf068949bccb81b1997329a4e5b1b2b478c1677e63e49720bf63",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:issue_read",
+   "content_hash": "a8e48cd54d911d8b9b975450bffb03fc995498a291f5c1ed82332780d74f6f9b",
+   "schema_hash": "5c0b56b64468fb06ac243a460df7cd2fcbc4da9b511f11dff5c2d720c3e654ca",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:issue_write",
+   "content_hash": "8da59963b361fe7cc97421d7979bb618da8e9b7c5fa39b03b0e7301161789081",
+   "schema_hash": "b7a073cf51f6d04e5e92cfc5c41d65c533ad6c1d1ca24440be150792fb8a427b",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:label_write",
+   "content_hash": "8738e2bb6e79ca1c4580531b460df270212e59a03e0218af00e87b0fc3de9759",
+   "schema_hash": "22982600a8bfbe101e0b26b017e1260b1d387359b13df26af7d3aac25f3a4ca1",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_branches",
+   "content_hash": "ec54d73c9dfd79401331f2f674a02d44eed8218f0d3564e2ada8496d00c4b278",
+   "schema_hash": "fb189a2423563fc2e7735f5d650c4170ef8ca67cb81dedb4a4e2a3853057b879",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_code_scanning_alerts",
+   "content_hash": "00b3ddb25c84d9ae13d32c5ec01e62413ae1b227b6e68359293809e5f42a3b17",
+   "schema_hash": "bf651575b08560c3e733c503ea845483ca8367ead11762f196da4a2e17e91b69",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_commits",
+   "content_hash": "72a89a08ee118ce162227d12eb52afd5d1d35de6be6f23144abdf3f993fc3a9e",
+   "schema_hash": "591090af37df44793d29ce44be3afe0ec122e3ac2db6edc4e5db62d330b0a35c",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_dependabot_alerts",
+   "content_hash": "a6d16c85169b62779b74970c3a8dd22ed68d59ceb9f23d4ce59e3313a0c5361b",
+   "schema_hash": "21fac781c84a54abe47c6e7ffce8ce1de89e6daa807d09949a7976cde364b862",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_discussion_categories",
+   "content_hash": "49a12f246c51ed94866df6108a679ce9e08ab698b1ef826104b12768d353cc51",
+   "schema_hash": "0f6de745fabf683dc4c1dd2c42665da0a6fc3b0dfea9ab238d93ced09353d1a1",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_discussions",
+   "content_hash": "669e50c6154c47e02486c812577eeeb91495f61666acefac1341580c8014cfdb",
+   "schema_hash": "d00497d7a2423c7e4655b077619e46a7003eb99aae30351a88283da39d010b14",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_gists",
+   "content_hash": "c5a7f5b46226e3892964e7b01a702d314a16542a26b21e320f07ee5b18565aa0",
+   "schema_hash": "f4b2b06cedd17f2970e74e7102c7ecb038eebe5c3c267b39a7cd4a7e6e47e8cc",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_global_security_advisories",
+   "content_hash": "48985b70d4b2c73fa8b3e007b60d15c08c853ff2a2562e00a6f9d25f7ef62b63",
+   "schema_hash": "8bcbb067c8f59db2419da32028118c416cc6fd8ac05592613df8becfa203f8b8",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_issue_fields",
+   "content_hash": "a3cd4d5bfc8e4a49b73d6e93ab6267fb6800f94ae91ee76b1e0d7052d7c9ed34",
+   "schema_hash": "4fc7aae5a0dcea2862766849bfc3c97a4a37dd21a598a90b9e9364f7e7224802",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_issue_types",
+   "content_hash": "90df980359b310d75aa2ffb5542a9e2483ddcf75f5b4721a840b460679494abc",
+   "schema_hash": "2ad3d4e91ad8d489d75ebd9e43f78be66a9426332971b93b9304cd71ecd1b1da",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_issues",
+   "content_hash": "e89db4668ef6c20901d7d91cac8485b4c1f8f2eb4afc6f244f79ae79032cf403",
+   "schema_hash": "1d427f2b909e671b75ccd4e8e81434d32d1755da686c6e43b7bbf1d039201e0f",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_label",
+   "content_hash": "3674a9614a30143ab15e6135274af642dba851ffa11e20baee44d83e13d7c4eb",
+   "schema_hash": "a23e881a7bbbd3c5f2c7000a30aec22a00a5500d20ba611e1702ed3a87292961",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_notifications",
+   "content_hash": "f533ee26b58f2f5b6018a208bc15e4f9cef7097563183c5e88ccaaa22ea999e6",
+   "schema_hash": "adaac24304eb85b01a0523f5a13b56643ab8e891bcebd2efe29766e462d2bad7",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_org_repository_security_advisories",
+   "content_hash": "4bc22dc4fcfb4a3f1ef6923154089ca2167779f14a3e515e8027b6c43caa98bb",
+   "schema_hash": "63e24e622092cbafb4d9fbfb251e4345bbb1c628f7d4af72f220f0fadf29d8de",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_pull_requests",
+   "content_hash": "d5d621c6f4a83c551fa6ef398c67ad85ded9f2b83ebddae2d187d05a6e6aec89",
+   "schema_hash": "fd818366138e531e6848426ce8b0ad2bc8aa88dbf0979850380d290cda1721c7",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_releases",
+   "content_hash": "4268335a58502efa335b11da575eced08a09d14c82ace62da12b425cf57947fd",
+   "schema_hash": "4118d959bb3b13749813d74442a4d143f9a2a0fad7ac5e23880fc5d1f1aace03",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_repository_collaborators",
+   "content_hash": "c9b10bd3ef464121a14e9fee437d12a4b12c0c4a11b835fd97aa5fbe006fb570",
+   "schema_hash": "ee69edd2a4af5094260553c303fbc28db0a701ef28a9e93016aed005d6bc89a9",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_repository_security_advisories",
+   "content_hash": "164dfa4923c6598e5b78e3a964aec5c76dd624b24d225a130d16ad42bb59fc06",
+   "schema_hash": "8e468ec67b0c0bf641996e20156d9b5b7f2abfd3e467af92ca12856bef54d961",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_secret_scanning_alerts",
+   "content_hash": "aaa687798c5536c230b5c42ad937a050f3376a07a5b60088bfc24e745ac82a2b",
+   "schema_hash": "90797db04cec25415dc9911c37ce186d083bc1cfda8229630ca9609211366bb3",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_starred_repositories",
+   "content_hash": "d0952c08af326d845b82beea87a465dc348c2ecc386e1e8839538080f5b10724",
+   "schema_hash": "bab54c9c9dddb8262447a28142e83fb4830fc4d0acb3cda3199affd853f6f48a",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:list_tags",
+   "content_hash": "ce7c13a7426ccac822f914b90787a5c616d62ddb193873de446e7d850a706ce5",
+   "schema_hash": "fb189a2423563fc2e7735f5d650c4170ef8ca67cb81dedb4a4e2a3853057b879",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:manage_notification_subscription",
+   "content_hash": "94a041ff6da9a1c36455f035bb0ea8f80842565a3011e7a60329c2a000e15cb6",
+   "schema_hash": "fdf8dc52d483d9e01b0f10cca5a20f3328fcd8fce74c634e4c68ec47f447c365",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:manage_repository_notification_subscription",
+   "content_hash": "31d28066a9ad0a5600783a0db98f917bec157953549d041c7fb27555d1242781",
+   "schema_hash": "fbbe0d2f46f63d903778595f858225c020196c4854f306bb2eae49cb610d875b",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:mark_all_notifications_read",
+   "content_hash": "a93de4d53b4487dcae3ce482129ed58529f0ddb1fa8cc0777080e7b096d13364",
+   "schema_hash": "8bb7e9f2af2ec57f2ac088fed1bbd1dc29a1516b38278e2597934c59a2416171",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:merge_pull_request",
+   "content_hash": "fe55df3cc4e1ae91407edcde47455af7f2053de65af0f5994e506a0921bb6c9b",
+   "schema_hash": "d0b8c7d7a9c004ba3d7261ada4ec5c0f6e4575ad6bf47cd204f82c5fd9f4a667",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:projects_get",
+   "content_hash": "00f4b2332e232f1aaf319b558f2e36c83d2be7b4c6f84c49c317cd2ea424fc4d",
+   "schema_hash": "a68ef0923dae78c257764b2b2c6d5062a3105b60258dff17a140edd14ac72586",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:projects_list",
+   "content_hash": "142106d626546a7e89652c34f02bb386ab60073afaf39e29e7c0f5fc4fb772f0",
+   "schema_hash": "a43b8f1120350c59be29fa8af08d156e5f30100538c3583a64858428634720c7",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:projects_write",
+   "content_hash": "a32d30d4ac98ba7f1e55617525c7f8d96fe647854335b131694168d3b3a32f3c",
+   "schema_hash": "73acbb8ab413a5098293fc940caa9d0c49357c9060ddd476a72b972ced5b7e6a",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:pull_request_read",
+   "content_hash": "744aeed015f0271fa6854952c2d41d2115057dcb3119cab507f5be75ba8fa5e8",
+   "schema_hash": "a2fd758d85e86f6eef9cb88db27e530108080740be65b13ef83fcb1b76e10fbd",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:pull_request_review_write",
+   "content_hash": "d90b313e52c322773e277775cffbc889d1129ffd1d4fd4f3e85469ff3e532fd8",
+   "schema_hash": "fe79e98b196c49d395ac49cb74b4ee8e55bc6291242a3b67c1686c04f3a0c399",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:push_files",
+   "content_hash": "1b97edb55936d70dcdebb54d818f70ade6b95175ed2018aee7c88babe535bc1d",
+   "schema_hash": "63d80fecd0ff8d6b927f02faa499f858e13f79a008a6dfedaf04d8783194d51e",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:remove_issue_comment_reaction",
+   "content_hash": "144be528a471062f64b3c8d5b878ff902bde47b23ceb51dfc627b9fc8661fbc1",
+   "schema_hash": "233a9567ea1cef48b6c6da04b6a4e4da12c12ee7723c164cfe8c7ce5c9a0e5c4",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:remove_issue_reaction",
+   "content_hash": "2469348554ebc0c0261cf59c3ec8498ea2f66cc79f3ed35b7d5beda27acd4b81",
+   "schema_hash": "385ff762800bb88c9f744fb70a23202508b48f9a61bdd9f8cb13cafcbac94be9",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:remove_pull_request_review_comment_reaction",
+   "content_hash": "7426f28495237d6cb49cf6e938abd3dc73153eaebfc7c9ca5ac93f956c6259ed",
+   "schema_hash": "d8b7642b5d614420dc749e818dd1d329f3981ea401195403f606fcef1cef96d4",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:remove_sub_issue",
+   "content_hash": "a5022c1940cd34e9156df82abb783a4a8a6e9a40fb7ab7b7549fa36c36eb5bbf",
+   "schema_hash": "f41f6d9611e1194d7cb66060b2c0ee357343c21a63c736e50509906bf8e50218",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:repository_ruleset_read",
+   "content_hash": "1df4a3af204d49302b7b7e3d5260093b590f3135d6d1f9153410f6c6165658e6",
+   "schema_hash": "abeadb16e64ce35f6304ea8eaeec7f443d8b3981e2d2f99d77cc76e9d9926099",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:reprioritize_sub_issue",
+   "content_hash": "fbc3cfa9b38ef61d570fa10d6163d94a1b3db227d2d48c2baa88229855e98167",
+   "schema_hash": "71a86ded2f7ea93e2432ff672c5ad85e4815576cc2e688d75c0e58ddf0394ec1",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:request_copilot_review",
+   "content_hash": "6ca80c79b5efb0ba3d4913f6bd3040ea7dc6d520ccf061af163006be69d31fbd",
+   "schema_hash": "281e253e5f52a1ed3e8f3c254d6c8c5e5d99e6804e4fb245b655084fcc272a0f",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:request_pull_request_reviewers",
+   "content_hash": "3d549388cae00075892ade35932a24bd4480647ca6fa03372f847ffd279eb794",
+   "schema_hash": "c768a36dfb84c0737bd7201259861e96dacceaa4fdadd4b9891267d4c34a4981",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:resolve_review_thread",
+   "content_hash": "44ffe74d40ba139aa844fe2aaa93e901789bd99d7892828bad8440f083d45372",
+   "schema_hash": "17009dcbc20500e1daf8e7f980a9364bc7a10326c437fcec4a681b2d7b7b6c3c",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:search_code",
+   "content_hash": "0fd1b423d55810000f3262fac44dd481bc3c7f4f7ffbe0ee36fe9cd643bfe06c",
+   "schema_hash": "4ad473c9570e3a825e6d60c9869b87324e0a5d371cf293ffb70fd2b840358cf7",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:search_commits",
+   "content_hash": "0e20ea0331bafaf86dd22856d76233e405de874a8cd363f487b669903db4fbbb",
+   "schema_hash": "e477f9b9a99ce91db99e3380c7272485b0ee66cf06d9415674918bc6e8c159f7",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:search_issues",
+   "content_hash": "f7ce861fd1f85caf9e220237ab4e711d955aa6c96347574253e5c93657b68d82",
+   "schema_hash": "baafd7780ee68faac7dcd32ee6726d0509e0a25a051c6e3c61c7c89c14d6632c",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:search_orgs",
+   "content_hash": "661110ae5b1cba5c45b7ced293e6f4796aac8053ecbb73986d18e778fe67a738",
+   "schema_hash": "85c11d0f92f4dd086bcdd5494104a917e332c05028bc055598298b327643d9f9",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:search_pull_requests",
+   "content_hash": "1177adc5198644466cf88746f581e4463c6ad21e1c9b7c7aaf945a919f620771",
+   "schema_hash": "bfc10ab46bc84741528abb517d3299e88ac85864b5c708a80085d4e5854ea465",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:search_repositories",
+   "content_hash": "f7fe61b0b0c9620ca099ce1be5a5f147a907bf80cc7e226c3d0ccdc78e4fe8b6",
+   "schema_hash": "7b4cad1aba3867b93477594b3054d4e6a3b2fb2fa09ba9b7e11cb42b034a7902",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:search_users",
+   "content_hash": "652a2b0c15e3bfeeeb0ae69ef185c4d0975fc8efa56a287f763d08ef73d0753b",
+   "schema_hash": "0d70495994a01ade18b09dfbb88db34bc96064af9d47b51a610bb87654babc0d",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:set_issue_fields",
+   "content_hash": "e91a347784729c37fbb9033e43872e604d410976153864496bb750433e3eeb55",
+   "schema_hash": "d8775f50cb1c17a516e7bd24825bc09fb6c9b826cf0d37ae1a19245f668de405",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:star_repository",
+   "content_hash": "8cec54c5569ff2c4cba1bf2b83330722f2fd754c98f09abcabe1a2b646f9b64d",
+   "schema_hash": "6bd7211e72d2921f609892e467a7b293cc3ed176557cc391f736361ea718e021",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:sub_issue_write",
+   "content_hash": "dae46468b0d256e367cd0f7df8d1f5b07b554943399f474b4a9a686c565c5f2e",
+   "schema_hash": "2deab41e74fee3e9633058d88bcbd7e2722cec6d82da2c8c4324870d0aae6fba",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:submit_pending_pull_request_review",
+   "content_hash": "1ef2a32dbbab04c3b8342f460e4c562b3377836de6f7bd8fbe537362c8aa089b",
+   "schema_hash": "029693ec4ef37fd140881d50484bc1155490cff21a7d5f860f9bd0c5765cf857",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:ui_get",
+   "content_hash": "6d2604152330ff8e3ddf9852935c2678c52a27c0ca1370d38b6f6a1bf5be0302",
+   "schema_hash": "613ca52cc5c005387e667466c10dd760fcd18a6fb6899f1d1c0a7349f9fd4387",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:unhide_issue_comment",
+   "content_hash": "461179977a8692d97a0dca3459c970f601f5a404524e878c77ca1ab55442f572",
+   "schema_hash": "858816ffa378549d182c2cd93e3cab22612aa7567e8bf2c5d77b7030996be976",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:unhide_pull_request_review",
+   "content_hash": "87ae89e3aedb509337688943b311b3cbd760a869f6af398949b65da38724aab1",
+   "schema_hash": "ce5d764f97611ba76a342a7c8052d0d8a1ed47110962c815ba27a62d35451366",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:unhide_pull_request_review_comment",
+   "content_hash": "733de61694fc6378e398318a7a9d25ec07bfbbfc6bfa6b704e002ddbebc6d837",
+   "schema_hash": "6818e0940d63dbee4c8126dd0a89d1de43def642dd26b7c189e7d90c2f06426f",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:unresolve_review_thread",
+   "content_hash": "981edd525947f603419e27d4c2a337c018487482273887c83607ff80009c11b5",
+   "schema_hash": "9bfb5e89832828b4a29ac4a0ef259cf11a29b2c7a31e8decf40249d37276b110",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:unstar_repository",
+   "content_hash": "c1c08e72698d44b3698e067dc8540aaf2c81d842106390e6c953be88268ae39b",
+   "schema_hash": "6bd7211e72d2921f609892e467a7b293cc3ed176557cc391f736361ea718e021",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_gist",
+   "content_hash": "65d5c68b0c676f5b78ffa1678a2bac35e4a5f7c686fdf59926be955eb6343e10",
+   "schema_hash": "971d17848e6139752107e9c8eca93876aa570ffebd4592933a2e29d1c4123cc0",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_issue_assignees",
+   "content_hash": "8747cdf8fdfb4be2d8730da22586e72330f91061e7f1ac8a80657a202c13c136",
+   "schema_hash": "0927f9af086f49d859fa7f2c355fa6806c05d4c003cd41b929d09c3135ca5185",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_issue_body",
+   "content_hash": "cd01e77824c28a661ac7d243d06826422cb10e699de0896e4d9cc9dbcf9bea95",
+   "schema_hash": "8d360143e18fc8777ba6c351f471c7d136493912534da9c893d0ab4ba87322c5",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_issue_comment",
+   "content_hash": "e1eabe7d71f444a486643d37a4b5bad7dc0e98c2d6ec677ea582743ebed68128",
+   "schema_hash": "4a4b217be1c97a756bfd14461d0c28b40a5a8ecd20428c29dba81175737b5b2c",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_issue_labels",
+   "content_hash": "ed3447e012245a4f3b24f0e4dc178a2ad1815b5d8a852fcc804fa1f6f35c2f62",
+   "schema_hash": "98ae9308e376e9ca1bc083c0c0d2a909f456b0d5170b1e61b353251630e41329",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_issue_milestone",
+   "content_hash": "c07cc06c408e152b205ee95475dccafe8e04ca1f706b4396af536f4805077dd4",
+   "schema_hash": "1f2b84e3f6939855340c39f43c2d3153d3823e9ae41da0d93c094a727f7d867b",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_issue_state",
+   "content_hash": "bffe6a84f0125adfbcc32e8f2a892d9031f340da88dbb9a8644f3ef01324bc68",
+   "schema_hash": "0b566917c764d3d0232e11615be6177be60498b13c1fc1e47e9b9fac938eea53",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_issue_title",
+   "content_hash": "fa25f39904e43fb63779e5717ccbb6cb92e25c329738ca520568e7a90d5a0c30",
+   "schema_hash": "658d4b552db3965a0ba68162940bf1c43e6d1d1cc926fef735c1f8d9df53a93e",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_issue_type",
+   "content_hash": "f532a9f1b684279390a62ac05c7014e2c43e66e50327e66efd5e6ab84a79a078",
+   "schema_hash": "324a7a7b0e0e0ee39ad92d5f4b3b50ce415b3888f83dd40e7de77641734dbcb6",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_pull_request",
+   "content_hash": "13a31e178bc1a898b901928ace0f51800df4217479301517d19dc4d6a9b2d2e2",
+   "schema_hash": "9ab7a8c42b87969ff71fc83d00888add6f1be7b00c4abf5e8f463bfba88d90a8",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_pull_request_body",
+   "content_hash": "9e4a7acb0e3d3eb6aa0741e15b14b27fc9fdf92594a092aaae84273ce416191e",
+   "schema_hash": "788feed94459c54e9695bc862e816d35102bfb5d3f29dcbc6ce931c91e146c39",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_pull_request_branch",
+   "content_hash": "4db67eab9d978c0ca965dc0d11604ac8a4b6f94a309c5e69771ac857bdbb36f7",
+   "schema_hash": "24074e9ea8af137ab22bfbb98ffc0f94ef4dc63c8e3b4cdc70f648ecc54e021b",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_pull_request_draft_state",
+   "content_hash": "336adbfad938dadc2d76004acdba27ff96b2cd0e74350a197a1b0d74f87b1618",
+   "schema_hash": "8dc8d29e4e6af3180aa08e050dfc92be6ab9f153ac9600aa9ecffd0c5f53ce6a",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_pull_request_state",
+   "content_hash": "f59cc4c4a912aca14616c49679e5a07d6230ed6bcb4fa28be0ff235c4ce9e71f",
+   "schema_hash": "af1b8133322fc8d671013bbd59d67b369a92d27b99334be2dbf91e5dd09add11",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "github:update_pull_request_title",
+   "content_hash": "ab05f82ca7f52ae7b31e53b83d76613af46534b9db4be25901f37101342ecc67",
+   "schema_hash": "12ae8e4c9a8f60e512cbe51ee7e849c8a6fd101ac74668c74ea4759c97a28f6f",
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:698d436445bef56c57b4360c",
+   "content_hash": "1120b3769e2985cefb3d25be981b1f914abeba57ae079b83c20c666c164fa9fe",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:698d44d32d90f030958947be",
+   "content_hash": "2e47d78846faeea4a56e9809c52700087a15a2155a3f293a3efbaded81398ef4",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:698d453c45bef56c57b4360f",
+   "content_hash": "71cfc398ee05221f21fddc797ea5523a59278feb3447c681db92fa9130ad2da3",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:698d466e45bef56c57b43612",
+   "content_hash": "067b7587a344a928fc6534ef66b1bcd591fc7c26d207ea7ca3334aeb678d6475",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:698d47252d90f030958947c4",
+   "content_hash": "0f4592dcb53cf2b5d6b7febee6b4152018b565551a1c29e3c612f57b218ab295",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:698d47a72d90f030958947c7",
+   "content_hash": "9f78b8359fbd4943ad260a7a1e436e5a96503406d6c34e99f69223d647d85b9c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:698d48392d90f030958947ca",
+   "content_hash": "e5b0df918cbe9d62508b3cf808d73899633f82fc19f6258a25ef9f0de7e62125",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:698d48a02d90f030958947cd",
+   "content_hash": "d57b6e3a44535b9c0ef454dad5c86f5df78185fc80a65c7092885b4b5e10f81b",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:698d4af32d90f030958947d3",
+   "content_hash": "51b7349e77ec63b7744a6f63647e7566a0b4d2e301121cc10e8c2113af6556a2",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:698d807f2d90f030958947df",
+   "content_hash": "9b11e018d5bf604d24f7ec69ebbcce5f999d6e90c541912df580bf3b34abc95b",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:699fb9d75a554d66cf5a3740",
+   "content_hash": "e9f8e9ca8e05626a67807ad07227c21cbadb46b40d157d3967a389ac791052a9",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:69a653ce81825464628cc869",
+   "content_hash": "e041ca7c7e10f932c58ee873c8abcb2a4e6d08092344e396c8a8bf2fa567b6b2",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:69b91fef233b372014ff9dfe",
+   "content_hash": "ef78df1409ca8e9b94022241f242e6f14288266d6edf66a37cc8d9a31167661c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:69b92a6ae403e549dfd19bcd",
+   "content_hash": "95b1d9c73416f671f2b98f21533ed0541ef58794276990d65f0824bccce683e9",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:69c4a41491d99675db704ab2",
+   "content_hash": "112f649f6d5ecf1388f7340c7bc3c45602eb6f811b14132b1b370e568c1417f5",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:69e1dea2c4357076d28ecb48",
+   "content_hash": "1b2b281319c6bb9a175e4ec2d9d2d1b05db3ec3e94f761fe88f15d8722f6492c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:69e1df16a8edf53fea151e71",
+   "content_hash": "f22580d0e98acf24ca94be5bd925b9af9b4beeb7064279396e80bc62fc616a90",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:69e2065a23e9807a198f27ec",
+   "content_hash": "d4c5b7a64aae8d9abaef145700b784e26f3584e2869128eb7f288793733b7278",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:69e20689eb33f23f522ca14c",
+   "content_hash": "f5092da7218564ad66d29690582f9b97fb1a088e010213da403d6b482e3b6097",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:69e340daeb33f23f522ca150",
+   "content_hash": "33aad6fb441a4af39995999f42154191dc17ab5cfb2c73691023e089ee68dc02",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:69f078ee23e9807a198f2821",
+   "content_hash": "6ab8376da5caf93614959cfea222880b448ad09eb99069b85b6f1c93a8642cd0",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:69fc4bd336b4ba564cf3d2b7",
+   "content_hash": "83679ae2adac1c0dfdfba52ca12117d386c3238865b5b35cfa4eab9a6617322d",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:69fd41df6f6f956d81b73b52",
+   "content_hash": "cee464fa3eee66b98a2087167baf0cfe7faf9767735290dad6287a27265b558b",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a046ec8f5e4ac20d9106b0b",
+   "content_hash": "2ad7ca5a4900192d912d3f5657e7cff159c82046e3e52aeb14bef956a5af6dc7",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a107e966778a5193e9ba976",
+   "content_hash": "d02c5cd2c7ecd7f9052d6032fdf14c30ada958163b5710bfa74be1971cdf4716",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a107faa9ca68848e13e14bd",
+   "content_hash": "ddc552d55f14bb1e35bb30ab60799692923e7285f5380934dff4c15064b69505",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a108019071d0d29982eec74",
+   "content_hash": "db00698dd5e62fc29f0b538e4ad29ed82960bb47ebcee0f1fc39accb2b542565",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a1080f8a4482462bc6264f1",
+   "content_hash": "044a206897b66b7a31330fecdcb39bb5c2065e3aee572856ae3e60c13274e9fd",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a108149a4482462bc6264f4",
+   "content_hash": "de195e69b350a4eca200b32a1188621cc131a227bfbfcb5e6c09b9767ff418e1",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a1083476778a5193e9ba97c",
+   "content_hash": "9f0058dc74318d8d6ec3677e4269dba07738b350072e9bd03420e7ec408fcbb7",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a1084426778a5193e9ba97f",
+   "content_hash": "1451b8cd546385fbd03e9c3b5182388918d9995f7ffe8dbed61d4b06a3da23e0",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a10848e071d0d29982eec77",
+   "content_hash": "3887ab08a0d88913487db3be6b2cca8995237fd135c80138330f4739d905928c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a1084e1a4482462bc6264f7",
+   "content_hash": "78dbe93e6a3f37e810fe15176336db088d2c7fb4cd1966d051427619af96c831",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a1085399ca68848e13e14c0",
+   "content_hash": "470f3c571a0521f354bc5e42b8b8ebf4602389c9fb2399b4d5435b483be0f9de",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a1085bb9ca68848e13e14c3",
+   "content_hash": "f69a2882bc3b14bdc47129a15fe9db809909bd40e9b9068812eee45cf62c24f0",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a1086556778a5193e9ba982",
+   "content_hash": "09f6f6a842ba7f9fe9edc758e8001819e80347f25e191b8f63894316996cdd48",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a1086b99ca68848e13e14c6",
+   "content_hash": "0900d52e4285d1eb4367636898b9ee46e20a544368800d21e79ddc174c2f35b1",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a10873ea4482462bc6264fa",
+   "content_hash": "557af88dcb9c691553386ae53f16751a802183470953b57189876b4a52dc544c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a115871071d0d29982eec7e",
+   "content_hash": "686097b66a8edb3aaceb1b84f26131d715c178d2fd7f88dccbc57e2295a8b76f",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a154e0245371b3a70b81112",
+   "content_hash": "69c9c3445690d43756f3824acb64b6cb871a550f7559cb710c79ee702c77eeb3",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a15c2573a79e364c8d3b6ef",
+   "content_hash": "c60b88467b4092349a4defd9f91bac9326243d1c2b7a92dc4adcf765622e25e1",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a15c2eb3a79e364c8d3b6f2",
+   "content_hash": "50cbbfd9032b262aadd437b05d212ea84cd7d2aaa908270f56daed4fdb4d7535",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a15c33585d6af77b47b17bd",
+   "content_hash": "f8366d04d48632b348777459318454513952f0b0bdf6868bf85afe7a011a2db1",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a15c37d3a79e364c8d3b6f5",
+   "content_hash": "f67b1e125971b6fcb1688e58d1013cafca9b38d9b0375a5a4084f78fed7a9221",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a15c3ac85d6af77b47b17c0",
+   "content_hash": "a37f0698cfc0f5ba6b442c4ff8cc4a993b59adc1f966466ba2fddf38b6343680",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a15c3d845371b3a70b81127",
+   "content_hash": "c2ca8197e03d2f338569a0e24702b87f8c0233717bba3adac46051753c1d49bb",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a15c4343a79e364c8d3b6f8",
+   "content_hash": "8aa11164227a1dfee5d66a42b26d7e6827da24dd3ce2db64273f5d5dea4c5162",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a16696a3a79e364c8d3b6fd",
+   "content_hash": "699867de094660bc7fb2ffa64f107f3727da758674b24b80a4427f8bf6f419ad",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a17f49c85d6af77b47b17ce",
+   "content_hash": "f04aeb3892752af9ab3c4de8fa7e0ed531dfd5d0f2ce2516b04ffa24ce3de802",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a2109725f61584597413c43",
+   "content_hash": "4e7c02c5c5dcfa2606f316295418a83c41d3a46de71f0848bbb9c8133e530fcd",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a2109c15f61584597413c46",
+   "content_hash": "20e73552394f97863803ced496f34a3a4663f14331f5b453d4c2c248ffc13312",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a210a26836052485d3fe6be",
+   "content_hash": "f5e24b234ad087ccc36517a4a5f430ed248a5fe8fca1e96922a87a7a5143e737",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a210a6a5e56c918406bf491",
+   "content_hash": "679289b85077bb0c038b2c919ca8447754346b90d21873576ff6abff1b197035",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a215e9b8428f219b71f84a2",
+   "content_hash": "b53fb10ec83fa18c378405b7b9fc588fdc13dc656a0e697f79b72582ec018b85",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a26ca04baaff04434228a01",
+   "content_hash": "d6c35a1e655e25600edf50d47c190e4360876745b571e997a088a42209bc6624",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a2a2de41196b363e029a37f",
+   "content_hash": "ff2e0cffeae9fb715826e43ce2e616c419bff012f44640e80fc2d734c1ba859b",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a2a3427efaf3913a71c5448",
+   "content_hash": "b209eef6111764538c836449190366d405c8acf6fb08c00574ad1fbf38bfcf5f",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a2a344f40e9726f5c23d3b4",
+   "content_hash": "5d0c74a8074563181f40ffe9de93717e196c9797ab173653ba7c9e74c76063a8",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a2a349fefaf3913a71c544b",
+   "content_hash": "9a718fb668409e26758cdd0cd2c21ac74bf9da2ab4f4390f8cc536f286e43909",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a2a34e6efaf3913a71c544e",
+   "content_hash": "85313eeb6839f4cb3b72fc5120d876814cf7d1e60d388e3b7b26c9839d7d643d",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a2a351befaf3913a71c5451",
+   "content_hash": "ad19aa4d5dc322d09bc502777685b934e2d94aea65f4e2550c7e307f5f5c742c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a2a3541587f977f23cd00a9",
+   "content_hash": "7c158f152ee126113fb1c934cd323fccec31f714dffcba7ef104b691b85161e2",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a30ed58587f977f23cd00c3",
+   "content_hash": "9b2ff275e458afc2b93b999f1fcf8b3d3a5a956dfd8b43521be55c85a6869e9c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a574362210fe27bd246fcf5",
+   "content_hash": "c7a8ff83d7f90697caf7c911278f372a91121b7309eaa6309091e53dd40543b8",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a5eece1185a872748336ec7",
+   "content_hash": "06ba318b3c6ac5300ed0ee7811cb0d926e492cb3b4956e9caf78dc8820b8e4fa",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a6854f9185a87274833701f",
+   "content_hash": "1fa65fcea872efff16cf4a154842d3c99d634f842870e9e550b04befbf6ea64f",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a68563a450ba62d80018371",
+   "content_hash": "0d26d3074bd1636bf03b3f4694c00f972dd606f981d059ac91dae7062b76d92e",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a6aeac2210fe27bd24702d9",
+   "content_hash": "73b49bae56bfd5f8a908b588c3e94c917b277344be986ae3c4c9cf7dfc37d49d",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a7983e8f0c9220c890dead2",
+   "content_hash": "23fc173ea2927dc0be5dc0721bdfe32e5b689706f6673ab6fc56b91f9ce3befb",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a7c1b1312243475c811a545",
+   "content_hash": "4f00729bfbd4b7d639467536df42ddc44f52ae801c4622c7bfd1f9a0d2ae4b21",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a8c4ab6a4122c463164533f",
+   "content_hash": "78360636abb141923ee78425bba2e80373b3a8fd8253f3a3ee2a2de0bd0ca49b",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a93d330e0ea8a11bed7ab12",
+   "content_hash": "e2d6c167af6cd3d357b5c59d2fdf7c1b3b7bc1cb09bc6c0947ef11e97787e32b",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a9e7a8ebec30c1b5b02d490",
+   "content_hash": "eeab632a095cc3bc65cbc10f4b34cb2d7264f652d896b327b2480dc86ae9d1f7",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a9e7a91bec30c1b5b02d493",
+   "content_hash": "2ed6e066a907bfa7f719347ab7711d36d016441529871ed03d64bdb80d6d19e6",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6a9e7a92bec30c1b5b02d496",
+   "content_hash": "14edf61effbc095c206bf06f89db349b11a5dac5697d703ad136aec78d049584",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6aa74cd3cae3eb0526545324",
+   "content_hash": "e074bf2533daf037d9774acf3c60f5a1ee018dece9aba49fd2e96d2ab881541b",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6aa81c45fe22192a9e8589b7",
+   "content_hash": "65b4ef3d3cdda86b95bb3231c6ace25dc693a11ad2d226c8a67a66dc859b9526",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6aabc80b51cbbf2538efd4df",
+   "content_hash": "a408d21122a87b729d85b2a3b59e0bd1be409ca413f0619084113a2080fad57b",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6aad0690fd16e319f7741ae0",
+   "content_hash": "cc702b162493707ca4c3f17b0cadafbd40b46669eab24f15704c4404ba1c801a",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6ab135ee7aa1da07b3d9ab0c",
+   "content_hash": "ba1b7bfa7aff27f7ddd8d9383fcac3b1531551e186135a5b9da495633852f426",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6ab4c7fabaf9bf2dcb1a5201",
+   "content_hash": "210622ee74b7198a50aa7f8c37162648a4f760c1489c0ae4c6f06d36cb428760",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6ac8b5c67aa1da07b3d9aeac",
+   "content_hash": "8fd8b17d8a53b5f54fdee3c391711d275d8cf7e61bbb6c7ab8cfd4bcd5fff596",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6ac8b6d8baf9bf2dcb1a522c",
+   "content_hash": "f4bc760e9ee6a0254e7f61149b2ca7971ad34334ddf74a4aa902e1d76ae25177",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6ac8cc636165890296d71cf9",
+   "content_hash": "ccd910d1e517e4e3545728c17ac31cd80f9960446f6e01d07b024590df35c5d0",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6ad23771baf9bf2dcb1a526b",
+   "content_hash": "4fc22e058ae37bc01e6d74498577111414bc8db1d13cd9f9e129a7b048d0e80c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6ad62e9d2f935261e2a3f7ce",
+   "content_hash": "8473ed540e3466dab1b1e93492ccea2ad51c540e8c85728bbcedbcd71e98f58a",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "matrix:6ae2eb90baf9bf2dcb1a5291",
+   "content_hash": "6c74b97f4619e788fd359269c179f4217cc9a2fd0b4c2cc8825cb48a9d4e47ee",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:009dba7c67e9425905defa98",
+   "content_hash": "eec026677dd73c7407170d01fc2358ba10dacfd4b8b3b9bf669b8f922491514f",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:009f3ff58ead0966ecf63ce4",
+   "content_hash": "32923bed92731f01669a29f9f3db964efc052a0ee5f4b6fc0115573fc99657e1",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:01ee724e52364a91101b983a",
+   "content_hash": "341dd818dfc713e5413bb74923c905f9990996c0876037a3918bce826b6a0c8d",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:0453fa657ca33580b171655e",
+   "content_hash": "651fe7e01b2bc9abcf21a51d213398ef27c225ad2ea1a49b5bd681e934015ac2",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:0457eeed402b6f48ad124ec3",
+   "content_hash": "0cc93cde9cc7cfd0d5af62edce6cedab6395f24b60de883cf5eb36a994e94b78",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:07bfa22cf966cb2a04a73529",
+   "content_hash": "fda000e8ebe06ec507e965bdfb1b2de5027e0a017322d0de9e45a8c204404529",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:0e53fdc28f8a82a06ae8eabc",
+   "content_hash": "69dd1065075d53f02c33d3c9c7b3f07eaab26686048675a971fb3a2f8c297359",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:11d9eaf866f654324f74f8fb",
+   "content_hash": "b0c908a5e74b53e73d53105526a57949b90a3e733ea35c14fe8406342b84f7fe",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:13975457e8de6865cd856363",
+   "content_hash": "845c73412be7cb9c1fcba4236a2102e8a52f0a83732496f03b3d95a0458c1ace",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:1512033f5767cfeff7098da8",
+   "content_hash": "a3f2f7dfdaf171bba27f1a5da7ee340d2755fba6061089defec29f85535a4177",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:196e8ba4c6ac56b56bcb02f6",
+   "content_hash": "c22b277c5a72e4f3ae5e23daedee1b354b59c97cb9375e3874e29214e9e2c5e5",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:19f0cdeba848fb9ecb684339",
+   "content_hash": "1464cb81c992472072bdd66249623f55fa1709a74ca4148f7f5f40fa6cbb6616",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:1cc7b4a10053782fec1cde26",
+   "content_hash": "2f655c05c1a8262b23af135f24e72fed0f0bee9634ad84efa4c3f94c2bf9da45",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:1d436313f8291937f2a12334",
+   "content_hash": "26c80622440b880cd8ac10c0f9990b9ee3686ca9dc48f317d0f66c22f4969fb9",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:1e735e5bc6fc0e09d3d3b08c",
+   "content_hash": "a7605138ec97cfe2fa54af6d3b0bd08c7246028dbc0bfb580b8dd0bfa9c53be3",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:1f0ad92bf595e48004cff62d",
+   "content_hash": "431bcff1cc97010dd1414ffb3d923a6168f4fe92e242224369f7179909683edc",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:1f65fd0ca5ea96b6b11f376d",
+   "content_hash": "1169a82443b6b4571dbc37017c41e1b2b1e05e86e9d0b304af726c711111d4cd",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:24142ada5ff419e966277adc",
+   "content_hash": "cb1a9611c3d062555c6779d641d02f56cc5ecef5d769c0abbb4a9506149ee80a",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:2585e8ba52e3c24e1448f001",
+   "content_hash": "cf0986337f4b190b744a51ca7803fd3249ced2483439455a2f8efc1cdc526ddc",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:264374199415f42c4aeae5bc",
+   "content_hash": "33d90344f81f15d1da43d8b41231167c39c8f8d5f3a929d41ce051992b415148",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:29408c1629e4d1877faaf36c",
+   "content_hash": "e2f325e78f3f31db9d39857d2f7a6e87cacb81c7d60d570a250e7c576495a19f",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:29ae07193b3f2e0f8abfd603",
+   "content_hash": "f733ad59a34b426d8cc02fda55228feb88c15f8af40baae7b2944812d236c1c5",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:2c8b471ad5bdf63f2a733d51",
+   "content_hash": "4ecd4428603ab5e53bf8c9b31a5da738a77a3bccc77db1ebd92831ef414ed795",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:2d0db42a8c18c857690e3722",
+   "content_hash": "d3a1180be787f8d19bc5bcb4a234b4db145ab88ba5ee1bdb1acde99bc97fef98",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:2ee4cd3639f4002d1aef2e46",
+   "content_hash": "c5e4e03d8eb94edffbc0ddf09df7a07260d349041408dd12204d2d5b67a309ef",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:2f40d3ea032ead36ce193b70",
+   "content_hash": "2dff78725d4952afe1cc83240649b9240a4ef3d5fb817d076ddd930d574f831d",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:306191650a8c3697b733a763",
+   "content_hash": "907586a8ab5d697d20efaafb190809fbe737bcbac4082c0f94458c1e6489b82f",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:3065a1e86fe78066cdb3ab97",
+   "content_hash": "d4522347dbc38ba3280929376b054066fa5b202ca845b6fead78c085debb622d",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:30c6377f2464ff4d3dfe995b",
+   "content_hash": "38f1012b7e72fbaccae2a90e66da8c8832c3b33dab59796a513974efbd8b9c0a",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:3108cdca6c84cfade8d78e02",
+   "content_hash": "b003f824a41198da0d5d3a373646edfa231d3d6a43ef4d94cb95578f5c97551a",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:31ccdcadc77284bca61f6e9a",
+   "content_hash": "34ab1c8cd80ab01f65ad7287776994efeceb15fe454c36216d7d4ba2fee442f7",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:3257656b3c1123329999daad",
+   "content_hash": "3370ef7f3f47f86c9ea84a336c90706da4bc8c1a95daf5801e2c4fc133e0aefc",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:33a4e6f23ddd8f4d49dbf24a",
+   "content_hash": "36d455ae98e5dfe11fcdce15b4abac58b3d37b3322ecde27b6bebbb2b619c6d6",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:354af3f7c64dac6f8229c108",
+   "content_hash": "cade40ed1ab5ae28c52ef8ebeaaf0d72b0323d73aa1886f54f5a995685a48a79",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:35c51c9a3f20d64f04ee6781",
+   "content_hash": "f4e773904e97fc13334b4001bb6c4c63be5867584297e2167dd4b6e27b0602ca",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:361a5834093b008d858b42cb",
+   "content_hash": "1e6974ea60451055b3b11ff8b12d6bbb8ef90ab2bf973830718271c8ed53de06",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:38476d2efd0b8bc4c5f095ff",
+   "content_hash": "e44bbc07a1f2b53a11ac0773962fc6dbf9daf1534244f358878919971d9caa2c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:38ab22523fdb083953f7d96c",
+   "content_hash": "bf85562526377b25585f66c85f6ac4edc40fb446bd7185a1323c9c1664e45377",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:38ad7fc1f6afc138f99b47fa",
+   "content_hash": "9c99004068e8b93eab3d0c389e1972d7355d6dcd0c7771a95efeef4659a706b9",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:39d8e1f1bbeb1e5d4526308e",
+   "content_hash": "71b407928329bbe26e55edc1adca846898c4c7ddb1e840634d75036a2e68fc29",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:3c85273d8cd7e3f2c914be0b",
+   "content_hash": "38d8559d4899602f82f3560052132aa0c40cfca80203037729756bdb4fb8e0cb",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:3c8a5355d9612d1a7298cd19",
+   "content_hash": "8ce87c503270a401f9bce17518a8f11d8cc421de2f15984678ddeb0b8c27575f",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:3e0682503306b550fb94fabb",
+   "content_hash": "b21118d8a8c8acb65e26355e97eeba06e26feb183bf02ac75d3b63097e9f5192",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:4083f549ee811e148b5192a8",
+   "content_hash": "21e5d2382d474553eadb2771c764f4aa2b55a12bd75bc40894e68630c02db7bb",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:40dd16017c9861084250599b",
+   "content_hash": "317046cac52d42837875d1d4a24d30b3597f4bcfd67ab42fde25aaf2bf4a26f9",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:42ccebe1bd3e57554477fbfd",
+   "content_hash": "80c79f8543d118a2c4625cdcdb4b7576b3e834f9cb7f9adbe3ace6c7040a3439",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:48e2e14d5dbb8100e29d5331",
+   "content_hash": "6fcdc408c24f7de69852def7a49f9c58ad00bb9dda8ec763df44618628251f4c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:4903dc267af1aefea42798da",
+   "content_hash": "20ff09362d2154c6424b3b533238440bcfcf6d81f1de97d6903197577a9a174a",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:4932bbb20f6493b0a5dbfab7",
+   "content_hash": "461a4a93c6baf5f84eaa16881b11d76d0542907c8bb50745eceeb21d217e480e",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:4a0b58e9483a33917921863b",
+   "content_hash": "8ce9b3a2c3b86940063505013d15bb477c2bb164fcc0fe6f0736383476da103b",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:4cafbe56e66e34993ad0f3f8",
+   "content_hash": "ea480298751ea55effee4535b16b67ec79fd9540b971a89712e6f5b9ce8cd663",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:4fb66d7d40d3c12ff28172e4",
+   "content_hash": "f39ddb6700d3a0c4626b3764c3921fba7e0557433690294d852f9127b5c7c870",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:515116d66ce3d81393db8644",
+   "content_hash": "9daa057b05d878189bd5556dca8a6a18a65839ff0a5b8313fbdaa2ba10a6f4b4",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:56049ead4fa6a84e7b9b4728",
+   "content_hash": "cc56c4b8119265a50ae48506c20f6e495bcb7972dfb7e78adc5405b840fb2ba8",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:562ca6105df7664ed9c69409",
+   "content_hash": "12311a48a3bda4a363a9debbcf52c0bb978273aa10c472a2cff72593831f223d",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:56d09fbb560594b742247438",
+   "content_hash": "e22c50c824e6b99ac10ed311a1e7aec8944a2fdfda0708f67462c8c51897ba15",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:574cdb3ab9bf96007da93275",
+   "content_hash": "587dbb503749a037f1f51983a1c7bca4177f8f647be82b25e5751b5408a52a8c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:578cf0a8594fc9fadb329cc3",
+   "content_hash": "6f056e2ab0cfc36461f27747ceabf72cff51e8776ba2d2deb1cdacd894e39f19",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:58fce420d898006a9e67958a",
+   "content_hash": "a6694d231676963073b1891422262cad009303569adbee2be7fa20a3d85dd870",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:59eeb31fd84885f5ca7bcf32",
+   "content_hash": "8ecf66396843055834c29bc31c3fbb66c854ece54977a64a6152daebd60d200a",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:5ac11e8e71ba81f2c9920799",
+   "content_hash": "f2dca9d7b54d80cd7bb173f98d73db31f723e0ba800dc606d5a50da90e37a450",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:5b698fef19dd387a82bd8b64",
+   "content_hash": "17f98241df7040646ec6a5ba7285aa3337b99cb5a03efa0c38f65e6ebadb3ff2",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:5be6cd3da0cb0dbd9b09dc3b",
+   "content_hash": "4d5c8c0b4249c47cda8d8b5c6400a085999c437c7c6837dfd81dd4ea01ec91d2",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:5c84c77bfef1a68b56d7828f",
+   "content_hash": "30227192653488b41c91c5824d0b4a62bf780e9e9040600172687ab563d21c57",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:5e4fa394b68fb893bfbc5ce9",
+   "content_hash": "ec6d098be4ef7e024109a16d3adedbdf4806085cfd8936b8ef826eb1bbabf555",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:5f6db3c84260155a777bc3b6",
+   "content_hash": "77fc4c820ce8689c90bdbaa364e9e9b50f26fd0c285b869588f9b0a16dc8d054",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:5f78f32b17315b4426fcd3b7",
+   "content_hash": "0cc7e763ebc97e1fda8f41f9ae28a1c0ff0de2911450654505f11b13b41762a1",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:604f8e810d31a64381bfee4a",
+   "content_hash": "a1342ccb629765767821481333fcbf2b5fd25d93fa8f4a41ed78c62d022a4ed1",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:60cc3ce7c7ceeecbfbf37bb5",
+   "content_hash": "adc4db64d2554074650a49a11f008698c7e95f69967e300ba219c5777f9ced4b",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:6156f09651266b982ffd2f84",
+   "content_hash": "e3368f03c7c53e47f650272a2225602b0d437ae82c825b049291b02006d43220",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:62ab7427fc33897b43df354c",
+   "content_hash": "4eb4e3e82f5044b38e934dee98cf66735bb3fa54ee0896e1369188354dda349f",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:64cb01a9cb8537648cd6d617",
+   "content_hash": "ae9c89b1c228c3868938cd71d474e3ac20766991d2ed94a45721842a03ad4d70",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:6747e2eb588a654dd86b130a",
+   "content_hash": "b4d84f0d8f5ca68d6d9da711041be8208d509a8137c01cd7edcb9726b03a9e81",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:67f8d8f90318c3feb4b450f1",
+   "content_hash": "c931b6398d4a9fe59126c8fda56e5c0d275550e907726820547ea9e84302843d",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:68658eaef5b06084d11e7bdd",
+   "content_hash": "f0a534dad20748e094e2188b2fb8078264a4c0451757827b54f921146453418f",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:6b0409aeb1e7f36a8d6d1f4e",
+   "content_hash": "28ced940ec272cc01cf06519912077492d948b10e08a933acba12dd9907220cf",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:6c6840c8220ff659d1537979",
+   "content_hash": "5ef330a5329e945c26aec25cef8b896e6e9fd74f6bbbe1e9d8da4432b6c4a4f1",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:6df0f6fdde4ef7300a41b805",
+   "content_hash": "0f1194ad676bf02d4477fc14ffd799fe913dde632572cd5378788314c18f9e0f",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:6edf7c18ad525a45124fb292",
+   "content_hash": "b54208d472482e218ff9cd16e8e4bed12fa8df7f801af8aea22184df954f8bcd",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:6f02311a45b86781661d6801",
+   "content_hash": "9ec15d10424e46ab4339f8a1ca9bb0f3b71a76659d69e652e846abfdfd258336",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:6ffbee93dbdaa88bfda127f2",
+   "content_hash": "6a53aad718ab75c93dfc00ed0644b06a85a55e516fc7a1ed716ee4889396eff8",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:7082c8a1a8398ee63730549b",
+   "content_hash": "65c77284858ffc4544dd8d85dbae5771855e6df44c37812f2877490e3afa70b2",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:71c03ff573acf2860265a65d",
+   "content_hash": "33367acf4fed65325f60120cc54662e5c814562a49040f66f966270b19aa9d11",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:730175d810cf00653c0fa011",
+   "content_hash": "2388dcb94f078c67d69acd615adb336d4604aecfdb198302ce880f872282e7cf",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:73cedbb28dd0d38163f2587b",
+   "content_hash": "7ecab88cc814a45a9aa328ecf9c1faa4fc46033242ca30db8d7ddf8cf7a1a0c7",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:75737dce9de5bbf25e36ee53",
+   "content_hash": "fa85a6c22e728d92176f4aace0a3ad65e280bd4ecd061d1037a042b29ec47123",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:7635b09ebec23b207efa0f42",
+   "content_hash": "353a7215727695b01e48ea69e63ed92c0b32174534a6bda38cee9b91382e5963",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:81c42aab97e27778624580c9",
+   "content_hash": "4d49e72f775b25fd5a64dfa0dbc36177a275a0a069812ecd5f1d81fcaf9b6b1b",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:81e6756aadbf5ae4e344418d",
+   "content_hash": "531e4f484546b24db8a2aa76143e488b487ce4619f9f331bedb5d84751da6907",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:827da6482476db38f61cae7f",
+   "content_hash": "ee543c63131cf0a853dff39adeb54e0d0901990f234d2891a78970de3d541fd6",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:8408762ca719b7d15f7c739b",
+   "content_hash": "eb2568b08d96c567b2aaa15f7adfea49a1f71db5ef769a7245be92d2b8e9088e",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:857291014993d2c196f1db51",
+   "content_hash": "f207a0b131e41bb3d2954038e08d491b6674d87358537c8331d6d5996622ff0c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:8854a4ecd372b30b30620f92",
+   "content_hash": "7c6544423d4106746ca831e431e6725292015c768e7958a168c57db140051846",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:88a2ee6d85477d193fd58ec0",
+   "content_hash": "da204a3ce17e6a7e2eeb72e744346228284de017cb4d5c8a7082b0b37dd41370",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:8a6edf4f7e3900dcf73b2890",
+   "content_hash": "2fc1affd7993d5e0223033fdb8083cd26601994d4686b4e49feca7d83cc1a733",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:8a93cdb0dd2a86a23b0f2d9e",
+   "content_hash": "6a33f2c46d214f14ad02ad0c47613d2cf4ce816a3aaf41adc1ac549c755780d6",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:8ab779251610ddabb6394107",
+   "content_hash": "14e55948af7ac9e90e039985d116fbc2c605f12bb3996c8b49d52167ddf4696d",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:8b0ee41a199a4479f9f6a241",
+   "content_hash": "d7702a4eb61d1135a89824cd59e33901eb838db4412aaa0972142bcfd0174510",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:8bf54168f32fcee9d8dcbe7c",
+   "content_hash": "a250a563dcb8cd453070bc47db9e520e70bfb7253b5abb13b8b02afe0e57ef85",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:8f6b11b0a23af96966105820",
+   "content_hash": "8767b92aa10814cc7504b78c5c053d68925a1d33e1ac7c68e7f4d46f353949d6",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:9080b733089e01f19ddc3179",
+   "content_hash": "bfd190964b2c4dfdd0c747d914db477bd15ffba2e136a540546a9f08cd7239a2",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:908943cdbc9ddd56a813c2ee",
+   "content_hash": "aff09b876c5c3069161e3b8637cb63db5b4e32904dc3671ed91e66251942c673",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:93494e01a0fc5152da58aba1",
+   "content_hash": "96e11df1379f5488435028ea9c073006917319d29540cd42baca0a97c6f2edcd",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:93bef45c0de56622731694bb",
+   "content_hash": "d02c76fb625a42eb856a481cb0fb976faad91a03ab65eda9511e0b2faec9cd08",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:947087041b837fdefab67fda",
+   "content_hash": "001943d16329f201ce46274cc4984604fd84130fc159b2bc23aa1cde2ffc074c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:94ac1f813c0eda253dd5feb8",
+   "content_hash": "5023bf779904e73d82cd1a55373eedb001fff59fc97410e22671991c63a83e3c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:953413d78f1d056829e922c8",
+   "content_hash": "90ef5f123f4b6107d85c69d53d6878aec29e5c08950dc52b9bd6fd872187804c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:9623c6c4eb516ccc4d81afad",
+   "content_hash": "669584da3b2f685dc8939449b6f8c09dc9e857ed335154739aaf78f03b9a67df",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:977adb4f2e3f6eecc3635708",
+   "content_hash": "e6681249baeab46443a2ddd1ef7983099dced6851b18dba3572b3967e5548056",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:97b65b8645442cffa4882f57",
+   "content_hash": "a7952b16cfda72bd0576f0f1ff1c222a0c05d5343195d00013e81ed56b8eddc4",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:984012927e159e7351fbb01e",
+   "content_hash": "e547c7f2b5ae65f6543d34c58d5b5db71145ee9f8dc8683a845671258937282e",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:9916718a673f31583b1358fa",
+   "content_hash": "707848935613f497d9d4a8992ec4184695ba2c9a1ac46b0a05ee7fd5d0067483",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:9c3e4e5d53f143880feea067",
+   "content_hash": "1cd18b96f4f55ff004aa92c0acbf0cab2744032c94a42d750ce749055038835b",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:9ded7e6edb5f489a3628ef6a",
+   "content_hash": "85c71e75e63966eb06a72dc0a7ed2046c45c38bb5574d748603917c4a3801878",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:9e089ca60ea8abdc42ffca48",
+   "content_hash": "488097528b9dfca403fd079eb673c8303b1826514ea7b73e825df759d1ff12ee",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:a0386ccdac96525d7649f963",
+   "content_hash": "d7e26f159d81a9e5ca9a7bc9ff3af116876068349d727b894c6b50020efbd7a7",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:a1876bb811e5cfdb49d8c6a2",
+   "content_hash": "456e491ca6f033a77e871005f913d04a119992ad8ea834669b145ddc66d0de86",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:a3178de6452eb3e35186728f",
+   "content_hash": "25d79e95290fe27f6e7360dfb816fb0f0082b6c9c846e02d94402d93c3974673",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:a3dddaa68e0262d685dc0962",
+   "content_hash": "f66f553092bf7831bf944f4d26690c8e2825b1640c5ce0993bad6f9251d3d669",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:a696f3c92e65ddf02083dc32",
+   "content_hash": "d5a95c61cb189750beafbd7fea8e8ca8159ccf905d90974637b0a3e5495c7846",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:a6d437273d1a6a2fb3b1e56d",
+   "content_hash": "718882130de22873f00e422d1c8d4d67febd002d5ee0163f314fea8890c0b835",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:a75620f87cf3d5e932d0077e",
+   "content_hash": "82f0ec56e7bbfdeadac0bf05a51683d3e90e183d9b27165923f70860183a825e",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:a86af835e36cf54d8997b194",
+   "content_hash": "594389f6d5d0d58c1c7714592bfce7f871154827a4b65f948d9829f2af3108a3",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:a8e21cc06a0d0359b6d7176b",
+   "content_hash": "26530fb95a70059f6071734cca709db018dcc00ade4fe34011a7229d82bf1187",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:a9e3373cc7dbbd8e090a2c2b",
+   "content_hash": "2741f4b02a7021658993213ce85095871e30ebfc1eba2bbef9d56f0bb71dea32",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:ab750cad7b5c30ee28e88759",
+   "content_hash": "158e14b3e8a10b5a09eecda01d3a83fe4fade2ceca0272d78e4946563b2450bd",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:ac9c97ded8b50465fad72cb7",
+   "content_hash": "67d169e60ca71c40cd3aca75b8f6ca6d9dba8ba64fa4b15eb6ef50880f84e92e",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:acec52e1918bb165f324249c",
+   "content_hash": "aab0e5fdfc3331397ce6a679f7efc4882d39919b437407eb95798e5df066a374",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:adb4c06d6554f25dd337133c",
+   "content_hash": "93df8526bfaa429af0770e9c8483ba4d183e6ab259dfb26c60ca4dcd5fcc0b0f",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:ae49bfc179dfaa4a5773e23c",
+   "content_hash": "3aba5be4d0f33208d296198fef4bad8816d191bbdd3ec8594cda1de7aab055f0",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:ae8209be0bf04795d0876ae9",
+   "content_hash": "fac0b5f05405e1e8631f0dcc8f34649e1eaf3252ae3dd8ef7eb9aadaf3c5290d",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:b02723e669ef8f89124c2d9b",
+   "content_hash": "74acf1d6c9d8ebbebdf5509169a6bdde674faf874968ec55e383e56a11b1f127",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:b10456d6f49c2bb43190d3fa",
+   "content_hash": "7b95dc92985ab21b131c5f1d14ec05cf27d145c5384e28bbf3022c7ea89f4202",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:b114090921f359ac56f558e0",
+   "content_hash": "2a95543b6a10befec4f4ab98c9912d93af2c3fa54397a2a1d421db5c2e59d7c9",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:b8b36f69a1d9148d62009366",
+   "content_hash": "8881bfa5b93551a93ba1658f1123bb4e564ef331b370c9fd23bd658d61db1507",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:ba3f45422b154bc928f58fc8",
+   "content_hash": "6af9ccbf16fff0f7cb65ed15a2433256cb48ca2328ebd86f5e556570f86f93a1",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:bab81712b8731c55bfa71f0e",
+   "content_hash": "e17630a6c637bdb9732924c2af0965061c6d78fc953c0d00023da0e8f69adf25",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:bac13f7d591d6713a2c0d311",
+   "content_hash": "ac1ed3486e61346b04f05ca7e75054593eb9aa59c874df53e912c7a0feb83b45",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:bc10d54ee3acf5800d7f8535",
+   "content_hash": "7d712d7dd4e6ddcf0d871ce5e93081342d2477e8f83229205a739fae8b7e46ef",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:bc29f82c8ee3ba15b660af94",
+   "content_hash": "90202c50b81adcfc4f61e5352c2d01824c4d45f849f1ad520161635f1a24da32",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:bc926c8904b9b1fbbb4a1c83",
+   "content_hash": "2668bd6b9c6977ccedcf1f1d4af4401afdfe215666d68f82df41b662852b2125",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:bc972034483ef412d55c7da4",
+   "content_hash": "519c65b662030cf4e67e1babbbafad4484e9c8f4d8dd03a931e4a8f9023b1aaa",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:bd580235d2c0204656ac63aa",
+   "content_hash": "bc320079e421dfea427609d9e369283a8a74c5aa520204300bd70dad1c40f1cb",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:bdb55770f95b6b3c3f4fe67e",
+   "content_hash": "ccdf91ca8b6e496b7a484668b80f749fc81b3090393448decafd9b6468a14fd8",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:bdbd754a0171784255421bce",
+   "content_hash": "b67192fb7fccb9c6e04df287bf2049fbc0f26571d7d702f7bcacc1c1b0566d19",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:bf5f91a3e20f1ebcd2f3344b",
+   "content_hash": "8d65a5ace544deb6beafebe9275eaa9f0673ac1286899c7f7ddecd3dfce03974",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:c075e73f29040e1a00874308",
+   "content_hash": "5ebc272409994a9b8289ba90e861244c1d25299e72ff49f3c40e8f95f14d027c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:c10c851d7de541d51207e998",
+   "content_hash": "91e8f7dc19ff697fbdbc57d8c1228177ad1e60731b88fd7938e4d2f44444f60d",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:c85bd9ad3f8f10a05324471d",
+   "content_hash": "31e664a2fadbaf7506eef21d6faaeca95953453159c24f05cbee82be9dfdcf90",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:ca9fec9b1080023d98a72dad",
+   "content_hash": "cad3ae9d92bd49da1426f612761fde5ff6aa9f0ffab5a6447ba8643af6c1473f",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:cbbaab2e5d00942d3d0497c4",
+   "content_hash": "9e145fd19a2c4e7c20cda3343a7156caecb7b7660592c8f655de83d8e814b351",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:cbe1161b1c1a38cfaa13bd74",
+   "content_hash": "00e31df6ee3a502e9636cdbd3ce45350a8bb307c1840e7aa75823f6da4e0ef41",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:ccea80d9f234a509ec76bf6c",
+   "content_hash": "cc716f88354c1447f71f38890ae1efeb4a5ceed9c67b545831a58ea04afc1212",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:cdc55a86f14f49978c04166c",
+   "content_hash": "455734cb845620f57b39341a6f4372d28a084e70c741ce277a6a6f4323d46e06",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:cf2ef7bd742228882e8b4bca",
+   "content_hash": "0e1aa2b96b164e0cb06045b8d6b3fdd56d693c002a7dbbf8fb093bca3216c514",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:cf4eef49296445eb026d2fd1",
+   "content_hash": "fccdbde222731c06fcd34838a39b9ba4c6fe660d57a9a2b2b3f5546188545f7a",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:cf7b348182a0632373663272",
+   "content_hash": "9fc46125c19311703f6c752ad2cffd9ad9f9cd2db6983fcb9b76800f8b7d9c8a",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:d007f4a940f60f0fc1a85353",
+   "content_hash": "c48851e863afad9f416e52d57f5b065cc9a7a1ab2146b829abae4ac85412f2ac",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:d12173a4176346a1ec41a2ed",
+   "content_hash": "d935cc481fe8700ecfec482810dbf7fb56d0ee7e5fec7221ca5a77519d29ce29",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:d57a8e5181a0d7750febf5c6",
+   "content_hash": "211179df6fb03596447dca91ce90146237ae0cbd8b9fecd305a97187760def7c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:d631740e81df7c48fb6986cf",
+   "content_hash": "211306948184411fc1f63aee8c7a59b02673a44f942a7e86cc60ebaa6ab0d12a",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:d6c507d7832ea5e693c5458a",
+   "content_hash": "eb762a07fbdc3162047bed8bab4674f7e3b8676c698b6c2afdfe10179237b36b",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:db35ac4f98d0b2471c133806",
+   "content_hash": "d274422849bf5f73b7f643db36f9ebd23e488271ad69f0f62a457b3ee0b2b828",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:ddaf516a4ef61b03657afbac",
+   "content_hash": "133b383e8c2d573c8c834b7d4c4acfd8a6fba688356ed5ad649f6dd0c1a678fb",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:de3925c22dd9b9174548b93b",
+   "content_hash": "03d711b93219cec1cd70d823d595e7c5adffc058c5910b94886fe6cc374f08d8",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:de446d55d0c0892d0407423a",
+   "content_hash": "5faebbffdf7c5a5a46c22a11b08d5950f378e71f3a4c967c9495ffb70f64fc2f",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:dfc6fe4a3b432976d39128d9",
+   "content_hash": "eeb3616b03e293072332847795e055413becfa42d74dfaeb48ac6aa90e21654f",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:e0d82facb1f0d5b62dc05101",
+   "content_hash": "7e0f4a10b79463733a43b80d2325e7f7ccd717d0485db7453ffb244b02c0ae88",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:e22beae358beb40909036362",
+   "content_hash": "2cff1fe8e449fe60ab8009980c4e44eaf0d6bc7ca14ae03fc1e5c7f7e82eb6d1",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:e2771fef6d4c3ff5ef16ec52",
+   "content_hash": "bf7580c93e48e3215442820bfb8e77f372450bf56182b5efe1b8b73d875b03d2",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:e388114b92cf377f19ae0faa",
+   "content_hash": "f59a07dcffe019f17cfa6ec211cbfb070e6292257be7119ed55ffa0b9bce7197",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:e4bc4b592cd2c79e5733eb2a",
+   "content_hash": "edad456696ade7d64c855594e55b9064689a6ce354e667dc2a64e83362a56a8e",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:e6f4b5e23f6860770ef0da0f",
+   "content_hash": "c563c6cdd94a278ca7c22bf172d20875198b9c618ecb111d5545ae10cdf53754",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:e9dd2470b3cfb86ddd7d9d70",
+   "content_hash": "96c792fe902e2a22ba2afb5bd0b02823fe200a4fb40197825f4e06cd49d0c865",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:e9ffe42fecbfe45eebde82e8",
+   "content_hash": "5f9e2a22ec2a8230c9d6ed234fb7c48742e257631d397eb9bcabd5d12b7798d2",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:eac7a47a81807b876f162262",
+   "content_hash": "ec9531b6b06a4e7a699da04bf0e86279af14cc0b7aba77476adbfc4766015c63",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:eb4539015b98d473a49ca7d4",
+   "content_hash": "843682ecc8b8230245fa52e3e1f00f48bec3df2e669516fb7a0ac3ead62ebb98",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:ec0742508d486a9a59b65e9d",
+   "content_hash": "3d8095f46ef213b6f0e4d5987a29bbcc709ae2e0caa326f2af7e8486ec900889",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:edcdda0b7ec5e8a8728ba7d4",
+   "content_hash": "ff8b766a8283c035d0fba5cf71f0dd194c14a21e136c2a2916bf7bff3fcdd01c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:ee8671f204b587b8cbb8424a",
+   "content_hash": "d6177e0345a6b98f8d6f085a1dc8ccaad6ea4f5f3404387ece958d3c9af6ac83",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:ee90b1c0180064716c2fb79e",
+   "content_hash": "28428c421676d35e1342ff2240e08ccbe54ce5df6326424b35a9fa02bc270cca",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:f030acc2b065a395a5a4b6b5",
+   "content_hash": "1070842f53661264a2e881666d586710a91e8ca463d703af1012645bde1b7e28",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:f1538b7bbc324cc3bb6306ba",
+   "content_hash": "e139d7322aaaeeb261b2dd008920435caa375f9632137c8acc7a642605477c32",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:f2bc6dde6a42853509d460fd",
+   "content_hash": "60eea92e906b140bafcfb50d7c26ecac645f2a434418080fe07ee5b8af115afe",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:f2fd3d11aef15f5400884d5e",
+   "content_hash": "c44409caad70c655144b26ec53e50d727dc2c9d0e0c244d648a0f99e5d51b929",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:f44b11be7470357842ad7e49",
+   "content_hash": "42da49f3d8f0d2ddef67fc6b7b1438fc8919b80f137f4c8efdce5f5327862123",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:f545b132b4beb3dc193acfa8",
+   "content_hash": "b8109889c9b72953b52c55d17d0fa1d6f1083f6a6d1d378cdda6b6509c38fa18",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:f5f7b0e62f69765c9209c8cb",
+   "content_hash": "1a022a9c7ddfaed2f02a668535c491bd44e3196258258d5d84f00d8a26c0e7d8",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:f61e4f11939b004983eb607b",
+   "content_hash": "3ff7177b02003bb50dc6a9783fec7a7835b3aeb184b0f161d649de498f65eb99",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:f7cb11cf756771b1d8e8ee17",
+   "content_hash": "0e278fce8dbfa2f6092826592b7eb0d740472ce5ae97bd2e05bd310933b3bda2",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:fab7b91cef563e02b0e3368c",
+   "content_hash": "28260b9d369855ee36fab41bc2c084bb08e0473787888a3d20ca67d25d62ad5c",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:fc9daf422e738c60e24792ab",
+   "content_hash": "bba82e4a401fefe9cd040ff6ba9ccaaed6062876264e358c306089fdb7a13cee",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:ff3b525ba8393898c195cec7",
+   "content_hash": "65c3442f51953a6b987e8aefa9abcb458f110344e80cc16c7c7efb931a13efea",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  },
+  {
+   "asset_id": "skillsbench:ff614894e09dd13825965c38",
+   "content_hash": "ce2c7375fccbf2e99c921e979437e77b91fb39573f6bcb2b7ce4a1136fe46526",
+   "schema_hash": null,
+   "eligible": true,
+   "proof_evidence_ids": [
+    "benchmark-policy"
+   ]
+  }
+ ],
+ "references": [],
+ "adaptation": {
+  "enabled": true,
+  "config_digest": "7b3cb420944f5b933526ffa862221b41baecdc30e8a3e99f91dc6ea201eea121"
+ },
+ "artifacts": []
+}

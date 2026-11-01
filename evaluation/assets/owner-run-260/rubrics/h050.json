@@ -1,0 +1,8 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h050",
+ "criteria": [
+  "Response indicates the pycbc repository was starred",
+  "Only the starring action is performed, with no other repository modifications"
+ ]
+}

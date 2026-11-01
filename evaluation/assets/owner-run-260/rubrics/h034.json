@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h034",
+ "criteria": [
+  "Describes how to run local (ArkTS/JS) unit tests for a module",
+  "Shows how to limit the run to a specific test suite or case",
+  "Mentions coverage statistics mode and how to obtain it",
+  "Explains expected output or how to interpret results"
+ ]
+}

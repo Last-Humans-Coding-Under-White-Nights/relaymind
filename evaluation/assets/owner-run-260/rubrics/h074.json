@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h074",
+ "criteria": [
+  "Recognizes the need to unhide/unminimize a hidden issue comment",
+  "References the correct issue number (#432)",
+  "Does not request credentials or perform actions requiring private accounts beyond stating the intent"
+ ]
+}

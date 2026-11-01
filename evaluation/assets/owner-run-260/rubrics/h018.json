@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h018",
+ "criteria": [
+  "Code creates a map component positioned to a specified location",
+  "Implements marker add/remove with click info popup",
+  "Draws a polygon overlay on the map",
+  "Controls camera zoom/position appropriately"
+ ]
+}

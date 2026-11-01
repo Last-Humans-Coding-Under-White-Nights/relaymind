@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h029",
+ "criteria": [
+  "Identifies likely causes of callback signature verification failure",
+  "Covers server-side (Spring Boot) verification setup",
+  "Mentions sandbox testing for diagnosis",
+  "Gives concrete fix suggestions"
+ ]
+}

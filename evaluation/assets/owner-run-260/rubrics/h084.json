@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h084",
+ "criteria": [
+  "Runs an Instrument Test scoped to the specified module, suite, and single test case",
+  "Includes coverage statistics in the run",
+  "Reports the test result clearly to the user"
+ ]
+}

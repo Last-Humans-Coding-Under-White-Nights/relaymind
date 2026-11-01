@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h093",
+ "criteria": [
+  "Request specifies the repository, PR number, and that a pending review exists with draft comments",
+  "The desired review action (approve) and a summary comment are stated",
+  "Task requires only public GitHub context and one submit action"
+ ]
+}

@@ -1,0 +1,28 @@
+{
+ "models": {
+  "providers": {
+   "external": {
+    "api": "openai-completions",
+    "models": [
+     {
+      "id": "glm-5.3-flash",
+      "name": "glm-5.3-flash",
+      "reasoning": false,
+      "input": [
+       "text"
+      ]
+     }
+    ],
+    "omitted_secret_fields": [
+     "apiKey",
+     "baseUrl"
+    ]
+   }
+  }
+ },
+ "tools": {
+  "exec": {
+   "mode": "deny"
+  }
+ }
+}

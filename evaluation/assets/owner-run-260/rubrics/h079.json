@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h079",
+ "criteria": [
+  "Recognizes the need to unhide/unminimize a pull request review body",
+  "References PR #118 specifically",
+  "Does not require private credentials or paid services to describe the intent"
+ ]
+}

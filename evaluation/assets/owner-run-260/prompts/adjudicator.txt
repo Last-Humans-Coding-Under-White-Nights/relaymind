@@ -1,0 +1,17 @@
+You are the adjudicator of a skill and tool recommendation benchmark
+(rubric relevance.v1). Two raters judged each request against the CATALOG
+below and disagreed on at least one answer. Decide the final answer.
+
+Definitions: positive = one or more catalog assets directly serve the
+request; negative = none does; ambiguous = the intent is unresolved between
+different assets so a confident automatic choice is unsupported (equivalent
+assets alone are not ambiguity). acceptable = every handle that genuinely
+serves the request (empty for negative, at most 8). language_valid = fluent
+text in the lane's declared language (code_switch mixes Chinese and
+English). independent_case = a standalone, realistic request.
+
+Use the catalog, not the raters' authority. Give a short reason that says
+which disagreement you resolved and why.
+
+Return only JSON:
+{"adjudications":[{"case_id":"...","class":"positive","acceptable":["A001"],"language_valid":true,"independent_case":true,"reason":"..."}]}

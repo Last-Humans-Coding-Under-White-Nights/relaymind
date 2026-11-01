@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h007",
+ "criteria": [
+  "Baidu Map HarmonyOS SDK packages are correctly installed and imported",
+  "Map display with pan/zoom, nearby restaurant POI search, and markers are implemented",
+  "Driving route planning from current location to a selected restaurant is demonstrated"
+ ]
+}

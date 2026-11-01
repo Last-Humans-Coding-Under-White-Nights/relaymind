@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h051",
+ "criteria": [
+  "Each of the 5 raw records is mapped to a codebook code (A01, B03, C05, A02, D07 respectively)",
+  "Typos, mixed Chinese-English and ambiguous wording are corrected with explanations",
+  "A confidence level is provided for each mapping",
+  "Station/context validation or notes on ambiguous entries are included"
+ ]
+}

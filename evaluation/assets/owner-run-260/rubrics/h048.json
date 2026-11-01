@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h048",
+ "criteria": [
+  "Tests use pytest with fixtures and parametrize as requested",
+  "Covers normal input, missing file, and malformed row cases, with file IO mocked",
+  "Tests are runnable given the inline sample data and the described function signature"
+ ]
+}

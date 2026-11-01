@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h080",
+ "criteria": [
+  "Extracts audio from the video into WAV format (e.g., via ffmpeg)",
+  "Names a concrete output file (e.g., meeting_recording.wav)",
+  "Does not require private accounts or paid services"
+ ]
+}

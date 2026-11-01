@@ -1,0 +1,8 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h077",
+ "criteria": [
+  "Retrieves the README.md content from vercel/next.js on the main branch",
+  "Provides an accurate short summary of the project based on the actual README content"
+ ]
+}

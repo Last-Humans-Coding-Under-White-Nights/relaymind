@@ -1,0 +1,9 @@
+{
+ "provider": "external-openai-compatible",
+ "api": "openai-completions",
+ "model": "glm-5.3-flash",
+ "omitted_secret_fields": [
+  "api_key",
+  "base_url"
+ ]
+}

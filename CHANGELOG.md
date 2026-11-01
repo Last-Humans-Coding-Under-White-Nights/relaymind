@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Owner-run #260 cohort, frozen and preregistered
+  (`evaluation/assets/owner-run-260/`; RM40, RM42, RM44; AC31, AC33, AC36;
+  spec 0.66 section 12.6.6): 600 held-out machine-drafted cases over the
+  412-asset development catalog (100 host tasks, 20 per required lane, and
+  100 adaptation episodes), `machine_dual.v1` labels from two same-family
+  machine annotators and a machine adjudication pass (class agreement 589/600,
+  Cohen's kappa 0.146 under 98% positive prevalence; acceptable-set agreement
+  451/600), the frozen lock, the episode and host freezes and both
+  preregistration outputs. The corpus stays `development`, so nothing graded
+  over it can qualify.
 - Verifier support for the 0.66 machine-drafted prompts and `machine_dual`
   labels (#260; RM40, RM42, RM44; AC31, AC33, AC36): `machine_dual.v1` in
   AssetLabelsV1 with role checks (two annotator-only machines, one distinct

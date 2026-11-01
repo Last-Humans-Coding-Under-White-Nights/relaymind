@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h081",
+ "criteria": [
+  "Processes files in directory order and explicitly handles batching for large directories",
+  "States or applies the user's remediation principle (uniform error logging) to each file",
+  "Does not skip files or merge unrelated changes",
+  "Output is self-contained and does not require external services"
+ ]
+}

@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h019",
+ "criteria": [
+  "Provides ArkTS declarative UI code for a todo list with input and delete",
+  "Uses @ohos relational database for persistence",
+  "Gives hvigorw build/deploy/verify commands",
+  "Code follows ArkTS syntax conventions"
+ ]
+}

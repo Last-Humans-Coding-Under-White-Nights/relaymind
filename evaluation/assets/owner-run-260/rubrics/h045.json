@@ -1,0 +1,8 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h045",
+ "criteria": [
+  "The assistant creates a review on PR #42 in pending state (not immediately submitted).",
+  "The response reflects that comments are accumulated before submitting an APPROVE/REQUEST_CHANGES decision."
+ ]
+}

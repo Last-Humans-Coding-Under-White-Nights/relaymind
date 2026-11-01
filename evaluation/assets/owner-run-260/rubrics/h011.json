@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h011",
+ "criteria": [
+  "Provides a step-by-step HBuilderX setup and adaptation procedure for turning a uni-app project into a HarmonyOS meta-service",
+  "Covers required environment, project configuration changes, and build/run steps",
+  "Includes troubleshooting for common first-build errors",
+  "Does not require private credentials or paid services to follow"
+ ]
+}

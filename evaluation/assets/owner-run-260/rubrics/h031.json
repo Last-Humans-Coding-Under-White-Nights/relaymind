@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h031",
+ "criteria": [
+  "Explains relevant hilog commands for capturing/filtering logs and how to produce a log export/archive",
+  "Shows how to extract and read the crash log / fault thread stack dump from the bundle",
+  "Interprets the provided stack trace and points to a likely cause or next diagnostic step"
+ ]
+}

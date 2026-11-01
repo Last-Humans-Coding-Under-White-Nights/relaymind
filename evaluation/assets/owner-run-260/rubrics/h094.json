@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h094",
+ "criteria": [
+  "The request asks to list security advisories across an organization's repositories",
+  "The desired output includes severity and CVE identifiers in a table",
+  "No private credentials or paid services are required"
+ ]
+}

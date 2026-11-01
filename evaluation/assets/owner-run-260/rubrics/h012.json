@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h012",
+ "criteria": [
+  "Explains data collection steps for both versions (htrace, showmap/smaps or equivalent)",
+  "Describes topdown comparison to identify degradation sources",
+  "Gives correct SO-type-based dispatch of analysis steps (ARKTS_HEAP→3+4, SO_SIZE/HAP→5, etc.)",
+  "Outlines a consolidated anti-regression report structure"
+ ]
+}

@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h100",
+ "criteria": [
+  "Provides tshark commands or outputs showing per-protocol packet counts from the pcap",
+  "Extracts HTTP request URLs together with their status codes",
+  "Reports TCP retransmission analysis or a command to detect them",
+  "Uses a single self-contained workflow without requiring external credentials"
+ ]
+}

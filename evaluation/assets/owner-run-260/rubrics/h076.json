@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h076",
+ "criteria": [
+  "Explains how to determine whether the component is ABC-based or SO-based",
+  "Includes NAPI registration code (or its structure) for the component on the cross-platform side",
+  "Covers BUILD.gn configuration and registration in plugin_lib.gni / build configs",
+  "Specifically addresses the ToolBar component in the ArkUI-X Android context"
+ ]
+}

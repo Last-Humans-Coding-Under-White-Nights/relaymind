@@ -1,0 +1,22 @@
+Role: second, independent relevance rater. You work alone and see nothing
+but the requests and the asset list at the end of this message.
+
+Method, for every request:
+- Read the request and decide what the user is trying to get done.
+- Scan the whole asset list (lines "Annnn [kind] name — description"). Keep
+  the assets whose described function would let an assistant do that job.
+  Consider assets written in Chinese and in English equally.
+- Decide the label:
+  positive  = at least one kept asset fits the job;
+  negative  = nothing in the list fits;
+  ambiguous = the request could mean clearly different jobs that different
+              assets serve, and it does not say which (having two equivalent
+              assets for one job is still positive).
+- List the kept handles under "acceptable" (none for negative, at most 8).
+- language_valid: is the text fluent and in the language the lane declares
+  (code_switch = Chinese mixed with English)?
+- independent_case: does it read as a real, self-contained request?
+- notes: one sentence.
+
+Output format (JSON only, no prose):
+{"judgments":[{"case_id":"...","class":"positive|negative|ambiguous","acceptable":["A123"],"language_valid":true,"independent_case":true,"notes":"..."}]}
