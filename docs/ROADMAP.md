@@ -1374,12 +1374,12 @@ foreign person (`FORBIDDEN`) and a foreign person on its own session, refused by
 RelayMind's own authority check (`INVALID_REQUEST`). The predicate also binds
 the asset ID, content hash and source version, and requires the saved revision
 in `skills.library.list`. The ordinary installed-host run (OpenClaw 2026.10.7,
-Ubuntu runner, CI run 41284482576, commit f866b66, PR merge checkout
-960f340) passed both the
+Ubuntu runner, CI run 41295359455, commit de6d5d9, PR merge checkout
+f5e3e39) passed both the
 ordinary-pass and ordinary-skill-pass predicates, with all 15 harness sources
 matching. Its unmodified capture is
 [openclaw-native-actions-20261101-skill.json](evidence/m10/openclaw-native-actions-20261101-skill.json)
-(SHA-256 `3fa0614ba5127e0e08182e40293dbc3c5f15854e2cc474f53e8c0098ce408dc3`), which the registry's evidence revision now names for the
+(SHA-256 `06d7e42aa1ea407136c66e1a6d8862cf552f2c88a1b2794391622175f8828793`), which the registry's evidence revision now names for the
 operations `direct_actions` and `exact_skill_selection`. The receipt records
 `sessionActivation: next-turn` and `instructions: not_observed`: selection is
 not observed loaded instruction use, which stays open as HOST-EXACT-SKILL-USE in
