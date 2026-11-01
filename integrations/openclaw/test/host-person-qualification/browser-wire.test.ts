@@ -146,3 +146,19 @@ it("RM39/AC30 caps native observation at four turns and refuses unused chat hist
   expect(f.requests).toHaveLength(4);
   expect(() => installNativeSocketObserver(f.target, ["chat.history"])).toThrow("invalid_fixture_method");
 });
+
+it("RM39/AC30 bounds terminal records by UTF-8 bytes including multibyte content", async () => {
+  const f = await fixture(["chat.send"]);
+  await f.target.__rmPersonWire.rpc("chat.send", { sessionKey: "s", idempotencyKey: "run" });
+  const emit = (content: string) => f.socket.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "event", event: "chat", payload: { runId: "run", sessionKey: "s", state: "final", message: { content } } }) }));
+  emit("中".repeat(400000));
+  expect(f.target.__rmPersonWire.turnEvents("run").length).toBe(0);
+  emit("中文");
+  expect(f.target.__rmPersonWire.turnEvents("run")).toHaveLength(1);
+});
+
+it.each([undefined, null, 1, "text", []])("RM39/AC30 refuses malformed chat params %s with a closed error", async params => {
+  const f = await fixture(["chat.send"]);
+  await expect(f.target.__rmPersonWire.rpc("chat.send", params)).rejects.toThrow("native_turn_bound");
+  expect(f.requests).toEqual([]);
+});
