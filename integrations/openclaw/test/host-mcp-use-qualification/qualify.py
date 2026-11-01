@@ -26,19 +26,21 @@ BLOCKED_TRIAL_REASONS = frozenset(
 TOTAL_SECONDS = 180
 
 
-def trial_outcome(capture: dict) -> int:
+def trial_outcome(capture: dict, *, discovery_pass: bool | None = None) -> int:
     """Zero only for an understood no-run or a completed, healthy fixture."""
     if capture.get("reason") == "preflight_only":
         return 0
     original = capture.get("ordinary_capture") or {}
     if original.get("reason") in BLOCKED_TRIAL_REASONS:
         return 0
+    if discovery_pass is None:
+        discovery_pass = GRADE.fixture_discovery_pass(capture)
     return (
         0
         if (
             original.get("status") == "completed"
             and capture.get("ordinary_exit_code") == 0
-            and GRADE.fixture_discovery_pass(capture)
+            and discovery_pass
         )
         else 1
     )
@@ -76,7 +78,7 @@ def blocked_capture(reason: str) -> dict:
     )
 
 
-def read_jsonl(path: Path) -> list[dict]:
+def read_jsonl(path: Path) -> list[dict | str]:
     if not path.exists():
         return []
     if path.stat().st_size > 1048576:
@@ -105,6 +107,10 @@ def composition_type(ordinary, *, forbidden=None):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.capture_forbidden_literals = forbidden if forbidden is not None else set()
+            # A failure before configure/prepare_host must leave reporting safe.
+            self.probe_exit = None
+            self.mcp_work = None
+            self.inventory_file = None
             self.remember_capture_secrets(self.secrets())
 
         def configure(self, config, work, origin):
@@ -174,17 +180,19 @@ def composition_type(ordinary, *, forbidden=None):
             value = capture.setdefault(
                 "mcp_use", blocked_capture("exact_route_unqualified")["mcp_use"]
             )
-            value["inventories"] = read_jsonl(self.inventory_file)
             value["probe_exit_code"] = self.probe_exit
-            value["server_events"] = [
-                event
-                for index in range(2)
-                for event in read_jsonl(self.mcp_work / f"mcp-events-{index}.jsonl")
-            ]
-            value["sandbox_files"] = {
-                name: read_jsonl(self.mcp_work / f"mcp-sandbox-{index}.jsonl")
-                for index, name in enumerate(("alpha.one", "alpha?one"))
-            }
+            if self.inventory_file is not None:
+                value["inventories"] = read_jsonl(self.inventory_file)
+            if self.mcp_work is not None:
+                value["server_events"] = [
+                    event
+                    for index in range(2)
+                    for event in read_jsonl(self.mcp_work / f"mcp-events-{index}.jsonl")
+                ]
+                value["sandbox_files"] = {
+                    name: read_jsonl(self.mcp_work / f"mcp-sandbox-{index}.jsonl")
+                    for index, name in enumerate(("alpha.one", "alpha?one"))
+                }
 
         def finalize(self, capture):
             super().finalize(capture)
@@ -255,8 +263,8 @@ def main(argv=None) -> int:
     capture["source_inventory"] = list(inventory.values())
     capture["checks"] = GRADE.grade_capture(capture)
     capture["functional_exact_use"] = GRADE.mcp_use_pass(capture)
-    outcome = trial_outcome(capture)
     capture["fixture_discovery_pass"] = GRADE.fixture_discovery_pass(capture)
+    outcome = trial_outcome(capture, discovery_pass=capture["fixture_discovery_pass"])
     if outcome:
         # Name what actually failed; the nested capture keeps its own reason.
         if "person_setup_reason" in capture:

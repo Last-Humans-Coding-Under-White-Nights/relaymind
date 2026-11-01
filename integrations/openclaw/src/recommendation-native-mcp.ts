@@ -13,6 +13,7 @@ import type {
   ReadOptions,
 } from "./recommendations.ts";
 import {
+  classifyGatewayError,
   nativeRequestWithinLimit,
   prepareNativeAuthority,
 } from "./recommendation-native-authority.ts";
@@ -533,12 +534,18 @@ function settle(
 }
 export function createNativeMcpHandler(dependencies: Dependencies) {
   // Same-key requests still in preparation in this process (not yet claimed).
-  const inFlight = new Map<string, { digest: string; base: UseBase }>();
+  const inFlight = new Map<
+    string,
+    { digest: string; done: Promise<McpUseReceipt | undefined> }
+  >();
   return async (options: NativeActionOptions): Promise<void> => {
     let authority: ReturnType<typeof prepareNativeAuthority> | undefined;
     let native: NativeMcpBinding | undefined;
     let base: UseBase | undefined;
     let ownedKey: string | undefined;
+    let final: McpUseReceipt | undefined;
+    let finish: (receipt: McpUseReceipt | undefined) => void = () => {};
+    let settled = false;
     let ledger: NativeUseLedger | undefined;
     let dispatched = false;
     let nativeRunId: string | null = null;
@@ -630,14 +637,38 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         deadlineMs: live.deadline(),
         assertCurrent: current,
       });
+      // RM16: report the honest cause of a gateway failure.
+      const gatewayFailed: (error: unknown, choice: boolean) => never = (
+        error,
+        choice,
+      ) => {
+        if (error instanceof McpRefusal) throw error;
+        switch (classifyGatewayError(error)) {
+          case "unauthorized":
+            refuse("unauthorized");
+          case "choice_unavailable":
+            refuse(choice ? "choice_unavailable" : "unavailable");
+          case "deadline":
+            refuse("timeout");
+          case "cancelled":
+            refuse(
+              live.expired()
+                ? "timeout"
+                : hostCancelled()
+                  ? "cancelled"
+                  : "unavailable",
+            );
+          default:
+            refuse("unavailable");
+        }
+      };
       const registered = async () => {
         try {
           const actions = await dependencies.actionClient(binding, read());
           current();
           await actions.listFeedback({ limit: 1 }, read());
         } catch (error) {
-          if (error instanceof McpRefusal) throw error;
-          refuse("unauthorized");
+          gatewayFailed(error, false);
         }
         current();
       };
@@ -657,10 +688,11 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
       } catch {
         return closed("unavailable");
       }
-      const pending = previous ?? inFlight.get(scopeKey);
+      const running = previous ? undefined : inFlight.get(scopeKey);
+      const pending = previous ?? running;
       if (pending) {
         // Recover only the historical receipt, after current authorization;
-        // never dispatch again. An unresolved history fails closed.
+        // never dispatch again.
         await registered();
         if (pending.digest !== digest)
           return options.respond(
@@ -677,17 +709,28 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
             } satisfies McpUseReceipt,
             undefined,
           );
-        return options.respond(
-          true,
-          previous?.receipt ?? {
-            ...pending.base,
-            outcome: "indeterminate",
-            code: "transport_unknown",
-            nativeRunId: null,
-            nativeCallId: null,
-          },
-          undefined,
-        );
+        if (previous)
+          // A durable claim is written only once dispatch may begin, so an
+          // unresolved claim is genuinely indeterminate (fails closed).
+          return options.respond(
+            true,
+            previous.receipt ?? {
+              ...previous.base,
+              outcome: "indeterminate",
+              code: "transport_unknown",
+              nativeRunId: null,
+              nativeCallId: null,
+            },
+            undefined,
+          );
+        // Still preparing in this process: wait for that attempt's actual
+        // receipt rather than inventing one before dispatch.
+        const outcome = await Promise.race([running!.done, aborted(signal)]);
+        current();
+        if (outcome === ABORTED || outcome === undefined)
+          return closed("unavailable");
+        await registered();
+        return options.respond(true, outcome, undefined);
       }
       base = {
         operationId: dependencies.operationId?.() ?? randomUUID(),
@@ -697,7 +740,12 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
       };
       // A pre-dispatch refusal proves no dispatch and does not consume the
       // key; the durable claim is written only once dispatch may begin.
-      inFlight.set(scopeKey, { digest, base });
+      inFlight.set(scopeKey, {
+        digest,
+        done: new Promise((resolve) => {
+          finish = resolve;
+        }),
+      });
       ownedKey = scopeKey;
       const operationId = base.operationId;
       // 7. The retained explicit choice and exact still-eligible offered asset.
@@ -713,8 +761,7 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
           current();
           view = await client.get(params.recommendationId as string, read());
         } catch (error) {
-          if (error instanceof McpRefusal) throw error;
-          refuse("choice_unavailable");
+          gatewayFailed(error, true);
         }
         current();
         const action = view.selected_action;
@@ -921,7 +968,10 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         nativeRunId,
         nativeCallId,
       };
+      // Settled exactly once; a failed response below never settles again.
+      settled = true;
       settle(ledger, ownedKey, receipt);
+      final = receipt;
       options.respond(true, receipt, undefined);
     } catch (error) {
       if (!base)
@@ -949,10 +999,16 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         nativeRunId: dispatched ? nativeRunId : null,
         nativeCallId: dispatched ? nativeCallId : null,
       };
-      if (dispatched) settle(ledger, ownedKey, receipt);
+      if (final) throw error; // The response itself failed; the outcome stands.
+      if (dispatched && !settled) {
+        settled = true;
+        settle(ledger, ownedKey, receipt);
+      }
+      final = receipt;
       options.respond(true, receipt, undefined);
     } finally {
       if (ownedKey !== undefined) inFlight.delete(ownedKey);
+      finish(final);
       try {
         native?.release();
       } finally {

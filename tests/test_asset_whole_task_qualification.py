@@ -13,10 +13,11 @@ import json
 import pytest
 
 from relaymind.canonical import canonical_digest
-from relaymind.evaluation.asset_episode_export import probe_plan
+from relaymind.evaluation.asset_episode_export import episode_summary, probe_plan
 from relaymind.evaluation.asset_platform_export import PLATFORM_STEPS, platform_gate
 from relaymind.evaluation.asset_whole_task import WholeTaskRejected, host_summary
 from relaymind.evaluation.asset_whole_task_cli import main
+from relaymind.evaluation.asset_whole_task_corpus import release_labels, resolve_corpus
 from relaymind.evaluation.asset_whole_task_qualification import (
     REVIEW_UNDEFINED,
     assess_qualification,
@@ -132,8 +133,6 @@ def test_qualified_adaptation_claim_over_fixture_inputs_is_rejected(bundle):
     """AC33: a fixture driver run cannot become qualified by its label."""
     report = adaptation_case(bundle)
     report["qualification"] = "qualified"
-    from relaymind.evaluation.asset_episode_export import episode_summary
-    from relaymind.evaluation.asset_whole_task_corpus import release_labels, resolve_corpus
 
     documents = {d["id"]: (bundle.root / d["path"]).read_bytes() for d in bundle.documents}
     evidence = {
@@ -237,8 +236,25 @@ def test_enforcement_rejects_contradictions_and_never_passes_unqualified_claims(
 
 def test_lower_claims_are_kept():
     """A conservative label over stronger inputs is honest and kept."""
-    assessment = _assess(claimed="provisional")
+    assessment = _assess(claimed="fixture")
+    assert assessment.claimed == "fixture" and assessment.assessed == "provisional"
     assert enforce_qualification(assessment, "not_applicable") == "not_applicable"
+
+
+@pytest.mark.parametrize(
+    "platform", [None, {}, {"os": "Darwin"}, {"architecture": "arm64"}, "darwin"]
+)
+def test_a_missing_or_malformed_platform_is_not_a_target(platform):
+    """RM44/AC37: a platform report without a usable environment never counts as a target."""
+    assessment = _assess(kind="platform", claimed="fixture", platform=platform)
+    assert "platform_not_target" in assessment.reasons
+
+
+@pytest.mark.parametrize("item", [{}, {"provenance": None}, "fixture"])
+def test_malformed_provenance_entries_do_not_crash(item):
+    """RM44/AC36: an entry without provenance is unverified, never a crash."""
+    assessment = _assess(evidence=[item], artifacts=[item])
+    assert assessment.assessed == "provisional"
 
 
 # --- preregistration commitments (#236, #237) ------------------------------------
