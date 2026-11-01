@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 import httpx
 import pytest
 
+from helpers import FakeClock
 from recommendation_helpers import BODY, setup
 
 ACTION_TOKEN = "test-action-credential-" + "a" * 40
@@ -499,6 +500,10 @@ def test_oversized_decimal_action_queries_are_invalid_request(tmp_path, paramete
 
 @asynccontextmanager
 async def action_client(tmp_path, **options):
+    # A controlled clock: the recommendation budget is measured on it, so a
+    # slow or loaded runner cannot turn the parent recommendation into a
+    # deadline failure (seen on Windows CI with the wall clock).
+    options.setdefault("clock", FakeClock())
     app, service, runs, catalog = setup(tmp_path, **options)
     registry = enable_fixture_action(app, service, runs)
     await service.refresh_catalog()
@@ -1049,7 +1054,7 @@ def test_launcher_resolves_private_path_and_loads_only_disabled_contracts(tmp_pa
 
 def test_choice_requires_a_separate_registered_action_even_with_current_bearer(tmp_path):
     async def go():
-        app, service, runs, _ = setup(tmp_path)
+        app, service, runs, _ = setup(tmp_path, clock=FakeClock())
         await service.refresh_catalog()
         headers = {
             "Authorization": "Bearer " + app.state.application_token,
@@ -1076,7 +1081,7 @@ def test_choice_requires_a_separate_registered_action_even_with_current_bearer(t
 
 def test_registered_none_choice_is_one_lifecycle_action_and_no_feedback(tmp_path):
     async def go():
-        app, service, runs, _ = setup(tmp_path)
+        app, service, runs, _ = setup(tmp_path, clock=FakeClock())
         enable_fixture_action(app, service, runs)
         await service.refresh_catalog()
         headers = {
@@ -1113,7 +1118,7 @@ def test_registered_none_choice_is_one_lifecycle_action_and_no_feedback(tmp_path
 
 def test_explicit_usefulness_feedback_has_independent_scope_revision(tmp_path):
     async def go():
-        app, service, runs, _ = setup(tmp_path)
+        app, service, runs, _ = setup(tmp_path, clock=FakeClock())
         enable_fixture_action(app, service, runs)
         await service.refresh_catalog()
         headers = {

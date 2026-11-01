@@ -67,9 +67,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   whose evidence revision names its fresh capture (CI run 41322540111, SHA-256
   `6b8947df711e…`). A fourth review rejects malformed request text and
   non-string session fields as `invalid_request`, drops a duplicate
-  registration check and keeps the native deadline live; the entry is
-  re-pinned to adapter revision
-  `5e55dce88251eecbeb0d08380fca1d921614027de8bf9153310744b6a7199ed1`, whose
+  registration check and keeps the native deadline live, and the ledger cuts
+  a torn final record through a separate read-write handle (a Windows append
+  handle cannot truncate); the entry is re-pinned to adapter revision
+  `a29cac121c5e01932b6b3ee75e9bab2214e5e9e72cbc36d8f802f62b917c7cfe`, whose
   capture is taken from CI before merge.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native

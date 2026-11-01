@@ -1428,9 +1428,11 @@ the registry's evidence revision named for that revision. A fourth review
 made the MCP use request fail as `invalid_request` before identity resolution
 when it has no canonical text (an explicit undefined property or an unpaired
 surrogate) or a non-string session field, checks registration once on the
-in-flight duplicate path, and reads the loaded-use fence deadline live. These
+in-flight duplicate path, and reads the loaded-use fence deadline live. The
+ledger then cuts a torn final record through a separate read-write handle,
+because a Windows append handle cannot change the file length. These
 changed bytes are re-pinned to adapter revision
-`5e55dce88251eecbeb0d08380fca1d921614027de8bf9153310744b6a7199ed1`; the
+`a29cac121c5e01932b6b3ee75e9bab2214e5e9e72cbc36d8f802f62b917c7cfe`; the
 evidence revision still names the earlier capture, so the evidence must be
 recaptured from CI for this new revision before the entry is qualified evidence
 for it. As before, this is Linux
