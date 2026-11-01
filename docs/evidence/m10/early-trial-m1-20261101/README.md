@@ -233,6 +233,17 @@ commit that holds those exact harness bytes and the same product code
 the checkout). The `record` command now stops before writing when the harness
 or `src/` differ from `HEAD` (`harness_uncommitted`).
 
+## Loaded skill use (later correction)
+
+At the time of the run, `inputs/setup.md` (and its digest-bound copies under
+`bundle/evidence/` and `frozen/evidence/`) cited the then-pending negative
+record `m10-negative-skill-loaded-use-openclaw-2026.10.7`. That record was
+later withdrawn (#267): the pinned host may offer a section 7.6.1 fence (the
+`GatewaySessionAccessAuthority.retain()` borrow with the provider's
+`onPayload`), so `stop_point_absent` is not established. The frozen inputs are
+digest-bound and stay unchanged. Read any step that recorded loaded use as a
+"host limitation" as "unqualified, disabled"; its qualification attempt is #280.
+
 ## What remains
 
 1. A preregistered rerun. This record cannot be approved (see "Preregistration

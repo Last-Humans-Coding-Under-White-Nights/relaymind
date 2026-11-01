@@ -1076,8 +1076,9 @@ the host's `GatewaySessionAccessAuthority.retain()` borrow re-checks the
 person's grant and the exact session incarnation at call time and could back a
 provider `onPayload` fence. Spec 7.6.1 admits such a qualified delegation, so
 `stop_point_absent` is not established; the earlier pending record asserting it
-was withdrawn after review. Loaded use stays disabled as unqualified, and its
-AC30 evidence is still required on this host. Both operations stay disabled.
+was withdrawn after review (#267). Loaded use stays disabled because it is
+unqualified, not as a host limitation; its qualification attempt is #280, and
+its AC30 evidence is still required on this host. Both operations stay disabled.
 See `docs/evidence/m10/host-use-settlement-20261101.md`. The first VPS run could
 not start a person tier (no private interface, missing Chromium libraries), so
 the first substantive captures came from CI run 41286397320. A second VPS run at

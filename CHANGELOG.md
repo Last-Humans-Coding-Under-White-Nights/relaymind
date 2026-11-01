@@ -19,6 +19,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `not_run`: no person sign-in on macOS. The evidence helpers
   (`build_trial_inputs.py`, `observe_row.py`, `machine_passes.py`) only drive the
   existing kit and checker. One task gives no general result; no gate is claimed.
+  Its frozen `setup.md` cites the loaded-use negative record that #267 later
+  withdrew; the trial README and the walkthrough README now say loaded skill
+  use is disabled because it is unqualified (#280), not a host limitation.
 
 - Verifier support for the 0.66 machine-drafted prompts and `machine_dual`
   labels (#260; RM40, RM42, RM44; AC31, AC33, AC36): `machine_dual.v1` in
