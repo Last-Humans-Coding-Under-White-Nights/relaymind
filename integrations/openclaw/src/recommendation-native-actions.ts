@@ -18,7 +18,10 @@ import type {
 import { RecommendationClientError } from "./recommendations.ts";
 import { renderRecommendation } from "./recommendation-render.ts";
 
-import { prepareNativeAuthority } from "./recommendation-native-authority.ts";
+import {
+  nativeRequestWithinLimit,
+  prepareNativeAuthority,
+} from "./recommendation-native-authority.ts";
 import type {
   NativeActionOptions,
   NativeActionBinding,
@@ -138,6 +141,8 @@ export function createNativeActionHandler(
   return async (options) => {
     let authority: ReturnType<typeof prepareNativeAuthority> | undefined;
     try {
+      // Spec 0.65 section 14.5: the native request row bound.
+      if (!nativeRequestWithinLimit(options)) throw Error("invalid_input");
       object(
         options.params,
         [

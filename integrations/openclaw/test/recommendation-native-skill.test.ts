@@ -232,3 +232,18 @@ it("keeps the success receipt when the choice expires after both valid dispatche
   expect(f.calls).toHaveLength(2);
   expect(f.replies[0]?.[0]).toBe(true);
 });
+
+// Spec 0.65 section 14.5: every section 7.6.1–7.6.2 native request is ≤512 KiB.
+it("refuses a native skill request over the 512 KiB row before any gateway or native call", async () => {
+  const f = setup();
+  let gateway = 0;
+  f.deps.actionClient = async () => {
+    gateway += 1;
+    throw Error("unexpected");
+  };
+  f.options.req = { id: "rpc-request", padding: "x".repeat(512 * 1024) };
+  await f.handler()(f.options);
+  expect(gateway).toBe(0);
+  expect(f.calls).toHaveLength(0);
+  expect(f.replies[0]?.[0]).toBe(false);
+});

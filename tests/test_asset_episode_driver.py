@@ -10,6 +10,7 @@ import asyncio
 
 import pytest
 
+from helpers import FakeClock
 from relaymind.canonical import canonical_digest
 from relaymind.evaluation.asset_episode_driver import (
     locked_episode_arms,
@@ -87,6 +88,7 @@ def setup(tmp_path, episode_count=1):
         fixture_production().recommendations,
         tmp_path / "work",
         adaptation_stage=stage,
+        clock=FakeClock(),
     )
     return release, freeze, episodes, arms
 

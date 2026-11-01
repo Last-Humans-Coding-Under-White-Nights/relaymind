@@ -1276,7 +1276,29 @@ registry enabled, explicit choice, feedback, inspection/delete/reset, account
 isolation and connection retirement. Its unmodified capture is
 [openclaw-native-actions-20261101.json](evidence/m10/openclaw-native-actions-20261101.json)
 (SHA-256 `d5c186ac552b6028cd47c9bd4679f79259eab1092d20dd95b48c36fa35437a39`), which the registry's evidence revision names. The 31 October
-capture remains the record of the earlier revision. As before, this is
+capture remains the record of the earlier revision. The loaded-use fence and
+the conditional MCP use path (#239/#204) change the adapter bytes again; the
+registry pinned the exact revision
+`653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`, and
+the ordinary installed-host run of those exact bytes (CI run 41286397320,
+pinned OpenClaw 2026.10.7, Ubuntu runner, commit 548588a, PR merge checkout
+6a4a99f) passed the ordinary-pass and ordinary-skill-pass predicates with all
+15 harness sources matching. Its unmodified capture is
+[openclaw-native-actions-20261101-adapter.json](evidence/m10/openclaw-native-actions-20261101-adapter.json)
+(SHA-256 `933fb4e7c8b3057305fae165561825984a63325275b821be84b008dd574589f7`), which the registry's evidence revision names. The #256
+review fixes (ledger single settle and close, in-flight receipt recovery,
+honest gateway failure codes, attributable conversation blocks, independent
+registration; then exclusive ledger ownership, admission-time key binding
+with dispatch markers, reserved block capacity and the post-read fence
+recheck) change the adapter bytes again: the entry is re-pinned to
+`943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`, and
+the ordinary installed-host run of these exact bytes with the stricter
+session-selection harness (CI run 41318389858, commit c0bd6f4, PR merge
+checkout c22ad40) passed the ordinary-pass and ordinary-skill-pass predicates
+with all 15 harness sources matching; its capture
+`openclaw-native-actions-20261101-adapter.json` (SHA-256
+`35436e519245…`) was the registry's evidence revision until the ledger fixes
+below were recaptured. As before, this is
 Linux functional evidence with disposable accounts, not macOS/Windows or
 customer acceptance. The person-ingress harness hardening raised in the #224 review
 (#228) changed evidence-bound harness files; a fresh ordinary installed-host
@@ -1364,6 +1386,72 @@ captures recorded an empty list because of the old flat projection. The person
 probe first starts the session MCP runtime with public `mcp.app.discover`. One
 uncommitted Linux x86-64 VPS run listed both colliding tools; it is discovery
 evidence only, and exact MCP use remains blocked.
+
+#239/#204 adapter checkpoint (spec 0.65; RM16/RM37/RM39; AC28/AC30/AC35): the
+OpenClaw adapter now carries the loaded-use fence
+(`src/recommendation-native-use.ts`) and the conditional `relaymind.mcp` handler
+(`src/recommendation-native-mcp.ts`), both behind their own registry operations
+(`src/recommendation-native-registry.ts`). The fence checks fresh native
+authority for the same session incarnation, registration, the unexpired
+choice, the eligible asset and operator association, a nonremoved library
+entry and the immutable selected bytes at every boundary, and blocks the
+conversation after a failure. The MCP handler implements the closed request,
+the 512 KiB native row, the 60-second deadline with the separately bounded
+approval wait, the exact binding with a recomputed canonical schema hash,
+approval binding to the bound target and single use, the closed receipt and
+idempotency. Key bindings, dispatch markers, consumed approvals and conversation blocks are kept
+in a durable private ledger synced before dispatch, so a restart replays an
+unresolved key as indeterminate and never reuses an approval; without a
+ledger nothing is dispatched. Retention/erasure of ledger records and the
+host-owned ledger location are not yet defined for a qualified composition.
+Host schema patterns are admitted only in a provably bounded subset. Only
+deterministic tests with injected fixture resolvers and routes exercise the
+admitted paths. Neither `skill_loaded_use` nor `mcp_use` is in the shipped
+registry, no production MCP route exists (the pinned host has no qualified
+exact-use route), and the adapter wires the fence to no host delivery boundary:
+spec 0.65 names no qualified native boundary that can stop the next model
+request. HOST-EXACT-SKILL-USE (#239) and MCP use with real approvals (#204)
+remain open. The changed adapter bytes have a new exact revision, and the
+shipped `direct_actions`/`exact_skill_selection` entry is re-pinned to it
+(`b49d94d8267076516430fb2e4fb64d41fad2961fc8009c84e60921cf43e9e98e`), as for the spec 0.63 scope fix. After review, the
+ledger takes over a stale owner lock without ever removing a live owner's
+lock (per-owner lock files; one owner under any interleaving) and writes each
+record completely across short writes before acknowledging it; these changed
+bytes are that new revision. The ordinary installed-host run of these exact
+bytes (CI run 41322540111, pinned OpenClaw 2026.10.7, Ubuntu runner, commit
+7af9cc2, PR merge checkout ad97e0b) passed the ordinary-pass and
+ordinary-skill-pass predicates with all 15 harness sources matching the #247
+harness; its unmodified capture replaces
+`openclaw-native-actions-20261101-adapter.json` (SHA-256
+`6b8947df711e70c0d87f1f50d8a43e1ffb57b2a68699ff69d6457249f4b828b2`), which
+the registry's evidence revision named for that revision. A fourth review
+made the MCP use request fail as `invalid_request` before identity resolution
+when it has no canonical text (an explicit undefined property or an unpaired
+surrogate) or a non-string session field, checks registration once on the
+in-flight duplicate path, and reads the loaded-use fence deadline live. The
+ledger then cuts a torn final record through a separate read-write handle,
+because a Windows append handle cannot change the file length. These
+changed bytes were re-pinned to adapter revision
+`a29cac121c5e01932b6b3ee75e9bab2214e5e9e72cbc36d8f802f62b917c7cfe`. A fifth
+review made a same-key MCP request read its key history again after its
+registration check (an attempt that settled meanwhile is recovered, never
+reported as `not_dispatched`), kept a host `UNAVAILABLE` result of the exact
+skill read from blocking the conversation, digested the adapter bytes once
+per resolver, took over a stale ledger lock that names this process's own
+PID but was not created by it (PID 1 in a container), reserved the exact
+room for each binding's dispatch marker and longest receipt under the byte
+cap, and compiled each host schema pattern once per operation. These bytes are
+re-pinned to adapter revision
+`37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`. The
+ordinary installed-host run of these exact bytes (CI run 41335800361, pinned
+OpenClaw 2026.10.7, Ubuntu runner, commit c791c0f, PR merge checkout
+44d4f9f) passed the ordinary-pass and ordinary-skill-pass predicates with all
+15 harness sources matching; its unmodified capture replaces
+`openclaw-native-actions-20261101-adapter.json` (SHA-256
+`1212d0e28080b08999f936b70416a70c6cef14802eef35d4553a45682a65b093`), which
+the registry's evidence revision names. As before, this is Linux
+functional evidence with disposable accounts. `tests/test_openclaw_install.py` fails when the registry and
+the built adapter digest of the release artifact drift.
 
 #240 host_config evidence must validate with the pinned host's own validator
 and captured schema/validator identities, including the native regex dialect.

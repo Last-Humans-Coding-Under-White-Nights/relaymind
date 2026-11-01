@@ -90,3 +90,27 @@ it("binds recommendation and action clients to each binding's own scope", async 
     ["user-b", "workspace-b"],
   ]);
 });
+
+// Review 4435447975 (spec 0.65 7.6.2): the excluded approval wait extends the
+// deadline every reader sees, including the deadlineMs field.
+import { prepareNativeAuthority } from "../src/recommendation-native-authority.js";
+import { fixture as nativeFixture } from "./recommendation-native-fixture.js";
+it("reports the resumed deadline through deadlineMs and deadline()", () => {
+  const f = nativeFixture();
+  let now = 100;
+  const authority = prepareNativeAuthority(
+    f.options,
+    { ...f.dependencies, monotonicNow: () => now },
+    60000,
+  );
+  try {
+    expect(authority.deadlineMs).toBe(60100);
+    authority.suspendDeadline();
+    now += 25000;
+    authority.resumeDeadline();
+    expect(authority.deadline()).toBe(85100);
+    expect(authority.deadlineMs).toBe(85100);
+  } finally {
+    authority.close();
+  }
+});

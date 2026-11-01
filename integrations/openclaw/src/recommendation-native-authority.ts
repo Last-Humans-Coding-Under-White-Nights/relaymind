@@ -1,5 +1,6 @@
 // RM37/RM39; AC28/AC30: in-process native authority, never request-asserted identity.
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
+import { RecommendationClientError } from "./recommendation-transport.ts";
 type Handler = Parameters<OpenClawPluginApi["registerGatewayMethod"]>[1];
 export type NativeActionOptions = Parameters<Handler>[0];
 export interface NativeActionBinding {
@@ -18,6 +19,58 @@ export interface NativeScopeDependencies {
     agentId: string,
   ) => string;
   monotonicNow: () => number;
+}
+/**
+ * RM16: an honest class for a gateway failure. Only the gateway's own
+ * refusals mean revoked authority/registration or an unavailable choice; a
+ * transport, protocol, overload or unknown failure is unavailable, and the
+ * client's deadline is a timeout.
+ */
+export type GatewayFailure =
+  | "unauthorized"
+  | "choice_unavailable"
+  | "deadline"
+  | "cancelled"
+  | "unavailable";
+export function classifyGatewayError(error: unknown): GatewayFailure {
+  if (!(error instanceof RecommendationClientError)) return "unavailable";
+  switch (error.code) {
+    case "unauthenticated":
+    case "user_action_required":
+    case "scope_mismatch":
+      return "unauthorized";
+    case "recommendation_not_found":
+    case "recommendation_expired":
+    case "asset_changed":
+    case "invalid_state":
+      return "choice_unavailable";
+    case "deadline_exceeded":
+      return "deadline";
+    case "cancelled":
+      return "cancelled";
+    default:
+      return "unavailable";
+  }
+}
+/** Spec 0.65 section 14.5: every section 7.6.1–7.6.2 native request is at most 512 KiB UTF-8. */
+export const MAX_NATIVE_REQUEST_BYTES = 512 * 1024;
+/** Measures the request frame with its fixed fields; any stricter host transport cap still applies. */
+export function nativeRequestWithinLimit(
+  options: NativeActionOptions,
+): boolean {
+  try {
+    const frame =
+      typeof options.req === "object" && options.req !== null
+        ? { ...options.req, params: options.params }
+        : { params: options.params };
+    const text = JSON.stringify(frame);
+    return (
+      typeof text === "string" &&
+      Buffer.byteLength(text, "utf8") <= MAX_NATIVE_REQUEST_BYTES
+    );
+  } catch {
+    return false;
+  }
 }
 /** Require the restrictive personal-session profile, independently of native write scope. */
 function personalPolicy(
@@ -55,6 +108,7 @@ function personalPolicy(
 export function prepareNativeAuthority(
   options: NativeActionOptions,
   dependencies: NativeScopeDependencies,
+  operationMs = 10000,
 ) {
   const allowedAgents = new Set(
     dependencies.bindings.map((binding) => binding.agentId),
@@ -106,9 +160,16 @@ export function prepareNativeAuthority(
       (value): value is AbortSignal => value !== undefined,
     ),
   ]);
-  const deadlineMs = dependencies.monotonicNow() + 10000;
-  const timer = setTimeout(() => controller.abort(), 10000);
-  timer.unref();
+  let deadlineMs = dependencies.monotonicNow() + operationMs;
+  let suspendedAt: number | undefined;
+  const arm = (ms: number) => {
+    const value = setTimeout(() => controller.abort(), Math.max(0, ms));
+    value.unref();
+    return value;
+  };
+  let timer = arm(operationMs);
+  const expired = () =>
+    suspendedAt === undefined && dependencies.monotonicNow() >= deadlineMs;
   const current = () => {
     if (
       signal.aborted ||
@@ -116,7 +177,7 @@ export function prepareNativeAuthority(
       options.hasCurrentClientAuthority?.() !== true ||
       client.preparedSessionProfile?.profileId !== profileId ||
       client.authenticatedUserId !== authenticatedUserId ||
-      dependencies.monotonicNow() >= deadlineMs
+      expired()
     )
       throw Error("authority_retired");
     access.assertCurrent();
@@ -139,8 +200,26 @@ export function prepareNativeAuthority(
   return {
     binding,
     signal,
-    deadlineMs,
+    /** The current deadline, including any excluded approval wait. */
+    get deadlineMs() {
+      return deadlineMs;
+    },
     assertCurrent: current,
+    /** The current operation deadline (monotonic), after excluded waits. */
+    deadline: () => deadlineMs,
+    expired,
+    /** Spec 0.65 7.6.2: the host approval wait is excluded from the operation deadline. */
+    suspendDeadline: () => {
+      if (suspendedAt !== undefined) return;
+      clearTimeout(timer);
+      suspendedAt = dependencies.monotonicNow();
+    },
+    resumeDeadline: () => {
+      if (suspendedAt === undefined) return;
+      deadlineMs += dependencies.monotonicNow() - suspendedAt;
+      suspendedAt = undefined;
+      timer = arm(deadlineMs - dependencies.monotonicNow());
+    },
     close: () => {
       clearTimeout(timer);
       controller.abort();

@@ -16,6 +16,73 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `plan-host` records the preregistered input and freeze digests, and the new
   `plan-episodes` command verifies frozen episodes and writes their probe plan
   (#236, #237). No measured or qualified result is claimed.
+- Native loaded-use fence and conditional MCP use path in the OpenClaw adapter
+  (#239/#204; spec 0.65 sections 7.6.1, 7.6.2 and 14.5; RM16/RM37/RM39;
+  AC28/AC30/AC35). The reviewed registry now names `skill_loaded_use` and
+  `mcp_use` as separate operations; an `mcp_use` entry must declare its exact
+  route, transport, tool class and finite maximum approval wait, and a
+  malformed entry qualifies nothing. The loaded-use fence rechecks fresh
+  native authority for the same session incarnation, registration, the
+  unexpired choice, the eligible asset and operator association, a nonremoved
+  library entry and the immutable selected bytes before loading, after the
+  exact read and immediately before delivery, keeps R0 across a library head
+  update and blocks the conversation after a fence failure. The `relaymind.mcp`
+  handler implements the closed request, the 60-second preparation/dispatch
+  deadline with the separately bounded approval wait, exact native binding with
+  a recomputed canonical schema hash, closed argument validation, approval
+  binding to the bound server/tool/schema/session and single use, the closed
+  receipt and same-scope idempotency. Key claims, consumed allow-once
+  approvals and blocked conversations are kept in a durable private ledger
+  synced before dispatch (`src/recommendation-native-ledger.ts`): after a
+  restart an unresolved key replays as indeterminate and never dispatches
+  again, and a full or unreadable ledger refuses. Without a ledger nothing is
+  dispatched. An admitted key is bound to its request at admission, so its
+  pre-dispatch refusal is its historical receipt and a different request
+  under it is `idempotency_conflict`. Host schema
+  patterns are admitted only in a provably bounded anchored subset, a schema
+  whose gateway hash cannot be recomputed here (for example `0.0`) is
+  `unavailable`, and all native RPC requests are capped at 512 KiB. Neither
+  operation is in the shipped registry, no production MCP route exists, and
+  `relaymind.mcp` is not registered; the tests use injected fixture resolvers
+  and routes only. The shipped direct-action/exact-selection entry is re-pinned
+  to the new adapter revision `943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`; its evidence revision names
+  the fresh capture of this revision (CI run 41318389858, SHA-256
+  `35436e519245…`). A release-artifact test now fails when the registry
+  and the built adapter digest drift. After review, the ledger never writes a
+  record recovery would reject and has `close()` (on gateway stop); a
+  same-key request during preparation recovers that attempt's actual receipt;
+  gateway transport, overload and deadline failures report `unavailable` or
+  `timeout`; only failures attributable to the verified person and session
+  block a conversation; and each native method registers on its own entry.
+  A second review added: one live ledger owner per path (an exclusive lock
+  file, taken over only from an exited owner); separate dispatch markers, so a
+  key bound before a restart that never dispatched recovers as
+  `not_dispatched`; reserved block capacity, with managed use refused once no
+  further block could be recorded; and a fence recheck of registration,
+  choice and operator association after the exact native read. A third
+  review made the stale-lock takeover race-safe (per-owner lock files, never
+  removing a live owner's lock) and made each ledger record complete across
+  short writes before it is acknowledged; the shipped entry is re-pinned to
+  adapter revision `b49d94d8267076516430fb2e4fb64d41fad2961fc8009c84e60921cf43e9e98e`,
+  whose evidence revision names its fresh capture (CI run 41322540111, SHA-256
+  `6b8947df711e…`). A fourth review rejects malformed request text and
+  non-string session fields as `invalid_request`, drops a duplicate
+  registration check and keeps the native deadline live, and the ledger cuts
+  a torn final record through a separate read-write handle (a Windows append
+  handle cannot truncate); the entry was re-pinned to adapter revision
+  `a29cac121c5e01932b6b3ee75e9bab2214e5e9e72cbc36d8f802f62b917c7cfe`. A fifth
+  review rereads a same-key MCP request's history after its registration
+  check (a receipt settled meanwhile is recovered, never reported as
+  `not_dispatched`), keeps a host `UNAVAILABLE` exact-read result from
+  blocking a conversation, digests the adapter bytes once per resolver, takes
+  over a stale ledger lock naming this process's PID that this process did
+  not create (PID 1 in a container), reserves exact room for each binding's
+  marker and longest receipt under the byte cap and compiles each host schema
+  pattern once per operation; the entry is re-pinned to adapter revision
+  `37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`, whose
+  evidence revision names its fresh capture (CI run 41335800361, SHA-256
+  `1212d0e28080…`).
+
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,
   with isolated stale/deleted/reset observations over deterministic inference.
