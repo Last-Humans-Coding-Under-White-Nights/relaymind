@@ -9,9 +9,12 @@ at its worst case. No model or host is called: fixtures and doubles only.
 """
 
 import importlib.util
+import io
 import json
+import sqlite3
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -966,8 +969,6 @@ def test_effective_config_rejects_changed_private_values(field):
 
 def test_annotation_preserves_unpadded_answers_and_notes(tmp_path, monkeypatch):
     """RM16/RM40, AC31: a handle formatting slip cannot change the raw judgment."""
-    from types import SimpleNamespace
-
     write(tmp_path / "catalog.json", dict(assets=[dict(record=dict(asset_id="asset:one"))]))
     template = tmp_path / "template.json"
     write(
@@ -1025,8 +1026,6 @@ def test_annotation_preserves_unpadded_answers_and_notes(tmp_path, monkeypatch):
 
 def test_call_log_holds_original_bytes_and_individual_rejections(tmp_path):
     """RM16/RM40, AC31: drafting evidence keeps bytes, not only their hashes."""
-    from types import SimpleNamespace
-
     logs = tmp_path / "log"
     logs.mkdir()
     sent = b'{ "messages": [ ], "temperature": 0 }\n'
@@ -1062,8 +1061,6 @@ def test_chat_keeps_the_exact_transmitted_request_bytes(tmp_path, monkeypatch):
     """RM16/RM40, AC31: reserialization is not original request evidence."""
     monkeypatch.setenv("RELAYMIND_EXTERNAL_BASE_URL", "http://127.0.0.1:9/v1")
     monkeypatch.setenv("RELAYMIND_EXTERNAL_API_KEY", "test-key")
-    import io
-
     sent = []
     raw = b'{"usage":{"prompt_tokens":1,"completion_tokens":1}}'
 
@@ -1089,9 +1086,6 @@ def test_chat_keeps_the_exact_transmitted_request_bytes(tmp_path, monkeypatch):
 )
 def test_transcript_decode_failure_retains_row_with_unknown_cost(tmp_path, monkeypatch, failure):
     """RM16/RM44, AC36: missing/broken decompression cannot lose the executed row."""
-    import sqlite3
-    from types import SimpleNamespace
-
     run = object.__new__(run_host.Run)
     run.frozen = run_host.frozen_arm_configs(FREEZE, CONFIGS, MODEL)
     run.budget = budget(tmp_path)
@@ -1145,8 +1139,6 @@ def test_transcript_decode_failure_retains_row_with_unknown_cost(tmp_path, monke
 
 def test_future_drafting_evidence_is_restricted_and_lock_bound(tmp_path):
     """RM12/RM40, AC31: exact drafting bytes stay private through corpus bundling."""
-    from types import SimpleNamespace
-
     root = tmp_path / "release"
     root.mkdir()
     write(

@@ -571,11 +571,7 @@ def _classes(row: dict, names: dict) -> dict:
         if given:
             raise ValueError("acceptable")
         chosen = []
-    elif (
-        not isinstance(given, list)
-        or not given
-        or any(not isinstance(h, str) or h not in back for h in given)
-    ):
+    elif not given or any(not isinstance(h, str) or h not in back for h in given):
         # An unknown or missing handle leaves the item for retry; the judgment is
         # never changed to negative or narrowed to the handles that resolve.
         raise ValueError("acceptable")
