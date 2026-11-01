@@ -800,6 +800,174 @@ def test_controls_are_observations_without_rejection_requirement(observed):
     assert api.ordinary_skill_loaded_use_pass(capture)
 
 
+# The pinned 2026.10.7 refusal of `sessions.reset` for the configured person
+# policy (CI run 41286397320): the method needs operator.admin, which the person
+# policy does not grant; the native Control UI itself falls back to
+# sessions.create without that scope.
+RESET_SCOPE_REFUSAL = dict(
+    type="res",
+    id="reset",
+    ok=False,
+    error=dict(
+        code="FORBIDDEN",
+        message="missing scope: operator.admin",
+        details=dict(
+            code="MISSING_SCOPE",
+            missingScope="operator.admin",
+            requiredScopes=["operator.admin"],
+        ),
+    ),
+)
+
+
+def refused_reset(case):
+    """A reset control the host refused before any turn: no turn evidence at all."""
+    import copy
+
+    case["intervention"]["frame"] = copy.deepcopy(RESET_SCOPE_REFUSAL)
+    case["current"] = dict(case["before"])
+    case.update(
+        chat={},
+        tools=[],
+        requests=[],
+        terminal={},
+        subscription={},
+        provider_attempts=[],
+        advertised_revision=None,
+        observed="control_refused",
+    )
+
+
+@pytest.mark.parametrize("require_positive", [True, False])
+def test_reset_refused_for_person_scope_is_a_complete_observation(require_positive):
+    """RM16/RM39 AC30 (#255): the host's person-scope reset refusal is recorded, not an error."""
+    api = module()
+    capture = loaded_fixture(api)
+    refused_reset(capture["ordinary_skill_loaded_use"]["cases"][3])
+    assert api.ordinary_skill_loaded_use_pass(capture, require_positive=require_positive)
+    assert capture["ordinary_skill_loaded_use"]["qualification"] == "unavailable"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "other_error_code",
+        "other_missing_scope",
+        "extra_detail",
+        "ok_true",
+        "session_changed",
+        "turn_evidence",
+        "tool_evidence",
+        "claims_loaded",
+        "stale_refused",
+        "deleted_refused",
+        "positive_refused",
+    ],
+)
+def test_only_the_exact_reset_scope_refusal_skips_the_turn(change):
+    """RM16/RM39 AC30 (#255): no other refusal, mutation or claim is a refused control."""
+    import copy
+
+    api = module()
+    capture = loaded_fixture(api)
+    cases = capture["ordinary_skill_loaded_use"]["cases"]
+    reset = cases[3]
+    refused_reset(reset)
+    error = reset["intervention"]["frame"]["error"]
+    if change == "other_error_code":
+        error["code"] = "UNAVAILABLE"
+    elif change == "other_missing_scope":
+        error["details"]["missingScope"] = "operator.write"
+    elif change == "extra_detail":
+        error["details"]["granted"] = True
+    elif change == "ok_true":
+        reset["intervention"]["frame"]["ok"] = True
+    elif change == "session_changed":
+        reset["current"]["lifecycleRevision"] = "L1"
+    elif change == "turn_evidence":
+        reset["chat"] = copy.deepcopy(cases[2]["chat"])
+    elif change == "tool_evidence":
+        reset["tools"] = copy.deepcopy(cases[2]["tools"])
+    elif change == "claims_loaded":
+        reset["observed"] = "loaded_pinned_revision"
+    elif change in ("stale_refused", "deleted_refused"):
+        target = cases[1 if change == "stale_refused" else 2]
+        target["intervention"]["frame"] = copy.deepcopy(RESET_SCOPE_REFUSAL)
+        target.update(
+            chat={},
+            tools=[],
+            requests=[],
+            terminal={},
+            subscription={},
+            provider_attempts=[],
+            observed="control_refused",
+        )
+    elif change == "positive_refused":
+        cases[0]["observed"] = "control_refused"
+    assert not api.ordinary_skill_loaded_use_pass(capture, require_positive=False)
+
+
+def test_driver_records_a_person_scope_reset_refusal_without_a_turn(tmp_path, monkeypatch):
+    """RM16/RM39 AC30 (#255): CI run 41286397320 raised here; record the refusal instead."""
+    api = module()
+    capture = loaded_fixture(api)
+    expected = capture["ordinary_skill_loaded_use"]["cases"]
+    refused_reset(expected[3])
+    extension = extension_fixture(api, tmp_path)
+    current = [0]
+    visited = []
+
+    def rpc(page, method, params):
+        if method == "sessions.create":
+            current[0] += 1
+        case = expected[current[0]]
+        selected = case["selected"]
+        if method == "sessions.create":
+            scope = case["before"]
+            return dict(
+                id="create",
+                socket_id="socket",
+                frame=dict(
+                    id="create",
+                    ok=True,
+                    payload=dict(
+                        key=scope["sessionKey"],
+                        sessionId=scope["sessionId"],
+                        entry=dict(lifecycleRevision=scope["lifecycleRevision"]),
+                    ),
+                ),
+            )
+        if method == "rmqualification.person":
+            return dict(frame=dict(ok=True, payload=case["before"]))
+        if method == "skills.library.read":
+            selected["read"]["payload"]["entry"]["slug"] = "fixture"
+            return dict(frame=selected["read"])
+        if method == "skills.library.save" and params["expectedRevision"] is None:
+            return dict(
+                frame=dict(ok=True, payload=dict(entry=selected["read"]["payload"]["entry"]))
+            )
+        if method == "skills.library.list":
+            pin = dict(skillId=selected["skillId"], revision=REVISION, name=selected["name"])
+            return dict(frame=dict(ok=True, payload=dict(session=dict(selections=[pin]))))
+        if method == "skills.library.activate":
+            return dict(frame=case["selection"])
+        return dict(frame=case["intervention"]["frame"])
+
+    def turn(rpc, page, session, case):
+        visited.append(case["case"])
+        case.update(expected[current[0]])
+
+    monkeypatch.setattr(extension, "loaded_use_turn", turn)
+    extension.observe_loaded_use(rpc, None, {}, capture)
+    assert visited == ["positive", "stale", "deleted"]
+    reset = capture["ordinary_skill_loaded_use"]["cases"][3]
+    assert reset["observed"] == "control_refused"
+    assert reset["failure_reason"] is None
+    assert reset["intervention"]["frame"] == RESET_SCOPE_REFUSAL
+    assert reset["chat"] == {} and reset["requests"] == [] and reset["tools"] == []
+    assert api.ordinary_skill_loaded_use_pass(capture)
+
+
 def native_wrapped_task(task):
     # Real 2026.10.7 webchat shape from the Ubuntu observation capture;
     # disposable identities replace the original run's metadata.
@@ -942,6 +1110,81 @@ def test_host_uses_packaged_provider_and_only_native_skill_read(tmp_path):
     assert extension.config["diagnosticsPath"] == str(tmp_path / "provider-attempts.jsonl")
 
 
+def profile_pin_fixture(api):
+    """RM39/AC30: owner-profile listing shape from the 20261101-vps2 capture."""
+    capture = loaded_fixture(api)
+    cases = capture["ordinary_skill_loaded_use"]["cases"]
+    pins = [
+        dict(
+            skillId=case["selected"]["skillId"],
+            revision=case["selected"]["revision"],
+            name=case["selected"]["name"],
+            ownerProfileId="fixture-owner-profile",
+        )
+        for case in cases
+    ]
+    # Native listings retain earlier sessions' pins, including the stale
+    # skill at its new head in the deleted/reset sessions. Preserve order.
+    advanced = dict(pins[1], revision="b" * 64)
+    for case, listing in zip(
+        cases[1:],
+        ([pins[1], pins[0]], [advanced, pins[0], pins[2]], [advanced, pins[0], pins[3]]),
+        strict=True,
+    ):
+        case["selection"]["payload"]["selections"] = listing
+    return capture
+
+
+@pytest.mark.parametrize("case_index", [1, 2, 3])
+@pytest.mark.parametrize(
+    "mutation", [None, "duplicate", "additional_revision", "wrong_revision", "missing"]
+)
+def test_loaded_use_profile_pins_require_one_selected_skill_revision(case_index, mutation):
+    """RM39/AC30: unrelated profile pins never invalidate the exact selected pin."""
+    api = module()
+    capture = profile_pin_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][case_index]
+    pins = case["selection"]["payload"]["selections"]
+    selected = next(pin for pin in pins if pin["skillId"] == case["selected"]["skillId"])
+    if mutation == "duplicate":
+        pins.append(dict(selected))
+    elif mutation == "additional_revision":
+        pins.append(dict(selected, revision="c" * 64))
+    elif mutation == "wrong_revision":
+        selected["revision"] = "c" * 64
+    elif mutation == "missing":
+        pins.remove(selected)
+    assert api.ordinary_skill_loaded_use_pass(capture) is (mutation is None)
+    listed = dict(frame=dict(ok=True, payload=dict(session=dict(selections=pins))))
+    if mutation is None:
+        assert api.selected_pin(listed, case["selected"]) == selected
+    else:
+        with pytest.raises(ValueError, match="^ordinary_skill_control_failed$"):
+            api.selected_pin(listed, case["selected"])
+
+
+def test_profile_pins_reach_the_independent_refused_reset_control(monkeypatch):
+    """RM39/AC30: the vps2 pin listings pass before its refused reset blocks proof."""
+    api = module()
+    capture = profile_pin_fixture(api)
+    reset = capture["ordinary_skill_loaded_use"]["cases"][3]
+    reset["current"] = dict(reset["before"])
+    reset["intervention"]["frame"] = dict(
+        ok=False, error=dict(code="FORBIDDEN", message="missing scope: operator.admin")
+    )
+    observed = []
+    control_observed = api._control_observed
+
+    def record_control(case):
+        result = control_observed(case)
+        observed.append((case["case"], result))
+        return result
+
+    monkeypatch.setattr(api, "_control_observed", record_control)
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+    assert observed == [("positive", True), ("stale", True), ("deleted", True), ("reset", False)]
+
+
 def test_control_native_activation_is_retained_as_native_not_bridge_receipt():
     """RM39/AC30: direct activation is isolated control setup, never adapter qualification."""
     api = module()
@@ -964,7 +1207,10 @@ def test_control_native_activation_is_retained_as_native_not_bridge_receipt():
     assert not api.ordinary_skill_loaded_use_pass(capture)
 
 
-def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(tmp_path):
+@pytest.mark.parametrize("incomplete_request", [False, True])
+def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(
+    tmp_path, incomplete_request
+):
     """RM39/AC30: the turn collector retains boundary observations, not generated tool bytes."""
     import copy
     import json
@@ -972,6 +1218,12 @@ def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(tmp_p
 
     api = module()
     case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    if incomplete_request:
+        case["requests"][0].update(
+            body=None, status=None, run_id=None, failure_reason="invalid_json"
+        )
+        case["requests"][1].pop("status")
+        case["requests"][1].pop("run_id")
     archive = tmp_path / "release.tgz"
     archive.write_bytes(b"fixture")
     extension = api.OrdinaryComposition(
@@ -1025,7 +1277,9 @@ def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(tmp_p
         expectedLifecycleRevision=case["current"]["lifecycleRevision"],
     )
     extension.loaded_use_turn(rpc, page, params, result)
-    assert result["observed"] == "loaded_pinned_revision"
+    assert result["observed"] == (
+        "loaded_other_bytes" if incomplete_request else "loaded_pinned_revision"
+    )
     assert result["tools"][0]["event"]["result"]["content"][0]["text"] == CONTENT
     assert result["requests"] == records
     assert [method for method, _ in calls] == [
@@ -2007,8 +2261,20 @@ def test_missing_native_pin_has_a_fixed_control_failure(pins):
 
 
 @pytest.mark.parametrize("failure", [None, "ordinary_skill_turn_timeout", "not_text_content"])
+@pytest.mark.parametrize(
+    "reset_failure",
+    [
+        None,
+        "missing_frame",
+        "missing_entry",
+        "invalid_entry",
+        "person_refused",
+        "person_payload",
+        "person_scope",
+    ],
+)
 def test_observation_saves_controls_after_a_completed_or_incomplete_turn(
-    tmp_path, monkeypatch, failure
+    tmp_path, monkeypatch, failure, reset_failure
 ):
     """RM39/AC30: the real save helper must reach controls after the captured positive turn."""
     api = module()
@@ -2045,6 +2311,13 @@ def test_observation_saves_controls_after_a_completed_or_incomplete_turn(
                 and params["expectedLifecycleRevision"] == "L1"
                 else case["before"]
             )
+            if case["case"] == "reset" and scope is case["current"]:
+                if reset_failure == "person_refused":
+                    return dict(frame=dict(ok=False))
+                if reset_failure == "person_payload":
+                    return dict(frame=dict(ok=True, payload=None))
+                if reset_failure == "person_scope":
+                    return dict(frame=dict(ok=True, payload={}))
             return dict(frame=dict(ok=True, payload=scope))
         if method == "skills.library.read":
             selected["read"]["payload"]["entry"]["slug"] = "fixture"
@@ -2072,6 +2345,13 @@ def test_observation_saves_controls_after_a_completed_or_incomplete_turn(
             )
         if method == "skills.library.activate":
             return dict(frame=case["selection"])
+        if method == "sessions.reset":
+            if reset_failure == "missing_frame":
+                return {}
+            if reset_failure == "missing_entry":
+                return dict(frame=dict(ok=True, payload={}))
+            if reset_failure == "invalid_entry":
+                return dict(frame=dict(ok=True, payload=dict(entry=[])))
         return dict(frame=case["intervention"]["frame"])
 
     def turn(rpc, page, session, case):
@@ -2090,6 +2370,11 @@ def test_observation_saves_controls_after_a_completed_or_incomplete_turn(
             raise ValueError(failure)
 
     monkeypatch.setattr(extension, "loaded_use_turn", turn)
+    if reset_failure is not None:
+        with pytest.raises(ValueError, match="^ordinary_skill_control_failed$"):
+            extension.observe_loaded_use(rpc, None, {}, capture)
+        assert visited == ["positive", "stale", "deleted"]
+        return
     extension.observe_loaded_use(rpc, None, {}, capture)
     assert visited == ["positive", "stale", "deleted", "reset"]
     assert extension.failure_diagnostics() == {}
@@ -2405,6 +2690,16 @@ def test_main_only_replaces_base_gateway_when_observation_is_requested(
     api = module()
     setup = recommendation_helpers.setup
     base_apps = []
+    tokens = []
+    random_token = api.secrets.token_urlsafe
+    generated = []
+
+    def token_urlsafe(size):
+        token = random_token(size)
+        generated.append((size, token))
+        return token
+
+    monkeypatch.setattr(api.secrets, "token_urlsafe", token_urlsafe)
 
     def base_setup(*args, **kwargs):
         result = setup(*args, **kwargs)
@@ -2417,7 +2712,7 @@ def test_main_only_replaces_base_gateway_when_observation_is_requested(
         base_url = "http://127.0.0.1:12345"
 
         def __init__(self, app):
-            assert (app is base_apps[0]) is (not observe)
+            assert (app is base_apps[-1]) is (not observe)
             assert (
                 any(getattr(route, "path", None) == "/v1/chat/completions" for route in app.routes)
                 is observe
@@ -2434,6 +2729,9 @@ def test_main_only_replaces_base_gateway_when_observation_is_requested(
 
     def run(work, out, *, extension):
         assert (extension.observation is not None) is observe
+        tokens.append(extension.application_token)
+        assert extension.application_token != "a" * 40
+        assert (48, extension.application_token) in generated
         out.write_text(json.dumps(loaded_fixture(api)))
         return 0
 
@@ -2441,20 +2739,23 @@ def test_main_only_replaces_base_gateway_when_observation_is_requested(
     monkeypatch.setattr(api.BASE, "person_module", lambda: person)
     archive = tmp_path / "release.tgz"
     archive.write_bytes(b"fixture")
-    assert (
-        api.main(
-            [
-                "--tarball",
-                str(archive),
-                "--work-dir",
-                str(tmp_path / "host"),
-                "--out",
-                str(tmp_path / "capture.json"),
-            ]
-            + (["--observe-loaded-use"] if observe else [])
+    for index in range(2):
+        assert (
+            api.main(
+                [
+                    "--tarball",
+                    str(archive),
+                    "--work-dir",
+                    str(tmp_path / f"host-{index}"),
+                    "--out",
+                    str(tmp_path / "capture.json"),
+                ]
+                + (["--observe-loaded-use"] if observe else [])
+            )
+            == 0
         )
-        == 0
-    )
+
+    assert len(set(tokens)) == 2
 
 
 def test_observer_source_inventory_includes_runtime_package_metadata(tmp_path):
@@ -2651,3 +2952,167 @@ def test_skill_evidence_requires_foreign_person_own_session_refusal():
         if item["case"] != "foreign_person_own_session"
     ]
     assert not api.ordinary_skill_pass(capture)
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        (("tools", 0, "event", "result"), None),
+        (("tools", 0, "event", "result"), {}),
+        (("tools", 0, "event", "result", "content"), None),
+        (("tools", 0, "event", "result", "content"), [{"type": "image"}]),
+        (("requests", 1, "body", "messages", 3), {"role": "tool"}),
+        (("requests", 1, "body", "messages", 2, "tool_calls", 0), {}),
+        (("requests", 1, "body", "messages", 2, "tool_calls", 0, "function"), None),
+        (("requests", 1, "body", "messages", 2, "tool_calls", 0, "function", "arguments"), "{"),
+        (("requests", 1, "body", "messages", 2, "tool_calls", 0, "function", "arguments"), []),
+        (("requests", 0, "body"), {}),
+        (("requests", 0, "body", "messages"), None),
+        (("tools", 0, "context"), []),
+    ],
+)
+def test_loaded_round_trip_rejects_malformed_wire_shapes(path, value):
+    """RM39/AC30: incomplete native evidence must fail closed during collection."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    target = case
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    assert api._loaded_round_trip(case) is False
+    assert api.loaded_use_observation(case) in {"loaded_other_bytes", "not_loaded"}
+
+
+@pytest.mark.parametrize("name", ["stale", "deleted", "reset"])
+@pytest.mark.parametrize(
+    "frame",
+    [
+        {},
+        None,
+        [],
+        {"ok": True},
+        {"ok": True, "payload": None},
+        {"ok": True, "payload": []},
+        {"ok": True, "payload": {}},
+        {"ok": True, "payload": {"entry": None}},
+        {"ok": True, "payload": {"entry": {"revision": None}}},
+    ],
+)
+def test_control_observation_rejects_malformed_receipts(name, frame):
+    """RM39/AC30: malformed native control receipts cannot crash the collector."""
+    api = module()
+    case = next(
+        c for c in loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"] if c["case"] == name
+    )
+    case["intervention"]["frame"] = frame
+    assert api._control_observed(case) is False
+
+
+@pytest.mark.parametrize("content", [None, [], [{"type": "image"}], 5])
+def test_advertised_skill_ignores_nontext_content(content):
+    """RM39/AC30: missing native advertisement is an observation, not an exception."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    case["requests"][0]["body"]["messages"][0]["content"] = content
+    assert api.advertised_skill(case["requests"], case["selected"]) is None
+
+
+@pytest.mark.parametrize("body", [{}, None, [], {"messages": None}, {"messages": [None]}])
+def test_advertised_skill_ignores_incomplete_requests(body):
+    """RM39/AC30: failed HTTP captures do not invent advertisements."""
+    assert module().advertised_skill([{"body": body}], {"skillId": SKILL_ID}) is None
+
+
+def test_advertised_skill_joins_native_text_parts():
+    """RM39/AC30: native structured text retains the exact advertisement."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    message = case["requests"][0]["body"]["messages"][0]
+    content = message["content"]
+    message["content"] = [
+        {"type": "text", "text": content[:50]},
+        {"type": "text", "text": content[50:]},
+    ]
+    assert api.advertised_skill(case["requests"], case["selected"]) == ("Hello World", REVISION)
+    assert api._loaded_round_trip(case) is True
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_model_request_capture_retains_closed_failure(tmp_path, cancelled):
+    """RM16/RM39/AC30: exceptions and cancellation leave complete, private records."""
+    import asyncio
+
+    from starlette.requests import Request
+
+    from recommendation_helpers import setup
+
+    api = module()
+    _, service, runs, _ = setup(tmp_path)
+    app, gateway, observation = api.loaded_use_gateway(tmp_path / "inference", service)
+    middleware = app.user_middleware[0].kwargs["dispatch"]
+
+    async def exercise():
+        async def receive():
+            return {"type": "http.request", "body": b'{"messages":[]}', "more_body": False}
+
+        request = Request({"type": "http", "path": "/v1/chat/completions", "headers": []}, receive)
+
+        async def fail(request):
+            raise asyncio.CancelledError("private") if cancelled else RuntimeError("private")
+
+        with pytest.raises(asyncio.CancelledError if cancelled else RuntimeError):
+            await middleware(request, fail)
+
+    try:
+        asyncio.run(exercise())
+        record = observation.requests[0]
+        assert record["status"] is None
+        assert record["run_id"] is None
+        assert record["failure_reason"] == ("request_cancelled" if cancelled else "request_failed")
+        assert "private" not in str(record)
+        capture = loaded_fixture(api)
+        capture["ordinary_skill_loaded_use"]["cases"][0]["requests"] = [record]
+        assert api.ordinary_skill_loaded_use_pass(capture) is False
+    finally:
+        gateway.store.close()
+        runs.close()
+
+
+def test_model_request_capture_passes_malformed_json_to_validation(tmp_path):
+    """RM16/RM39/AC30: malformed client input is not a model request or HTTP 500."""
+    import asyncio
+
+    import httpx
+
+    from recommendation_helpers import setup
+
+    api = module()
+    _, service, runs, _ = setup(tmp_path)
+    app, gateway, observation = api.loaded_use_gateway(tmp_path / "inference", service)
+
+    async def exercise():
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+            base_url="http://test",
+        ) as client:
+            return await client.post(
+                "/v1/chat/completions",
+                content="{",
+                headers={
+                    "Authorization": f"Bearer {app.state.application_token}",
+                    "Content-Type": "application/json",
+                },
+            )
+
+    try:
+        response = asyncio.run(exercise())
+        assert response.status_code in {400, 422}
+        record = observation.requests[0]
+        assert record["body"] is None
+        assert record["failure_reason"] == "invalid_json"
+        assert record["status"] == response.status_code
+        assert record["run_id"] is None
+        assert api.advertised_skill(observation.requests, {"skillId": SKILL_ID}) is None
+    finally:
+        gateway.store.close()
+        runs.close()
