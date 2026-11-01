@@ -339,7 +339,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   pattern once per operation; the entry is re-pinned to adapter revision
   `37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`, whose
   evidence revision names its fresh capture (CI run 41335800361, SHA-256
-  `1212d0e28080…`).
+  `1212d0e28080…`). The host qualification harnesses then built their backend
+  on the real wall clock instead of the test default `FakeClock`, so the
+  capture was recaptured with them at the same adapter revision (CI run
+  41351781170, SHA-256 `58c6df0ba6dc…`; unmodified, no runner hostname in it).
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,
