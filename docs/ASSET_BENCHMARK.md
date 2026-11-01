@@ -567,7 +567,7 @@ comparison object. Unknown CPU/memory and incomplete costs remain unknown;
 setup inference is never added to query inference a second time. Historical
 comparison objects retain their original closed shape and are not upgraded.
 
-## Whole-host trials, adaptation episodes and platform exports (spec 0.60/0.64 section 12.6.5)
+## Whole-host trials, adaptation episodes and platform exports (spec 0.60/0.64/0.65 section 12.6.5)
 
 These offline tools serve #198 (early installed-skill trial), #202 (adaptation
 episodes), #204 (host MCP-use rows), #205 (paired whole-host tasks) and #206
@@ -620,6 +620,11 @@ resolve only through an explicit `--resolver`; the runner inventory is the
 whole `src/relaymind` Python package plus `pyproject.toml` and
 `scripts/asset_whole_task.py`, whose package members must equal the running
 grader and whose other files must match reviewed bytes.
+
+**Native configuration validation (spec 0.65; #240).** Host, provider, sampling
+and budget configuration documents stay unverified and cannot establish qualified
+acceptance until the pinned native validation and applicable schema/extraction
+evidence required by section 12.6.5 are supplied and verified.
 
 **Reset evidence (spec 0.64).** The registry entry `reset:<episode_id>` holds,
 as its original bytes, the closed canonical JSON object
