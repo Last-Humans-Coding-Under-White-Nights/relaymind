@@ -469,6 +469,72 @@ def native_tools(events: list[dict], run_id: str) -> list[dict]:
     return tools
 
 
+def _failed_before_http(record):
+    """A provider attempt that failed or aborted with no gateway response at all."""
+    return (
+        record.get("outcome") in ("failed", "aborted")
+        and record.get("runId") == "unavailable"
+        and record.get("runIdSource") is None
+        and record.get("status") is None
+    )
+
+
+def provider_attempt_audit(requests, attempts):
+    """RM16/RM39/AC30: explain every provider record of one turn window.
+
+    A record is explained when it pairs one-to-one with a received gateway
+    request: the same idempotency key and run ID, or, for a received request
+    whose response run ID was never recorded, the provider's "unavailable" run
+    ID. A record without a received request is explained only as a failure
+    that never got a gateway response; it stays retained with its actual
+    outcome. Returns the number of received requests without a provider
+    record, the unexplained records, and the number of paired attempts that
+    returned a tool call.
+    """
+    pending = [
+        (a.get("idempotency_key"), a.get("run_id")) if isinstance(a, dict) else (None, None)
+        for a in requests
+    ]
+    unexplained, tool_calls = [], 0
+    for record in attempts:
+        if not isinstance(record, dict) or record.get("event") != "relaymind.inference_attempt":
+            unexplained.append(record)
+            continue
+        key, run_id = record.get("idempotencyKey"), record.get("runId")
+        paired = next(
+            (
+                index
+                for index, (request_key, request_run) in enumerate(pending)
+                if isinstance(key, str)
+                and key
+                and key == request_key
+                and (
+                    run_id == request_run
+                    if isinstance(request_run, str) and request_run
+                    else run_id == "unavailable"
+                )
+            ),
+            None,
+        )
+        if paired is not None:
+            del pending[paired]
+            tool_calls += record.get("outcome") == "tool_call"
+        elif not _failed_before_http(record):
+            unexplained.append(record)
+    return len(pending), unexplained, tool_calls
+
+
+def outstanding_tool_calls(case, tool_calls):
+    """Tool calls the turn evidence shows were proposed or answered, minus their native hooks."""
+    receiving = {
+        message.get("tool_call_id")
+        for attempt in case["requests"]
+        for message in _request_messages(attempt)
+        if message.get("role") == "tool"
+    }
+    return max(tool_calls, len(receiving)) - len(case["tools"])
+
+
 def read_observer_events(path, start=0, *, with_offset=False):
     """RM39/AC30: reread a torn tail once; every committed record is strict."""
     for attempt in range(2):
@@ -877,15 +943,13 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
                 or (terminal and terminal["socket_id"] != subscription["socket_id"])
             ):
                 return False
-            receiver_pairs = [(a["idempotency_key"], a["run_id"]) for a in case["requests"]]
-            provider_pairs = [(a["idempotencyKey"], a["runId"]) for a in case["provider_attempts"]]
-            if (
-                len(provider_pairs) != len(receiver_pairs)
-                or sorted(provider_pairs) != sorted(receiver_pairs)
-                or any(
-                    a["event"] != "relaymind.inference_attempt" for a in case["provider_attempts"]
-                )
-            ):
+            # Every received request has its provider record; every other retained
+            # provider record is a failure that never got a gateway response, and
+            # every attempt that returned a tool call has its native hook.
+            missing, unexplained, tool_calls = provider_attempt_audit(
+                case["requests"], case["provider_attempts"]
+            )
+            if missing or unexplained or outstanding_tool_calls(case, tool_calls) > 0:
                 return False
             if (
                 chat["params"]["sessionKey"] != case["current"]["sessionKey"]
@@ -909,6 +973,7 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
                 or not chat["frame"].get("error")
                 or case["requests"]
                 or case["tools"]
+                or case["provider_attempts"]
                 or terminal
             ):
                 return False
@@ -1110,6 +1175,10 @@ def loaded_use_gateway(work, recommendations):
 
 
 class OrdinaryComposition(BASE.ActionComposition):
+    # Bounded drain of asynchronous turn evidence after a terminal or refusal.
+    turn_drain_seconds = 3.0
+    turn_settle_seconds = 0.5
+
     def __init__(self, *args, archive, runs, skill_text, skill_asset, observation=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.archive, self.runs = archive.resolve(strict=True), runs
@@ -1248,6 +1317,8 @@ class OrdinaryComposition(BASE.ActionComposition):
             "ordinary_skill_generation_bound",
             "ordinary_skill_task_mismatch",
             "ordinary_skill_native_event_invalid",
+            "ordinary_skill_provider_unexplained",
+            "ordinary_skill_tool_unresolved",
             "not_text_content",
         }
 
@@ -1570,17 +1641,40 @@ class OrdinaryComposition(BASE.ActionComposition):
         ):
             raise ValueError("ordinary_skill_selection_failed")
 
-    def collect_turn_activity(self, case, start):
-        """Gateway requests since start, their provider records, and native hooks of the turn."""
+    def collect_turn_activity(self, case, start, provider_start):
+        """Gateway requests, provider records and native hooks of this turn's window.
+
+        Provider records are read by their own file window, not filtered by the
+        received requests, so an attempt that never reached the gateway stays
+        retained with its actual outcome.
+        """
         events = read_observer_events(self.event_file)
         case["tools"] = native_tools(events, case["chat"]["params"]["idempotencyKey"])
         case["requests"] = self.observation.requests[start:]
-        keys = {attempt["idempotency_key"] for attempt in case["requests"]}
-        case["provider_attempts"] = [
-            record
-            for record in read_observer_events(self.provider_attempt_file)
-            if record.get("idempotencyKey") in keys
-        ]
+        case["provider_attempts"] = read_observer_events(self.provider_attempt_file, provider_start)
+
+    def drain_turn_activity(self, page, case, start, provider_start, settled):
+        """Collect until settled(case) holds and nothing new arrived for the settle interval.
+
+        Returns whether the activity settled before the bounded drain deadline.
+        """
+        deadline = time.monotonic() + self.turn_drain_seconds
+        previous, quiet_since = None, None
+        while True:
+            self.collect_turn_activity(case, start, provider_start)
+            snapshot = (
+                len(case["tools"]),
+                len(case["requests"]),
+                len(case["provider_attempts"]),
+            )
+            now = time.monotonic()
+            if snapshot != previous or not settled(case):
+                previous, quiet_since = snapshot, now
+            elif now - quiet_since >= self.turn_settle_seconds:
+                return True
+            if now >= deadline:
+                return False
+            page.wait_for_timeout(50)
 
     @closed_native_data("ordinary_skill_turn_timeout")
     def loaded_use_turn(self, rpc, page, session, case, *, timeout=60):
@@ -1607,6 +1701,7 @@ class OrdinaryComposition(BASE.ActionComposition):
         )
         self.observation.begin(case["selected"], case["task"])
         start = len(self.observation.requests)
+        _, provider_start = read_observer_events(self.provider_attempt_file, with_offset=True)
         params = dict(
             sessionKey=case["current"]["sessionKey"],
             message=case["task"],
@@ -1629,7 +1724,8 @@ class OrdinaryComposition(BASE.ActionComposition):
             # A refusal can follow partial dispatch: retain the same window and
             # correlations as a completed turn, and never accept activity as a
             # refusal without it.
-            self.collect_turn_activity(case, start)
+            # Activity can arrive asynchronously: drain the bounded window first.
+            self.drain_turn_activity(page, case, start, provider_start, lambda case: True)
             if case["requests"] or case["tools"] or case["provider_attempts"]:
                 raise ValueError("ordinary_skill_refusal_contradicted")
             case["observed"] = "refused"
@@ -1654,29 +1750,31 @@ class OrdinaryComposition(BASE.ActionComposition):
                 break
             page.wait_for_timeout(100)
         else:
-            events = read_observer_events(self.event_file)
-            case["tools"] = native_tools(events, params["idempotencyKey"])
-            case["requests"] = self.observation.requests[start:]
+            self.collect_turn_activity(case, start, provider_start)
             raise ValueError("ordinary_skill_turn_timeout")
-        # Tool hooks are asynchronous; allow their bounded delivery to catch up
-        # after the terminal event before reading the passive capture file.
-        deadline = time.monotonic() + 3
-        while True:
-            self.collect_turn_activity(case, start)
-            has_result = any(
-                message.get("role") == "tool"
-                for attempt in case["requests"]
-                for message in _request_messages(attempt)
+
+        # Tool hooks and provider records are asynchronous: a failed or cancelled
+        # tool's hook can follow the terminal event. Drain until every received
+        # request has its provider record, every provider record is explained,
+        # and every proposed or answered tool call has its native hook.
+        def settled(case):
+            missing, unexplained, tool_calls = provider_attempt_audit(
+                case["requests"], case["provider_attempts"]
             )
-            advertisement = advertised_skill(case["requests"], case["selected"])
-            case["advertised_revision"] = advertisement[1] if advertisement else None
-            if (case["tools"] or not has_result) and len(case["provider_attempts"]) == len(
-                case["requests"]
-            ):
-                break
-            if time.monotonic() >= deadline:
-                raise ValueError("ordinary_skill_turn_timeout")
-            page.wait_for_timeout(50)
+            return not missing and not unexplained and outstanding_tool_calls(case, tool_calls) <= 0
+
+        complete = self.drain_turn_activity(page, case, start, provider_start, settled)
+        advertisement = advertised_skill(case["requests"], case["selected"])
+        case["advertised_revision"] = advertisement[1] if advertisement else None
+        if not complete:
+            missing, unexplained, tool_calls = provider_attempt_audit(
+                case["requests"], case["provider_attempts"]
+            )
+            if unexplained:
+                raise ValueError("ordinary_skill_provider_unexplained")
+            if outstanding_tool_calls(case, tool_calls) > 0:
+                raise ValueError("ordinary_skill_tool_unresolved")
+            raise ValueError("ordinary_skill_turn_timeout")
         after = rpc(page, "rmqualification.person", session)
         if native_scope(after, "ordinary_skill_scope_changed") != case["current"]:
             raise ValueError("ordinary_skill_scope_changed")
