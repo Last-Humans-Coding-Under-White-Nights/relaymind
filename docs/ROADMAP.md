@@ -1292,11 +1292,12 @@ registration; then exclusive ledger ownership, admission-time key binding
 with dispatch markers, reserved block capacity and the post-read fence
 recheck) change the adapter bytes again: the entry is re-pinned to
 `943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`, and
-the ordinary installed-host run of these exact bytes (CI run 41307043410,
-commit f800c60, PR merge checkout 2c8c8cd) passed the ordinary-pass and
-ordinary-skill-pass predicates with all 15 harness sources matching; its
-capture `openclaw-native-actions-20261101-adapter.json` (SHA-256
-`babba902bb57…`) is the registry's evidence revision. As before, this is
+the ordinary installed-host run of these exact bytes with the stricter
+session-selection harness (CI run 41318389858, commit c0bd6f4, PR merge
+checkout c22ad40) passed the ordinary-pass and ordinary-skill-pass predicates
+with all 15 harness sources matching; its capture
+`openclaw-native-actions-20261101-adapter.json` (SHA-256
+`35436e519245…`) is the registry's evidence revision. As before, this is
 Linux functional evidence with disposable accounts, not macOS/Windows or
 customer acceptance. The person-ingress harness hardening raised in the #224 review
 (#228) changed evidence-bound harness files; a fresh ordinary installed-host
@@ -1400,8 +1401,8 @@ request. HOST-EXACT-SKILL-USE (#239) and MCP use with real approvals (#204)
 remain open. The changed adapter bytes have a new exact revision, and the
 shipped `direct_actions`/`exact_skill_selection` entry is re-pinned to it
 (`943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`), as for the spec 0.63 scope fix. Its evidence revision names
-the fresh capture of this revision (CI run 41307043410,
-`openclaw-native-actions-20261101-adapter.json`, SHA-256 `babba902bb57…`). `tests/test_openclaw_install.py` fails when the registry and
+the fresh capture of this revision (CI run 41318389858,
+`openclaw-native-actions-20261101-adapter.json`, SHA-256 `35436e519245…`). `tests/test_openclaw_install.py` fails when the registry and
 the built adapter digest of the release artifact drift.
 
 #240 host_config evidence must validate with the pinned host's own validator
