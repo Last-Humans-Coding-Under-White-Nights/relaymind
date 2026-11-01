@@ -1279,7 +1279,7 @@ isolation and connection retirement. Its unmodified capture is
 capture remains the record of the earlier revision. The loaded-use fence and
 the conditional MCP use path (#239/#204) change the adapter bytes again; the
 registry now pins the new exact revision
-`c618b8c267663c2bfe2480ce8b60b07cfdae27acc6404e8bb1d249200acb3e76`, and its
+`653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`, and its
 evidence revision is replaced by the fresh ordinary installed-host capture of
 these exact bytes before this change is merged. As before, this is
 Linux functional evidence with disposable accounts, not macOS/Windows or
@@ -1354,19 +1354,26 @@ entry and the immutable selected bytes at every boundary, and blocks the
 conversation after a failure. The MCP handler implements the closed request,
 the 512 KiB native row, the 60-second deadline with the separately bounded
 approval wait, the exact binding with a recomputed canonical schema hash,
-approval binding and single use, the closed receipt and idempotency. Only
+approval binding to the bound target and single use, the closed receipt and
+idempotency. Key claims, consumed approvals and conversation blocks are kept
+in a durable private ledger synced before dispatch, so a restart replays an
+unresolved key as indeterminate and never reuses an approval; without a
+ledger nothing is dispatched. Retention/erasure of ledger records and the
+host-owned ledger location are not yet defined for a qualified composition.
+Host schema patterns are admitted only in a provably bounded subset. Only
 deterministic tests with injected fixture resolvers and routes exercise the
 admitted paths. Neither `skill_loaded_use` nor `mcp_use` is in the shipped
 registry, no production MCP route exists (the pinned host has no qualified
 exact-use route), and the adapter wires the fence to no host delivery boundary:
 spec 0.65 names no qualified native boundary that can stop the next model
 request. HOST-EXACT-SKILL-USE (#239) and MCP use with real approvals (#204)
-remain open. The changed adapter bytes have a new exact revision
-(`c618b8c267663c2bfe2480ce8b60b07cfdae27acc6404e8bb1d249200acb3e76`). The
-shipped `direct_actions`/`exact_skill_selection` entry still names the earlier
-revision and its capture, so the native RPCs stay unregistered (fail-safe)
-until the entry is re-pinned together with a fresh ordinary installed-host
-capture of these bytes, as for the spec 0.63 scope fix.
+remain open. The changed adapter bytes have a new exact revision, and the
+shipped `direct_actions`/`exact_skill_selection` entry is re-pinned to it
+(`653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`), as for the spec 0.63 scope fix. Its evidence revision still names
+the capture of the earlier bytes: the fresh ordinary installed-host capture
+of this revision, and the evidence revision naming it, are the open
+pre-merge gate. `tests/test_openclaw_install.py` fails when the registry and
+the built adapter digest of the release artifact drift.
 
 #240 host_config evidence must validate with the pinned host's own validator
 and captured schema/validator identities, including the native regex dialect.

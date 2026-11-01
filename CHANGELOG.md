@@ -30,13 +30,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   handler implements the closed request, the 60-second preparation/dispatch
   deadline with the separately bounded approval wait, exact native binding with
   a recomputed canonical schema hash, closed argument validation, approval
-  binding and single use, the closed receipt and same-scope idempotency. All
-  native RPC requests are now capped at 512 KiB. Neither operation is in the
-  shipped registry, no production MCP route exists, and `relaymind.mcp` is not
-  registered; the tests use injected fixture resolvers and routes only. The
-  changed adapter bytes have a new exact revision, so the shipped
-  direct-action/exact-selection entry no longer matches until a fresh CI
-  capture re-pins it.
+  binding to the bound server/tool/schema/session and single use, the closed
+  receipt and same-scope idempotency. Key claims, consumed allow-once
+  approvals and blocked conversations are kept in a durable private ledger
+  synced before dispatch (`src/recommendation-native-ledger.ts`): after a
+  restart an unresolved key replays as indeterminate and never dispatches
+  again, and a full or unreadable ledger refuses. Without a ledger nothing is
+  dispatched. A pre-dispatch refusal does not consume its key. Host schema
+  patterns are admitted only in a provably bounded anchored subset, a schema
+  whose gateway hash cannot be recomputed here (for example `0.0`) is
+  `unavailable`, and all native RPC requests are capped at 512 KiB. Neither
+  operation is in the shipped registry, no production MCP route exists, and
+  `relaymind.mcp` is not registered; the tests use injected fixture resolvers
+  and routes only. The shipped direct-action/exact-selection entry is re-pinned
+  to the new adapter revision `653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`; its evidence revision still names the
+  capture of the earlier bytes, and the fresh ordinary installed-host capture of
+  this revision is the open pre-merge gate. A release-artifact test now fails
+  when the registry and the built adapter digest drift.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,
