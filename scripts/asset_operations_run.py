@@ -77,10 +77,7 @@ def startup_report(
         memory_bytes=list(memory),
         useful_startups=useful,
         # Complete means all ten startups were useful and all ten memory samples known.
-        complete=len(samples) == 10
-        and useful == 10
-        and len(memory) == len(samples) == 10
-        and None not in memory,
+        complete=useful == 10 and len(samples) == len(memory) == 10 and None not in memory,
     )
 
 
@@ -95,11 +92,10 @@ def _startup(args) -> dict:
     generate_catalog(catalog, args.assets)
     samples: list[StartupSample] = []
     memory: list[int | None] = []
-    counter = iter(range(1000))
 
     @contextlib.asynccontextmanager
     async def launch():
-        ordinal = next(counter)
+        ordinal = len(memory)
         memory.append(None)  # Reserve the slot even if launch never yields.
         async with serve(work / f"run-{ordinal}", catalog, base_config=base) as running:
             try:
@@ -158,13 +154,15 @@ def _platform(args) -> dict:
     # The grader binds the observed platform to the frozen environment lock.
     if any(v is not None and v != platform.get(k) for k, v in environment.items()):
         raise ValueError("environment_binding")
-    paths = {"install-check": _registered(registry, "install-check", Path(args.install_check))}
-    if args.ordinary:
-        paths["ordinary-capture"] = _registered(registry, "ordinary-capture", Path(args.ordinary))
+    install_check = Path(args.install_check)
+    ordinary = Path(args.ordinary) if args.ordinary else None
+    paths = {"install-check": _registered(registry, "install-check", install_check)}
+    if ordinary is not None:
+        paths["ordinary-capture"] = _registered(registry, "ordinary-capture", ordinary)
     report = platform_report(
-        install_check=Path(args.install_check),
-        ordinary=Path(args.ordinary) if args.ordinary else None,
-        ordinary_check=ordinary_check() if args.ordinary else None,
+        install_check=install_check,
+        ordinary=ordinary,
+        ordinary_check=ordinary_check() if ordinary is not None else None,
         evidence_paths=paths,
         input_digest=input_digest,
         input_manifest=dict(

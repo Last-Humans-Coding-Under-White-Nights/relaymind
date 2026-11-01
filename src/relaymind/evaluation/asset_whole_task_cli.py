@@ -68,16 +68,16 @@ def _grade(args) -> tuple[str, dict]:
     # Check the report's own shape before following any of its references.
     validate_whole_task(_REPORTS[args.command], report)
     resolver = OfflineResolver(args.resolver) if args.resolver else None
-    kind = "adaptation" if args.command == "grade-adaptation" else "host"
-    inputs = resolve_whole_task_inputs(kind, report, args.inputs, resolver=resolver)
+    kind = args.command.removeprefix("grade-")
+    inputs = resolve_whole_task_inputs(
+        "adaptation" if kind == "adaptation" else "host", report, args.inputs, resolver=resolver
+    )
     # Qualification is assessed from the inputs, never taken from the label
     # (#240): a known fixture contradiction rejects before grading.
-    assessment = assess_inputs(
-        "platform" if args.command == "grade-platform" else kind, report, inputs
-    )
+    assessment = assess_inputs(kind, report, inputs)
     check_claim(assessment)
     extra = dict(unverified=list(inputs.unverified), qualification=assessment.as_output())
-    if args.command == "grade-adaptation":
+    if kind == "adaptation":
         summary = grade_adaptation_report(
             report,
             inputs.root,
@@ -93,21 +93,31 @@ def _grade(args) -> tuple[str, dict]:
                 ),
             ),
         )
-        return enforce_qualification(assessment, summary["gate"]), dict(summary=summary, **extra)
-    if args.command == "grade-host":
+    elif kind == "host":
         summary = grade_host_report(report, inputs.root, inputs.freeze, registry=inputs.registry)
-        return enforce_qualification(assessment, summary["gate"]), dict(summary=summary, **extra)
-    gate = grade_platform_report(report, inputs.root, inputs.freeze, registry=inputs.registry)
-    return enforce_qualification(assessment, gate), extra
+    else:
+        gate = grade_platform_report(report, inputs.root, inputs.freeze, registry=inputs.registry)
+        return enforce_qualification(assessment, gate), extra
+    return enforce_qualification(assessment, summary["gate"]), dict(summary=summary, **extra)
+
+
+def _plan_host(args) -> dict:
+    """The preregistered task commitments and the deterministic three-arm plan."""
+    tasks, _ = read_json_path(args.tasks, DOCUMENT_BYTES)
+    freeze, _ = read_json_path(args.freeze, DOCUMENT_BYTES)
+    return dict(
+        input_digest=verify_host_tasks(tasks, freeze),
+        freeze_digest=tasks["freeze_digest"],
+        planned=plan_host_trial(tasks),
+    )
 
 
 def _plan_episodes(args) -> dict:
     """The preregistered episode commitments and per-episode probe plan."""
     episodes, _ = read_json_path(args.episodes, DOCUMENT_BYTES)
     freeze, _ = read_json_path(args.freeze, DOCUMENT_BYTES)
-    input_digest = verify_episodes(episodes, freeze)
     return dict(
-        input_digest=input_digest,
+        input_digest=verify_episodes(episodes, freeze),
         config_digest=episodes["config_digest"],
         episodes=[
             dict(
@@ -241,6 +251,9 @@ def _trial_parsers(sub) -> None:
     host(trial)
 
 
+_PLANS = {"plan-host": _plan_host, "plan-episodes": _plan_episodes}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
@@ -278,19 +291,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command.startswith("trial"):
         return _trial(args)
     try:
-        if args.command == "plan-host":
-            tasks, _ = read_json_path(args.tasks, DOCUMENT_BYTES)
-            freeze, _ = read_json_path(args.freeze, DOCUMENT_BYTES)
-            input_digest = verify_host_tasks(tasks, freeze)
-            plan = dict(
-                input_digest=input_digest,
-                freeze_digest=tasks["freeze_digest"],
-                planned=plan_host_trial(tasks),
-            )
-            atomic_bytes(args.output, json_bytes(plan))
-            return 0
-        if args.command == "plan-episodes":
-            atomic_bytes(args.output, json_bytes(_plan_episodes(args)))
+        if args.command in _PLANS:
+            atomic_bytes(args.output, json_bytes(_PLANS[args.command](args)))
             return 0
         gate, extra = _grade(args)
         result = dict(status="graded", gate=gate, reason=None, **extra)
@@ -299,7 +301,7 @@ def main(argv: list[str] | None = None) -> int:
         result, code = dict(status="blocked", gate="blocked", reason=exc.reason), 3
     except (WholeTaskRejected, AssetCorpusError, ValueError, KeyError, TypeError) as exc:
         reason = str(exc) if str(exc).isidentifier() else "invalid_input"
-        if args.command in ("plan-host", "plan-episodes"):
+        if args.command in _PLANS:
             print(json.dumps(dict(status="rejected", reason=reason)), file=sys.stderr)
             return 2
         result, code = dict(status="rejected", gate=None, reason=reason), 2
