@@ -11,6 +11,7 @@ registry never lists either operation.
 import copy
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -178,7 +179,27 @@ def test_current_loaded_use_predicate_accepts_the_vps2_capture():
     assert [case["observed"] for case in reset] == ["control_refused"]
 
 
+def shipped_operations(source):
+    """The operations arrays of the exported NATIVE_QUALIFICATIONS entries."""
+    declaration = re.search(r"export const NATIVE_QUALIFICATIONS\b[^=]*=(.*)", source, re.S)
+    assert declaration, "NATIVE_QUALIFICATIONS declaration not found"
+    arrays = re.findall(r"\boperations:\s*(?:Object\.freeze\()?\[([^\]]*)\]", declaration[1])
+    assert arrays, "no operations array in NATIVE_QUALIFICATIONS"
+    return [re.findall(r'"([a-z_]+)"', array) for array in arrays]
+
+
 def test_shipped_registry_lists_neither_operation():
+    """RM39; AC30, AC35: no shipped entry lists skill_loaded_use or mcp_use (#255)."""
     source = (ROOT / "integrations/openclaw/src/recommendation-native-qualification.ts").read_text()
-    shipped = source.split("NATIVE_QUALIFICATIONS", 1)[1]
-    assert '"skill_loaded_use"' not in shipped and '"mcp_use"' not in shipped
+    for operations in shipped_operations(source):
+        assert operations and not {"skill_loaded_use", "mcp_use"} & set(operations)
+
+
+def test_the_registry_check_reads_the_operations_arrays():
+    listed = 'export const NATIVE_QUALIFICATIONS: X[] = [{ operations: ["direct_actions"] }];'
+    assert shipped_operations(listed) == [["direct_actions"]]
+    qualified = listed.replace('["direct_actions"]', 'Object.freeze(["mcp_use"] as const)')
+    assert shipped_operations(qualified) == [["mcp_use"]]
+    # Code after the registry that names an operation is not a registry entry.
+    later = listed + '\nif (op === "mcp_use") {}'
+    assert shipped_operations(later) == [["direct_actions"]]

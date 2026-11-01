@@ -24,8 +24,13 @@ setTimeout(() => finish(unavailable), 10_000);
 // First config path whose plugin schema the host did not inspect, or null.
 // A preserved (uninspected) discovery owner makes the host skip every plugin
 // config check; a plugins.entries key needs a discovered record with a schema.
+// So does a plugins.allow name: an allowed plugin is enabled with its default
+// config, which the host checks against the plugin schema once discovered.
+// A plugins.deny name enables nothing, and an unknown plugins.slots owner is
+// already a native error.
 function uninspectedPlugin(config, registry, normalizeId, normalizePluginId) {
   const entries = Object.keys(config?.plugins?.entries ?? {});
+  const allow = Array.isArray(config?.plugins?.allow) ? config.plugins.allow : [];
   const entryPath = (pluginId) => {
     const id = entries.find((key) => normalizeId(normalizePluginId(key)) === pluginId);
     return id === undefined ? "plugins" : `plugins.entries.${id}`;
@@ -33,7 +38,11 @@ function uninspectedPlugin(config, registry, normalizeId, normalizePluginId) {
   const preserved = registry.diagnostics.find((diagnostic) => diagnostic.configDisposition === "preserve");
   if (preserved) return entryPath(preserved.pluginId);
   const schemas = new Map(registry.plugins.map((record) => [record.id, record.configSchema]));
-  for (const key of entries) if (!schemas.get(normalizeId(normalizePluginId(key)))) return `plugins.entries.${key}`;
+  const inspected = (name) => Boolean(schemas.get(normalizeId(normalizePluginId(name))));
+  for (const key of entries) if (!inspected(key)) return `plugins.entries.${key}`;
+  for (const [index, name] of allow.entries()) {
+    if (typeof name === "string" && !inspected(name)) return `plugins.allow.${index}`;
+  }
   return null;
 }
 
@@ -54,14 +63,22 @@ try {
     const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
     if (pkg.name !== "openclaw" || pkg.version !== "2026.10.7") throw Error();
     // Exact pinned distribution entry points; no glob choosing an arbitrary build.
-    const validatorFile = "dist/validation-ongxOmrj.mjs";
-    const validator = {
-      host_version: pkg.version,
-      validator_file: validatorFile,
-      validator_sha256: createHash("sha256").update(readFileSync(resolve(root, validatorFile))).digest("hex"),
+    // The identity records the digest of every entry point this checker imports.
+    const files = {
+      validation: "dist/validation-ongxOmrj.mjs",
+      cli: "dist/config-cli-validation-Dnu71lrA.mjs",
+      registry: "dist/io.plugin-metadata-CyZLGhSx.mjs",
+      snapshot: "dist/plugin-metadata-snapshot-YmhmQlNq.mjs",
+      state: "dist/config-state-ByKt1EBw.mjs",
     };
-    const { r: withDefaults, n: rawWithPlugins } = await import(pathToFileURL(resolve(root, validatorFile)).href);
-    const { r: finishCliValidation } = await import(pathToFileURL(resolve(root, "dist/config-cli-validation-Dnu71lrA.mjs")).href);
+    const validator_files = {};
+    for (const file of Object.values(files).sort()) {
+      validator_files[file] = createHash("sha256").update(readFileSync(resolve(root, file))).digest("hex");
+    }
+    const validator = { host_version: pkg.version, validator_files };
+    const load = (file) => import(pathToFileURL(resolve(root, file)).href);
+    const { r: withDefaults, n: rawWithPlugins } = await load(files.validation);
+    const { r: finishCliValidation } = await load(files.cli);
     const options = { semanticValidation: "strict", pluginValidation: "full" };
     const raw = rawWithPlugins(config, options);
     const effective = raw.ok ? withDefaults(config, options) : raw;
@@ -72,9 +89,9 @@ try {
     }) : { valid: false, issues: effective.issues };
     if (snapshot.valid) {
       // The same config-wide registry the validator consulted (pinned entry points).
-      const { n: pluginRegistry } = await import(pathToFileURL(resolve(root, "dist/io.plugin-metadata-CyZLGhSx.mjs")).href);
-      const { y: idNormalizer } = await import(pathToFileURL(resolve(root, "dist/plugin-metadata-snapshot-YmhmQlNq.mjs")).href);
-      const { c: normalizePluginId } = await import(pathToFileURL(resolve(root, "dist/config-state-ByKt1EBw.mjs")).href);
+      const { n: pluginRegistry } = await load(files.registry);
+      const { y: idNormalizer } = await load(files.snapshot);
+      const { c: normalizePluginId } = await load(files.state);
       const registry = pluginRegistry({ config: effective.config, env: process.env });
       const issuePath = uninspectedPlugin(config, registry, idNormalizer(registry), normalizePluginId);
       if (issuePath === null) finish({ status: "valid", validator, issue_path: null, reason: null });

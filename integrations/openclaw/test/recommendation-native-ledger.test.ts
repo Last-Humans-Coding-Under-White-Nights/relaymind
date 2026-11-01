@@ -90,6 +90,42 @@ it("drops only a torn final record, which was never acknowledged", () => {
   expect(createFileUseLedger(file).lookup("k3")).toBeDefined();
 });
 
+// Windows CI: a handle opened for appending holds append access only, and
+// changing the file length needs write access, so ftruncate through it fails
+// (EPERM). The double refuses exactly that, as Windows does.
+it("cuts a torn final record without truncating through an append handle", () => {
+  const file = path();
+  const first = createFileUseLedger(file);
+  first.claim("k1", D, base);
+  first.close();
+  appendFileSync(file, '{"t":"claim","k":"k2"');
+  const appendHandles = new Set<number>();
+  const io: LedgerIo = {
+    ...nodeLedgerIo,
+    openSync: ((...args: Parameters<typeof fs.openSync>) => {
+      const handle = fs.openSync(...args);
+      if (typeof args[1] === "string" && args[1].startsWith("a"))
+        appendHandles.add(handle);
+      else appendHandles.delete(handle);
+      return handle;
+    }) as typeof fs.openSync,
+    ftruncateSync: ((handle: number, length?: number) => {
+      if (appendHandles.has(handle))
+        throw Object.assign(Error("EPERM: operation not permitted"), {
+          code: "EPERM",
+        });
+      fs.ftruncateSync(handle, length);
+    }) as typeof fs.ftruncateSync,
+  };
+  const reopened = createFileUseLedger(file, {}, io);
+  expect(reopened.lookup("k1")).toBeDefined();
+  expect(reopened.lookup("k2")).toBeUndefined();
+  reopened.claim("k3", D, base);
+  reopened.close();
+  expect(readFileSync(file, "utf8").endsWith("\n")).toBe(true);
+  expect(createFileUseLedger(file).lookup("k3")).toBeDefined();
+});
+
 it("fails closed on every operation when a complete record is unreadable", () => {
   const file = path();
   writeFileSync(file, "not json\n");
@@ -403,4 +439,73 @@ it("refuses and acknowledges nothing when a write makes no progress", () => {
   expect(() => ledger.isBlocked("incarnation")).toThrow("ledger_unavailable");
   expect(() => ledger.consumeApproval("a")).toThrow("ledger_unavailable");
   ledger.close();
+});
+
+/**
+ * Spec 0.65 7.6.2 condition 1 (RM39; AC35): durable dispatch history must
+ * stay usable across a restart. A restarted gateway can get the PID of its
+ * crashed predecessor (PID 1 in a container, or PID reuse): a lock naming this
+ * process's PID that this process never created belongs to an exited owner
+ * and is taken over, while a lock this process holds still refuses.
+ */
+it("takes over a lock left by an exited owner that had this process's PID", () => {
+  const live = new Set([1]);
+  for (const [suffix, content] of [
+    [".lock.1.0b6a1c1e-stale", ""],
+    [".lock", "1\n"],
+  ] as const) {
+    const file = path();
+    writeFileSync(file + suffix, content);
+    const restarted = createFileUseLedger(file, {}, double(1, live));
+    expect(usable(restarted), suffix).toBe(true);
+    expect(existsSync(file + suffix)).toBe(false);
+    // This process's own live lock still refuses a second owner.
+    const second = createFileUseLedger(file, {}, double(1, live));
+    expect(usable(second), suffix).toBe(false);
+    second.close();
+    expect(usable(restarted), suffix).toBe(true);
+    restarted.close();
+    expect(
+      readdirSync(join(file, "..")).filter((n) => n.includes(".lock")),
+    ).toEqual([]);
+  }
+});
+
+/**
+ * Spec 0.65 7.6.2 condition 1 (RM39; AC35): a full ledger refuses rather than
+ * evicting history, so its byte cap must hold for every record a binding may
+ * still write. A claim reserves the exact room for its dispatch marker and its
+ * longest possible receipt (bounded native IDs, JSON escaping included).
+ */
+it("keeps the byte cap when a binding's marker and receipt are long", () => {
+  const control = "\u0001".repeat(256);
+  const key = JSON.stringify(["user", "workspace", control, control, control]);
+  const longBase = { ...base, assetId: "\u0001".repeat(256) };
+  const settled = {
+    ...longBase,
+    outcome: "indeterminate",
+    code: "transport_unknown",
+    nativeRunId: control,
+    nativeCallId: control,
+  } as const;
+  const claimLine = JSON.stringify({ t: "claim", k: key, d: D, b: longBase });
+  for (const extra of [0, 4096, 16384]) {
+    const file = path();
+    const maxBytes = Buffer.byteLength(claimLine) + 1 + 2048 + extra;
+    const ledger = createFileUseLedger(file, { maxBytes });
+    let claimed = true;
+    try {
+      ledger.claim(key, D, longBase);
+    } catch {
+      claimed = false;
+    }
+    if (claimed) {
+      ledger.markDispatched(key);
+      ledger.settle(key, settled);
+    }
+    ledger.close();
+    expect(statSync(file).size, `cap ${maxBytes}`).toBeLessThanOrEqual(
+      maxBytes,
+    );
+  }
 });

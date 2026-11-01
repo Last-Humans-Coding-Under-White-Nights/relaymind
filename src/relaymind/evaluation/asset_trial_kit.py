@@ -79,7 +79,9 @@ PLUGIN_ID = "relaymind"
 # The gateway's default loopback listener (relaymind.example.toml) and the
 # operator guide's ``baseUrl``; the plugin refuses a non-loopback URL itself.
 DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1"
-_VERSION = re.compile(r"\b\d{4}\.\d{1,2}\.\d{1,2}\b")
+# A whole version token: a pre-release, build or fourth part stays attached, so
+# ``2026.10.7-beta.2`` or ``2026.10.7.1`` is never read as the pinned version.
+_VERSION = re.compile(r"(?<![\d.])\d{4}\.\d{1,2}\.\d{1,2}(?:[-+.\w][0-9A-Za-z.+-]*)?(?<!\.)")
 _OBSERVATION_KEYS = {"schema_version", "ordinal", "task_id", "arm", "row", "evidence"}
 _PROVENANCE = ("observed", "reported", "fixture")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -175,10 +177,11 @@ def _sha256(payload: bytes) -> str:
 
 
 def real_path(path: Path) -> Path:
-    """An operator output path with its existing symlinked ancestors resolved once.
+    """An operator path with its existing symlinked ancestors resolved once.
 
     On macOS ``/tmp`` and ``/var`` are symlinks; the no-follow write fence then
-    applies to the real directory. The final component is not followed.
+    applies to the real directory, and an input's directory (the no-follow read
+    root) is the real one. The final component is not followed.
     """
     path = Path(path).absolute()
     if path.name in ("", ".", ".."):
@@ -403,13 +406,23 @@ def install_plugin(
     error stay in separate private logs under ``work``; the record keeps only
     placeholders, exit codes, SHA-256 digests and sizes, and the configured
     loopback ``base_url``. Inspect reads the JSON on standard output only.
+
+    The install replaces the plugin in the operator's real host, so before any
+    mutating host command (and before ``work`` is created) the release must
+    match its ``SHA256SUMS`` and ``release.json`` (else rejected,
+    ``release_checksum``) and the host must name only the pinned version (else
+    blocked, ``host_version``).
     """
     base_url = check_base_url(base_url)
-    tarball = Path(tarball).absolute()
+    tarball = real_path(tarball)
+    identity = release_identity(tarball)
+    if not identity["checksum_ok"]:
+        raise WholeTaskRejected("release_checksum")
+    if host_version(host_command)[0] != PINNED_OPENCLAW:
+        raise WholeTaskBlocked("host_version")
     work = real_path(work)
     work.mkdir(mode=0o700, parents=True, exist_ok=False)
     work.chmod(0o700)
-    identity = release_identity(tarball)
     steps, failed = [], False
     for name, shown_args in _install_plan(base_url):
         shown = ["<openclaw>", *shown_args]
@@ -590,7 +603,7 @@ def verify_install(record, release: Mapping) -> None:
 
 def load_frozen(inputs: Path) -> dict:
     """The operator's frozen companion manifest and its host-trial documents."""
-    inputs = Path(inputs).absolute()
+    inputs = real_path(inputs)
     manifest, payload = read_json_path(inputs, CONFIG_BYTES)
     validate_whole_task("S3InputManifestV1", manifest)
 
@@ -838,7 +851,7 @@ def trial_run(
                 raise WholeTaskBlocked("install_failed")
             verify_install(install_record, preflight_record["observed"]["release"])
         if tarball is not None:
-            tarball = Path(tarball).absolute()
+            tarball = real_path(tarball)
             package_payload = read_local(tarball.parent, tarball.name, ORIGINAL_BYTES)
             identity = (_sha256(package_payload), len(package_payload))
             matched = [p for p in freeze["packages"] if (p["sha256"], p["bytes"]) == identity]
@@ -885,7 +898,7 @@ def trial_run(
         report = run_host_trial(
             tasks,
             freeze,
-            _executor(Path(observations).absolute(), ordinals, kit, qualification, ask),
+            _executor(real_path(observations), ordinals, kit, qualification, ask),
             environment=environment,
             artifacts=[],
             qualification=qualification,

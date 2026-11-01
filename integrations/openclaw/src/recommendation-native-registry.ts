@@ -75,6 +75,19 @@ export function registryResolver(
   hostVersion: string,
   adapterRevision: () => string,
 ): QualificationResolver {
+  // The loaded adapter bytes cannot change while this process runs: digest
+  // them once, on first use, and keep a failure as a failure.
+  let revision: string | null | undefined;
+  const loaded = (): string | null => {
+    if (revision === undefined) {
+      try {
+        revision = adapterRevision();
+      } catch {
+        revision = null;
+      }
+    }
+    return revision;
+  };
   return (operation) => {
     if (
       !Array.isArray(entries) ||
@@ -82,12 +95,8 @@ export function registryResolver(
       entries.length === 0
     )
       return undefined;
-    let revision: string;
-    try {
-      revision = adapterRevision();
-    } catch {
-      return undefined;
-    }
+    const revision = loaded();
+    if (revision === null) return undefined;
     return entries.find(
       (entry) =>
         wellFormedEntry(entry) &&

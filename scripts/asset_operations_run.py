@@ -2,7 +2,8 @@
 
     startup     ten real ``relaymind serve`` startups over a generated catalog,
                 measured by the existing AC29 driver, with memory samples
-    operations  the AC29 run (#241): ten clean startups, the gateway without
+    operations  the lexical portion of the AC29 protocol as a fixture (#241;
+                lexical-only evidence never closes AC29): ten clean startups, the gateway without
                 recommendations as memory baseline, and the 60-second 2 req/s
                 workload with four 25-record import batches during a derived
                 rebuild, summarized by the unchanged ``summarize_operations``
@@ -21,6 +22,7 @@ import dataclasses
 import hashlib
 import importlib.util
 import json
+import shutil
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -86,6 +88,7 @@ def startup_report(
     assets: int,
     base_config_digest: str,
     counter: str,
+    harness_errors: Sequence[str] = (),
 ) -> dict:
     useful = sum(sample.outcome == "useful" for sample in samples)
     return dict(
@@ -97,9 +100,25 @@ def startup_report(
         samples=[dataclasses.asdict(sample) for sample in samples],
         memory_bytes=list(memory),
         useful_startups=useful,
+        harness_errors=list(harness_errors),
         # Complete means all ten startups were useful and all ten memory samples known.
         complete=useful == 10 and len(samples) == len(memory) == 10 and None not in memory,
     )
+
+
+def fresh_directories(work: Path, names: Sequence[str]) -> None:
+    """Remove the kit's own subdirectories of ``work`` so a reused work directory
+    starts with exactly the requested catalog and new empty stores.
+
+    Only the named, kit-owned subdirectories are removed; anything else in
+    ``work`` (and an operator's ``--base-config`` store) is left alone.
+    """
+    for name in names:
+        path = work / name
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+        elif path.exists():
+            shutil.rmtree(path)
 
 
 async def _startup_samples(
@@ -107,44 +126,67 @@ async def _startup_samples(
     catalog: Path,
     base_for: Callable[[int], Path],
     env: Mapping[str, str] | None = None,
-) -> tuple[list[StartupSample], list[int | None]]:
+) -> tuple[list[StartupSample], list[int | None], list[str]]:
+    """The ten startup samples, their memory, and the launches that failed to start.
+
+    A launch that raises (the gateway exits, its token never arrives, no port)
+    is a harness error named ``startup_<ordinal>_<reason>``. A launch the
+    driver's one-second deadline cancels is a slow startup, a product sample,
+    and is not listed: a gateway that would fail only after the deadline cannot
+    be told apart from a slow one here.
+    """
     samples: list[StartupSample] = []
     memory: list[int | None] = []
+    launch_errors: list[str] = []
 
     @contextlib.asynccontextmanager
     async def launch():
         ordinal = len(memory)
         memory.append(None)  # Reserve the slot even if launch never yields.
         extra = {} if env is None else {"env": env}
-        async with serve(
-            work / f"run-{ordinal}", catalog, base_config=base_for(ordinal), **extra
-        ) as running:
-            try:
-                yield running
-            finally:
-                memory[ordinal] = rss_bytes(running[0])
+        entered = False
+        try:
+            async with serve(
+                work / f"run-{ordinal}", catalog, base_config=base_for(ordinal), **extra
+            ) as running:
+                entered = True
+                try:
+                    yield running
+                finally:
+                    memory[ordinal] = rss_bytes(running[0])
+        except LAUNCH_ERRORS as error:
+            if not entered:
+                launch_errors.append(launch_failure(f"startup_{ordinal}", error))
+            raise
 
     await measure_startups(launch, BODY, samples=samples)
-    return samples, memory
+    return samples, memory, launch_errors
 
 
-def _startup(args) -> dict:
+def _startup(args) -> tuple[dict, bool]:
     if args.assets <= 0:
         raise ValueError(f"assets_must_be_positive: {args.assets}")
     base = Path(args.base_config).absolute()
     if not base.is_file():
         raise ValueError(f"base_config_not_found: {base}")
     work = Path(args.work).absolute()
+    fresh_directories(work, ("catalog",))
     catalog = work / "catalog"
     generate_catalog(catalog, args.assets)
-    samples, memory = asyncio.run(_startup_samples(work, catalog, lambda _ordinal: base))
-    return startup_report(
+    samples, memory, harness = asyncio.run(_startup_samples(work, catalog, lambda _ordinal: base))
+    report = startup_report(
         samples,
         memory,
         assets=args.assets,
         base_config_digest=hashlib.sha256(base.read_bytes()).hexdigest(),
         counter=memory_counter(),
+        harness_errors=harness,
     )
+    return report, not harness
+
+
+# Every subdirectory ``operations`` writes below ``--work``.
+_OPERATIONS_DIRECTORIES = ("catalog", "config", "imports", "startups", "baseline", "workload")
 
 
 def _operations(args) -> tuple[dict, bool]:
@@ -154,7 +196,10 @@ def _operations(args) -> tuple[dict, bool]:
     with its own empty store, so each of the ten startups is clean. Product
     outcomes (a slow startup, a late batch, a failed request) are recorded in
     the report; only a harness failure (no gateway, a broken control channel)
-    makes the run fail.
+    makes the run fail. A startup launch that raises before its gateway is
+    ready is such a harness failure too, named ``startup_<ordinal>_<reason>``.
+    A reused ``--work`` starts again from the requested catalog and new
+    stores: the kit's own subdirectories are removed first.
     """
     if args.assets <= 0:
         raise ValueError(f"assets_must_be_positive: {args.assets}")
@@ -168,13 +213,14 @@ def _operations(args) -> tuple[dict, bool]:
             return Path(args.base_config).absolute()
         return development_base_config(work / "config" / name, ROOT)
 
-    harness: list[str] = []
+    fresh_directories(work, _OPERATIONS_DIRECTORIES)
     environment = collect_benchmark_environment()
     catalog = work / "catalog"
     generate_catalog(catalog, args.assets)
-    startups, startup_memory = asyncio.run(
+    startups, startup_memory, startup_errors = asyncio.run(
         _startup_samples(work / "startups", catalog, lambda n: base_for(f"startup-{n}"), env)
     )
+    harness: list[str] = list(startup_errors)
 
     baseline_pid = None
 
@@ -265,7 +311,10 @@ def _manifest_inputs(path: Path) -> tuple[dict, bytes, str, dict, dict]:
 
     input_digest = verify_host_tasks(document("host_tasks"), document("host_freeze"))
     registry = {e["id"]: e for e in manifest["evidence"]}
-    return manifest, payload, input_digest, registry, document("environment_lock")
+    environment = document("environment_lock")
+    if not isinstance(environment, dict):
+        raise ValueError("environment_lock_invalid")
+    return manifest, payload, input_digest, registry, environment
 
 
 def _registered(registry: Mapping, evidence_id: str, original: Path) -> str:
@@ -343,7 +392,7 @@ def main(argv=None) -> int:
     held = True
     try:
         if args.command == "startup":
-            report = _startup(args)
+            report, held = _startup(args)
         elif args.command == "operations":
             report, held = _operations(args)
         else:

@@ -5,7 +5,9 @@ blind label templates, the adjudication worksheet and label freeze;
 preregistration checks for host tasks and adaptation episodes; the resumable
 host runner over an operator executor program; and external cost capture from
 RelayMind trace events. Exit codes follow the grading commands: 0 done, 2
-rejected input, 3 blocked or incomplete (an interrupted run). Nothing here
+rejected input, 3 blocked or incomplete (an interrupted run). A first SIGINT or
+SIGTERM to ``run-host`` stops before the next row; a second stops at once,
+killing the executor's process group and writing no report. Nothing here
 grades acceptance; ``grade-host`` and ``grade-adaptation`` do, offline.
 """
 
@@ -187,7 +189,11 @@ def _run_host(args) -> tuple[dict, int]:
     stop = False
 
     def interrupt(signum, frame):
+        # The first signal stops before the next row; a second one stops at
+        # once, even inside a hung executor (its started row is kept).
         nonlocal stop
+        if stop:
+            raise KeyboardInterrupt
         stop = True
 
     prior = {}
@@ -251,6 +257,10 @@ def run(args) -> int:
         atomic_bytes(args.output, json_bytes(result))
     except WholeTaskBlocked as exc:
         print(json.dumps(dict(status="blocked", reason=exc.reason)), file=sys.stderr)
+        return 3
+    except KeyboardInterrupt:
+        # Stopped inside a row: nothing is written; the journal keeps it started.
+        print(json.dumps(dict(status="interrupted")), file=sys.stderr)
         return 3
     except (
         WholeTaskRejected,

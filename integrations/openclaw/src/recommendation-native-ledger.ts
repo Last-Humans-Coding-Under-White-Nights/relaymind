@@ -63,6 +63,33 @@ type Record =
   | { t: "approval"; a: string }
   | { t: "block"; i: string };
 
+function lineBytes(record: Record): number {
+  return Buffer.byteLength(JSON.stringify(record), "utf8") + 1;
+}
+function markerLine(key: string): Record {
+  return { t: "dispatch", k: key };
+}
+// A bounded native identity is at most 256 UTF-8 bytes; JSON escapes a
+// control byte to six, so this is the longest encoded native ID.
+const LONGEST_NATIVE_ID = "\u0001".repeat(256);
+/** The longest settle line a receipt over this claimed base can have. */
+function settleBound(key: string, base: UseBase): number {
+  return lineBytes({
+    t: "settle",
+    k: key,
+    r: {
+      operationId: base.operationId,
+      recommendationId: base.recommendationId,
+      assetId: base.assetId,
+      contentHash: base.contentHash,
+      outcome: "not_dispatched",
+      code: "idempotency_conflict",
+      nativeRunId: LONGEST_NATIVE_ID,
+      nativeCallId: LONGEST_NATIVE_ID,
+    },
+  });
+}
+
 function syncDirectory(io: LedgerIo, path: string): void {
   try {
     const fd = io.openSync(dirname(path), "r");
@@ -98,6 +125,15 @@ export const nodeLedgerIo: LedgerIo = {
   writeSync: fs.writeSync,
 };
 /**
+ * The lock names this process currently holds, shared by every copy of this
+ * module in the process. Each name carries a fresh random token, so a lock
+ * naming this PID that is not listed here was left by an exited owner that
+ * had the same PID (PID 1 in a container, or PID reuse after a crash).
+ */
+const HELD: Set<string> = ((globalThis as any)[
+  Symbol.for("relaymind.native-use-ledger.held-locks")
+] ??= new Set<string>());
+/**
  * Exclusive ownership without ever removing a live owner's lock. Each opener
  * creates its own lock file, named by its process and a random token and
  * never reused, and only then inspects the others: any other lock of a live
@@ -106,14 +142,21 @@ export const nodeLedgerIo: LedgerIo = {
  * inspection always sees the earlier lock, so two can never both proceed
  * (both may refuse; a later open succeeds). A lock's name is its whole
  * content, so the lock removed is exactly the stale one inspected. Returns
- * the lock this owner holds and releases.
+ * the lock this owner holds and releases. A lock naming this process's own
+ * PID is live only while this process holds it (HELD).
  */
 function acquire(io: LedgerIo, path: string): string {
   const directory = dirname(path);
   const prefix = basename(path) + ".lock";
   const mine = `${prefix}.${io.pid}.${randomUUID()}`;
   const own = join(directory, mine);
-  io.closeSync(io.openSync(own, "wx", 0o600));
+  HELD.add(mine);
+  try {
+    io.closeSync(io.openSync(own, "wx", 0o600));
+  } catch (error) {
+    HELD.delete(mine);
+    throw error;
+  }
   syncDirectory(io, own);
   try {
     for (const name of io.readdirSync(directory)) {
@@ -136,8 +179,13 @@ function acquire(io: LedgerIo, path: string): string {
         );
         owner = match ? Number(match[1]) : Number.NaN;
       } else continue;
-      // A live owner, including this process, keeps the path.
-      if (!Number.isSafeInteger(owner) || owner <= 0 || io.alive(owner))
+      // A live owner keeps the path; this process is a live owner only of
+      // the locks it holds now.
+      if (
+        !Number.isSafeInteger(owner) ||
+        owner <= 0 ||
+        (owner === io.pid ? HELD.has(name) : io.alive(owner))
+      )
         throw Error("ledger_owned");
       try {
         io.unlinkSync(join(directory, name));
@@ -151,6 +199,7 @@ function acquire(io: LedgerIo, path: string): string {
     } catch {
       /* Already removed. */
     }
+    HELD.delete(mine);
     throw error;
   }
   return own;
@@ -183,10 +232,18 @@ export function createFileUseLedger(
     if (created) syncDirectory(io, path);
     const text = io.readFileSync(path, "utf8");
     const end = text.lastIndexOf("\n") + 1;
-    // An unterminated final record was never synced and acknowledged.
+    // An unterminated final record was never synced and acknowledged. It is
+    // cut through a separate read-write handle: an append-mode handle cannot
+    // change the file length on every platform (on Windows it holds append
+    // access only, and truncation needs write access).
     if (end < text.length) {
-      io.ftruncateSync(fd, Buffer.byteLength(text.slice(0, end), "utf8"));
-      io.fsyncSync(fd);
+      const writer = io.openSync(path, "r+");
+      try {
+        io.ftruncateSync(writer, Buffer.byteLength(text.slice(0, end), "utf8"));
+        io.fsyncSync(writer);
+      } finally {
+        io.closeSync(writer);
+      }
     }
     for (const line of text.slice(0, end).split("\n")) {
       if (!line) continue;
@@ -208,8 +265,15 @@ export function createFileUseLedger(
   function cost(record: Record): number {
     return record.t === "claim" ? 3 : 1;
   }
+  /**
+   * A binding reserves the exact room for its dispatch marker and its
+   * longest possible receipt, so the byte cap holds for every record it may
+   * still write.
+   */
   function reserve(size: number, record: Record): number {
-    return record.t === "claim" ? size + 2048 : size;
+    return record.t === "claim"
+      ? size + lineBytes(markerLine(record.k)) + settleBound(record.k, record.b)
+      : size;
   }
   /** Throws for a record that recovery would reject; changes nothing. */
   function validate(record: Record): void {
@@ -290,6 +354,13 @@ export function createFileUseLedger(
         bytes + reserve(size, record) > maxBytes)
     )
       throw Error("ledger_full");
+    // A receipt longer than its binding reserved would break the byte cap;
+    // the binding then stays unresolved (indeterminate on recovery).
+    if (record.t === "settle") {
+      const claimed = history.get(record.k)!;
+      if (size > settleBound(record.k, claimed.base))
+        throw Error("ledger_full");
+    }
     // A block is never refused for capacity: new managed use refuses at the
     // block limit instead (isBlocked), so a required stop is never lost.
     try {
@@ -341,6 +412,7 @@ export function createFileUseLedger(
       } catch {
         /* Already removed. */
       }
+      HELD.delete(basename(held));
     }
   }
   return {

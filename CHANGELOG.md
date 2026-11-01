@@ -89,28 +89,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   output reports its `labelling`. Label commands take `--labelling
   owner_machine` (`owner_machine.v1`: the owner may also tune, the machine
   annotator never); the record's Cohen's kappa is recomputed from the labels.
-  Negative `host_operation` records list disabled operations as known host
-  limitations. Fixture-tested only; no record exists and no gate has passed.
+  Every bound freeze, tasks, episodes or labels subject must be the report's
+  resolved input, platform records included; a platform record may carry the
+  corpus review; Time fields must be real UTC instants
+  (`invalid_record_time`). Under `owner_machine` only the owner custodian may
+  also tune. `known_host_limitations` returns approved negative
+  `host_operation` records for the roadmap, docs and reports to list; nothing
+  consumes it until such a record is approved. Fixture-tested only; no
+  record exists and no gate has passed.
 
 - Native host configuration preflight (#250; RM16/RM39/RM40/RM44;
   AC31/AC35/AC36/AC37): a bounded Node checker uses pinned OpenClaw 2026.10.7
   validation, including defaults, strict refinements and plugin schemas, and
-  returns a closed verdict with the validator file digest. The Python wrapper
-  enforces a timeout; input resolution rejects invalid native preflights and
+  returns a closed verdict with the SHA-256 of every pinned host entry point it
+  imports. The Python wrapper enforces a timeout and accepts only that pinned
+  validator identity; input resolution rejects invalid native preflights and
   retains validator identities by config digest. Offline resolution can consume
   captured verdicts without Node; native fixture tests run in the OpenClaw CI job.
   The isolated state (no operator HOME or credentials) installs the packaged
   RelayMind plugin when the config names `relaymind`, so ordinary installed
   discovery validates its settings without `plugins.load.paths`. A referenced
-  plugin whose schema the host did not inspect (undiscovered, or a discovery
-  owner the host preserved uninspected) is `unavailable` with reason
+  plugin (in `plugins.entries` or `plugins.allow`) whose schema the host did
+  not inspect (undiscovered, or a discovery owner the host preserved
+  uninspected) is `unavailable` with reason
   `plugin_schema_not_inspected`, never `valid`; every verdict carries a closed
   `reason`.
   Qualified captured-evidence verification remains open in #240.
 - Platform runs on GitHub-hosted runners (#241, #235; RM38, RM39, RM44; AC29,
   AC37): a separate `Platform runs` workflow on `macos-latest`,
   `windows-latest` and `ubuntu-latest`.
-  - `scripts/asset_operations_run.py operations` runs the AC29 run: ten clean
+  - `scripts/asset_operations_run.py operations` runs the lexical portion of
+    the AC29 protocol as a fixture (it does not close AC29): ten clean
     startups, a recommendations-disabled memory baseline, and the 60-second
     2 req/s workload with four 25-record metadata-import batches and a derived
     rebuild. The workload goes through the existing `run_workload` and
@@ -134,6 +143,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `asset_platform_run.py` exits 2 with a reason on input errors and on an
     ordinary-step timeout. The gateway control child answers every command
     even when its job store fails, and its reader ignores a closed loop.
+  - Second review fixes: a startup launch that fails before readiness is a
+    harness error (`startup_<n>_<reason>`, exit 2) in `operations` and
+    `startup`; `verify` fails an operations report with harness errors, and a
+    platform report without its bundle or a bundle without its report. The
+    control child binds the job the request awaited (`job_id`), never the
+    newest listed job, and reports an unbindable job as a harness error. The
+    bundle registers `platform-runner-files`, the digests of the driver
+    scripts, workflow, ordinary harness and test helpers the run executes,
+    and `verify` checks them against the checkout. The workflow's path filter
+    covers the run's dependency closure, and every step has a time limit that
+    fits inside the job's. A non-object environment lock exits 2, and a
+    reused `--work` starts from the requested catalog and new stores. The
+    docs call the run the lexical AC29 fixture portion and no longer quote
+    uncommitted local numbers.
+  - Third review fixes: an operations harness error no longer skips the
+    release and lifecycle steps; its exit code is kept in `operations.exit`
+    and a final `Harness result` step fails the job on it. The ordinary step
+    passes `--timeout 780`, so its own `ordinary_timeout` fires before the
+    step limit. The test files and workflow the run binds check out with LF
+    line endings on Windows, so a `windows-latest` report verifies on another
+    checkout. The control channel reads lines up to 16 MiB, a control call
+    after the reply stream ended fails at once with `control_closed`, a job
+    reported in two replies is kept once in its latest state, and memory
+    phases are listed only when a workload sample is known.
 - Episode and host-task run kit (#236, #237; RM40–RM44; AC31–AC36): blind
   label templates, adjudication worksheet and `AssetLabelsV1` freeze;
   `preregister-host`/`preregister-episodes` checks; a resumable, crash-safe
@@ -149,7 +182,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   gateway-bounded calls keep their own outcome, with dispatch counted only
   when evidenced; `--events`/`--artifacts` use the bounded strict reader;
   executor output is capped while read; host task sets missing a required
-  lane are not acceptance-eligible.
+  lane are not acceptance-eligible. Third review: episode probes outside the
+  `held_out` split make the set ineligible (`probes_not_held_out`); the
+  episode journal also binds the corpus release lock; an executor `not_run`
+  row is invalid; a journal with only a torn header starts again; a second
+  signal stops `run-host` at once and kills the executor's group; dispatch
+  needs a received token or a known usage count, also for
+  `provider_unreachable`.
 - Early installed-skill trial kit (#234; RM39, RM44; AC30, AC36; spec 0.65
   section 12.6.5): `scripts/asset_whole_task.py trial-preflight`,
   `trial-install`, `trial-run` and `trial`.
@@ -238,7 +277,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   removing a live owner's lock) and made each ledger record complete across
   short writes before it is acknowledged; the shipped entry is re-pinned to
   adapter revision `b49d94d8267076516430fb2e4fb64d41fad2961fc8009c84e60921cf43e9e98e`,
-  whose evidence must be recaptured from CI.
+  whose evidence revision names its fresh capture (CI run 41322540111, SHA-256
+  `6b8947df711e…`). A fourth review rejects malformed request text and
+  non-string session fields as `invalid_request`, drops a duplicate
+  registration check and keeps the native deadline live, and the ledger cuts
+  a torn final record through a separate read-write handle (a Windows append
+  handle cannot truncate); the entry was re-pinned to adapter revision
+  `a29cac121c5e01932b6b3ee75e9bab2214e5e9e72cbc36d8f802f62b917c7cfe`. A fifth
+  review rereads a same-key MCP request's history after its registration
+  check (a receipt settled meanwhile is recovered, never reported as
+  `not_dispatched`), keeps a host `UNAVAILABLE` exact-read result from
+  blocking a conversation, digests the adapter bytes once per resolver, takes
+  over a stale ledger lock naming this process's PID that this process did
+  not create (PID 1 in a container), reserves exact room for each binding's
+  marker and longest receipt under the byte cap and compiles each host schema
+  pattern once per operation; the entry is re-pinned to adapter revision
+  `37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`, whose
+  capture is taken from CI before merge.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,
@@ -360,7 +415,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   session incarnation and pinned-byte re-verification does not count);
   `exact_route_absent` means no supported route invokes an independent,
   non-App MCP tool by its exact native identity (App view routes such as
-  `mcp.app.callTool` do not count).
+  `mcp.app.callTool` do not count). The record's `corpus_review` is allowed
+  on host, adaptation and platform records (a platform report resolves the same
+  frozen corpus) and is null on walkthrough and host_operation records; under
+  `owner_machine` the tuner exclusion is waived for the owner custodian only.
   "Customer" wording about who runs trials becomes owner/operator. No metric,
   threshold or budget changes. Amended before release (#268; RM34/AC25;
   sections 4.6, 4.6.1, 14.5): each ordinary local SKILL.md candidate is

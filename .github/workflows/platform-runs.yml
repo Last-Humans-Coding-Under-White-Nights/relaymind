@@ -1,7 +1,8 @@
 name: Platform runs
 
 # M10 platform runs on GitHub-hosted runners (#241, #235; RM38, RM39, RM44;
-# AC29, AC37): the AC29 operations workload and the packaged installation
+# AC29, AC37): the lexical AC29 operations workload (a fixture; lexical-only
+# evidence never closes AC29) and the packaged installation
 # lifecycle with its AssetPlatformReportV1 on Apple Silicon macOS
 # (macos-latest, arm64), native x86-64 Windows (windows-latest) and Linux
 # (ubuntu-latest). Spec 0.65 section 12.6.5: CI runners do not satisfy the
@@ -10,20 +11,38 @@ name: Platform runs
 # only on a harness error; a slow runner or a failed product step is recorded
 # in the uploaded reports, never hidden and never turned into a pass.
 # Separate from CI so ordinary pull requests stay fast; see docs/ASSET_BENCHMARK.md.
+# The path filter is the platform run's dependency closure: the gateway and
+# graders (src/relaymind), the driver scripts, the plugin the lifecycle and the
+# ordinary harness install and drive (integrations/openclaw), the test helpers
+# and fixtures the bundle and the harness load, the default skills and
+# sandbox seed of the development config, and the specification the bundle's
+# protocol inventory binds (tests/test_asset_platform_run.py checks it).
 
 on:
   workflow_dispatch:
   pull_request:
     paths:
       - .github/workflows/platform-runs.yml
+      - .gitattributes
+      - pyproject.toml
+      - docs/SPECIFICATION.md
+      - src/relaymind/**
       - scripts/asset_platform_run.py
       - scripts/asset_operations_run.py
+      - scripts/asset_whole_task.py
       - scripts/openclaw_install_check.py
-      - src/relaymind/evaluation/asset_operations_run.py
-      - src/relaymind/evaluation/asset_operations_child.py
-      - src/relaymind/evaluation/asset_operations.py
-      - src/relaymind/evaluation/asset_platform_export.py
-      - integrations/openclaw/test/host-ordinary-qualification/qualify.py
+      - integrations/openclaw/**
+      - skills/**
+      - tests/test_asset_whole_task_inputs.py
+      - tests/whole_task_helpers.py
+      - tests/api_helpers.py
+      - tests/gateway_helpers.py
+      - tests/helpers.py
+      - tests/recommendation_helpers.py
+      - tests/test_asset_catalog.py
+      - tests/test_asset_sources.py
+      - tests/fixtures/asset-benchmark/**
+      - tests/fixtures/sandbox/**
 
 permissions:
   contents: read
@@ -40,7 +59,10 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 80
+    # Every step has its own limit, and their sum (120) stays below the job's,
+    # so a long step that reaches its own limit still leaves time for the
+    # always-run report, verify and upload steps.
+    timeout-minutes: 125
     defaults:
       run:
         shell: bash
@@ -50,8 +72,10 @@ jobs:
       LABEL: GitHub Actions ${{ matrix.os }} runner (not an acceptance platform)
     steps:
       - uses: actions/checkout@v4
+        timeout-minutes: 5
 
       - uses: actions/setup-node@v4
+        timeout-minutes: 5
         with:
           # The lower bound of the pinned host's engines, as in the CI job.
           node-version: '24.22.1'
@@ -59,6 +83,7 @@ jobs:
           cache-dependency-path: integrations/openclaw/package-lock.json
 
       - uses: actions/setup-python@v5
+        timeout-minutes: 5
         with:
           python-version: '3.12'
           cache: pip
@@ -75,12 +100,20 @@ jobs:
       # generated catalog, the gateway without recommendations as memory
       # baseline, and the 60-second 2 req/s workload with four 25-record
       # import batches during a derived rebuild. Exit 2 only for a harness error.
+      # The exit code is kept in operations.exit and the step passes, so a
+      # harness error here never skips the packaged lifecycle steps below; the
+      # Harness result step fails the job on it at the end.
       - name: Operations workload (AC29)
         timeout-minutes: 20
-        run: >
-          python scripts/asset_operations_run.py operations
-          --work "$WORK/operations" --assets 300 --label "$LABEL"
-          --output "$EVIDENCE/operations.json"
+        run: |
+          set +e
+          python scripts/asset_operations_run.py operations \
+            --work "$WORK/operations" --assets 300 --label "$LABEL" \
+            --output "$EVIDENCE/operations.json"
+          code=$?
+          set -e
+          echo "$code" > "$EVIDENCE/operations.exit"
+          echo "operations exit $code"
 
       - name: Release artifact
         timeout-minutes: 10
@@ -121,10 +154,11 @@ jobs:
       - name: Ordinary installed-host actions
         timeout-minutes: 15
         run: |
+          # 780 s, so the script's own ordinary_timeout fires before the step limit.
           python scripts/asset_platform_run.py ordinary \
             --tarball "release/openclaw/$(node -p "require('./release/openclaw/release.json').filename")" \
             --work-dir "${RUNNER_TEMP}/relaymind-platform-ordinary" \
-            --out "$EVIDENCE/ordinary.json"
+            --out "$EVIDENCE/ordinary.json" --timeout 780
 
       # Also after an earlier failed step, so the evidence that exists is
       # reported; the earlier failure still fails the job. Without
@@ -153,6 +187,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         if: always()
+        timeout-minutes: 5
         with:
           name: platform-run-${{ matrix.os }}-${{ github.run_attempt }}
           path: |
@@ -160,3 +195,13 @@ jobs:
             platform-work/**/*.log
           if-no-files-found: warn
           retention-days: 30
+
+      # Last, after the evidence is uploaded: an operations harness error (or a
+      # run that never recorded its exit code) fails the job.
+      - name: Harness result
+        if: always()
+        timeout-minutes: 5
+        run: |
+          code=$(cat "$EVIDENCE/operations.exit" 2>/dev/null || echo missing)
+          echo "operations exit $code"
+          [ "$code" = 0 ]

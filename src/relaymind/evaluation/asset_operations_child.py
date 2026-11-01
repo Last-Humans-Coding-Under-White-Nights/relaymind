@@ -10,8 +10,15 @@ command per standard-input line that calls the gateway's own background owner:
 - ``{"id": n, "op": "rebuild"}`` awaits ``AssetCatalogService.rebuild()``.
 
 Each reply is one ``Control-Reply:`` line on standard output with the
-publication revision and the stored outcome and event chain of every job that
-started for that request. When the job store cannot be read, the reply is
+publication revision, ``jobs`` (the stored outcome and event chain of every job
+of that source that was not finished when the request began, newest first) and
+``job_id``, the one job the request awaited. The catalog owner runs one job at
+a time and answers a request when its job is recorded finished, so that job is
+the latest-finished of ``jobs``; a periodic or repair job that started after it
+is still running when the reply is built. When no such job, or more than one
+with the same finish time, exists, ``job_id`` is null and ``binding`` says
+``job_missing`` or ``job_ambiguous``: the child never guesses. When the job
+store cannot be read, the reply is
 ``{"ok": false, "error": "job_evidence_unavailable", "evidence_error": ...}``:
 missing evidence, not a refused command. A closed standard input stops the server. This is
 not a product API: it opens no socket and adds no endpoint, and only the
@@ -39,6 +46,23 @@ def _new_jobs(catalog, before: set[str], source_id: str | None) -> list[dict]:
     ]
 
 
+def _finished_before(catalog) -> set[str]:
+    """Jobs already finished when the request began; a running job may be the one it joins."""
+    return {job["job_id"] for job in catalog.store.job_outcomes() if job.get("state") != "running"}
+
+
+def bound_job(jobs: list[dict]) -> tuple[str | None, str | None]:
+    """The awaited job's ID, or None with ``job_missing`` / ``job_ambiguous``."""
+    finished = [job for job in jobs if job.get("state") != "running" and job.get("finished_at")]
+    if not finished:
+        return None, "job_missing"
+    last = max(job["finished_at"] for job in finished)
+    candidates = [job["job_id"] for job in finished if job["finished_at"] == last]
+    if len(candidates) != 1:
+        return None, "job_ambiguous"
+    return candidates[0], None
+
+
 EVIDENCE_UNAVAILABLE = "job_evidence_unavailable"
 
 
@@ -60,7 +84,7 @@ async def handle(app, command: Mapping) -> dict:
     # control timeout. A failed job store read is the closed evidence error
     # ``job_evidence_unavailable``, never a refused rescan or rebuild.
     try:
-        before = {job["job_id"] for job in catalog.store.job_outcomes()}
+        before = _finished_before(catalog)
     except Exception as error:
         return _evidence_unavailable(reply, error)
     try:
@@ -74,13 +98,16 @@ async def handle(app, command: Mapping) -> dict:
         jobs = _new_jobs(catalog, before, source_id)
     except Exception as error:
         return _evidence_unavailable(reply, error)
-    return dict(
+    job_id, binding = bound_job(jobs)
+    reply = dict(
         reply,
         ok=True,
         revision=publication.revision,
         changed=publication.changed,
         jobs=jobs,
+        job_id=job_id,
     )
+    return reply if binding is None else dict(reply, binding=binding)
 
 
 def _write(reply: Mapping) -> None:

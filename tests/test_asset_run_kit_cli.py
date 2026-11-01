@@ -6,6 +6,7 @@ surface, exit codes and that every written run is fixture or provisional.
 """
 
 import json
+import os
 import sys
 
 import pytest
@@ -365,3 +366,36 @@ json.dump(dict(row=r, evidence=refs), sys.stdout)
     report = read(tmp_path / "report.json")
     assert code == 3
     assert [r["status"] for r in report["rows"]] == ["completed", "not_run", "not_run"]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals")
+def test_a_second_signal_stops_a_hung_executor_and_keeps_its_row_started(tmp_path, capsys):
+    """Section 12.6.5 (RM44; AC36): with no executor timeout, a second SIGINT
+    stops the run at once. The executor's group is killed, the lock is released
+    and the started row is exported as cancelled on resume, never rerun."""
+    freeze, tasks = setup(1)
+    pid_file = tmp_path / "executor.pid"
+    script = tmp_path / "hanging.py"
+    script.write_text(
+        f"""
+import os, signal, sys, time
+open({str(pid_file)!r}, "w").write(str(os.getpid()))
+os.kill(os.getppid(), signal.SIGINT)
+time.sleep(0.3)
+os.kill(os.getppid(), signal.SIGINT)
+time.sleep(60)
+""",
+        encoding="utf-8",
+    )
+    args = run_host_args(tmp_path, tasks, freeze, "--", sys.executable, "-I", str(script))
+    assert main(args) == 3
+    assert json.loads(capsys.readouterr().err)["status"] == "interrupted"
+    assert not (tmp_path / "run.jsonl.lock").exists()
+    pid = int(pid_file.read_text())
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+    resumed = run_host_args(tmp_path, tasks, freeze, "--", *executor_script(tmp_path))
+    assert main(resumed) == 0
+    rows = read(tmp_path / "report.json")["rows"]
+    assert rows[0]["status"] == "cancelled" and rows[0]["reason"] == "interrupted_unrecorded"
+    assert [r["status"] for r in rows[1:]] == ["completed", "completed"]
