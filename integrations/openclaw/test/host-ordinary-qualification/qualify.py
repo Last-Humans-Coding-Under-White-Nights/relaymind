@@ -404,12 +404,13 @@ def selected_pin(listed, mapping):
         if listed["frame"]["ok"] is not True:
             raise ValueError("ordinary_skill_control_failed")
         pins = listed["frame"]["payload"]["session"]["selections"]
-        matching = [
-            pin
-            for pin in pins
-            if pin["skillId"] == mapping["skillId"] and pin["revision"] == mapping["revision"]
-        ]
-        if len(matching) == 1 and isinstance(matching[0]["name"], str) and matching[0]["name"]:
+        matching = [pin for pin in pins if pin["skillId"] == mapping["skillId"]]
+        if (
+            len(matching) == 1
+            and matching[0]["revision"] == mapping["revision"]
+            and isinstance(matching[0]["name"], str)
+            and matching[0]["name"]
+        ):
             return matching[0]
     except (KeyError, TypeError):
         pass
@@ -679,12 +680,14 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
                     return False
             else:
                 payload = selection["payload"]
-                pins = payload["selections"]
+                # Native listings include unrelated pins from the owner profile.
+                pins = [
+                    pin for pin in payload["selections"] if pin["skillId"] == selected["skillId"]
+                ]
                 if (
                     payload["sessionKey"] != case["before"]["sessionKey"]
                     or payload["sessionActivation"] != "next-turn"
                     or len(pins) != 1
-                    or pins[0]["skillId"] != selected["skillId"]
                     or pins[0]["revision"] != selected["revision"]
                     or pins[0]["name"] != selected["name"]
                 ):

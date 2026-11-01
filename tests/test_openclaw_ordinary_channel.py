@@ -942,6 +942,81 @@ def test_host_uses_packaged_provider_and_only_native_skill_read(tmp_path):
     assert extension.config["diagnosticsPath"] == str(tmp_path / "provider-attempts.jsonl")
 
 
+def profile_pin_fixture(api):
+    """RM39/AC30: owner-profile listing shape from the 20261101-vps2 capture."""
+    capture = loaded_fixture(api)
+    cases = capture["ordinary_skill_loaded_use"]["cases"]
+    pins = [
+        dict(
+            skillId=case["selected"]["skillId"],
+            revision=case["selected"]["revision"],
+            name=case["selected"]["name"],
+            ownerProfileId="fixture-owner-profile",
+        )
+        for case in cases
+    ]
+    # Native listings retain earlier sessions' pins, including the stale
+    # skill at its new head in the deleted/reset sessions. Preserve order.
+    advanced = dict(pins[1], revision="b" * 64)
+    for case, listing in zip(
+        cases[1:],
+        ([pins[1], pins[0]], [advanced, pins[0], pins[2]], [advanced, pins[0], pins[3]]),
+        strict=True,
+    ):
+        case["selection"]["payload"]["selections"] = listing
+    return capture
+
+
+@pytest.mark.parametrize("case_index", [1, 2, 3])
+@pytest.mark.parametrize(
+    "mutation", [None, "duplicate", "additional_revision", "wrong_revision", "missing"]
+)
+def test_loaded_use_profile_pins_require_one_selected_skill_revision(case_index, mutation):
+    """RM39/AC30: unrelated profile pins never invalidate the exact selected pin."""
+    api = module()
+    capture = profile_pin_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][case_index]
+    pins = case["selection"]["payload"]["selections"]
+    selected = next(pin for pin in pins if pin["skillId"] == case["selected"]["skillId"])
+    if mutation == "duplicate":
+        pins.append(dict(selected))
+    elif mutation == "additional_revision":
+        pins.append(dict(selected, revision="c" * 64))
+    elif mutation == "wrong_revision":
+        selected["revision"] = "c" * 64
+    elif mutation == "missing":
+        pins.remove(selected)
+    assert api.ordinary_skill_loaded_use_pass(capture) is (mutation is None)
+    listed = dict(frame=dict(ok=True, payload=dict(session=dict(selections=pins))))
+    if mutation is None:
+        assert api.selected_pin(listed, case["selected"]) == selected
+    else:
+        with pytest.raises(ValueError, match="^ordinary_skill_control_failed$"):
+            api.selected_pin(listed, case["selected"])
+
+
+def test_profile_pins_reach_the_independent_refused_reset_control(monkeypatch):
+    """RM39/AC30: the vps2 pin listings pass before its refused reset blocks proof."""
+    api = module()
+    capture = profile_pin_fixture(api)
+    reset = capture["ordinary_skill_loaded_use"]["cases"][3]
+    reset["current"] = dict(reset["before"])
+    reset["intervention"]["frame"] = dict(
+        ok=False, error=dict(code="FORBIDDEN", message="missing scope: operator.admin")
+    )
+    observed = []
+    control_observed = api._control_observed
+
+    def record_control(case):
+        result = control_observed(case)
+        observed.append((case["case"], result))
+        return result
+
+    monkeypatch.setattr(api, "_control_observed", record_control)
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+    assert observed == [("positive", True), ("stale", True), ("deleted", True), ("reset", False)]
+
+
 def test_control_native_activation_is_retained_as_native_not_bridge_receipt():
     """RM39/AC30: direct activation is isolated control setup, never adapter qualification."""
     api = module()
