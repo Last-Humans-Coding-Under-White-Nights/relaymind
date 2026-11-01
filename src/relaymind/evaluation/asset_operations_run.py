@@ -106,8 +106,8 @@ def rss_bytes(pid: int) -> int | None:
     else:
         argv = ["ps", "-o", "rss=", "-p", str(pid)]
     try:
-        result = subprocess.run(argv, capture_output=True, text=True, timeout=5)
-    except (OSError, subprocess.SubprocessError):
+        result = subprocess.run(argv, capture_output=True, text=True, errors="replace", timeout=5)
+    except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
         return None
     if result.returncode != 0:
         return None
@@ -284,9 +284,11 @@ async def _wait_ready(
     while True:
         try:
             response = await client.get("/relay/v1/recommendations/readiness")
-            if response.status_code == 200 and response.json().get("state") == "ready":
-                return
-        except (httpx.TransportError, ValueError):
+            if response.status_code == 200:
+                body = response.json()
+                if isinstance(body, dict) and body.get("state") == "ready":
+                    return
+        except (httpx.HTTPError, ValueError):
             pass
         if process.returncode is not None:
             raise RuntimeError("gateway_exited")
@@ -303,7 +305,7 @@ async def _wait_serving(
         try:
             if (await client.get("/v1/models")).status_code == 200:
                 return
-        except httpx.TransportError:
+        except httpx.HTTPError:
             pass
         if process.returncode is not None:
             raise RuntimeError("gateway_exited")
@@ -312,7 +314,12 @@ async def _wait_serving(
         await asyncio.sleep(0.02)
 
 
-async def _stop(process: asyncio.subprocess.Process) -> None:
+async def _stop(process: asyncio.subprocess.Process) -> bool:
+    """Terminate, kill after the grace period, and reap the child.
+
+    Every wait is bounded: a process that ignores ``kill()`` is reported on
+    stderr and never blocks shutdown. True means the child was reaped.
+    """
     if process.returncode is None:
         with contextlib.suppress(ProcessLookupError):
             process.terminate()
@@ -321,7 +328,12 @@ async def _stop(process: asyncio.subprocess.Process) -> None:
         except TimeoutError:
             with contextlib.suppress(ProcessLookupError):
                 process.kill()
-    await process.wait()
+    try:
+        await asyncio.wait_for(process.wait(), _GRACE_SECONDS)
+    except TimeoutError:
+        print("relaymind: gateway process could not be reaped", file=sys.stderr)
+        return False
+    return True
 
 
 @dataclasses.dataclass(frozen=True)
@@ -347,6 +359,10 @@ async def _gateway(
 ):
     work = Path(work).absolute()
     work.mkdir(parents=True, exist_ok=True)
+    # Both logs start clean on every launch, so a reused work directory never
+    # mixes two launches.
+    (work / "stdout.log").unlink(missing_ok=True)
+    (work / "stderr.log").unlink(missing_ok=True)
     port = _free_port()
     catalog = None if catalog is None else Path(catalog).absolute()
     imports = None if imports is None else Path(imports).absolute()
@@ -420,8 +436,10 @@ async def serve(
     model tables, absolute paths only) without ``[server]``,
     ``[recommendations]`` or asset sources, which the kit owns. The child's
     stdout (without the token) and stderr go to ``stdout.log`` and
-    ``stderr.log`` in ``work``. On exit, or on cancellation at any point, the
-    process is terminated, killed after a grace period, and reaped.
+    ``stderr.log`` in ``work``. Both logs start clean on every launch, so a
+    reused work directory never mixes two launches. On exit, or on
+    cancellation at any point, the process is terminated, killed after a grace
+    period, and reaped.
     """
     async with _gateway(work, catalog, base_config=base_config, env=env, timeout=timeout) as gw:
         yield gw.pid, gw.client
