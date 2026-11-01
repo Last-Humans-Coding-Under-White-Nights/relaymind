@@ -1,0 +1,549 @@
+{
+  "schema_version": 1,
+  "record_id": "owner-platform-run-vps-2026-11-01",
+  "profile": "owner_run",
+  "outcome": "positive",
+  "scope": "platform",
+  "labelling": "not_applicable",
+  "annotators": null,
+  "agreement": null,
+  "prompt_authorship": "not_applicable",
+  "drafter": null,
+  "corpus_review": null,
+  "preregistration": null,
+  "runs_started_at": null,
+  "machine": {
+    "role": "linux_host",
+    "os": "Linux",
+    "os_build": "Ubuntu 26.04.1 LTS 7.0.0-38-generic",
+    "architecture": "x86_64",
+    "cpu_model": "Intel Xeon Processor (Skylake, IBRS)",
+    "ram_bytes": 11998482432,
+    "hostname_sha256": "bafcdd4933633f2d8c15bec38b13546e4d879cd8b65095a56e713b8336cedd01"
+  },
+  "revisions": {
+    "repository_commit": "2f4ddecc3da0efd632df89ed0d63f3cc1d72c00f",
+    "adapter_revision": "85512a7bba21273180c63d03c07ecd0db5a976515cab97392ffc3f497f67b6e2",
+    "harness_sha256": "0965c4ff8034bc9d573571fdf155b841e69951303f7821aef54aa2c795bac1be"
+  },
+  "operation": null,
+  "subjects": [
+    {
+      "role": "evidence",
+      "path": "README.md",
+      "sha256": "93789e12d74e7fc94202379beaefe29c97e213c8050b0649b83bb83a61fc53d3",
+      "bytes": 8102
+    },
+    {
+      "role": "evidence",
+      "path": "vps/SHA256SUMS",
+      "sha256": "03bdc02d5050787c735dac777dc740a6eea23ed7729b79ca42f6abede6d354f7",
+      "bytes": 104
+    },
+    {
+      "role": "evidence",
+      "path": "vps/install-check.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "role": "evidence",
+      "path": "vps/install-check.json",
+      "sha256": "8348c8ab479358523446dff5db24bc1e853f033791f75005d78d775fd6d183c7",
+      "bytes": 129060
+    },
+    {
+      "role": "environment",
+      "path": "vps/machine.json",
+      "sha256": "f54abac54b4f73d315af98e78b6e84888a8079b0bf810323679a47fe4d3c0008",
+      "bytes": 297
+    },
+    {
+      "role": "evidence",
+      "path": "vps/ordinary.json",
+      "sha256": "8c4c2950c0a9a6fb30d0df4c8c379af1c5fd731262248d441e6ab1cac67fc179",
+      "bytes": 169651
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/1b0b0019505463c35dba138847fb19c9015fbc2ba1b5e9150e2098e7a9552607.json",
+      "sha256": "5405d8373cb352d723fd2719e62e0af937940462e8ca02290eabd52f7dca2d23",
+      "bytes": 29
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/1dcafdabc84a484cc5ecb4441cc24a7df0bc946739b977af8973d5f833f9d55e.json",
+      "sha256": "7cbbdd261467996cff1620431fcd8f67fb4a1af4aea91b6cdb743daaadc23b9f",
+      "bytes": 30
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/246306138d2bc42284c1a2eaa6939750e4e7992052f1679c5fd2b9c39131e9c4.json",
+      "sha256": "a050ef06ea542b8fd8781f1e945f9adcd03c7ae5190719e66ba826e2059fce12",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/33e0ec95c6219f496ef08527f029e96b603156c1f85a7300485788096124e2f1.json",
+      "sha256": "6973617ef0d595c5878b2f487c8f0776c475df463f4fb0f6b0a34822e65d0a6e",
+      "bytes": 23738
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/4df6cdc75f5a44f366d2cd51787fb953bcd6d9b58fc7eca3d3c7cfd1199d1771.json",
+      "sha256": "49f18338abe37a2d19f04db6bf440ad32495a206e34a638cb2a59ab4a067369f",
+      "bytes": 30
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/6934fc7af3a3182c8e0f3e210434be4196d7a7dc2755900933c6517338811a61.json",
+      "sha256": "2845b7c428d7c62a3097409b8f70d96283183ab8ffc9b29e2ef4aa050ab14e87",
+      "bytes": 25
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/917b340071fa1a750ddfa4ccb79102365ea73cd4c7e9592281feb890ba515234.json",
+      "sha256": "0f69311b3c48666c6ce182742e7bf16435b93e786d0add1c735023dddd67abbf",
+      "bytes": 2158
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/929fbd1a27d095924032fd319024c7caa5f3adda7e86d37d0284c53a48bbcf9c.json",
+      "sha256": "f27e14e904927bb01272e159fbaf1e43882a1264dfa7405d33a4bfbabc210cbf",
+      "bytes": 11812
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/9757043340e81c4dabcfc7f98f6b59647825a67a3915b83071d0d851ebe93a91.json",
+      "sha256": "ac732e2e872fe755751b05565ccf310293d8b15781bf4645da74a8950914c353",
+      "bytes": 20
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/9c8c000875d648a9a45044b3a588e3a45093da20f718628c84c7c1e5a276b5ba.json",
+      "sha256": "ed4cb1f7055de6f19bb12d429082abae7cb35bf825a30d60107e2ed7a8df1dd3",
+      "bytes": 1224
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/a84f6cc0c838eae849dcfaf191177fd20f671223f68b35e00fb5647f98e56500.json",
+      "sha256": "2758bab8e270d2833c7c5d252524f95ec23d44fdd83afe068a88656d97002ccb",
+      "bytes": 27
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/b09cf492b048e62872233a3e5a603e3c0a9d620f387e765875ab5dc48f67b411.json",
+      "sha256": "cc84d0ddf5fad22485378b47eec65a0326843e9aeffb829fec1a85f5e757cb12",
+      "bytes": 6940
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/b1ec23ceb5c82b2f70ea4b0af7bb0906a3d5938e20c3114c800726080a556c8f.json",
+      "sha256": "ad0f9aa25938f3be05e6b91be6407c31a2544a5bf96e596d234e7759b237e7c7",
+      "bytes": 2635
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/b4d97dc5f4a0ce5f7f874d7a79e84e811176d983a8e151b4ca865449b35eeebd.json",
+      "sha256": "0d1fe2e30626897d043942703aaf8703101066e0bd71f7e4a10a5c8138d54af0",
+      "bytes": 29
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/c165b3817f22ef00f469e1933482340679311bb4fcca580dac0d26c8c3fe00c7.json",
+      "sha256": "57647af3bb5e16c25f00023cc416afb91dc7c1d1fc9fb92ca49513d8e159024e",
+      "bytes": 5312
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/d64a621072f687dd3802d5135803d7b65d294bda3501eaf318a35bfb188ac33d.json",
+      "sha256": "cb24d69f52bb016e9516f57641aea43011f1373dcfe5bccfdc54e037f4265e6c",
+      "bytes": 5412
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/f261d7bad6c29e33a4aeafe0b7079e92c11ee7312c690ef9a59898bff1c19d57.json",
+      "sha256": "e6e34eafe05d04ee7e2e4fc0a5dc36b3a51cc957b8beff5c04ae309af3bd6190",
+      "bytes": 18
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/docs/f6f2fb3a71b105f3bb14fcca6751664b36322291db5673a57eb96b4a2fa749c6.json",
+      "sha256": "bce0d0eea51a35323781fa56959fa3da1c55fcc80c710b0769bc1480be0c3783",
+      "bytes": 353
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/1fa8b7800aa738093608f650c1d5aef296cff49beeff8eef2ef154322c07f2eb",
+      "sha256": "8c4c2950c0a9a6fb30d0df4c8c379af1c5fd731262248d441e6ab1cac67fc179",
+      "bytes": 169651
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/86355c3b3ba0bc98efa8c3942f9a2325d0ae2932d5a3ae593f3e8171a569f00a",
+      "sha256": "8348c8ab479358523446dff5db24bc1e853f033791f75005d78d775fd6d183c7",
+      "bytes": 129060
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/approval",
+      "sha256": "9deb65b8788f41ff94a217842017db2f843954fc0eb46110835903908e5a265f",
+      "bytes": 8
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/ev-host",
+      "sha256": "41b0585afd3813073d6295eb4461b198bf1ff06d7cf174c28b43862bd04a6ca0",
+      "bytes": 7
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/ev-package",
+      "sha256": "80f2fc8f01d10a58b752efa1e83523ce1fb3d42e2e953f8b6989d10915917489",
+      "bytes": 10
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/ev-t1-native-1",
+      "sha256": "10d09c71800d5e73511ecd42cb86bc2084ec0f21bf0bcf9bfc630387ac58094f",
+      "bytes": 14
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/ev-t1-provider_only-1",
+      "sha256": "1c4492a9832c1eb17daf717fd4832d8b40b01424bb590bbece5d979f1316aea6",
+      "bytes": 21
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/ev-t1-recommendations-1",
+      "sha256": "a01503a370dfdb901034636d2346978bb897047e041ee7d8286cf0a0881d026e",
+      "bytes": 23
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/ev-t2-native-1",
+      "sha256": "e4ebd8975ddfb86ca4919d321bf6be401ab470992ed38ed1aa138c96c4cc7428",
+      "bytes": 14
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/ev-t2-provider_only-1",
+      "sha256": "ab9facb7039f28501fe784e1ea5154e948dbe2fd5b85d79530f70f284d932553",
+      "bytes": 21
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/ev-t2-recommendations-1",
+      "sha256": "fed6d53795ff2dd6c686d813c09aa954a4db31354cd0916e3735aca5f3e5a992",
+      "bytes": 23
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/ops",
+      "sha256": "a92c36e66a25ee99ff862faa8e87987be6c7cd13c3ee661c400a45b0f1e3b132",
+      "bytes": 3
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/receipt-choose",
+      "sha256": "e4a4065bd448d4bc934316bcc6e9233190731e21bb5ab78ba236e15fab342165",
+      "bytes": 14
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/receipt-configure",
+      "sha256": "02c3a79d50e198aedfc01f8d36de421bf869b3c2b3520b297e8a7cfac949a13c",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/receipt-delete",
+      "sha256": "51377f54fbec2864ccd0c1930548e083d459a831cdbc3d240077eb2009d97a82",
+      "bytes": 14
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/receipt-feedback",
+      "sha256": "b124794fc044d452f7db0555fb4ac3389701de63b952112f6d3be283470958f9",
+      "bytes": 16
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/receipt-install",
+      "sha256": "c3f201aadf39cd0af834e3e5ed725e3fe973875718727259ef06ca36f19b332d",
+      "bytes": 15
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/receipt-mcp_use",
+      "sha256": "1fd2a98eb143a02fbd156f52a7999711e493f48e40b0792539b16a0416c49630",
+      "bytes": 15
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/receipt-recommend",
+      "sha256": "f07a849de3625191c2880c31874c6db676b92386f014b2c0fd2554e6fd9e8ea5",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/receipt-reset",
+      "sha256": "17034830e224f79c38b79eac0df2bba88481c4ab80bd05f024a2faaa2cd473ca",
+      "bytes": 13
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/receipt-restart",
+      "sha256": "1ef7f052b94da845c321e79c78cd8c4de344ca0a8f018ebf2b1ff33430ebcb0d",
+      "bytes": 15
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/receipt-skill_use",
+      "sha256": "b920e9a2179925853d430ea56da2448262261fcf6d660d11315feb263cc7f3d8",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/receipt-uninstall",
+      "sha256": "b9f4bc8fd29c005ce7d361c2b146648dff0c7358ad07b8b58f9bd219f4ef8cb8",
+      "bytes": 17
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/rubric-t1",
+      "sha256": "5b0a14ae96541c53022dc6862dbe53907ec91595a9ee3f3439824cd768702225",
+      "bytes": 9
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/rubric-t2",
+      "sha256": "1d27d809ceb380293f0e62768dd16543a96ed727cf1231a06b69fc4cd351cf38",
+      "bytes": 9
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/run-t1-native",
+      "sha256": "5b3c000e8b0d82941a6129abf6df6af5ca585034d1db830eda60ff589e5684b7",
+      "bytes": 13
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/run-t1-provider_only",
+      "sha256": "fb54caa5a2b8530808e0c110d85dc21e31736ba32628711e25ca05982c663ed9",
+      "bytes": 20
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/run-t1-recommendations",
+      "sha256": "17715e64c4149e65f7d5f6a7842360775510687a15b3d00a92af9fd06827abfe",
+      "bytes": 22
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/run-t2-native",
+      "sha256": "6ec90fbacef7f496599b4b3983fe7301712760be0a12af99e59efde986401e51",
+      "bytes": 13
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/run-t2-provider_only",
+      "sha256": "76777038db6c7bdd574f8e62a50b52233c0d41dbc8febdafee078af887bd21ab",
+      "bytes": 20
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/run-t2-recommendations",
+      "sha256": "b4b3d2a80a58a13feb2d334c626f071adf6dbbc2c0b7280eb46d8eac5e24c2e7",
+      "bytes": 22
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/setup-t1",
+      "sha256": "cb925b92a6a2b54e5732ef395914fbe1375330f5419c2744b3ae13385fbadb1c",
+      "bytes": 8
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/evidence/setup-t2",
+      "sha256": "b21b722cb36d4c4b4519c2b5b114772dd75b9f1bdcfe5eac778f646acfae96b5",
+      "bytes": 8
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/inputs.json",
+      "sha256": "f240dc4aecc7874a54666b78d668c503ec6148af4ba162ac88564c46421c17af",
+      "bytes": 13903
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/builtin-production.toml",
+      "sha256": "48a678e7abc5c9e5e5655e89b57e5ac3abdd1ae6ed697b7f59a8303fc478ad92",
+      "bytes": 403
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/builtin.toml",
+      "sha256": "2d7ad95e9559501b5a10999d7626c90aa6ad663be36eab770211ff54a8391325",
+      "bytes": 479
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/cases.json",
+      "sha256": "cb24d69f52bb016e9516f57641aea43011f1373dcfe5bccfdc54e037f4265e6c",
+      "bytes": 5412
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/catalog.json",
+      "sha256": "57647af3bb5e16c25f00023cc416afb91dc7c1d1fc9fb92ca49513d8e159024e",
+      "bytes": 5312
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/environment.json",
+      "sha256": "2fab8d998c614bb1a1b3595a0e915869005c83ac72fbc4d43a03204d152663d5",
+      "bytes": 353
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/labels.json",
+      "sha256": "f27e14e904927bb01272e159fbaf1e43882a1264dfa7405d33a4bfbabc210cbf",
+      "bytes": 11812
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/lock.json",
+      "sha256": "ad0f9aa25938f3be05e6b91be6407c31a2544a5bf96e596d234e7759b237e7c7",
+      "bytes": 2635
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/originals/access_control.txt",
+      "sha256": "3f77bfdae4e1d6750a058ae8a5f0d0c176db21e2f2dd451ac62e2dd4b099b80f",
+      "bytes": 64
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/originals/adjudication.txt",
+      "sha256": "3cf2a83e374ac91abfe496c5eb7aff0e09ab1c1776f3a28b6f1a2afc82751290",
+      "bytes": 62
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/originals/authorship.txt",
+      "sha256": "0171d4275007485402bc25d6532060ce2a37b62c4d8e17b1e399e256d81c5bea",
+      "bytes": 60
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/originals/calendar.md",
+      "sha256": "1defa6396b1d171810d65e313267b929748324acc7f6b7e0450357e6932e3aa2",
+      "bytes": 62
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/originals/derivation.txt",
+      "sha256": "b097cb90a5a9db7ff10c72c8581c789fad731aaa61c7052bbd0fac245d44c924",
+      "bytes": 60
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/originals/independence.txt",
+      "sha256": "6a5f82e112a72182473cf8245dd1df5e316305d08e7a695dbb516ce4a3747f56",
+      "bytes": 62
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/originals/language_review.txt",
+      "sha256": "f528e23a6d960d2f74fa6dc06a5626ba838b697cdd52a0fff3f9e2daa7b63555",
+      "bytes": 65
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/originals/license.txt",
+      "sha256": "19f3189d2ae35183351e059b5bb44f7c55c8336c4eee2cc1d296a2042ec190a8",
+      "bytes": 57
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/originals/notice.txt",
+      "sha256": "9473b9dc30eec6ba5c80b7d4bf91c8bce4ddcb0f4ad5e5a38ffce9efd1702a21",
+      "bytes": 56
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/originals/permission.txt",
+      "sha256": "7c600be4ea9bee469dab9a457f9d6314c14e209b7a3c35c811d9fd0abf7f4b7b",
+      "bytes": 60
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/originals/source_provenance.txt",
+      "sha256": "c20519845080da78a798fe346e68b80702874934d8e7923d45efa4f016468ef5",
+      "bytes": 67
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/originals/split_review.txt",
+      "sha256": "b87708435de8767e71e70e9cd0db888b05e3d565c77a7507b433ddce29bdf62e",
+      "bytes": 62
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/third-party-production.toml",
+      "sha256": "3a8a730adb67b4a8f564b0f64a925411a94f9083139154f3ed2753be2763459c",
+      "bytes": 491
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/release/third-party.toml",
+      "sha256": "2e2ce60c3c530147ae1b2750706cda25a5fa698f9f7ac5da5cfdc976b496b7a7",
+      "bytes": 483
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/bundle/resolver.json",
+      "sha256": "68600cba0bb27946ebf58eeadf86c1607958cf69fa0381d3be363ff2c3fe8a04",
+      "bytes": 53761
+    },
+    {
+      "role": "environment",
+      "path": "vps/platform/environment.json",
+      "sha256": "8f1accc9b205d8026c603d1d369d4f3f8b54b12fe7b45834bcf0b7db4c51336d",
+      "bytes": 398
+    },
+    {
+      "role": "evidence",
+      "path": "vps/platform/platform-grade.json",
+      "sha256": "281a9e3603370ee5f2e962cdfed6a61e4e523efdd4075ffe3b7b29b1eb8174c0",
+      "bytes": 333
+    },
+    {
+      "role": "report",
+      "path": "vps/platform/platform.json",
+      "sha256": "8c9f96f2a5752d5933d18493a5fb97a0e97927f806c0322a40532064cde74ff0",
+      "bytes": 2966
+    },
+    {
+      "role": "evidence",
+      "path": "vps/release.json",
+      "sha256": "e369482b34b2d417af839ee047cda5c18259c4e3a06d0e70a1122abdf3d7e4e2",
+      "bytes": 2311
+    },
+    {
+      "role": "evidence",
+      "path": "vps/verify.txt",
+      "sha256": "a22207a7c2953a84a5f140b4fc99bd44dbd540cd1dd015d8b3ed7481e304f149",
+      "bytes": 289
+    }
+  ],
+  "review": {
+    "owner_login": "devnullexile",
+    "pull_request": null,
+    "reviewer_logins": [],
+    "approved_at": null
+  },
+  "recorded_at": "2026-11-01T12:26:33.142349Z"
+}

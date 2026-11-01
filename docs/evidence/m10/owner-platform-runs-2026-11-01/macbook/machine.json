@@ -1,0 +1,9 @@
+{
+  "role": "target_macos_m1_8gib",
+  "os": "Darwin",
+  "os_build": "macOS 27.0.1 26A434",
+  "architecture": "arm64",
+  "cpu_model": "Apple M1",
+  "ram_bytes": 8589934592,
+  "hostname_sha256": "bd804e5f81a7c50b2823f12e562e1ac9f029a4ba4513ef5450370bd3972b4e24"
+}

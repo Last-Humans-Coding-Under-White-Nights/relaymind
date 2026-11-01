@@ -1,0 +1,3 @@
+operations.json: ok (startups useful 0/10, scheduled useful 120/120 (p95 service 46.55533307231963 ms, scheduled 74.4996250141412 ms), batches visible 3/4, gateway-only memory increment 8372224 bytes, harness errors [])
+{"status": "graded", "gate": "not_applicable", "reason": null}
+platform/platform.json: ok (Darwin arm64: install=passed, configure=passed, recommend=not_run, choose=not_run, skill_use=not_run, mcp_use=not_run, feedback=not_run, delete=not_run, reset=not_run, restart=not_run, uninstall=passed)

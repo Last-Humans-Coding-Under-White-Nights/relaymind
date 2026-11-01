@@ -1,0 +1,9 @@
+{
+  "role": "linux_host",
+  "os": "Linux",
+  "os_build": "Ubuntu 26.04.1 LTS 7.0.0-38-generic",
+  "architecture": "x86_64",
+  "cpu_model": "Intel Xeon Processor (Skylake, IBRS)",
+  "ram_bytes": 11998482432,
+  "hostname_sha256": "bafcdd4933633f2d8c15bec38b13546e4d879cd8b65095a56e713b8336cedd01"
+}

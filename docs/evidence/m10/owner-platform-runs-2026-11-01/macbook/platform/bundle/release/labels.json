@@ -1,0 +1,454 @@
+{
+  "schema_version": 1,
+  "dataset_id": "fixture-small",
+  "release": 1,
+  "cases_digest": "789fc4aab9c6dea1a779efeb9cc4efd2d25dcd04484550ca34c7273d37aca9a5",
+  "rubric_version": "relevance.v1",
+  "judgments": [
+    {
+      "case_id": "case-01",
+      "annotator_id": "judge-a",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-01",
+      "annotator_id": "judge-b",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-02",
+      "annotator_id": "judge-a",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-02",
+      "annotator_id": "judge-b",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-03",
+      "annotator_id": "judge-a",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-03",
+      "annotator_id": "judge-b",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-04",
+      "annotator_id": "judge-a",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-04",
+      "annotator_id": "judge-b",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-05",
+      "annotator_id": "judge-a",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-05",
+      "annotator_id": "judge-b",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-06",
+      "annotator_id": "judge-a",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-06",
+      "annotator_id": "judge-b",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-07",
+      "annotator_id": "judge-a",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-07",
+      "annotator_id": "judge-b",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-a",
+      "annotator_id": "judge-a",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    },
+    {
+      "case_id": "case-a",
+      "annotator_id": "judge-b",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "notes": "Synthetic infrastructure judgment.",
+      "independence_evidence_ids": [
+        "independence"
+      ]
+    }
+  ],
+  "adjudications": [
+    {
+      "case_id": "case-01",
+      "adjudicator_id": "reviewer",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "disposition": "include",
+      "reason": "Synthetic infrastructure adjudication.",
+      "evidence_ids": [
+        "adjudication"
+      ]
+    },
+    {
+      "case_id": "case-02",
+      "adjudicator_id": "reviewer",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "disposition": "include",
+      "reason": "Synthetic infrastructure adjudication.",
+      "evidence_ids": [
+        "adjudication"
+      ]
+    },
+    {
+      "case_id": "case-03",
+      "adjudicator_id": "reviewer",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "disposition": "include",
+      "reason": "Synthetic infrastructure adjudication.",
+      "evidence_ids": [
+        "adjudication"
+      ]
+    },
+    {
+      "case_id": "case-04",
+      "adjudicator_id": "reviewer",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "disposition": "include",
+      "reason": "Synthetic infrastructure adjudication.",
+      "evidence_ids": [
+        "adjudication"
+      ]
+    },
+    {
+      "case_id": "case-05",
+      "adjudicator_id": "reviewer",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "disposition": "include",
+      "reason": "Synthetic infrastructure adjudication.",
+      "evidence_ids": [
+        "adjudication"
+      ]
+    },
+    {
+      "case_id": "case-06",
+      "adjudicator_id": "reviewer",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "disposition": "include",
+      "reason": "Synthetic infrastructure adjudication.",
+      "evidence_ids": [
+        "adjudication"
+      ]
+    },
+    {
+      "case_id": "case-07",
+      "adjudicator_id": "reviewer",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "disposition": "include",
+      "reason": "Synthetic infrastructure adjudication.",
+      "evidence_ids": [
+        "adjudication"
+      ]
+    },
+    {
+      "case_id": "case-a",
+      "adjudicator_id": "reviewer",
+      "recorded_at": "2026-10-30T00:00:00Z",
+      "class": "positive",
+      "acceptable_asset_ids": [
+        "calendar"
+      ],
+      "language_valid": true,
+      "independent_case": true,
+      "disposition": "include",
+      "reason": "Synthetic infrastructure adjudication.",
+      "evidence_ids": [
+        "adjudication"
+      ]
+    }
+  ],
+  "agreement": {
+    "method": "double_annotation.v1",
+    "groups": [
+      {
+        "lane": "all",
+        "paired_cases": 8,
+        "class_agreements": 8,
+        "acceptable_set_agreements": 8,
+        "language_agreements": 8,
+        "independence_agreements": 8,
+        "joint_agreements": 8,
+        "jaccard_sum": 8.0
+      },
+      {
+        "lane": "code_switch",
+        "paired_cases": 0,
+        "class_agreements": 0,
+        "acceptable_set_agreements": 0,
+        "language_agreements": 0,
+        "independence_agreements": 0,
+        "joint_agreements": 0,
+        "jaccard_sum": 0.0
+      },
+      {
+        "lane": "en_to_en",
+        "paired_cases": 8,
+        "class_agreements": 8,
+        "acceptable_set_agreements": 8,
+        "language_agreements": 8,
+        "independence_agreements": 8,
+        "joint_agreements": 8,
+        "jaccard_sum": 8.0
+      },
+      {
+        "lane": "en_to_zh_hans",
+        "paired_cases": 0,
+        "class_agreements": 0,
+        "acceptable_set_agreements": 0,
+        "language_agreements": 0,
+        "independence_agreements": 0,
+        "joint_agreements": 0,
+        "jaccard_sum": 0.0
+      },
+      {
+        "lane": "zh_hans_to_en",
+        "paired_cases": 0,
+        "class_agreements": 0,
+        "acceptable_set_agreements": 0,
+        "language_agreements": 0,
+        "independence_agreements": 0,
+        "joint_agreements": 0,
+        "jaccard_sum": 0.0
+      },
+      {
+        "lane": "zh_hans_to_zh_hans",
+        "paired_cases": 0,
+        "class_agreements": 0,
+        "acceptable_set_agreements": 0,
+        "language_agreements": 0,
+        "independence_agreements": 0,
+        "joint_agreements": 0,
+        "jaccard_sum": 0.0
+      },
+      {
+        "lane": "zh_hant_diagnostic",
+        "paired_cases": 0,
+        "class_agreements": 0,
+        "acceptable_set_agreements": 0,
+        "language_agreements": 0,
+        "independence_agreements": 0,
+        "joint_agreements": 0,
+        "jaccard_sum": 0.0
+      }
+    ]
+  }
+}
