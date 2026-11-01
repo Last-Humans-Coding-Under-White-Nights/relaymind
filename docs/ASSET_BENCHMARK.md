@@ -1168,7 +1168,10 @@ disabled until it is configured, so the kit sets `baseUrl` (`--base-url`,
 default `http://127.0.0.1:8080/v1`, the gateway's default loopback listener)
 and then runs `plugins enable relaymind` (#269). The URL must meet the
 plugin's own `baseUrl` rules (http or https, a loopback host, the `/v1` root,
-no credentials, query or fragment); any other value is refused with
+no credentials, query or fragment), applied after the same WHATWG URL parse
+the plugin uses, so the kit accepts and refuses exactly what the plugin does
+and configures the plugin's normal form (for example `http://127.1:8080/v1`
+is configured as `http://127.0.0.1:8080/v1`); any other value is refused with
 `invalid_base_url` before any host command runs, and is never written to a
 record or an error message. Each step is recorded with
 its exit code; a failed step stops the rest, which are `not_run`. Each step's

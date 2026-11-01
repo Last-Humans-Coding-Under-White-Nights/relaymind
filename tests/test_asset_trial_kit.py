@@ -376,6 +376,77 @@ def test_loopback_base_url_is_configured_in_its_normal_form(url, configured):
     assert kit.check_base_url(url) == configured
 
 
+# Forms the pinned plugin's WHATWG URL parse accepts and normalizes (#271 review;
+# the expected values are what `parsePluginConfig` in config.ts returns).
+PLUGIN_NORMALIZED_BASE_URLS = [
+    ("http://127.0.0.1.:8080/v1", "http://127.0.0.1:8080/v1"),
+    ("http://[0:0:0:0:0:0:0:1]:8080/v1", "http://[::1]:8080/v1"),
+    ("http://127.1:8080/v1", "http://127.0.0.1:8080/v1"),
+    ("http://127.000.000.001:8080/v1", "http://127.0.0.1:8080/v1"),
+    ("http://0x7f.1:8080/v1", "http://127.0.0.1:8080/v1"),
+    ("http://0177.0.0.1/v1", "http://127.0.0.1/v1"),
+    ("http://2130706433/v1", "http://127.0.0.1/v1"),
+    ("http://@127.0.0.1/v1", "http://127.0.0.1/v1"),
+    ("http://:@127.0.0.1/v1", "http://127.0.0.1/v1"),
+    ("http://127.0.0.1:8080/v1?#", "http://127.0.0.1:8080/v1"),
+    ("HTTP://127.0.0.1:80/v1", "http://127.0.0.1/v1"),
+    ("https://127.0.0.1:443/v1", "https://127.0.0.1/v1"),
+    ("http:127.0.0.1:8080/v1", "http://127.0.0.1:8080/v1"),
+    ("http:\\\\127.0.0.1:8080\\v1", "http://127.0.0.1:8080/v1"),
+    ("http://127.0.0.1:08080/v1", "http://127.0.0.1:8080/v1"),
+    ("http://127.0.0.1:/v1", "http://127.0.0.1/v1"),
+    ("http://%6Cocalhost:8080/v1", "http://localhost:8080/v1"),
+    ("http://loc\talhost:8080/v1", "http://localhost:8080/v1"),
+    ("http://local\u00adhost/v1", "http://localhost/v1"),
+    (
+        "http://\uff4c\uff4f\uff43\uff41\uff4c\uff48\uff4f\uff53\uff54:8080/v1",
+        "http://localhost:8080/v1",
+    ),
+    ("  http://127.0.0.1:8080/v1 \n", "http://127.0.0.1:8080/v1"),
+    ("http://127.0.0.1:8080/x/../v1", "http://127.0.0.1:8080/v1"),
+    ("http://127.0.0.1/v1/%2e/", "http://127.0.0.1/v1"),
+    ("http://127.0.0.1/v1//", "http://127.0.0.1/v1"),
+]
+PLUGIN_REFUSED_BASE_URLS = [
+    "http://localhost.:8080/v1",
+    "http://[::ffff:127.0.0.1]/v1",
+    "http://127.0.0.1/V1",
+    "http://127.0.0.1/%76%31",
+    "http://128.0.0.1/v1",
+    "http://127.0.0.256/v1",
+    "http://127.0.0.0.1/v1",
+    "http://0x80.1/v1",
+    "http://08.0.0.1/v1",
+    "http://a@@127.0.0.1/v1",
+    "http://::@127.0.0.1/v1",
+    "http://127.0.0.1:65536/v1",
+    "http://127.0.0.1:8o/v1",
+    "http://[::1/v1",
+    "http://[::1]x/v1",
+    "http:///v1",
+    "http://127.0.0.1/v1?a",
+    "http://127.0.0.1/v1#a",
+    "http://127.0.0.1//v1",
+    "http://xn--localhost/v1",
+    "file:///v1",
+    "127.0.0.1:8080/v1",
+    "",
+]
+
+
+@pytest.mark.parametrize(("url", "configured"), PLUGIN_NORMALIZED_BASE_URLS)
+def test_base_url_forms_the_plugin_normalizes_are_accepted(url, configured):
+    """#271 review: the kit applies the plugin's WHATWG URL parse, not a stricter one."""
+    assert kit.check_base_url(url) == configured
+
+
+@pytest.mark.parametrize("url", PLUGIN_REFUSED_BASE_URLS)
+def test_base_url_forms_the_plugin_refuses_are_refused(url):
+    """#271 review: and refuses exactly what the plugin's parsePluginConfig refuses."""
+    with pytest.raises(ValueError, match="^invalid_base_url$"):
+        kit.check_base_url(url)
+
+
 @pytest.mark.parametrize("command", ["trial-install", "trial"])
 def test_trial_commands_refuse_a_credential_url_without_writing_it(
     tmp_path, bundle, command, capsys, monkeypatch
@@ -647,6 +718,29 @@ def test_one_command_trial_runs_every_stage(tmp_path, bundle, monkeypatch):
     assert json.loads((out / "install.json").read_bytes())["passed"] is True
     registry = {e["id"] for e in json.loads((out / "inputs.json").read_bytes())["evidence"]}
     assert {"trial-preflight", "trial-install"} <= registry
+
+
+def test_one_command_trial_uses_the_base_url(tmp_path, bundle, monkeypatch):
+    """#269, #271 review: ``trial --base-url`` reaches configure and the install record.
+
+    A custom loopback URL in a form the plugin normalizes is configured, and
+    recorded, in the plugin's normal form, never the default URL.
+    """
+    monkeypatch.setattr(kit, "observed_environment", lambda: ENVIRONMENT)
+    tarball = release(tmp_path)
+    argv = ["trial", "--inputs", str(frozen_manifest(bundle)), "--tarball", str(tarball)]
+    argv += ["--observations", str(observations(tmp_path, bundle))]
+    argv += ["--bundle", str(tmp_path / "out"), "--work", str(tmp_path / "work")]
+    argv += ["--resolver", str(bundle.resolver), "--qualification", "fixture"]
+    argv += ["--base-url", "http://127.1:18080/v1/", "--", *fake_host(tmp_path)]
+    assert main(argv) == 3
+    url = "http://127.0.0.1:18080/v1"
+    assert url != kit.DEFAULT_BASE_URL
+    install = json.loads((tmp_path / "out" / "install.json").read_bytes())
+    assert install["passed"] is True and install["base_url"] == url
+    configure = next(s for s in install["steps"] if s["name"] == "configure")
+    assert configure["argv"][-1] == url
+    assert json.loads((tmp_path / "fake_openclaw.py.state").read_text())["base_url"] == url
 
 
 def test_preflight_command_exits_nonzero_off_target(tmp_path, bundle, monkeypatch):

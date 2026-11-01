@@ -10,7 +10,7 @@ import json
 import math
 import re
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -81,6 +81,19 @@ class SourceFailure(Exception):
         self.rejected_count = rejected_count
         self.received_bytes = received_bytes
         self.exclusions = failure_exclusions(reason, asset_id)
+        self._kept_rejections = False
+
+    def keep_rejections(self, rejections: Sequence[Mapping[str, Any]]) -> "SourceFailure":
+        """Put the scan's earlier candidate rejections before this failure, once.
+
+        Spec 0.66 section 4.6.1: a failed scan records its rejection evidence,
+        so a later scan-level failure never drops a candidate's exclusion.
+        """
+        if not self._kept_rejections:
+            self._kept_rejections = True
+            self.rejected_count += len(rejections)
+            self.exclusions = (*rejections, *self.exclusions)
+        return self
 
 
 class CandidateRejected(SourceFailure):
@@ -136,6 +149,8 @@ class CaptureContext:
     batch_observations: list[dict] = field(default_factory=list)
     batch_bytes: int = 0
     rejected_count: int = 0
+    # Candidate exclusions so far; a later scan-level failure keeps them.
+    rejections: list[Mapping[str, Any]] = field(default_factory=list)
     utc_now: Callable[[], datetime] = lambda: datetime.now(UTC)
     deadline: float = field(init=False)
     work_gate: Callable[["CaptureContext"], None] | None = None
@@ -226,9 +241,10 @@ class CaptureContext:
         self.batch_records += 1
         self._finish_full_batch()
 
-    def reject_record(self) -> None:
+    def reject_record(self, exclusion: Mapping[str, Any]) -> None:
         """One candidate excluded on its own (spec 0.66 section 4.6.1)."""
         self.rejected_count += 1
+        self.rejections.append(exclusion)
         self.batch_rejected += 1
         self._finish_full_batch()
 
@@ -694,7 +710,6 @@ def _local(
             if info.is_directory and stage.exists(f"{name}/SKILL.md"):
                 candidates.append(name)
     documents, paths, exclusions = [], {}, []
-    rejected: set[str] = set()
     for package in candidates:
         context.add_record()
         relative = "SKILL.md" if package == "." else f"{package}/SKILL.md"
@@ -706,9 +721,9 @@ def _local(
             document = _local_candidate(stage, source, package, relative, context)
         except CandidateRejected as exc:
             # Spec 0.66 section 4.6.1: excluded by itself with a fixed reason.
-            rejected.add(asset_id)
-            exclusions.append(failure_exclusions(exc.reason, asset_id)[0])
-            context.reject_record()
+            exclusion = failure_exclusions(exc.reason, asset_id)[0]
+            exclusions.append(exclusion)
+            context.reject_record(exclusion)
             continue
         documents.append(document)
         paths[asset_id] = package
@@ -716,9 +731,12 @@ def _local(
     context.finish_batch()
     complete = not exclusions
     absent = set()
-    for item in previous.records:
+    # A partial generation applies no removals, so it never checks absence: a
+    # retained record of a rejected or otherwise omitted package (such as a
+    # child hidden by a rejected root SKILL.md) just stays and is marked stale.
+    for item in previous.records if complete else ():
         context.check()
-        if item.record.asset_id in paths or item.record.asset_id in rejected:
+        if item.record.asset_id in paths:
             continue
         package = item.relative_package_path
         if package is None:
@@ -849,6 +867,17 @@ def _import(
 
 
 def capture_source(
+    source: SourceConfig, *, previous: SourceInventory, context: CaptureContext
+) -> SourceCapture:
+    try:
+        return _capture_source(source, previous=previous, context=context)
+    except SourceFailure as exc:
+        # A scan-level failure keeps the candidate rejections recorded before it.
+        exc.keep_rejections(context.rejections)
+        raise
+
+
+def _capture_source(
     source: SourceConfig, *, previous: SourceInventory, context: CaptureContext
 ) -> SourceCapture:
     stage = None

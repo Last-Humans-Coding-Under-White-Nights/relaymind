@@ -752,6 +752,37 @@ def test_catalog_conflict_is_recorded_as_index_error(tmp_path, monkeypatch):
         assert source["rejected_count"] == 0
 
 
+def test_failure_after_capture_keeps_the_candidate_rejections(tmp_path, monkeypatch):
+    """RM34/AC25, spec 0.66 section 4.6.1: a failed scan records its rejection evidence."""
+    from relaymind.store.asset_catalog import CatalogConflict
+
+    root = tmp_path / "source"
+    skill(root / "good")
+    (root / "bad").mkdir()
+    (root / "bad" / "SKILL.md").write_text("---\nname: bad\n---\nno description\n")
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(root), catalog)
+
+        def conflict(*args, **kwargs):
+            raise CatalogConflict("revision moved")
+
+        monkeypatch.setattr(catalog, "commit", conflict)
+
+        async def run():
+            await service.tick()
+            await service.stop()
+
+        asyncio.run(run())
+        outcome = catalog.job_outcomes()[0]
+        assert (outcome["state"], outcome["reason"]) == ("failed", "index_error")
+        source = catalog.snapshot().sources[0]
+        assert [e["reason"] for e in source["exclusions"]] == ["invalid_data", "index_error"]
+        assert source["exclusions"][0]["asset_id"] is not None
+        assert source["exclusions"][1]["asset_id"] is None
+        assert source["rejected_count"] == 1
+
+
 def test_periodic_sources_are_scheduled_oldest_due_first(tmp_path):
     """RM34/AC25: slow scans cannot starve a later source (31 s scans, 30 s interval)."""
     sources = [

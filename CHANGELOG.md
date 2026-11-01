@@ -47,7 +47,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and inspect must report the plugin loaded and enabled. `--base-url` must meet
   the plugin's `baseUrl` rules (loopback http/https `/v1` root, no
   credentials, query or fragment); any other value is refused before any host
-  command runs and is never written out. Verified with a host
+  command runs and is never written out. The kit parses the value with the
+  plugin's WHATWG URL rules (`src/relaymind/evaluation/plugin_base_url.py`), so
+  it accepts and refuses what the plugin does and configures the plugin's
+  normal form (`http://127.1:8080/v1` becomes `http://127.0.0.1:8080/v1`);
+  `tests/test_openclaw_pinned_package.py` compares it case by case with the
+  plugin's own `config.ts` under Node. Verified with a host
   double that models the disabled fresh install; not yet rerun on the
   owner's M1 (#259).
 - Ordinary local skill discovery (#268; RM34/AC25; spec 0.66 section 4.6.1)
@@ -55,9 +60,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   rejected for `<placeholder>` text or HTML examples and 9 for more than three
   code-fence lines, and one rejected file failed the whole folder. Bodies now
   keep only the encoding, control and size checks, and a rejected candidate is
-  excluded on its own with a fixed reason. All 49 bundled skills are admitted
-  by a local scan of the pinned package. Five verbatim copies are test
-  fixtures (`tests/fixtures/openclaw-bundled-skills/`, MIT).
+  excluded on its own with a fixed reason. Five verbatim copies are test
+  fixtures (`tests/fixtures/openclaw-bundled-skills/`, MIT) in the default
+  suite. `tests/test_openclaw_pinned_package.py` scans a copy of the pinned
+  package's `skills/` directory installed by `npm ci` and checks that all 49
+  bundled skills are admitted; it runs in the `openclaw-plugin` CI job and
+  skips elsewhere without `node_modules`. This is a developer check of the
+  bundled files, not an AC25 live host subcase. A rejected root `SKILL.md`
+  after an earlier child generation is now a partial generation (the child
+  records stay, stale) instead of a whole-scan failure, and a scan that fails
+  after a candidate rejection keeps that rejection in its recorded exclusions
+  and rejected count (spec 0.66 section 4.6.1).
 - The loaded-use observation harness records the exact person-scope
   `sessions.reset` refusal (`operator.admin` required on the pinned host) as
   `control_refused`, with no turn, instead of raising
