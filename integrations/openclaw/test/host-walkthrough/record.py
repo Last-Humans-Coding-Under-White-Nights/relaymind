@@ -345,8 +345,13 @@ def snapshot_fonts(font_dir: Path, target: Path) -> list[dict]:
 
 def install_fonts(font_dir: Path, environment: dict) -> None:
     """Copy the fonts into the browser's isolated ``$XDG_DATA_HOME/fonts`` (read by fontconfig)."""
-    data = environment.get("XDG_DATA_HOME") or Path(environment["HOME"]) / ".local/share"
-    target = Path(data) / "fonts"
+    # Only the isolated home the harness set: without one (or with a relative one) the
+    # fonts would land somewhere unexpected, so the install step fails closed instead.
+    data, home = environment.get("XDG_DATA_HOME"), environment.get("HOME")
+    data = Path(data) if data else Path(home) / ".local/share" if home else None
+    if data is None or not data.is_absolute():
+        raise ValueError("walkthrough_font_home")
+    target = data / "fonts"
     target.mkdir(mode=0o700, parents=True, exist_ok=True)
     _copy_fonts(font_dir, target)
 
@@ -742,7 +747,11 @@ def record(args) -> int:
         return _refused("work_root_out_dir_overlap")
     fonts = font_snapshot = None
     if args.font_dir is not None:
-        _font_paths(args.font_dir)  # refuse a directory without fonts before creating anything
+        # Refuse a missing, non-directory or font-less directory before creating anything.
+        try:
+            _font_paths(args.font_dir)
+        except (ValueError, OSError):
+            return _refused("walkthrough_font_dir")
     # Both must be new; an existing one is refused before either is created.
     for path, reason in ((work_root, "work_root_exists"), (out, "out_dir_exists")):
         if path.exists() or path.is_symlink():
