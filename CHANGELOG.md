@@ -84,7 +84,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
 - CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation or native-preparation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
-- CI: both `check` and `openclaw-plugin` run stacked PRs on Linux only to
+- CI: the shared asset benchmark fixture uses a deterministic recommendation
+  budget instead of the production 500/150 ms pair, so a loaded runner cannot
+  expire a confident HTTP selector attempt and flatten its paired coverage.
+  Deliberate timeout cases keep explicit small budgets, the HTTP cancellation
+  test uses the shared fixed clock, and a slowed-selector regression test
+  proves the old deadline failed on every host.
+- CI: a small `plan` job picks the platforms (and logs its decision); both
+  `check` and `openclaw-plugin` take them from it and run stacked PRs on Linux only to
   conserve CI capacity, with no base-branch filter. Every PR must target
   `master` and pass the full Linux/macOS/Windows matrix before merge; pushes
   also run all three platforms. `openclaw-plugin` now shares the Chromium
