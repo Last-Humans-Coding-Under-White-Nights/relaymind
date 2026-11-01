@@ -20,7 +20,10 @@ qualified result: a caller cannot flag a run ``qualified``.
 """
 
 import copy
+import os
+import signal
 import subprocess
+import sys
 import threading
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -48,6 +51,8 @@ EXECUTOR_REQUEST = "relaymind.host_executor_request.v1"
 REQUIRED_LANES = tuple(lane for lane in LANES if lane != "zh_hant_diagnostic")
 EXECUTOR_OUTPUT_BYTES = REPORT_BYTES
 _CHUNK = 64 * 1024
+# Seconds the reader may take to finish after the program exits.
+_DRAIN_GRACE = 0.5
 RUN_QUALIFICATIONS = ("fixture", "provisional")
 TOKEN_RELATIONSHIPS = (
     "component_disjoint",
@@ -119,6 +124,10 @@ def _admit(row, refs, planned, config, seen: set, evidence: Mapping) -> tuple[di
     row = validate_whole_task("HostRow", copy.deepcopy(dict(row)))
     if (row["task_id"], row["arm"]) != (planned["task_id"], planned["arm"]):
         raise WholeTaskRejected("row_plan")
+    if row["status"] == "not_run":
+        # The row was journaled as started before the executor ran; not_run
+        # means execution did not start, so it contradicts that record.
+        raise WholeTaskRejected("row_started")
     refs = [validate_whole_task("EvidenceRef", copy.deepcopy(dict(r))) for r in refs]
     ids = [r["id"] for r in refs]
     if len(set(ids)) != len(ids):
@@ -218,16 +227,50 @@ def run_host_plan(
     return report
 
 
-def _run_program(argv: list[str], payload: bytes, timeout: float | None) -> bytes:
-    """Run one executor program; its output is bounded while it is read."""
-    try:
-        process = subprocess.Popen(  # noqa: S603 - the operator's own executor program
-            argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE
+def _start_group(argv: list[str]) -> subprocess.Popen:
+    """Start the executor as the leader of its own process group."""
+    if sys.platform == "win32":
+        group = dict(creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+    else:
+        group = dict(start_new_session=True)
+    return subprocess.Popen(  # noqa: S603 - the operator's own executor program
+        argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, **group
+    )
+
+
+def _kill_group(process: subprocess.Popen) -> None:
+    """Kill the executor and every descendant still in its process group."""
+    if sys.platform == "win32":
+        subprocess.run(  # noqa: S603, S607 - the system tool, fixed arguments
+            ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
         )
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except OSError:
+            pass  # The group is already gone.
+    process.kill()
+
+
+def _run_program(argv: list[str], payload: bytes, timeout: float | None) -> bytes:
+    """Run one executor program; its output is bounded while it is read.
+
+    The program leads its own process group. A timeout or an output flood
+    kills the whole group, and a descendant still holding standard output
+    after the program exits is killed too. The reader thread reads the raw
+    descriptor, so cleanup never waits behind it: a reader still blocked
+    after a bounded join is abandoned, and its descriptor is not closed.
+    """
+    try:
+        process = _start_group(argv)
     except OSError:
         raise ExecutorFailed("executor_start") from None
     chunks: list[bytes] = []
     flooded = threading.Event()
+    fd = process.stdout.fileno()
 
     def feed() -> None:
         try:
@@ -238,29 +281,44 @@ def _run_program(argv: list[str], payload: bytes, timeout: float | None) -> byte
 
     def drain() -> None:
         size = 0
-        while chunk := process.stdout.read(_CHUNK):
-            size += len(chunk)
-            if size > EXECUTOR_OUTPUT_BYTES:
-                flooded.set()
-                process.kill()
-                break
-            chunks.append(chunk)
+        try:
+            while chunk := os.read(fd, _CHUNK):
+                size += len(chunk)
+                if size > EXECUTOR_OUTPUT_BYTES:
+                    flooded.set()
+                    _kill_group(process)
+                    break
+                chunks.append(chunk)
+        except OSError:
+            pass  # A failed read is incomplete output; the alive check decides.
 
-    threads = [threading.Thread(target=f, daemon=True) for f in (feed, drain)]
-    for thread in threads:
-        thread.start()
+    reader = threading.Thread(target=drain, daemon=True)
+    threading.Thread(target=feed, daemon=True).start()
+    reader.start()
+    timed_out = False
     try:
         process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        process.kill()
+        timed_out = True
+    except BaseException:
+        # The operator stopped the runner (a second signal): never leave the
+        # executor's group running behind it.
+        _kill_group(process)
         process.wait()
-        raise ExecutorFailed("executor_timeout") from None
-    finally:
-        for thread in threads:
-            # A grandchild may keep the pipe open; the wait stays bounded.
-            thread.join(timeout)
+        raise
+    if timed_out or flooded.is_set():
+        _kill_group(process)
+    process.wait()
+    reader.join(_DRAIN_GRACE)
+    if reader.is_alive():
+        # A descendant still holds standard output: stop it, then give up.
+        _kill_group(process)
+        reader.join(_DRAIN_GRACE)
+    if not reader.is_alive():
         process.stdout.close()
-    if flooded.is_set() or any(thread.is_alive() for thread in threads):
+    if timed_out:
+        raise ExecutorFailed("executor_timeout")
+    if flooded.is_set() or reader.is_alive():
         raise ExecutorFailed("executor_output")
     if process.returncode != 0:
         raise ExecutorFailed("executor_exit")
@@ -281,8 +339,10 @@ def command_executor(
     ``timeout`` (seconds, default none) is a harness bound, not a task budget:
     a program still running when it expires is killed and the row is failed
     with unknown consumption, never recorded as a host task timeout. Set it
-    above the frozen task budgets; it never replaces or changes them. Only the
-    direct child process is killed; the program must stop its own children.
+    above the frozen task budgets; it never replaces or changes them. The
+    program leads its own process group, and the whole group is killed on a
+    timeout; a descendant left holding standard output after the program exits
+    is killed too, and that output is unusable (``executor_output``).
     Standard output is read incrementally and the program is killed as soon as
     it exceeds the report size bound (``executor_output``).
     """
@@ -324,8 +384,19 @@ _GATEWAY_STOPS = {
     "time_budget": "timeout",
     "interrupted": "failed",
 }
-# The request never left the gateway: no dispatch.
-_NOT_DISPATCHED = {"provider_unreachable", "missing_credentials"}
+# The request was never sent: no dispatch.
+_NOT_DISPATCHED = {"missing_credentials"}
+# A transport error: a connection failure before the request was sent, or a
+# read/protocol error after streaming began. It alone shows no dispatch.
+_TRANSPORT = {"provider_unreachable": "failed"}
+
+
+def _received(payload: Mapping) -> bool:
+    """A received token or a known reported count: evidence of dispatch."""
+    usage = payload.get("usage") or {}
+    return payload.get("first_token_ms") is not None or any(
+        usage.get(k) is not None for k in _COUNTS
+    )
 
 
 def _outcome(finished: Mapping | None) -> tuple[str, int | None]:
@@ -340,10 +411,10 @@ def _outcome(finished: Mapping | None) -> tuple[str, int | None]:
     code = error["code"]
     if code in _NOT_DISPATCHED:
         return "failed", None
-    if code in _GATEWAY_STOPS:
+    stops = _GATEWAY_STOPS | _TRANSPORT
+    if code in stops:
         # Dispatch is evidenced only by a received token or reported usage.
-        received = payload.get("first_token_ms") is not None or payload.get("usage") is not None
-        return _GATEWAY_STOPS[code], 1 if received else None
+        return stops[code], 1 if _received(payload) else None
     if code == "provider_timeout":
         return "timeout", 1
     # A provider error or an invalid/incomplete response came from the provider.

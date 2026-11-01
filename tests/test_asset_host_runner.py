@@ -23,6 +23,7 @@ from relaymind.evaluation.asset_host_runner import (
 from relaymind.evaluation.asset_run_journal import JournalError, RunJournal
 from relaymind.evaluation.asset_whole_task import (
     WholeTaskRejected,
+    _not_run,
     grade_host_report,
     normalized_total_tokens,
     plan_host_trial,
@@ -599,3 +600,108 @@ def test_a_flooding_executor_is_stopped_at_the_output_cap(tmp_path, monkeypatch)
     execute = command_executor(argv, tasks, timeout=30)
     with pytest.raises(ExecutorFailed, match="executor_output"):
         execute(tasks["tasks"][0], "native", freeze["configurations"][0])
+
+
+_DESCENDANT = """
+import subprocess, sys, time
+subprocess.Popen([sys.executable, "-c", "import time; time.sleep(20)"])
+time.sleep({parent})
+"""
+
+
+def test_a_descendant_holding_stdout_cannot_block_a_timed_out_executor(tmp_path):
+    """Review of PR #263: a timeout kills the executor's whole process group.
+
+    The descendant inherits standard output and outlives the direct child; the
+    call must still return in bounded time and the row must be recorded.
+    """
+    import time
+
+    freeze, tasks = setup(1)
+    argv = write_executor(tmp_path, _DESCENDANT.format(parent=30))
+    started = time.monotonic()
+    report = run(tasks, freeze, command_executor(argv, tasks, timeout=0.2), tmp_path / "j.jsonl")
+    elapsed = time.monotonic() - started
+    assert elapsed < 0.2 * len(report["rows"]) + 2.0
+    assert {r["status"] for r in report["rows"]} == {"failed"}
+    assert {r["reason"] for r in report["rows"]} == {"executor_error"}
+
+
+def test_a_descendant_holding_stdout_after_the_executor_exits_is_bounded(tmp_path):
+    """Review of PR #263: an exited executor whose descendant keeps standard
+    output open is unusable output, reported in bounded time."""
+    import time
+
+    freeze, tasks = setup(1)
+    argv = write_executor(tmp_path, _DESCENDANT.format(parent=0))
+    execute = command_executor(argv, tasks, timeout=0.5)
+    started = time.monotonic()
+    with pytest.raises(ExecutorFailed, match="executor_output"):
+        execute(tasks["tasks"][0], "native", freeze["configurations"][0])
+    assert time.monotonic() - started < 0.5 + 2.0
+
+
+# --- review fixes -----------------------------------------------------------------
+
+
+def test_an_executor_not_run_row_is_an_invalid_row(tmp_path):
+    """Spec 0.65 section 12.6.5 (RM44; AC36): not_run means execution did not
+    start, but the runner journaled the row as started before it called the
+    executor, so that started work is failed with unknown consumption."""
+    freeze, tasks = setup(1)
+
+    def execute(task, arm, config):
+        return _not_run(task["id"], arm, "interrupted"), []
+
+    report = run(tasks, freeze, execute, tmp_path / "run.jsonl")
+    assert {r["status"] for r in report["rows"]} == {"failed"}
+    assert {r["reason"] for r in report["rows"]} == {"executor_invalid_row"}
+
+
+@pytest.mark.parametrize("partial", [b"", b'{"format":"relaymind.s3_run'])
+def test_a_journal_without_a_complete_header_is_started_again(tmp_path, partial):
+    """A crash while the header was written leaves no complete record, so no row
+    can have started: the journal is initialized again (section 12.6.5; AC36)."""
+    journal = tmp_path / "run.jsonl"
+    journal.write_bytes(partial)
+    header = dict(type="header", kind="host", input_digest=H)
+    with RunJournal(journal, header) as j:
+        assert j.started == set() and j.finished == {}
+        j.start("1")
+    with RunJournal(journal, header) as j:
+        assert j.started == {"1"}
+
+
+@pytest.mark.parametrize("code", ["cancelled", "deadline_exceeded", "time_budget", "interrupted"])
+def test_a_usage_object_with_no_known_count_is_no_dispatch_evidence(code):
+    """Section 12.6.5 (RM16; AC36): calls=1 requires actual dispatch evidence;
+    a usage object whose counts are all null evidences nothing."""
+    usage = dict(input_tokens=None, output_tokens=None)
+    end = finished(2, "c1", usage, error=dict(code=code, message="x"))
+    (attempt,) = attempts_from_trace(
+        [started(1, "c1"), end], provider="p", attempt_prefix="a-", evidence_id="t"
+    )
+    assert attempt["calls"] is None and attempt["usage_provenance"] == "unknown"
+
+
+@pytest.mark.parametrize("evidence", ["token", "usage"])
+def test_a_transport_failure_after_a_token_or_usage_evidences_the_dispatch(evidence):
+    """provider_unreachable also covers transport errors after streaming began
+    (section 12.6.5; RM16; AC36): a received token or reported usage is dispatch."""
+    usage = USAGE if evidence == "usage" else None
+    end = finished(2, "c1", usage, error=dict(code="provider_unreachable", message="x"))
+    if evidence == "token":
+        end["payload"]["first_token_ms"] = 12
+    (attempt,) = attempts_from_trace(
+        [started(1, "c1"), end], provider="p", attempt_prefix="a-", evidence_id="t"
+    )
+    assert (attempt["outcome"], attempt["calls"]) == ("failed", 1)
+
+
+def test_missing_credentials_never_evidences_a_dispatch():
+    end = finished(2, "c1", None, error=dict(code="missing_credentials", message="x"))
+    end["payload"]["first_token_ms"] = 12
+    (attempt,) = attempts_from_trace(
+        [started(1, "c1"), end], provider="p", attempt_prefix="a-", evidence_id="t"
+    )
+    assert attempt["calls"] is None

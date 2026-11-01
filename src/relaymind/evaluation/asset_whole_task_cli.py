@@ -167,12 +167,18 @@ def _trial_preflight(args, environment: dict) -> dict:
     )
 
 
+_TRIAL_COMMANDS = ("trial-preflight", "trial-install", "trial", "trial-run")
+
+
 def _trial(args) -> int:
     """#234: the early-trial kit commands (spec 0.65 section 12.6.5).
 
     Output paths are resolved once (macOS ``/tmp`` is a symlink), so the
     no-follow write fence applies to the real directories.
     """
+    if args.command not in _TRIAL_COMMANDS:
+        # A programming error, not an operator input: never fall through to trial-run.
+        raise ValueError(f"trial_command: {args.command}")
     try:
         if args.command == "trial-preflight":
             record = _trial_preflight(args, asset_trial_kit.observed_environment())
@@ -197,7 +203,7 @@ def _trial(args) -> int:
                     _host(args), args.tarball, work / "install"
                 )
             tarball = args.tarball
-        else:
+        elif args.command == "trial-run":
             preflight, _ = read_json_path(args.preflight)
             # Offline bundling may run elsewhere: the report keeps the target
             # machine's environment as the preflight recorded it.
@@ -206,8 +212,10 @@ def _trial(args) -> int:
             tarball = args.tarball
     except (WholeTaskBlocked, WholeTaskRejected, AssetCorpusError, OSError, ValueError) as exc:
         reason = getattr(exc, "reason", str(exc))
-        print(json.dumps(dict(status="rejected", reason=reason)), file=sys.stderr)
-        return 3 if isinstance(exc, WholeTaskBlocked) else 2
+        blocked = isinstance(exc, WholeTaskBlocked)
+        status = "blocked" if blocked else "rejected"
+        print(json.dumps(dict(status=status, reason=reason)), file=sys.stderr)
+        return 3 if blocked else 2
     stop = []
     previous = signal.signal(signal.SIGINT, lambda *_: stop.append(True))
     try:

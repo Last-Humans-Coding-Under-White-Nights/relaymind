@@ -191,6 +191,8 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.66: platform records carry the corpus review; owner-only tuner waiver.
+            ("6b0c6ee476412a109db89cbbdd35648c0a4425ad03a8e4e0d9715711b722491a", 623442),
             # Reviewed 0.66 with the precise negative-finding definitions.
             ("8c00f5154b64da1f1ad00352aadea9cee419e4b96e24f757ec1cd812259abf13", 623250),
             # Reviewed 0.66 with the #266 record input, scope and identity rules.
