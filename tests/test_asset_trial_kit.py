@@ -49,8 +49,13 @@ elif args[:2] == ["plugins", "install"]:
 elif args[:2] == ["plugins", "inspect"]:
     if mode == "stderr-noise":
         print("(node) ExperimentalWarning: update available", file=sys.stderr)
-    print(json.dumps({"plugin": {"status": "loaded", "enabled": False, "version": "1.0.0"},
-                      "diagnostics": []}))
+    status, diagnostics = "loaded", []
+    if mode == "diagnostics":
+        diagnostics = [{"message": "config /Users/alice/.openclaw/openclaw.json token sk-live-9"}]
+    if mode == "bad-status":
+        status = "error at /home/alice/.openclaw"
+    print(json.dumps({"plugin": {"status": status, "enabled": False, "version": "1.0.0"},
+                      "diagnostics": diagnostics}))
 else:
     sys.exit(9)
 """
@@ -260,7 +265,7 @@ def run(tmp_path, bundle, *, qualification="fixture", preflight=None, **kwargs):
     return kit.trial_run(
         inputs=inputs,
         observations=observed,
-        bundle=tmp_path / "out",
+        bundle=kwargs.pop("out", tmp_path / "out"),
         resolver=bundle.resolver,
         qualification=qualification,
         environment=kwargs.pop("environment", ENVIRONMENT),
@@ -618,3 +623,202 @@ def test_trial_install_command_writes_its_record(tmp_path, mode, code):
     argv += ["--output", str(output), "--", *fake_host(tmp_path, mode)]
     assert main(argv) == code
     assert json.loads(output.read_bytes())["passed"] is (code == 0)
+
+
+# --- second review follow-ups (PR #262) ---------------------------------------
+
+
+def provisional_records(tmp_path, bundle):
+    """A passed preflight and install on the target machine for the frozen package."""
+    set_lock(bundle, M1)
+    preflight = preflight_record(tmp_path, bundle)
+    tarball = tmp_path / "release" / "relaymind-openclaw-provider-1.0.0.tgz"
+    install = kit.install_plugin(fake_host(tmp_path), tarball, tmp_path / "install")
+    return preflight, install, tarball
+
+
+def provisional(tmp_path, bundle, preflight, install, **kwargs):
+    return run(
+        tmp_path,
+        bundle,
+        qualification="provisional",
+        preflight=preflight,
+        environment=kwargs.pop("environment", M1),
+        install_record=install,
+        observed=observations(tmp_path, bundle, provenance="observed"),
+        **kwargs,
+    )
+
+
+def no_partial_output(tmp_path: Path) -> bool:
+    return not (tmp_path / "out").exists() and not [
+        p for p in tmp_path.iterdir() if p.name.startswith(".out")
+    ]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
+def test_bundle_files_and_directories_are_private(tmp_path, bundle):
+    """Spec 12.6.5 (AC36): restricted originals are never copied world-readable."""
+    import os
+
+    previous = os.umask(0o022)
+    try:
+        run(tmp_path, bundle)
+    finally:
+        os.umask(previous)
+    out = tmp_path / "out"
+    assert out.stat().st_mode & 0o777 == 0o700
+    for path in out.rglob("*"):
+        expected = 0o700 if path.is_dir() else 0o600
+        assert path.stat().st_mode & 0o777 == expected, path.relative_to(out)
+
+
+@pytest.mark.parametrize("mode", ["diagnostics", "bad-status"])
+def test_install_record_keeps_no_raw_host_text(tmp_path, mode):
+    """RM12: host diagnostics stay in the private log; the record keeps codes and digests."""
+    tarball = release(tmp_path)
+    work = tmp_path / "install"
+    record = kit.install_plugin(fake_host(tmp_path, mode), tarball, work)
+    text = json.dumps(record)
+    assert "alice" not in text and "sk-live" not in text and ".openclaw" not in text
+    inspect = record["steps"][1]["inspect"]
+    assert set(inspect) == {"status", "enabled", "version", "diagnostics_count", "passed"}
+    assert inspect["passed"] is False and record["passed"] is False
+    if mode == "diagnostics":
+        assert inspect["diagnostics_count"] == 1 and inspect["status"] == "loaded"
+    else:
+        assert inspect["status"] is None and inspect["diagnostics_count"] == 0
+    # The raw output is still reviewable in the private log, bound by its digest.
+    raw = (work / record["steps"][1]["log"]).read_bytes()
+    assert b"alice" in raw
+    assert record["steps"][1]["output_sha256"] == hashlib.sha256(raw).hexdigest()
+
+
+def test_provisional_rejects_an_install_record_without_its_closed_shape(tmp_path, bundle):
+    """Spec 12.6.5: a provenance label is not proof; an unbound `passed` is refused."""
+    preflight, _, tarball = provisional_records(tmp_path, bundle)
+    code, result = provisional(tmp_path, bundle, preflight, {"passed": True}, tarball=tarball)
+    assert (code, result["status"], result["reason"]) == (2, "rejected", "install_record")
+    assert no_partial_output(tmp_path)
+
+
+def test_provisional_rejects_an_install_of_another_tarball(tmp_path, bundle):
+    preflight, _, tarball = provisional_records(tmp_path, bundle)
+    other = tmp_path / "other"
+    other.mkdir()
+    install = kit.install_plugin(
+        fake_host(other), release(other, b"another build"), other / "install"
+    )
+    assert install["passed"] is True
+    code, result = provisional(tmp_path, bundle, preflight, install, tarball=tarball)
+    assert (code, result["reason"]) == (2, "install_binding")
+    assert no_partial_output(tmp_path)
+
+
+def test_provisional_rejects_a_passed_label_that_its_environment_contradicts(tmp_path, bundle):
+    preflight, install, tarball = provisional_records(tmp_path, bundle)
+    preflight["observed"]["environment"]["ram_bytes"] = 16 * 1024**3
+    code, result = provisional(
+        tmp_path,
+        bundle,
+        preflight,
+        install,
+        tarball=tarball,
+        environment=preflight["observed"]["environment"],
+    )
+    assert (code, result["reason"]) == (2, "preflight_contradiction")
+
+
+def test_provisional_rejects_a_preflight_outside_its_closed_shape(tmp_path, bundle):
+    preflight, install, tarball = provisional_records(tmp_path, bundle)
+    code, result = provisional(
+        tmp_path, bundle, dict(preflight, note="trust me"), install, tarball=tarball
+    )
+    assert (code, result["reason"]) == (2, "preflight_record")
+
+
+def test_provisional_binds_the_preflight_to_the_report_environment(tmp_path, bundle):
+    preflight, install, tarball = provisional_records(tmp_path, bundle)
+    code, result = provisional(
+        tmp_path, bundle, preflight, install, tarball=tarball, environment=ENVIRONMENT
+    )
+    assert (code, result["reason"]) == (2, "preflight_binding")
+
+
+def test_provisional_binds_the_preflight_release_to_the_frozen_package(tmp_path, bundle):
+    preflight, install, tarball = provisional_records(tmp_path, bundle)
+    preflight["observed"]["release"]["sha256"] = "1" * 64
+    code, result = provisional(tmp_path, bundle, preflight, install, tarball=tarball)
+    assert (code, result["reason"]) == (2, "preflight_binding")
+
+
+def test_a_bundle_under_a_symlinked_parent_is_written_to_the_real_path(tmp_path, bundle):
+    """macOS /tmp is a symlink: the operator's path is resolved once, then fenced."""
+    real = tmp_path / "real"
+    real.mkdir()
+    (tmp_path / "link").symlink_to(real, target_is_directory=True)
+    code, result = run(tmp_path, bundle, out=tmp_path / "link" / "bundle")
+    assert (code, result["status"]) == (3, "graded")
+    assert (real / "bundle" / "SHA256SUMS").is_file()
+    assert result["bundle"] == str(real / "bundle")
+
+
+def test_a_rejected_run_leaves_no_partial_bundle(tmp_path, bundle):
+    observed = observations(tmp_path, bundle)
+    first = observed / kit.observation_name(3)
+    document = json.loads(first.read_bytes())
+    document["ordinal"] = 99
+    first.write_text(json.dumps(document), encoding="utf-8")
+    code, result = run(tmp_path, bundle, observed=observed)
+    assert (code, result["reason"]) == (2, "observation_row")
+    assert no_partial_output(tmp_path)
+
+
+def test_one_command_trial_under_symlinked_parents(tmp_path, bundle, monkeypatch):
+    monkeypatch.setattr(kit, "observed_environment", lambda: ENVIRONMENT)
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    argv = ["trial", "--inputs", str(frozen_manifest(bundle)), "--tarball"]
+    argv += [str(release(tmp_path)), "--observations", str(observations(tmp_path, bundle))]
+    argv += ["--bundle", str(link / "out"), "--work", str(link / "work")]
+    argv += ["--resolver", str(bundle.resolver), "--qualification", "fixture"]
+    assert main([*argv, "--", *fake_host(tmp_path)]) == 3
+    assert (real / "work" / "preflight.json").is_file()
+    assert (real / "out" / "report.json").is_file()
+    output = link / "preflight.json"
+    argv = ["trial-preflight", "--inputs", str(frozen_manifest(bundle)), "--tarball"]
+    argv += [str(release(tmp_path)), "--output", str(output), "--", *fake_host(tmp_path)]
+    assert main(argv) == 3
+    assert (real / "preflight.json").is_file()
+
+
+def test_plan_names_the_task_lane_and_prompt_case(tmp_path, bundle):
+    run(tmp_path, bundle)
+    plan = json.loads((tmp_path / "out" / "plan.json").read_bytes())["planned"]
+    tasks = {t["id"]: t for t in bundle.tasks["tasks"]}
+    configs = {c["arm"]: c["host_config_digest"] for c in bundle.freeze["configurations"]}
+    for entry in plan:
+        task = tasks[entry["task_id"]]
+        assert (entry["lane"], entry["prompt_case_id"]) == (task["lane"], task["prompt_case_id"])
+        assert entry["host_config_digest"] == configs[entry["arm"]]
+        assert entry["observation"] == kit.observation_name(entry["ordinal"])
+
+
+def test_observation_evidence_keeps_the_original_byte_limit(tmp_path, bundle):
+    """Spec 12.6.5: evidence originals keep their 10 MiB limit, refused by the kit."""
+    observed = observations(tmp_path, bundle)
+    document = json.loads((observed / kit.observation_name(1)).read_bytes())
+    (observed / document["evidence"][0]["file"]).write_bytes(b"x" * (10 * 1024 * 1024 + 1))
+    code, result = run(tmp_path, bundle, observed=observed)
+    assert (code, result["reason"]) == (2, "observation_evidence_too_large")
+    assert no_partial_output(tmp_path)
+
+
+def test_absent_observation_evidence_is_reported_missing(tmp_path, bundle):
+    observed = observations(tmp_path, bundle)
+    document = json.loads((observed / kit.observation_name(1)).read_bytes())
+    (observed / document["evidence"][0]["file"]).unlink()
+    code, result = run(tmp_path, bundle, observed=observed)
+    assert (code, result["reason"]) == (2, "observation_evidence_missing")
