@@ -170,6 +170,9 @@ def raw_judgments(
                 raise AssetCorpusError("invalid_judgment")
             _answer(row, assets)
             judgments.append(row)
+        if ids != set(case_map):
+            # A deleted case is a changed template, not a missing judgment.
+            raise AssetCorpusError("template_binding")
     judgments.sort(key=lambda j: (j["case_id"].encode(), j["annotator_id"].encode()))
     check_object_order(judgments, ("case_id", "annotator_id"))
     counts = Counter(row["case_id"] for row in judgments)

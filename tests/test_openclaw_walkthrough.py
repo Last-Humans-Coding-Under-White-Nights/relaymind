@@ -747,6 +747,7 @@ class _ExitedProcess:
         return 0
 
 
+@pytest.mark.skipif(__import__("sys").platform == "win32", reason="POSIX process groups")
 @pytest.mark.parametrize(
     ("alive", "expected"),
     [
@@ -800,3 +801,49 @@ def test_record_refuses_overlapping_work_and_out_before_creating_anything(
     outcome = json.loads(capsys.readouterr().out)
     assert outcome == dict(complete=False, reason="work_root_out_dir_overlap", manifest=None)
     assert sorted(p.name for p in tmp_path.iterdir()) == ["link", "plugin.tgz"]
+
+
+def test_run_child_ends_the_whole_tree_on_windows(rec, monkeypatch):
+    """Windows has no POSIX process groups: the child's tree is ended with taskkill."""
+    calls = []
+
+    class _Child:
+        pid = 4242
+        returncode = None
+
+        def wait(self, timeout=None):
+            if timeout is not None:
+                raise rec.subprocess.TimeoutExpired("child", timeout)
+            return 1
+
+        def poll(self):
+            return self.returncode
+
+        def kill(self):
+            calls.append("kill")
+            self.returncode = 1
+
+    def popen(command, **options):
+        calls.append(("popen", options))
+        return _Child()
+
+    def run(command, **options):
+        calls.append(("run", command))
+        child.returncode = 1
+
+    child = None
+
+    def popen_and_keep(command, **options):
+        nonlocal child
+        child = popen(command, **options)
+        return child
+
+    monkeypatch.setattr(rec.sys, "platform", "win32")
+    monkeypatch.setattr(rec.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, raising=False)
+    monkeypatch.setattr(rec.subprocess, "Popen", popen_and_keep)
+    monkeypatch.setattr(rec.subprocess, "run", run)
+    with pytest.raises(rec.subprocess.TimeoutExpired):
+        rec.run_child(["child"], timeout=0.01)
+    assert calls[0] == ("popen", {"creationflags": 0x200})
+    assert ("run", ["taskkill", "/F", "/T", "/PID", "4242"]) in calls
+    assert "kill" not in calls
