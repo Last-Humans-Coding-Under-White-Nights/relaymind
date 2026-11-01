@@ -1913,11 +1913,11 @@ def test_missing_native_pin_has_a_fixed_control_failure(pins):
         )
 
 
-@pytest.mark.parametrize("failure", ["ordinary_skill_turn_timeout", "not_text_content"])
-def test_observation_continues_controls_after_a_turn_fixture_failure(
+@pytest.mark.parametrize("failure", [None, "ordinary_skill_turn_timeout", "not_text_content"])
+def test_observation_saves_controls_after_a_completed_or_incomplete_turn(
     tmp_path, monkeypatch, failure
 ):
-    """RM39/AC30 F6/F9: one incomplete turn retains evidence without starving later cases."""
+    """RM39/AC30: the real save helper must reach controls after the captured positive turn."""
     api = module()
     capture = loaded_fixture(api)
     expected = capture["ordinary_skill_loaded_use"]["cases"]
@@ -1954,7 +1954,12 @@ def test_observation_continues_controls_after_a_turn_fixture_failure(
             )
             return dict(frame=dict(ok=True, payload=scope))
         if method == "skills.library.read":
+            selected["read"]["payload"]["entry"]["slug"] = "fixture"
             return dict(frame=selected["read"])
+        if method == "skills.library.save" and params["expectedRevision"] is None:
+            return dict(
+                frame=dict(ok=True, payload=dict(entry=selected["read"]["payload"]["entry"]))
+            )
         if method == "skills.library.list":
             return dict(
                 frame=dict(
@@ -1976,18 +1981,13 @@ def test_observation_continues_controls_after_a_turn_fixture_failure(
             return dict(frame=case["selection"])
         return dict(frame=case["intervention"]["frame"])
 
-    def save(*args):
-        case = expected[current[0]]
-        case["selected"]["read"]["payload"]["entry"]["slug"] = "fixture"
-        return dict(
-            mapping=dict(skillId=case["selected"]["skillId"], revision=REVISION),
-            content_sha256=case["selected"]["content_sha256"],
-        )
-
-    monkeypatch.setattr(extension, "save_library_skill", save)
-
     def turn(rpc, page, session, case):
         visited.append(case["case"])
+        if failure is None:
+            # CI run 41283633023 retained this completed positive case before
+            # the first control's save failed; keep that capture shape.
+            case.update(expected[current[0]])
+            return
         case["requests"] = [dict(status=429)]
         if case["case"] == "positive":
             if failure == "not_text_content":
@@ -1999,6 +1999,13 @@ def test_observation_continues_controls_after_a_turn_fixture_failure(
     monkeypatch.setattr(extension, "loaded_use_turn", turn)
     extension.observe_loaded_use(rpc, None, {}, capture)
     assert visited == ["positive", "stale", "deleted", "reset"]
+    assert extension.failure_diagnostics() == {}
+    if failure is None:
+        assert (
+            capture["ordinary_skill_loaded_use"]["cases"][0]["observed"] == "loaded_pinned_revision"
+        )
+        assert api.ordinary_skill_loaded_use_pass(capture)
+        return
     partial = capture["ordinary_skill_loaded_use"]["cases"][0]
     assert partial["observed"] == "incomplete"
     assert partial["failure_reason"] == failure

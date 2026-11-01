@@ -1452,7 +1452,7 @@ class OrdinaryComposition(BASE.ActionComposition):
                     created, capture["accounts"][0]["native_person_email"]
                 )
                 selected_session = BASE.person_module().session_params(receipt)
-                skill = self.save_library_skill(rpc, page, selected_session)
+                skill = self.save_library_skill(rpc, page)
                 activated = rpc(
                     page,
                     "skills.library.activate",
