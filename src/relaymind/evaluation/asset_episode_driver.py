@@ -336,7 +336,10 @@ async def _run_episode(episode, cases, labels, open_arm, evidence, interrupted):
                 stop_on(forced)
             if interrupted():
                 raise _Stop("cancelled", "interrupted")
-            await _reset(on, revision)
+            try:
+                await _reset(on, revision)
+            except (RecommendationError, WholeTaskRejected):
+                raise _Stop("failed", "reset_refused") from None
             after = []
             for case_id in episode["reset_probe_case_ids"]:
                 row, forced, _ = await run(on, "on", "after", case_id)

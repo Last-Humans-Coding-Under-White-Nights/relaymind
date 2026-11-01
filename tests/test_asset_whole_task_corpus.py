@@ -327,3 +327,20 @@ def test_catalog_evidence_without_an_id_is_never_located(corpus):
     with pytest.raises((WholeTaskRejected, WholeTaskBlocked)) as raised:
         resolve_corpus(digest, documents, evidence)
     assert "KeyError" not in repr(raised.value)
+
+
+@pytest.mark.parametrize("value", [123, None, False, "evidence", {"id": "license"}])
+def test_a_non_list_catalog_evidence_rejects(corpus, value):
+    """RM44/AC36: malformed catalog evidence rejects as invalid_corpus_lock."""
+    digest, documents, evidence = corpus
+    key = next(k for k in documents if k.startswith("catalog:"))
+    catalog = json.loads(documents.pop(key))
+    catalog["evidence"] = value
+    raw = json.dumps(catalog).encode()
+    documents["catalog:" + canonical_digest(catalog)] = raw
+    lock_key = next(k for k in documents if k.startswith("lock:"))
+    lock = json.loads(documents.pop(lock_key))
+    lock["catalog"]["digest"] = canonical_digest(catalog)
+    documents["lock:" + canonical_digest(lock)] = json.dumps(lock).encode()
+    with pytest.raises(WholeTaskRejected, match="invalid_corpus_lock"):
+        resolve_corpus(canonical_digest(lock), documents, evidence)
