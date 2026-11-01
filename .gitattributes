@@ -20,9 +20,16 @@
 /scripts/*.py text eol=lf
 /pyproject.toml text eol=lf
 /docs/SPECIFICATION.md text eol=lf
+# The platform run binds these files' bytes too (platform-runner-files), so a
+# Windows checkout must not turn them into CRLF.
+/tests/*.py text eol=lf
+/.github/workflows/*.yml text eol=lf
 # These captured rights bytes are independently pinned by the remote profile.
 /LICENSE -text
 /docs/evidence/2026-10-30-github-skill-source/LICENSE -text
 # Verbatim OpenClaw 2026.10.7 bundled SKILL.md copies, pinned by SHA-256 in tests.
 /tests/fixtures/openclaw-bundled-skills/** text eol=lf
 /docs/evidence/m10/windows-platform-run-2026-11-01/** -text whitespace=cr-at-eol
+# Every file in an M10 evidence folder is bound by SHA-256 in a record, including
+# extensionless captures, TOML and TXT files, so none may be converted on checkout.
+/docs/evidence/m10/*/** -text

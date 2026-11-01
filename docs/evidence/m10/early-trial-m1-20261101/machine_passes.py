@@ -5,7 +5,9 @@ Spec 0.66 section 12.6.6 (`machine_drafted_owner_approved` prompts,
 AC36). Operator evidence tooling, not product code. Every model call runs at
 temperature 0 against the owner's OpenAI-compatible endpoint with a recorded
 template; the exact request and response bytes are kept under ``machine/calls/``
-and the provider-reported usage is appended to a private ledger. The endpoint
+(a repeated pass never overwrites them: the earlier pair is kept as
+``<name>.superseded-<n>.*``, so a rejected draft stays in the drafting
+evidence) and the provider-reported usage is appended to a private ledger. The endpoint
 URL and the key come from the environment and are never written.
 
 Commands:
@@ -16,7 +18,11 @@ Commands:
 ``blind``         anonymize the observed rows; write the blind map privately and
                   its digest publicly (commit the digest before judging)
 ``judge``         judges A and B, then the adjudicator on disagreements, set
-                  ``success`` in each observed row
+                  ``success`` in each observed row. Both judges must give one
+                  JSON-boolean verdict per blind ID; every disagreement needs one
+                  adjudication with a nonempty reason. Anything else is a closed
+                  error (``success_verdicts`` or ``success_adjudication``) and no
+                  row is written.
 """
 
 import argparse
@@ -66,6 +72,25 @@ def _ledger() -> Path:
     return Path(os.environ["TRIAL_ROOT"]) / "labelling" / "usage.jsonl"
 
 
+def keep_call(name: str, request: bytes, body: bytes) -> None:
+    """Write one call's exact bytes; an earlier pair of that name is kept, never replaced.
+
+    Spec 12.6.6: a rejected draft is counted in the drafting evidence, never
+    silently replaced. The newest pass keeps the plain name the other steps read.
+    """
+    CALLS.mkdir(parents=True, exist_ok=True)
+    current = [CALLS / f"{name}.request.json", CALLS / f"{name}.response.json"]
+    if any(path.exists() for path in current):
+        n = 1
+        while any(CALLS.glob(f"{name}.superseded-{n}.*")):
+            n += 1
+        for path, part in zip(current, ("request", "response"), strict=True):
+            if path.exists():
+                path.rename(CALLS / f"{name}.superseded-{n}.{part}.json")
+    current[0].write_bytes(request)
+    current[1].write_bytes(body)
+
+
 def call(role: str, name: str, payload: dict) -> dict:
     """One recorded temperature-0 call; returns the parsed JSON answer."""
     _, model, template = ROLES[role]
@@ -91,9 +116,7 @@ def call(role: str, name: str, payload: dict) -> dict:
     )
     with urllib.request.urlopen(http, timeout=300) as response:
         body = response.read()
-    CALLS.mkdir(parents=True, exist_ok=True)
-    (CALLS / f"{name}.request.json").write_bytes(request)
-    (CALLS / f"{name}.response.json").write_bytes(body)
+    keep_call(name, request, body)
     answer = json.loads(body)
     usage = answer.get("usage") or {}
     _ledger().parent.mkdir(parents=True, exist_ok=True)
@@ -124,6 +147,27 @@ def _projections(catalog: dict) -> list[dict]:
     ]
 
 
+# Spec 12.6.6: each prompt is written in its lane's query language or mix.
+_LANE_LANGUAGE = {
+    "en_to_en": (["en"], False),
+    "en_to_zh_hans": (["en"], False),
+    "zh_hans_to_zh_hans": (["zh-Hans"], False),
+    "zh_hans_to_en": (["zh-Hans"], False),
+    "code_switch": (["en", "zh-Hans"], True),
+}
+
+
+def lane_language(lane: str) -> tuple[list[str], bool]:
+    """The case's query ``language_tags`` and ``code_switched`` for a planned lane.
+
+    Drafted prompts never fill the zh-Hant diagnostic lane.
+    """
+    if lane not in _LANE_LANGUAGE:
+        raise SystemExit(f"no drafted prompts for lane {lane}")
+    tags, mixed = _LANE_LANGUAGE[lane]
+    return list(tags), mixed
+
+
 def draft_cases(args) -> None:
     catalog = json.loads((HERE / "inputs/catalog.json").read_text())
     plan = json.loads(args.plan.read_text())
@@ -133,18 +177,19 @@ def draft_cases(args) -> None:
         raise SystemExit("the drafter did not answer every planned case")
     cases = []
     for p in plan:
+        language_tags, code_switched = lane_language(p["lane"])
         cases.append(
             dict(
                 id=p["case_id"],
-                split="held_out",
+                split=p.get("split", "held_out"),
                 task_family_ids=p["task_family_ids"],
                 target_asset_family_ids=p["target_asset_family_ids"],
                 lane=p["lane"],
                 task_text=drafted[p["case_id"]],
                 conversation=[],
                 requested_kinds=p["requested_kinds"],
-                language_tags=["en"],
-                code_switched=False,
+                language_tags=language_tags,
+                code_switched=code_switched,
                 author_ids=[ROLES["drafter"][0]],
                 authorship="machine_drafted_owner_approved",
                 authorship_evidence_ids=["drafting-request", "drafting-response"],
@@ -280,41 +325,84 @@ def blind(args) -> None:
     print(json.dumps(dict(transcripts=len(order), blind_map_digest=canonical_digest(mapping))))
 
 
+def _verdict_map(verdicts, expected: list[str], error: str, *, reasoned: bool) -> dict:
+    """Exactly one verdict per expected blind ID, ``success`` a JSON boolean."""
+    if not isinstance(verdicts, list):
+        raise SystemExit(error)
+    out = {}
+    for verdict in verdicts:
+        if (
+            not isinstance(verdict, dict)
+            or not isinstance(verdict.get("blind_id"), str)
+            or verdict["blind_id"] in out
+            or type(verdict.get("success")) is not bool
+            or not isinstance(verdict.get("reason"), str)
+            or (reasoned and not verdict["reason"].strip())
+        ):
+            raise SystemExit(error)
+        out[verdict["blind_id"]] = verdict
+    if set(out) != set(expected):
+        raise SystemExit(error)
+    return out
+
+
+def check_judges(blind_ids: list[str], judge_a, judge_b) -> tuple[dict, list[str]]:
+    """Both blind judges cover every blind ID once with a boolean (spec 12.6.6).
+
+    Returns the agreed finals and the sorted disagreeing blind IDs; a closed
+    ``success_verdicts`` error otherwise.
+    """
+    if len(set(blind_ids)) != len(blind_ids):
+        raise SystemExit("success_verdicts")
+    a = _verdict_map(judge_a, blind_ids, "success_verdicts", reasoned=False)
+    b = _verdict_map(judge_b, blind_ids, "success_verdicts", reasoned=False)
+    disagree = sorted(i for i in blind_ids if a[i]["success"] != b[i]["success"])
+    return {i: a[i] for i in blind_ids if i not in disagree}, disagree
+
+
+def adjudicated(finals: dict, disagree: list[str], verdicts) -> dict:
+    """Every disagreement, and only those, adjudicated once with a nonempty reason.
+
+    Spec 12.6.6: a disagreement is never settled by either judge's verdict; an
+    omitted, repeated, non-boolean or unexplained adjudication is a closed
+    ``success_adjudication`` error and nothing is written.
+    """
+    chosen = _verdict_map(verdicts, disagree, "success_adjudication", reasoned=True)
+    return dict(finals, **chosen)
+
+
 def judge(args) -> None:
     packet = json.loads((args.private / "blind-packet.json").read_text())
     rubric = args.rubric.read_text(encoding="utf-8")
     payload = dict(rubric=rubric, request_date=args.request_date, **packet)
-    raw = {}
+    blind_ids = [t["blind_id"] for t in packet["transcripts"]]
+    answers = {}
     for role in ("judge_a", "judge_b"):
         result = call(role, "success-" + role, payload)
-        raw[role] = {v["blind_id"]: v for v in result["value"]["verdicts"]}
-    finals = {}
-    disagree = [
-        b
-        for b in raw["judge_a"]
-        if raw["judge_a"][b]["success"] != raw["judge_b"].get(b, {}).get("success")
-    ]
+        answers[role] = result["value"].get("verdicts")
+    finals, disagree = check_judges(blind_ids, answers["judge_a"], answers["judge_b"])
+    raw = {role: {v["blind_id"]: v for v in answers[role]} for role in answers}
     if disagree:
         result = call(
             "success_adjudicator",
             "success-adjudication",
-            dict(payload, raw={b: [raw["judge_a"][b], raw["judge_b"].get(b)] for b in disagree}),
+            dict(payload, raw={b: [raw["judge_a"][b], raw["judge_b"][b]] for b in disagree}),
         )
-        finals.update({v["blind_id"]: v for v in result["value"]["verdicts"]})
-    for b, verdict in raw["judge_a"].items():
-        finals.setdefault(b, verdict)
+        finals = adjudicated(finals, disagree, result["value"].get("verdicts"))
     # Only now is the blind map opened.
     mapping = json.loads((args.private / "blind-map.json").read_text())
     recorded = json.loads((MACHINE / "blind-map.digest.json").read_text())
     if canonical_digest(mapping) != recorded["blind_map_sha256"]:
         raise SystemExit("the blind map changed after its digest was committed")
+    if sorted(e["blind_id"] for e in mapping["entries"]) != sorted(finals):
+        raise SystemExit("success_verdicts")
     (MACHINE / "blind-map.json").write_bytes(_json(mapping))
     verdicts = []
     for entry in mapping["entries"]:
-        final = finals.get(entry["blind_id"])
+        final = finals[entry["blind_id"]]
         path = args.observations / f"row-{entry['ordinal']:04d}.json"
         observation = json.loads(path.read_text())
-        observation["row"]["success"] = None if final is None else bool(final["success"])
+        observation["row"]["success"] = final["success"]
         path.write_bytes(_json(observation))
         verdicts.append(
             dict(

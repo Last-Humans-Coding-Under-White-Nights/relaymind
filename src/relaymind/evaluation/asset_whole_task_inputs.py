@@ -42,7 +42,7 @@ from relaymind.evaluation.asset_whole_task_corpus import (
     verify_episode_configs,
     verify_reference_closure,
 )
-from relaymind.evaluation.asset_whole_task_host_config import validate_verdict
+from relaymind.evaluation.asset_whole_task_host_config import PINNED_VALIDATOR, validate_verdict
 
 SINGLETONS = ("environment_lock", "runner_inventory", "protocol_inventory")
 _ROOTS = {
@@ -308,7 +308,10 @@ def resolve_whole_task_inputs(
             host_config_checker is not None and host_config_validation is not None
         ):
             raise WholeTaskRejected("host_config_validation_mode")
-        if freeze["host"]["name"] != "openclaw" or freeze["host"]["version"] != "2026.10.7":
+        if (
+            freeze["host"]["name"] != "openclaw"
+            or freeze["host"]["version"] != PINNED_VALIDATOR["host_version"]
+        ):
             raise WholeTaskBlocked("host_config_validator_unavailable")
         digests = {arm["host_config_digest"] for arm in freeze["configurations"]}
         if host_config_validation is not None and set(host_config_validation) != digests:

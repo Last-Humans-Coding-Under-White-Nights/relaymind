@@ -32,6 +32,34 @@ UNAVAILABLE = {
     "reason": "validator_unavailable",
 }
 RELAYMIND_URL = "http://127.0.0.1:8080/v1"
+# Every pinned host entry point the checker imports, with its file digest.
+PINNED_IDENTITY = {
+    "host_version": "2026.10.7",
+    "validator_files": {
+        "dist/config-cli-validation-Dnu71lrA.mjs": (
+            "6e3dbbcdab56f21053764642fbc17127574b52328e4d8fc01e9354fae025321c"
+        ),
+        "dist/config-state-ByKt1EBw.mjs": (
+            "863d94fcfbba058d5dc439b3c6a6507eb152fe9d224e0015387cfab7dce6e79b"
+        ),
+        "dist/io.plugin-metadata-CyZLGhSx.mjs": (
+            "6bf0142104107467f9c2619ab70e0545acff5383b3a2117a39fd4679c8d9a78d"
+        ),
+        "dist/plugin-metadata-snapshot-YmhmQlNq.mjs": (
+            "2a03d6d904eaddae02f7b1ee0b342bef600535ea369b99e118bab29403e2ff8f"
+        ),
+        "dist/validation-ongxOmrj.mjs": (
+            "a79aac9f01ef15e5abcc78205814fe38a3248cc2b22dd0f3e075600eee236889"
+        ),
+    },
+}
+
+
+def _assert_pinned_identity(identity, native_host):
+    """The identity names every imported entry point and matches the install."""
+    assert identity == PINNED_IDENTITY
+    for name, digest in identity["validator_files"].items():
+        assert hashlib.sha256((native_host / name).read_bytes()).hexdigest() == digest
 
 
 def check(config, **kwargs):
@@ -109,13 +137,7 @@ def test_native_validator_verdict_and_identity(native_host, config, status, path
     result = check(config, host_root=native_host)
     assert set(result) == {"status", "validator", "issue_path", "reason"}
     assert (result["status"], result["issue_path"], result["reason"]) == (status, path, None)
-    identity = result["validator"]
-    assert set(identity) == {"host_version", "validator_file", "validator_sha256"}
-    assert identity["host_version"] == "2026.10.7"
-    assert (
-        identity["validator_sha256"]
-        == hashlib.sha256((native_host / identity["validator_file"]).read_bytes()).hexdigest()
-    )
+    _assert_pinned_identity(result["validator"], native_host)
     assert "private-invalid-value" not in json.dumps(result)
 
 
@@ -123,12 +145,7 @@ def _assert_not_inspected(result, native_host, path):
     assert result["status"] == "unavailable"
     assert result["reason"] == "plugin_schema_not_inspected"
     assert result["issue_path"] == path
-    assert (
-        result["validator"]["validator_sha256"]
-        == hashlib.sha256(
-            (native_host / result["validator"]["validator_file"]).read_bytes()
-        ).hexdigest()
-    )
+    _assert_pinned_identity(result["validator"], native_host)
 
 
 def test_unknown_referenced_plugin_is_unavailable_not_valid(native_host):
@@ -137,6 +154,87 @@ def test_unknown_referenced_plugin_is_unavailable_not_valid(native_host):
     _assert_not_inspected(
         check(config, host_root=native_host), native_host, "plugins.entries.nosuchplugin"
     )
+
+
+def test_allowed_unknown_plugin_is_unavailable_not_valid(native_host):
+    """RM39/RM44, AC35/AC37: an allow-listed plugin is enabled with its default
+    config, which the host checks against the plugin's schema once discovered.
+    An undiscovered allow-listed plugin therefore had no inspected schema."""
+    config = {"plugins": {"allow": ["nosuchplugin"]}}
+    _assert_not_inspected(check(config, host_root=native_host), native_host, "plugins.allow.0")
+
+
+def test_denied_unknown_plugin_needs_no_schema(native_host):
+    """A denied plugin is never enabled, so the host checks no config for it."""
+    result = check({"plugins": {"deny": ["nosuchplugin"]}}, host_root=native_host)
+    assert (result["status"], result["reason"]) == ("valid", None)
+
+
+def test_non_object_config_gets_the_native_verdict(native_host):
+    """RM16, AC37: a non-object preimage reaches the host, never a Python crash."""
+    result = check([], host_root=native_host)
+    assert (result["status"], result["issue_path"], result["reason"]) == ("invalid", "", None)
+
+
+def test_non_object_config_never_raises(monkeypatch):
+    """Malformed input is a verdict (here: the stubbed host's), not an exception."""
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 0, json.dumps(UNAVAILABLE).encode(), b""
+        ),
+    )
+    assert check([]) == UNAVAILABLE
+    assert check("text") == UNAVAILABLE
+
+
+@pytest.mark.parametrize(
+    "identity",
+    [
+        # A single-file identity does not pin the code that produced the verdict.
+        {
+            "host_version": "2026.10.7",
+            "validator_file": "dist/validation-ongxOmrj.mjs",
+            "validator_sha256": "0" * 64,
+        },
+        # Another build of the pinned version (or a modified install).
+        {
+            **PINNED_IDENTITY,
+            "validator_files": {
+                **PINNED_IDENTITY["validator_files"],
+                "dist/config-state-ByKt1EBw.mjs": "0" * 64,
+            },
+        },
+        # A missing imported entry point.
+        {
+            **PINNED_IDENTITY,
+            "validator_files": {
+                k: v
+                for k, v in PINNED_IDENTITY["validator_files"].items()
+                if k != "dist/io.plugin-metadata-CyZLGhSx.mjs"
+            },
+        },
+        {**PINNED_IDENTITY, "host_version": "2026.10.8"},
+    ],
+)
+def test_unpinned_validator_identity_is_rejected(tmp_path, identity):
+    """RM16/RM44, AC37: captured verdicts must name the pinned validator files."""
+    from relaymind.evaluation.asset_whole_task_host_config import validate_verdict
+
+    verdict = {"status": "valid", "issue_path": None, "reason": None, "validator": identity}
+    with pytest.raises(ValueError, match="host_config_verdict"):
+        validate_verdict(verdict)
+    config = {"gateway": {"mode": "local"}}
+    bundle = Bundle(tmp_path, host_config=config)
+    with pytest.raises(WholeTaskRejected, match="host_config_validation_verdict"):
+        resolve_whole_task_inputs(
+            "host",
+            bundle.host_report(),
+            bundle.root / "inputs.json",
+            resolver=OfflineResolver(bundle.resolver),
+            host_config_validation={canonical_digest(config): verdict},
+        )
 
 
 def test_uninspected_plugin_discovery_is_unavailable_not_valid(native_host, tmp_path):
@@ -319,11 +417,7 @@ def test_nonzero_checker_cannot_claim_valid(monkeypatch):
                     "status": "valid",
                     "issue_path": None,
                     "reason": None,
-                    "validator": {
-                        "host_version": "2026.10.7",
-                        "validator_file": "dist/validation-ongxOmrj.mjs",
-                        "validator_sha256": "0" * 64,
-                    },
+                    "validator": PINNED_IDENTITY,
                 }
             ).encode(),
             b"",
@@ -339,11 +433,7 @@ def test_offline_resolution_consumes_captured_verdict_without_node(tmp_path, mon
         "status": "valid",
         "issue_path": None,
         "reason": None,
-        "validator": {
-            "host_version": "2026.10.7",
-            "validator_file": "dist/validation-ongxOmrj.mjs",
-            "validator_sha256": "0" * 64,
-        },
+        "validator": PINNED_IDENTITY,
     }
 
     def no_node(*args, **kwargs):
@@ -393,11 +483,7 @@ def test_captured_uninspected_plugin_verdict_blocks_resolution(tmp_path):
         "status": "unavailable",
         "issue_path": "plugins.entries.nosuchplugin",
         "reason": "plugin_schema_not_inspected",
-        "validator": {
-            "host_version": "2026.10.7",
-            "validator_file": "dist/validation-ongxOmrj.mjs",
-            "validator_sha256": "0" * 64,
-        },
+        "validator": PINNED_IDENTITY,
     }
     with pytest.raises(WholeTaskBlocked, match="host_config_validator_unavailable"):
         resolve_whole_task_inputs(

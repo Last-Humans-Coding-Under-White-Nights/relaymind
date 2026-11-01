@@ -28,7 +28,7 @@ from dataclasses import dataclass
 
 from relaymind.evaluation.asset_corpus import assess_asset_release
 from relaymind.evaluation.asset_qualification import CustodianReview
-from relaymind.evaluation.asset_qualification_record import REPORT_SCOPES, QualificationRecord
+from relaymind.evaluation.asset_qualification_record import QualificationRecord
 from relaymind.evaluation.asset_whole_task import WholeTaskRejected
 from relaymind.evaluation.asset_whole_task_inputs import WholeTaskInputs
 
@@ -88,10 +88,7 @@ def assess_qualification(
     if record is None:
         reasons.add(REVIEW_UNDEFINED)
     else:
-        if record.outcome != "positive" or REPORT_SCOPES.get(record.scope) != kind:
-            raise WholeTaskRejected("qualification_record_scope")
-        if report_sha256 is None or not record.binds("report", report_sha256):
-            raise WholeTaskRejected("qualification_record_unbound")
+        record.check_report(kind, report_sha256)
         if kind == "platform":
             _check_platform_machine(record.machine, platform, reasons)
         if record.approved:
@@ -182,13 +179,21 @@ def assess_inputs(
     the frozen labels.
     """
     release = inputs.release
+    prompt_authorship = None
     if record is not None:
+        # A record for another scope or report rejects before any input or
+        # label comparison, so the closed reason names that contradiction.
+        record.check_report(kind, report_sha256)
         record.check_inputs(kind, inputs)
         record.check_labels(release.labels, {p["id"]: p for p in release.catalog["people"]})
         record.check_cases(release.cases)
+        prompt_authorship = record.prompt_authorship
         if custodian_review is None:
             custodian_review = record.custodian_review()
-    status = assess_asset_release(release, custodian_review=custodian_review).status
+    # Spec 12.6.6: drafted cases count only under the record that declares them.
+    status = assess_asset_release(
+        release, custodian_review=custodian_review, prompt_authorship=prompt_authorship
+    ).status
     return assess_qualification(
         kind=kind,
         claimed=report["qualification"],

@@ -7,14 +7,21 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from relaymind.canonical import canonical_digest
-from relaymind.evaluation.asset_judgments import OWNER_MACHINE
+from relaymind.evaluation.asset_judgments import DRAFTED, OWNER_MACHINE
 from relaymind.evaluation.asset_splits import input_identity
 from relaymind.schema_util import freeze_json
 
-# Spec 0.66 section 12.6.6: owner-approved machine-drafted prompts count in
-# the cohort under the owner-run profile; translated or generated never do.
-DRAFTED = "machine_drafted_owner_approved"
-COUNTED_AUTHORSHIP = ("original", DRAFTED)
+
+def counted_authorship(prompt_authorship: str | None) -> tuple[str, ...]:
+    """Case authorship that counts in the cohort.
+
+    Spec 0.66 section 12.6.6: owner-approved machine-drafted prompts count only
+    under the owner-run profile, that is when a section 12.6.6 record declares
+    ``prompt_authorship: machine_drafted_owner_approved``; translated or
+    generated prompts never count.
+    """
+    return ("original", DRAFTED) if prompt_authorship == DRAFTED else ("original",)
+
 
 if TYPE_CHECKING:
     from relaymind.evaluation.asset_corpus import VerifiedAssetRelease
@@ -114,8 +121,10 @@ def _claim_requirements(documents, need, reasons: set[str]) -> None:
     for case in cases["cases"]:
         need(case["authorship_evidence_ids"], "authorship", ("authorship",))
         if case["authorship"] == DRAFTED:
-            # Spec 0.66 section 12.6.6: the recorded drafter and the owner's
-            # approval replace the author competence rule.
+            # Spec 0.66 section 12.6.6: under the owner-run profile the recorded
+            # drafter (the record checks it is each case's only author) and the
+            # owner's approval replace the author competence rule; without that
+            # profile drafted cases do not count at all.
             if not case["author_ids"]:
                 reasons.add("authorship_unqualified")
             continue
@@ -166,14 +175,22 @@ def _baseline_continuity(catalog: Mapping, baseline) -> tuple[bool, dict]:
 
 
 def assess_asset_release(
-    release: "VerifiedAssetRelease", *, custodian_review: CustodianReview | None = None
+    release: "VerifiedAssetRelease",
+    *,
+    custodian_review: CustodianReview | None = None,
+    prompt_authorship: str | None = None,
 ) -> QualificationAssessment:
-    """Assess the declared release purpose without manufacturing authenticity."""
+    """Assess the declared release purpose without manufacturing authenticity.
+
+    ``prompt_authorship`` is the section 12.6.6 record's value; drafted cases
+    count only when it is ``machine_drafted_owner_approved``.
+    """
     return _assess_asset_release(
         release,
         purpose=release.lock["purpose"],
         development=None,
         custodian_review=custodian_review,
+        prompt_authorship=prompt_authorship,
     )
 
 
@@ -182,10 +199,15 @@ def assess_acceptance_release(
     development: "VerifiedAssetRelease",
     *,
     custodian_review: CustodianReview | None = None,
+    prompt_authorship: str | None = None,
 ) -> QualificationAssessment:
     """RM40/AC31: assess the exact 200→300 extension through the same review gate."""
     return _assess_asset_release(
-        release, purpose="acceptance", development=development, custodian_review=custodian_review
+        release,
+        purpose="acceptance",
+        development=development,
+        custodian_review=custodian_review,
+        prompt_authorship=prompt_authorship,
     )
 
 
@@ -195,6 +217,7 @@ def _assess_asset_release(
     purpose: str,
     development: "VerifiedAssetRelease | None",
     custodian_review: CustodianReview | None,
+    prompt_authorship: str | None = None,
 ) -> QualificationAssessment:
     """A complete review can qualify a freeze, never manufacture authenticity."""
     reasons, required = set(), defaultdict(set)
@@ -233,9 +256,10 @@ def _assess_asset_release(
     lanes = Counter()
     hard_counts = Counter()
     seen_inputs, repeated_inputs = set(), []
+    counted = counted_authorship(prompt_authorship)
     for case in cases["cases"]:
         final = finals[case["id"]]
-        if case["authorship"] not in COUNTED_AUTHORSHIP or case["split"] == "diagnostic":
+        if case["authorship"] not in counted or case["split"] == "diagnostic":
             continue
         if purpose == "acceptance" and case["split"] != "held_out":
             continue
@@ -327,13 +351,16 @@ def _assess_asset_release(
         custodian = people.get(review.custodian_id)
         if review.lock_digest != lock["digest"]:
             reasons.add("external_review_lock_mismatch")
-        # Spec 0.66 section 12.6.6: under owner_machine labelling the owner is
-        # custodian and tuner; the reviewed record and its label disclose it.
-        owner_machine = labels["agreement"]["method"] == OWNER_MACHINE
+        # Spec 0.66 section 12.6.6: under owner_machine labelling only the
+        # owner, who adjudicates every case, may be both custodian and tuner;
+        # any other custodian keeps the section 12.6.1 tuner exclusion.
+        owner_custodian = labels["agreement"]["method"] == OWNER_MACHINE and {
+            row["adjudicator_id"] for row in labels["adjudications"]
+        } == {review.custodian_id}
         if (
             custodian is None
             or "custodian" not in custodian["roles"]
-            or ("tuner" in custodian["roles"] and not owner_machine)
+            or ("tuner" in custodian["roles"] and not owner_custodian)
         ):
             reasons.add("custodian_unqualified")
         if (

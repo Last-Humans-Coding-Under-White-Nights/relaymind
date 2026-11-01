@@ -46,6 +46,16 @@
     async request(method, params) {
       window.calls.push({ method, params });
       if (method === "sessions.describe") return { session: row };
+      if (params.input.kind === "recommend" && window.malformedNext) {
+        window.malformedNext = false;
+        // A candidate without evidence_refs cannot be formatted.
+        return {
+          label: "recommendation",
+          text: "",
+          receipt_json:
+            '{"recommendation_id":"00000000-0000-4000-8000-000000000000","state":"ready","decision":"choice_required","state_version":1,"displayed_candidates":[{"asset":{},"candidate":{}}]}',
+        };
+      }
       if (params.input.kind === "recommend")
         return {
           label: "recommendation",
