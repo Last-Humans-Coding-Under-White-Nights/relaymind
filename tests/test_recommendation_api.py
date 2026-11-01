@@ -91,8 +91,16 @@ def test_create_poll_readiness_and_exact_defaults_replay(tmp_path):
     ],
 )
 def test_strict_parse_precedes_unavailable(tmp_path, change):
+    from relaymind.assets.settings import RecommendationSettings
+
+    # The contract is 400, then 503, then 401, not timing: a generous budget
+    # keeps a busy CI runner from turning the 503 into a 504.
+    settings = RecommendationSettings(
+        enabled=True, user_id="u", workspace_id="w", total_ms=10_000, primary_ms=150
+    )
+
     async def go():
-        app, service, runs, _ = setup(tmp_path, populate=False)
+        app, service, runs, _ = setup(tmp_path, populate=False, settings=settings)
         async with await client_for(app) as c:
             response = await c.post("/relay/v1/recommendations", json=BODY | change)
             assert response.status_code == 400
