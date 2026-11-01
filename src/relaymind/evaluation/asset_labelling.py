@@ -38,6 +38,7 @@ from relaymind.evaluation.asset_judgments import (
     check_owner_machine_pair,
     check_person,
     id_map,
+    pair_checks,
     validate_judgments,
 )
 
@@ -72,6 +73,7 @@ _ADJUDICATION = {
     "reason",
     "evidence_ids",
 }
+_AGREES = ("class", "acceptable_set", "language", "independence")
 _JUDGMENT_ITEM = _CorpusValidator(_VALIDATORS["labels"].schema["properties"]["judgments"]["items"])
 
 
@@ -226,13 +228,7 @@ def adjudication_worksheet(
     items = []
     for case_id in case_map:
         left, right = rows[case_id]
-        agrees = {
-            "class": left["class"] == right["class"],
-            "acceptable_set": set(left["acceptable_asset_ids"])
-            == set(right["acceptable_asset_ids"]),
-            "language": left["language_valid"] == right["language_valid"],
-            "independence": left["independent_case"] == right["independent_case"],
-        }
+        agrees = dict(zip(_AGREES, pair_checks(left, right), strict=True))
         agrees["joint"] = all(agrees.values())
         items.append(
             dict(case_id=case_id, judgments=[left, right], agrees=agrees, adjudication=None)

@@ -425,6 +425,36 @@ class QualificationRecord:
                 _reject("prompt_authorship_mismatch")
 
 
+def _read_bound(root: Path, ref: Mapping, limit: int) -> bytes:
+    """The bytes of one bound file, checked against its size and SHA-256."""
+    try:
+        payload = read_local(root, ref["path"], limit)
+    except (OSError, ValueError) as exc:
+        raise WholeTaskRejected("record_subject_unavailable") from exc
+    if len(payload) != ref["bytes"] or hashlib.sha256(payload).hexdigest() != ref["sha256"]:
+        _reject("record_digest_mismatch")
+    return payload
+
+
+def _check_report_dispatch(record: Mapping, payload: bytes, root: Path) -> None:
+    """A preregistered host report's bound dispatch evidence corroborates it."""
+    try:
+        report = parse_json(payload)
+    except ValueError as exc:
+        raise WholeTaskRejected("record_input_mismatch") from exc
+    # Full report shape is checked by the report verifier. When rows are
+    # present, its bound evidence must corroborate preregistration.
+    if not isinstance(report, dict) or "rows" not in report:
+        return
+    first = first_host_dispatch(report, root)
+    if first is None:
+        _reject("preregistration_missing")
+    if _time(record["preregistration"]["committed_at"]) > _time(first):
+        _reject("preregistration_late")
+    if _time(record["runs_started_at"]) > _time(first):
+        _reject("record_input_mismatch")
+
+
 def first_host_dispatch(report: Mapping, root: Path | None = None) -> str | None:
     """RM16/RM44: earliest evidenced dispatch, never an assistant end time.
 
@@ -446,12 +476,7 @@ def first_host_dispatch(report: Mapping, root: Path | None = None) -> str | None
             if len(refs) != 1 or root is None:
                 return None
             ref = refs[0]
-            try:
-                payload = read_local(root, ref["path"], DOCUMENT_BYTES)
-            except (OSError, ValueError) as exc:
-                raise WholeTaskRejected("record_subject_unavailable") from exc
-            if len(payload) != ref["bytes"] or hashlib.sha256(payload).hexdigest() != ref["sha256"]:
-                _reject("record_digest_mismatch")
+            payload = _read_bound(root, ref, DOCUMENT_BYTES)
             try:
                 capture = parse_json(payload)
             except ValueError as exc:
@@ -466,14 +491,13 @@ def first_host_dispatch(report: Mapping, root: Path | None = None) -> str | None
                 or ref.get("provenance") != "observed"
             ):
                 _reject("record_input_mismatch")
-            dispatch = capture["started_at"]
-            _time(dispatch)
+            dispatch = _time(capture["started_at"])
             # A capture after a known attempt cannot describe its dispatch.
             for attempt in row["attempts"]:
                 for key in ("started_at", "ended_at"):
-                    if attempt.get(key) is not None and _time(dispatch) > _time(attempt[key]):
+                    if attempt.get(key) is not None and dispatch > _time(attempt[key]):
                         _reject("record_input_mismatch")
-            times.append(dispatch)
+            times.append(capture["started_at"])
         else:
             starts = [a["started_at"] for a in row["attempts"]]
             if not starts or any(t is None for t in starts):
@@ -495,34 +519,13 @@ def load_record(path: Path) -> QualificationRecord:
     _check_rules(record)
     canonical = {}
     for subject in record["subjects"]:
-        try:
-            payload = read_local(path.parent, subject["path"], REPORT_BYTES)
-        except (OSError, ValueError) as exc:
-            raise WholeTaskRejected("record_subject_unavailable") from exc
-        if (
-            hashlib.sha256(payload).hexdigest() != subject["sha256"]
-            or len(payload) != subject["bytes"]
-        ):
-            _reject("record_digest_mismatch")
+        payload = _read_bound(path.parent, subject, REPORT_BYTES)
         if (
             subject["role"] == "report"
             and record["scope"] in _HOST_SCOPES.values()
             and record["preregistration"] is not None
         ):
-            try:
-                report = parse_json(payload)
-            except ValueError as exc:
-                raise WholeTaskRejected("record_input_mismatch") from exc
-            # Full report shape is checked by the report verifier. When rows
-            # are present, its bound evidence must corroborate preregistration.
-            if isinstance(report, dict) and "rows" in report:
-                first = first_host_dispatch(report, path.parent / Path(subject["path"]).parent)
-                if first is None:
-                    _reject("preregistration_missing")
-                if _time(record["preregistration"]["committed_at"]) > _time(first):
-                    _reject("preregistration_late")
-                if _time(record["runs_started_at"]) > _time(first):
-                    _reject("record_input_mismatch")
+            _check_report_dispatch(record, payload, path.parent / Path(subject["path"]).parent)
         if subject["role"] in _INPUT_ROLES:
             try:
                 canonical[subject["role"]] = canonical_digest(parse_json(payload))

@@ -499,9 +499,7 @@ def test_fonts_without_a_home_are_refused_not_installed_elsewhere(rec, tmp_path,
     fonts = font_dir(tmp_path)
     monkeypatch.chdir(tmp_path)
     before = sorted(p.name for p in tmp_path.iterdir())
-    with pytest.raises(ValueError, match="walkthrough_font_home"):
-        rec.install_fonts(fonts, {})
-    for environment in (dict(HOME=""), dict(XDG_DATA_HOME="", HOME=""), dict(HOME="rel")):
+    for environment in ({}, dict(HOME=""), dict(XDG_DATA_HOME="", HOME=""), dict(HOME="rel")):
         with pytest.raises(ValueError, match="walkthrough_font_home"):
             rec.install_fonts(fonts, environment)
     assert sorted(p.name for p in tmp_path.iterdir()) == before
@@ -1014,24 +1012,19 @@ def test_run_child_ends_the_whole_tree_on_windows(rec, monkeypatch):
             calls.append("kill")
             self.returncode = 1
 
+    child = _Child()
+
     def popen(command, **options):
         calls.append(("popen", options))
-        return _Child()
+        return child
 
     def run(command, **options):
         calls.append(("run", command))
         child.returncode = 1
 
-    child = None
-
-    def popen_and_keep(command, **options):
-        nonlocal child
-        child = popen(command, **options)
-        return child
-
     monkeypatch.setattr(rec.sys, "platform", "win32")
     monkeypatch.setattr(rec.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, raising=False)
-    monkeypatch.setattr(rec.subprocess, "Popen", popen_and_keep)
+    monkeypatch.setattr(rec.subprocess, "Popen", popen)
     monkeypatch.setattr(rec.subprocess, "run", run)
     with pytest.raises(rec.subprocess.TimeoutExpired):
         rec.run_child(["child"], timeout=0.01)
