@@ -140,24 +140,6 @@ jobs:
       # Capability investigation only: an unavailable exact-use route is a
       # blocked capture (exit 0); harness/fixture errors must fail the job.
       # Typical 50–100 s; tier deadline 180 s, plus 60 s for cleanup/export.
-      - name: Disposable MCP use capability fixture
-        if: matrix.os == 'ubuntu-latest'
-        timeout-minutes: 4
-        run: |
-          python integrations/openclaw/test/host-mcp-use-qualification/qualify.py \
-            --tarball "release/openclaw/$(node -p "require('./release/openclaw/release.json').filename")" \
-            --work-dir "${RUNNER_TEMP}/relaymind-mcp-use-qualification" \
-            --out ci-evidence/openclaw-mcp-use-ubuntu.json
-
-      - name: Upload MCP use capability capture
-        uses: actions/upload-artifact@v4
-        if: always() && matrix.os == 'ubuntu-latest'
-        with:
-          name: openclaw-mcp-use-ubuntu-${{ github.run_attempt }}
-          path: ci-evidence/openclaw-mcp-use-ubuntu.json
-          if-no-files-found: error
-          retention-days: 30
-
       - name: Transport, plugin, and artifact tiers
         run: >
           pytest tests/test_openclaw_host_transport.py tests/test_openclaw_plugin.py
@@ -198,6 +180,24 @@ jobs:
             release/openclaw/
             ci-evidence/
           if-no-files-found: warn
+          retention-days: 30
+
+      - name: Disposable MCP use capability fixture
+        if: matrix.os == 'ubuntu-latest'
+        timeout-minutes: 4
+        run: |
+          python integrations/openclaw/test/host-mcp-use-qualification/qualify.py \
+            --tarball "release/openclaw/$(node -p "require('./release/openclaw/release.json').filename")" \
+            --work-dir "${RUNNER_TEMP}/relaymind-mcp-use-qualification" \
+            --out ci-evidence/openclaw-mcp-use-ubuntu.json
+
+      - name: Upload MCP use capability capture
+        uses: actions/upload-artifact@v4
+        if: always() && matrix.os == 'ubuntu-latest'
+        with:
+          name: openclaw-mcp-use-ubuntu-${{ github.run_attempt }}
+          path: ci-evidence/openclaw-mcp-use-ubuntu.json
+          if-no-files-found: error
           retention-days: 30
 
       - name: Native loaded skill observation (outcomes do not qualify use)

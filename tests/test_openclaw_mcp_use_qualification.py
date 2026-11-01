@@ -729,3 +729,13 @@ def test_the_pin_never_requires_an_output_for_a_declaration_file():
             .as_posix()
         )
         assert (output in required) == (not source.name.endswith(".d.ts"))
+
+
+def test_the_mcp_capability_step_runs_after_every_regular_tier():
+    """RM39/AC35 F1: an unmeasured tier can never skip the regular plugin tiers."""
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    step = ci.index("      - name: Disposable MCP use capability fixture")
+    assert step > ci.index("      - name: Transport, plugin, and artifact tiers")
+    assert step > ci.index("      - name: Pinned host lifecycle")
+    assert step > ci.index("          name: openclaw-plugin-${{ matrix.os }}")
+    assert "continue-on-error" not in ci
