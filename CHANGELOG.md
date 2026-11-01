@@ -76,10 +76,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   operation is in the shipped registry, no production MCP route exists, and
   `relaymind.mcp` is not registered; the tests use injected fixture resolvers
   and routes only. The shipped direct-action/exact-selection entry is re-pinned
-  to the new adapter revision `943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`; its evidence revision still names
-  the capture of the earlier revision `653902615edf…` (CI run 41286397320,
-  SHA-256 `933fb4e7c8b3…`), and the evidence recapture of this revision is
-  pending before merge. A release-artifact test now fails when the registry
+  to the new adapter revision `943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`; its evidence revision names
+  the fresh capture of this revision (CI run 41307043410, SHA-256
+  `babba902bb57…`). A release-artifact test now fails when the registry
   and the built adapter digest drift. After review, the ledger never writes a
   record recovery would reject and has `close()` (on gateway stop); a
   same-key request during preparation recovers that attempt's actual receipt;
