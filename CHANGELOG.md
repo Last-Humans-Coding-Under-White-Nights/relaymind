@@ -92,7 +92,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   admitted only 8 of OpenClaw 2026.10.7's 49 bundled skills: 32 bodies were
   rejected for `<placeholder>` text or HTML examples and 9 for more than three
   code-fence lines, and one rejected file failed the whole folder. Bodies now
-  keep only the encoding, control and size checks, and a rejected candidate is
+  keep only the NFC, encoding, control and size checks, and a rejected candidate is
   excluded on its own with a fixed reason. Five verbatim copies are test
   fixtures (`tests/fixtures/openclaw-bundled-skills/`, MIT) in the default
   suite. `tests/test_openclaw_pinned_package.py` scans a copy of the pinned
