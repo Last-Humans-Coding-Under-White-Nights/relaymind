@@ -11,7 +11,9 @@ command per standard-input line that calls the gateway's own background owner:
 
 Each reply is one ``Control-Reply:`` line on standard output with the
 publication revision and the stored outcome and event chain of every job that
-started for that request. A closed standard input stops the server. This is
+started for that request. When the job store cannot be read, the reply is
+``{"ok": false, "error": "job_evidence_unavailable", "evidence_error": ...}``:
+missing evidence, not a refused command. A closed standard input stops the server. This is
 not a product API: it opens no socket and adds no endpoint, and only the
 parent process that owns the pipes can use it.
 """
@@ -37,6 +39,13 @@ def _new_jobs(catalog, before: set[str], source_id: str | None) -> list[dict]:
     ]
 
 
+EVIDENCE_UNAVAILABLE = "job_evidence_unavailable"
+
+
+def _evidence_unavailable(reply: dict, error: Exception) -> dict:
+    return dict(reply, error=EVIDENCE_UNAVAILABLE, evidence_error=type(error).__name__)
+
+
 async def handle(app, command: Mapping) -> dict:
     """Run one control command against the app's asset catalog owner."""
     reply: dict = {"id": command.get("id"), "ok": False}
@@ -47,17 +56,24 @@ async def handle(app, command: Mapping) -> dict:
     if op not in ("rescan", "rebuild"):
         return dict(reply, error="unknown_op")
     source_id = command.get("source_id") if op == "rescan" else None
-    # Every failure, including reading the job store, is answered at once so
-    # the parent never waits for its control timeout.
+    # Every failure is answered at once so the parent never waits for its
+    # control timeout. A failed job store read is the closed evidence error
+    # ``job_evidence_unavailable``, never a refused rescan or rebuild.
     try:
         before = {job["job_id"] for job in catalog.store.job_outcomes()}
+    except Exception as error:
+        return _evidence_unavailable(reply, error)
+    try:
         if op == "rescan":
             publication = await catalog.rescan(source_id)
         else:
             publication = await catalog.rebuild()
-        jobs = _new_jobs(catalog, before, source_id)
     except Exception as error:
         return dict(reply, error=type(error).__name__, reason=getattr(error, "reason", None))
+    try:
+        jobs = _new_jobs(catalog, before, source_id)
+    except Exception as error:
+        return _evidence_unavailable(reply, error)
     return dict(
         reply,
         ok=True,
