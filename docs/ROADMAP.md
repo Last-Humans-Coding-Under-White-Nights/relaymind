@@ -1050,31 +1050,39 @@ functional host, never a target platform). Labels may be `owner_machine`
 adjudication), and reports say so. A closed `QualificationRecordV1` in
 `docs/evidence/m10/` binds the frozen inputs and reports by SHA-256 and is
 approved by a pull request review from at least one org member other than the
-owner; a negative record closes the `skill_loaded_use` or `mcp_use` gate on
-the pinned host with the operation disabled and listed as a known host
-limitation. The verifier support is implemented (`--qualification-record`,
-`--labelling owner_machine`) and fixture-tested only. No gate has passed.
+owner; an approved negative record (a pending one lifts nothing) closes the
+`skill_loaded_use` or `mcp_use` gate on the pinned host with the operation
+disabled and listed as a known host limitation. The verifier support is
+implemented (`--qualification-record`, `--labelling owner_machine`) and
+fixture-tested only. No gate has passed.
 A later 0.66 addition for #260 adds `machine_drafted_owner_approved`
 prompts and `machine_dual_owner_approved` labels (two machine annotators and a
 machine adjudicator; the owner approves by PR review). Their verifier support
 is fixture-tested only.
-#255 has committed two **pending** negative `host_operation` records for the
-pinned 2026.10.7 host: `m10-negative-skill-loaded-use-openclaw-2026.10.7`
-(`stop_point_absent`) and `m10-negative-mcp-use-openclaw-2026.10.7`
-(`exact_route_absent`). Both operations stay disabled. See
-`docs/evidence/m10/host-use-settlement-20261101.md`. The host has hooks, tool-result
-middleware and the provider stream that can stop a read or a request, but none
-can re-verify fresh person authority, the session incarnation and the pinned
-bytes, so none can fence the next model request as 7.6.1 requires. The only
-delegation candidate, `GatewaySessionAccessAuthority.retain()`, has no defined
-qualification. No supported route invokes an independent, non-App MCP tool by
-its exact native identity: `tools.invoke` is name-only, the harness runtimes
-are documented private, and the App-scoped `mcp.app.callTool` does not count. The records lift nothing until a
-pull request review by an org member other than the owner is written into
-them, which will make these host limitations. The first VPS run could not
-start a person tier (no private interface, missing Chromium libraries), so the
-first substantive captures came from CI run 41286397320. A second VPS run at
-62c4dcd, after the owner's setup, also binds its captures. Person ingress
+#255 has committed one **pending** negative `host_operation` record for the
+pinned 2026.10.7 host: `m10-negative-mcp-use-openclaw-2026.10.7`
+(`exact_route_absent`). No supported route invokes an independent, non-App MCP
+tool by its exact native identity: `tools.invoke` is name-only, the harness
+runtimes are documented private, and the App-scoped `mcp.app.callTool` does not
+count. Those three verdicts rest on the pinned host source; the captures
+attempted only `mcp.app.discover`, `tools.effective` and `mcp.app.listTools`
+(listed in the inventory's `attempted_routes`). The record lifts nothing until
+a pull request review by an org member other than the owner is written into
+it, which will make MCP use a host limitation. There is **no** negative
+`skill_loaded_use` record: the hooks, tool-result middleware and the provider
+stream can stop a read or a request but cannot re-verify fresh person
+authority, the session incarnation and the pinned bytes on their own, while
+the host's `GatewaySessionAccessAuthority.retain()` borrow re-checks the
+person's grant and the exact session incarnation at call time and could back a
+provider `onPayload` fence. Spec 7.6.1 admits such a qualified delegation, so
+`stop_point_absent` is not established; the earlier pending record asserting it
+was withdrawn after review. Loaded use stays disabled as unqualified, and its
+AC30 evidence is still required on this host. Both operations stay disabled.
+See `docs/evidence/m10/host-use-settlement-20261101.md`. The first VPS run could
+not start a person tier (no private interface, missing Chromium libraries), so
+the first substantive captures came from CI run 41286397320. A second VPS run at
+62c4dcd, after the owner's setup, also ran; the MCP record binds its MCP
+capture. Person ingress
 passes there. MCP use is `blocked` (`exact_route_unqualified`). The reset case
 is now `control_refused` on the real host. That run exited 2 because the
 62c4dcd predicate expected one pin in the session's selection listing while
@@ -1084,7 +1092,7 @@ committed capture. A CI run of the current harness is still missing. The CI and
 VPS2 MCP captures show an empty `tools.effective` list only because the old
 probe read `payload.tools` instead of the host's `groups[].tools`; a third VPS
 run at bba0cf1 with the #249 fix lists both colliding tools and is still
-`blocked`, and the MCP record binds it. The findings are unchanged. #259, #260 and #261 remain open and
+`blocked`, and the MCP record binds it. The MCP finding is unchanged. #259, #260 and #261 remain open and
 need the real runs, captures, labels and reviews. Host configuration semantics
 (#250/#240) still keep host reports below `qualified`. Spec-only decisions
 awaiting implementation: the rank 4–10 choice receipt returning the offered
@@ -1110,7 +1118,9 @@ manifest. Loaded skill use, MCP use and host MCP approval are recorded as
 
 #270 (RM12/RM39; AC30) localizes all recommendation-detail labels for `en-US`
 and `zh-CN`, displays ordinary characters through text-only DOM rendering,
-neutralizes control characters, and wraps long evidence and feedback values.
+neutralizes control characters (in the evidence, the privacy data and the
+host skill labels of the native skill select), and wraps long evidence and
+feedback values.
 Source locators remain the exact offered record: spec sections 4.6.1 and 7.6
 define local locators as resolved `SKILL.md` paths and return that record in
 the scoped view; no home-path abbreviation/redaction rule is specified.
@@ -1121,7 +1131,7 @@ panel and its evidence, and a receipt that cannot be displayed leaves the
 shown recommendation and its actions in place.
 The adapter revision is repinned to the built bytes that include these review
 fixes and the #256 ledger and fence fixes
-(`3fc77018c85ed3bae757427365d71089b692d647194f8c67bde5e31f21bb8ced`).
+(`d47d07640a0280a37580ca015a4a83a151d5ac9bdfd0500b69010edbf64e53c8`).
 The committed capture below ran the earlier bytes
 (`ddeb3c70d69c3d6de61902b41b05008853c777b1e13c04ec9d7cc827db01b894`), so it
 must be recaptured from CI for the new revision before merge.

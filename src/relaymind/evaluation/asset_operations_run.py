@@ -74,6 +74,8 @@ _CONTROL_SECONDS = 60.0
 # chains, far above asyncio's default 64 KiB line limit.
 _STREAM_LIMIT = 16 * 1024 * 1024
 _GRACE_SECONDS = 10.0
+# After stdout EOF, how long to wait for the child to exit before calling it a timeout.
+_EOF_EXIT_SECONDS = 5.0
 SOURCE_ID = "operations"
 IMPORT_SOURCE_ID = "operations-import"
 UNUSED_KEY_ENV = "RELAYMIND_OPERATIONS_UNUSED_KEY"
@@ -268,6 +270,14 @@ async def _read_token(
             except TimeoutError:
                 raise TimeoutError("gateway_token_unavailable") from None
             if not line:
+                # EOF: the child closed its output, normally by exiting. An
+                # exited gateway is gateway_exited, not a token timeout.
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(
+                        process.wait(), max(0.0, min(_EOF_EXIT_SECONDS, remaining))
+                    )
+                if process.returncode is not None:
+                    raise RuntimeError("gateway_exited")
                 raise TimeoutError("gateway_token_unavailable")
             text = line.decode("utf-8", "replace")
             if text.startswith(_PID_PREFIX):

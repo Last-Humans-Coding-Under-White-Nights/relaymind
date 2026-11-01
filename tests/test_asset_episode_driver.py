@@ -530,3 +530,23 @@ def test_a_refused_reset_keeps_its_own_reason(tmp_path, monkeypatch):
     assert result["status"] == "failed" and result["reason"] == "reset_refused"
     assert [c["status"] for c in result["corrections"]] == ["accepted"] * 3
     assert result["reset_equal"] is None
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {},
+        dict(result=dict(episode_id="e1")),
+        dict(evidence=[]),
+        dict(evidence=None, result=dict(episode_id="e1")),
+        dict(evidence=[3], result=dict(episode_id="e1")),
+        dict(evidence=[], result=None),
+        dict(evidence=[], result=[]),
+    ],
+)
+def test_a_malformed_journaled_episode_rejects_with_a_fixed_reason(value):
+    """Review 4436631723: a malformed journal entry is journal_evidence, never a raw error."""
+    from relaymind.evaluation.asset_episode_driver import _restored
+
+    with pytest.raises(WholeTaskRejected, match="journal_evidence"):
+        _restored(value, "e1", {})
