@@ -6,13 +6,22 @@ adaptation report), 1 a known gate failure, 2 the export or its inputs were
 rejected (contradiction), 3 blocked (missing or unverifiable required input or
 evidence). Blocked is never reported as a pass. A graded result records the
 qualification tier assessed from the inputs (#240), never the report's label.
+
+The ``trial-*`` commands are the #234 early installed-skill trial kit
+(``asset_trial_kit``): a target machine/host/release preflight, the packaged
+plugin installed with the pinned host CLI, and the frozen plan run over
+operator-captured host observations, bundled and graded with the grader above.
+They invoke the host CLI only for ``--version``, ``plugins install`` and
+``plugins inspect``; they never execute a task, a tool or an approval.
 """
 
 import argparse
 import json
+import signal
 import sys
 from pathlib import Path
 
+from relaymind.evaluation import asset_trial_kit
 from relaymind.evaluation.asset_benchmark_io import (
     REPORT_BYTES,
     atomic_bytes,
@@ -115,6 +124,120 @@ def _plan_episodes(args) -> dict:
     )
 
 
+def _host(args) -> list[str]:
+    host = list(args.host)
+    if host[:1] == ["--"]:
+        host = host[1:]
+    if not host:
+        raise SystemExit("the OpenClaw command follows --, e.g. -- openclaw")
+    return host
+
+
+def _trial_preflight(args, environment: dict) -> dict:
+    frozen = asset_trial_kit.load_frozen(args.inputs)
+    return asset_trial_kit.preflight(
+        environment=environment,
+        lock=frozen["lock"],
+        host_command=_host(args),
+        tarball=args.tarball,
+        freeze=frozen["freeze"],
+    )
+
+
+def _trial(args) -> int:
+    """#234: the early-trial kit commands (spec 0.65 section 12.6.5)."""
+    try:
+        environment = asset_trial_kit.observed_environment()
+        if args.command == "trial-preflight":
+            record = _trial_preflight(args, environment)
+            atomic_bytes(args.output, json_bytes(record))
+            print(json.dumps(dict(passed=record["passed"], checks=record["checks"])))
+            return 0 if record["passed"] else 3
+        if args.command == "trial-install":
+            record = asset_trial_kit.install_plugin(_host(args), args.tarball, args.work)
+            atomic_bytes(args.output, json_bytes(record))
+            print(json.dumps(dict(passed=record["passed"])))
+            return 0 if record["passed"] else 3
+        if args.command == "trial":
+            work = args.work.absolute()
+            work.mkdir(mode=0o700, parents=True, exist_ok=False)
+            preflight = _trial_preflight(args, environment)
+            atomic_bytes(work / "preflight.json", json_bytes(preflight))
+            install = None
+            # A provisional trial stops at a failed preflight; nothing is installed.
+            if preflight["passed"] or args.qualification == "fixture":
+                install = asset_trial_kit.install_plugin(
+                    _host(args), args.tarball, work / "install"
+                )
+            tarball = args.tarball
+        else:
+            preflight, _ = read_json_path(args.preflight)
+            install = read_json_path(args.install)[0] if args.install else None
+            tarball = args.tarball
+    except (WholeTaskBlocked, WholeTaskRejected, AssetCorpusError, OSError, ValueError) as exc:
+        reason = getattr(exc, "reason", str(exc))
+        print(json.dumps(dict(status="rejected", reason=reason)), file=sys.stderr)
+        return 3 if isinstance(exc, WholeTaskBlocked) else 2
+    stop = []
+    previous = signal.signal(signal.SIGINT, lambda *_: stop.append(True))
+    try:
+        code, result = asset_trial_kit.trial_run(
+            inputs=args.inputs,
+            observations=args.observations,
+            bundle=args.bundle,
+            resolver=args.resolver,
+            qualification=args.qualification,
+            environment=environment,
+            preflight_record=preflight,
+            install_record=install,
+            tarball=tarball,
+            ask=input if args.interactive else None,
+            interrupted=lambda: bool(stop),
+        )
+    finally:
+        signal.signal(signal.SIGINT, previous)
+    print(json.dumps({k: result.get(k) for k in ("status", "gate", "reason", "bundle")}))
+    return code
+
+
+def _trial_parsers(sub) -> None:
+    def host(parser):
+        parser.add_argument(
+            "host", nargs=argparse.REMAINDER, help="-- then the OpenClaw command, e.g. openclaw"
+        )
+
+    def run(parser):
+        parser.add_argument("--inputs", type=Path, required=True, help="frozen input manifest")
+        parser.add_argument("--observations", type=Path, required=True)
+        parser.add_argument("--bundle", type=Path, required=True, help="new output directory")
+        parser.add_argument("--resolver", type=Path)
+        parser.add_argument(
+            "--qualification", choices=asset_trial_kit.QUALIFICATIONS, required=True
+        )
+        parser.add_argument("--interactive", action="store_true")
+
+    preflight = sub.add_parser("trial-preflight", help="#234 target machine/host/release check")
+    preflight.add_argument("--inputs", type=Path, required=True)
+    preflight.add_argument("--tarball", type=Path, required=True)
+    preflight.add_argument("--output", type=Path, required=True)
+    host(preflight)
+    install = sub.add_parser("trial-install", help="install the packaged plugin in the host")
+    install.add_argument("--tarball", type=Path, required=True)
+    install.add_argument("--work", type=Path, required=True)
+    install.add_argument("--output", type=Path, required=True)
+    host(install)
+    trial_run = sub.add_parser("trial-run", help="run, bundle and grade the early trial")
+    run(trial_run)
+    trial_run.add_argument("--preflight", type=Path, required=True)
+    trial_run.add_argument("--install", type=Path)
+    trial_run.add_argument("--tarball", type=Path)
+    trial = sub.add_parser("trial", help="preflight, install, run, bundle and grade")
+    run(trial)
+    trial.add_argument("--tarball", type=Path, required=True)
+    trial.add_argument("--work", type=Path, required=True, help="new private work directory")
+    host(trial)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
@@ -147,7 +270,10 @@ def main(argv: list[str] | None = None) -> int:
             ),
         )
         grade.add_argument("--output", type=Path, required=True)
+    _trial_parsers(sub)
     args = parser.parse_args(argv)
+    if args.command.startswith("trial"):
+        return _trial(args)
     try:
         if args.command == "plan-host":
             tasks, _ = read_json_path(args.tasks, DOCUMENT_BYTES)
