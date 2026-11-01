@@ -251,9 +251,24 @@ def ordinary_pass(capture):
 SELECTED_LABEL = (
     "Exact native revision selected for the next turn; instruction use is not yet observed."
 )
-_SKILL_ID = re.compile(r"[a-f0-9-]{36}")
+_SKILL_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 _REVISION = re.compile(r"[a-f0-9]{64}")
-_SKILL_NEGATIVES = {"unmapped_skill", "foreign_person"}
+_SKILL_NEGATIVES = {
+    "unmapped_skill": "INVALID_REQUEST",
+    "foreign_person": "FORBIDDEN",
+    "foreign_person_own_session": "INVALID_REQUEST",
+}
+
+
+def library_revision_listed(listed, skill_id, revision):
+    """Require a successful native listing containing the exact saved revision."""
+    try:
+        return listed["ok"] is True and any(
+            entry["skillId"] == skill_id and entry["revision"] == revision
+            for entry in listed["payload"]["entries"]
+        )
+    except (KeyError, TypeError):
+        return False
 
 
 def ordinary_skill_pass(capture):
@@ -279,6 +294,22 @@ def ordinary_skill_pass(capture):
             or not _REVISION.fullmatch(revision)
         ):
             return False
+        asset_id = mapping["assetId"]
+        views = capture["ordinary_actions"]["ui"]["snapshots"]["choice"]["views"]
+        chosen = [view for view in views if view["state"] == "chosen"]
+        if (
+            not isinstance(asset_id, str)
+            or not asset_id.strip()
+            or len(chosen) != 1
+            or chosen[0]["selected_action"]["choice"]
+            != dict(kind="asset", asset_id=asset_id, content_hash=mapping["contentHash"])
+            or not any(
+                item["asset"]["asset_id"] == asset_id
+                and item["asset"]["content_hash"] == mapping["contentHash"]
+                for item in chosen[0]["displayed_candidates"]
+            )
+        ):
+            return False
         if (
             mapping["skillId"] != skill_id
             or mapping["revision"] != revision
@@ -296,9 +327,14 @@ def ordinary_skill_pass(capture):
             return False
         if value["ui_status"] != "selected":
             return False
+        if not library_revision_listed(value["library_list"], skill_id, revision):
+            return False
+        if len(value["negatives"]) != len(_SKILL_NEGATIVES):
+            return False
         negatives = {item["case"]: item for item in value["negatives"]}
-        return set(negatives) == _SKILL_NEGATIVES and all(
-            item["ok"] is False for item in negatives.values()
+        return negatives.keys() == _SKILL_NEGATIVES.keys() and all(
+            item["ok"] is False and item["error_code"] == _SKILL_NEGATIVES[item["case"]]
+            for item in value["negatives"]
         )
     except (KeyError, TypeError):
         return False
@@ -1061,7 +1097,7 @@ class OrdinaryComposition(BASE.ActionComposition):
         self.host_config["plugins"]["allow"] = list(
             dict.fromkeys([*self.host_config["plugins"]["allow"], "relaymind"])
         )
-        skill = self.save_library_skill(rpc, pages[0], sessions[0])
+        skill = self.save_library_skill(rpc, pages[0])
         with self.step("entry_read"):
             capture["ordinary_skill"] = skill
             self.config["recommendations"]["skills"] = [skill["mapping"]]
@@ -1206,7 +1242,7 @@ class OrdinaryComposition(BASE.ActionComposition):
                 raise ValueError("ordinary_zero_http_failed")
 
     @ordinary_step("save_library_skill")
-    def save_library_skill(self, rpc, page, session):
+    def save_library_skill(self, rpc, page):
         """Save the gateway's exact fixture SKILL.md into this person's library."""
         saved = rpc(
             page,
@@ -1241,7 +1277,7 @@ class OrdinaryComposition(BASE.ActionComposition):
 
     @ordinary_step("select_library_skill")
     def select_library_skill(self, rpc, pages, sessions, ui_page, skill):
-        """Exact selection through the bridge, the official UI and two refusals."""
+        """Exact selection through the bridge, UI, and routing/binding refusals."""
         views = self.observe_backend()["views"]
         chosen = [v for v in views if v["state"] == "chosen"]
         if len(chosen) != 1:
@@ -1259,10 +1295,13 @@ class OrdinaryComposition(BASE.ActionComposition):
         skill["receipt"] = dict(
             ok=receipt["frame"].get("ok") is True, payload=receipt["frame"].get("payload")
         )
+        if skill["receipt"]["ok"] is not True:
+            raise ValueError("ordinary_skill_selection_failed")
         negatives = []
         for case, page, change in (
             ("unmapped_skill", pages[0], dict(skillId=str(uuid.uuid4()))),
             ("foreign_person", pages[1], {}),
+            ("foreign_person_own_session", pages[1], sessions[1]),
         ):
             observed = rpc(page, "relaymind.skill", dict(params, **change))
             negatives.append(
@@ -1291,6 +1330,10 @@ class OrdinaryComposition(BASE.ActionComposition):
         skill["library_list"] = dict(
             ok=listed["frame"].get("ok") is True, payload=listed["frame"].get("payload")
         )
+        if not library_revision_listed(
+            skill["library_list"], mapping["skillId"], mapping["revision"]
+        ):
+            raise ValueError("ordinary_skill_selection_failed")
 
     def loaded_use_turn(self, rpc, page, session, case, *, timeout=60):
         """Collect a bounded native browser turn; hooks only observe, never dispatch."""

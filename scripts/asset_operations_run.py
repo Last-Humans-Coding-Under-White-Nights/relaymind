@@ -66,7 +66,7 @@ def startup_report(
     base_digest: str,
     counter: str,
 ) -> dict:
-    useful = sum(sample.first_useful_at is not None for sample in samples)
+    useful = sum(sample.outcome == "useful" for sample in samples)
     return dict(
         kind="asset-operations-startup",
         qualification="fixture",
@@ -92,15 +92,15 @@ def _startup(args) -> dict:
 
     @contextlib.asynccontextmanager
     async def launch():
-        async with serve(work / f"run-{next(counter)}", catalog, base_config=base) as running:
+        ordinal = next(counter)
+        memory.append(None)  # Reserve the slot even if launch never yields.
+        async with serve(work / f"run-{ordinal}", catalog, base_config=base) as running:
             try:
                 yield running
             finally:
-                memory.append(rss_bytes(running[0]))
+                memory[ordinal] = rss_bytes(running[0])
 
     asyncio.run(measure_startups(launch, BODY, samples=samples))
-    while len(memory) < len(samples):
-        memory.append(None)  # a launch that never yielded has no memory sample
     return startup_report(
         samples,
         memory,
