@@ -902,3 +902,16 @@ def test_each_exchange_runs_in_its_own_state_directory_inside_the_host_home(
     step = next(s for s in export["steps"] if s["name"] == "text-exchange")
     shown = step["argv"][step["argv"].index("--state-dir") + 1]
     assert shown.startswith(install_check.HOST_HOME)
+
+
+@pytest.mark.parametrize("encoded", [False, True])
+def test_runtime_default_model_is_redacted(tmp_path, encoded):
+    """RM12/AC24: the operator's default model never enters lifecycle evidence."""
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    raw = "Runtime: model=relaymind/client | default_model=private/provider-model | shell=pwsh\n"
+    text = json.dumps(raw) if encoded else raw
+    result = install_check._sanitize(text, ctx)
+    assert "private/provider-model" not in result
+    assert "default_model=<default-model>" in result
+    assert "model=relaymind/client" in result
+    assert (json.loads(result) if encoded else result).endswith(" | shell=pwsh\n")

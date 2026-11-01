@@ -55,6 +55,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import socket
 import sqlite3
@@ -440,6 +441,7 @@ def _exec(ctx: Context, step: str, prompt: str) -> list[str]:
 
 def _sanitize(text: str, ctx: Context) -> str:
     text = text.replace(ctx.token, NOT_RECORDED)
+    text = re.sub(r'(?<=default_model=)[^\s|\\"]+', "<default-model>", text)
     # Most specific first: the host home and the artifact may sit under the others.
     places = (
         (ctx.home, HOST_HOME),

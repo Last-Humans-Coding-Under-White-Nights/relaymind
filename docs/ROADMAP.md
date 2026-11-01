@@ -1580,3 +1580,14 @@ console-launch proof. The full 412/128 provisional source runs retain the
 observed hybrid quality regression, primary failure and lexical fallback. No
 host correction authority, dataset/hardware-wide qualification,
 new numerical threshold or final-M10 pass is supplied by this contract.
+
+#274 native Windows run (RM38; AC29, AC37; spec 0.66):
+`docs/evidence/m10/windows-platform-run-2026-11-01/` records the owner's
+AMD64 Windows PC and the packaged lifecycle, with a pending qualification
+record. All 15 lifecycle steps passed. Ordinary person ingress is Linux-only;
+skill use, MCP use and restart remain unobserved. Generated inputs retain
+fixture qualification, and this evidence does not close final acceptance.
+Review recapture uses interpreter-reported PIDs for memory (12 MiB gateway-only
+increase), redacts the host default model, and moves the full reproducibility
+bundle to a SHA-256-bound release attachment. The earlier memory figure is
+invalid and superseded. The compact repository record retains the gate misses.

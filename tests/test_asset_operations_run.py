@@ -161,7 +161,7 @@ def test_the_kit_owns_the_server_and_source_tables(tmp_path):
 
 def _fake_python(tmp_path, body: str) -> Path:
     script = tmp_path / "fake_gateway.py"
-    script.write_text(body)
+    script.write_text("import os\nprint('Gateway-Pid: ' + str(os.getpid()), flush=True)\n" + body)
     return script
 
 
@@ -967,3 +967,73 @@ def test_base_config_root_dotted_keys_keep_their_table(tmp_path):
     parsed = tomllib.loads(_config(tmp_path, base, tmp_path, 1234).read_text())
     assert parsed["store"]["path"] == str(tmp_path / "runs.sqlite")
     assert parsed["server"] == {"host": "127.0.0.1", "port": 1234}
+
+
+def test_loopback_gateway_ignores_operator_proxy(tmp_path, monkeypatch):
+    """RM38/AC29: proxy settings must not divert local measurement traffic."""
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
+    monkeypatch.setenv("ALL_PROXY", "http://127.0.0.1:1")
+    monkeypatch.setenv("NO_PROXY", "")
+    generate_catalog(tmp_path / "catalog", 3)
+    base = _base(tmp_path, monkeypatch)
+
+    async def go():
+        async with serve(tmp_path / "work", tmp_path / "catalog", base_config=base, timeout=10) as (
+            _,
+            client,
+        ):
+            response = await client.get("/relay/v1/recommendations/readiness")
+            assert response.status_code == 200
+            assert response.json()["state"] == "ready"
+
+    asyncio.run(go())
+
+
+@pytest.mark.parametrize("controlled", [False, True])
+def test_gateway_pid_and_allocations_are_measured(tmp_path, monkeypatch, controlled):
+    """RM38/AC29: sample the interpreter, including a native Windows venv child."""
+    import relaymind.evaluation.asset_operations_run as kit
+
+    signal = tmp_path / "allocate"
+    identity = tmp_path / "pid"
+    name = "_controlled_argv" if controlled else "_child_argv"
+    original = getattr(kit, name)
+    setup = (
+        "import os, pathlib, threading, time\n"
+        f"pathlib.Path({str(identity)!r}).write_text(str(os.getpid()))\n"
+        "def allocate():\n"
+        f" while not pathlib.Path({str(signal)!r}).exists(): time.sleep(.01)\n"
+        " global held\n held = bytearray(64 * 1024 * 1024)\n"
+        "threading.Thread(target=allocate, daemon=True).start()\n"
+    )
+
+    def argv(config):
+        result = original(config)
+        result[2] = setup + result[2]
+        return result
+
+    monkeypatch.setattr(kit, name, argv)
+    base = _base(tmp_path, monkeypatch)
+    generate_catalog(tmp_path / "catalog", 3)
+
+    async def go():
+        async with kit._gateway(
+            tmp_path / "work",
+            tmp_path / "catalog",
+            base_config=base,
+            env=None,
+            timeout=20,
+            controlled=controlled,
+        ) as gateway:
+            assert gateway.pid == int(identity.read_text())
+            before = rss_bytes(gateway.pid)
+            assert before is not None
+            signal.touch()
+            for _ in range(50):
+                after = rss_bytes(gateway.pid)
+                if after is not None and after - before >= 48 * 1024 * 1024:
+                    return
+                await asyncio.sleep(0.1)
+            pytest.fail("gateway allocation did not reach the sampled process")
+
+    asyncio.run(go())
