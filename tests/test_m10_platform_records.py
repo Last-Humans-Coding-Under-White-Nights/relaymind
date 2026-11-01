@@ -18,6 +18,8 @@ from relaymind.evaluation.asset_whole_task_qualification import _check_platform_
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "docs" / "evidence" / "m10"
 OWNER_RUNS = EVIDENCE / "owner-platform-runs-2026-11-01"
+# The two records whose subjects are in OWNER_RUNS (record ID = file stem, 12.6.6).
+OWNER_MACHINES = ("macbook", "vps")
 RECORDS = sorted(
     {
         *EVIDENCE.glob("*platform-run*/*platform-run*-review.json"),
@@ -36,7 +38,7 @@ def test_the_windows_platform_record_is_present():
     assert any("windows" in path.name for path in RECORDS)
 
 
-@pytest.mark.parametrize("machine", ["macbook", "vps"])
+@pytest.mark.parametrize("machine", OWNER_MACHINES)
 def test_owner_run_records_live_where_section_12_6_6_says(machine):
     """Records live in docs/evidence/m10/ as <record_id>.json (spec 0.66 12.6.6)."""
     path = EVIDENCE / f"owner-platform-run-{machine}-2026-11-01.json"
@@ -80,12 +82,28 @@ def _verify_block() -> str:
 
 
 def _run_commit() -> str:
+    """The commit both owner-platform-runs-2026-11-01 records bind, named by record ID."""
     commits = {
-        json.loads(path.read_bytes())["revisions"]["repository_commit"]
-        for path in EVIDENCE.glob("owner-platform-run-*.json")
+        json.loads((EVIDENCE / f"owner-platform-run-{machine}-2026-11-01.json").read_bytes())[
+            "revisions"
+        ]["repository_commit"]
+        for machine in OWNER_MACHINES
     }
     (commit,) = commits
     return commit
+
+
+def test_the_run_commit_comes_only_from_the_2026_11_01_owner_records(tmp_path, monkeypatch):
+    """A later owner-run record with another commit does not change this run's commit."""
+    for machine in OWNER_MACHINES:
+        name = f"owner-platform-run-{machine}-2026-11-01.json"
+        shutil.copyfile(EVIDENCE / name, tmp_path / name)
+    later = json.loads((EVIDENCE / "owner-platform-run-vps-2026-11-01.json").read_bytes())
+    later["revisions"]["repository_commit"] = "0" * 40
+    (tmp_path / "owner-platform-run-vps-2026-12-01.json").write_text(json.dumps(later))
+    expected = _run_commit()
+    monkeypatch.setitem(globals(), "EVIDENCE", tmp_path)
+    assert _run_commit() == expected
 
 
 def test_the_documented_verify_procedure_names_the_recorded_run_commit():

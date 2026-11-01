@@ -411,6 +411,8 @@ def test_the_documented_freeze_reproduces_the_committed_capture_and_lock(tmp_pat
     assert result.returncode == 0, result.stderr
     for name in ("capture.v1.json", "lock.v1.json"):
         written = (out / name).read_bytes()
+        # The bound as-run copy writes native newlines, so normalize them here;
+        # the maintained successor scripts/acceptance_mcp_capture.py writes LF.
         if os.name == "nt":  # write_text uses CRLF there; the capture tool is POSIX-only.
             written = written.replace(b"\r\n", b"\n")
         assert written == (CAPTURE / name).read_bytes(), name

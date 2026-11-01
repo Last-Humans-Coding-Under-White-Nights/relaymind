@@ -81,6 +81,16 @@ originals). A new capture is not a replay: servers can answer with other
 bytes, and any change needs a new capture version and review, never a
 replacement of these files (spec section 12.6.6).
 
+## Future captures
+
+Use the maintained successor `scripts/acceptance_mcp_capture.py` (`capture`
+and `freeze` commands) for any new capture version. It writes every JSON file
+with LF line endings on every platform, copies itself into OUT_DIR when it is
+missing there (and refuses a different copy), and closes both server pipes
+when a session ends. `capture_mcp_tools.py` and `freeze_mcp_capture.py` in this
+folder are the as-run copies whose bytes `lock.v1.json` binds; they stay
+unchanged, and the steps above only reproduce this v1 freeze.
+
 ## What this is not
 
 This is not yet an `AssetCatalogSetV1` acceptance release. Still missing for

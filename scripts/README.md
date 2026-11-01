@@ -19,6 +19,12 @@
   `trial-run` and `trial` commands are the #234 early-trial kit (Apple M1
   8 GiB preflight, pinned-CLI plugin install, the frozen plan over
   operator-captured row observations, a digest bundle and offline grading).
+- `acceptance_mcp_capture.py` — maintained successor to the as-run MCP capture
+  scripts in `evaluation/assets/acceptance-mcp-v1/`, which its lock binds and
+  which stay unchanged (#261; RM40; AC31; spec 0.66 section 12.6.6). `capture`
+  records `tools/list` from locally running servers (POSIX only); `freeze`
+  writes the capture document, the selection of 100 tools and the lock with LF
+  line endings, and locks its own bytes. A new capture is a new capture version.
 - `m1_trial_inputs.py` / `m1_trial_observe.py` — maintained successors to the
   archived #259 helpers (RM16/RM40/RM44; AC31/AC36; spec 0.66 section 12.6.6).
   Both require `--trial-dir <new-trial-directory>` outside committed evidence,

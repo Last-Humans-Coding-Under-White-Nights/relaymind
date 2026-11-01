@@ -1769,6 +1769,9 @@ increase), redacts the host default model, and moves the full reproducibility
 bundle to a SHA-256-bound release attachment. The earlier memory figure is
 invalid and superseded. The compact repository record retains the gate misses.
 The initial proxy-related operations failure is retained alongside the rerun.
+The evidence README pins reproduction to `8d406e94` with Python 3.12 and
+documents the broken companion locator, unsupported startup memory phase and
+unloadable archived capture record. The digest-bound capture remains unchanged.
 
 #261 MacBook and VPS runs (RM38, RM39, RM40, RM44; AC29, AC31, AC37; spec 0.66;
 `docs/evidence/m10/owner-platform-runs-2026-11-01/`, two pending platform
@@ -1798,6 +1801,3 @@ reports reject with `inventory_membership`. The README's claim that a later
 commit always produces `unsupported_generator` is too narrow. Use its
 procedure with the recorded run commit `2f4ddecc3da0efd632df89ed0d63f3cc1d72c00f`
 to reproduce `verify.txt`; the bound README and evidence remain unchanged.
-The evidence README pins reproduction to `8d406e94` with Python 3.12 and
-documents the broken companion locator, unsupported startup memory phase and
-unloadable archived capture record. The digest-bound capture remains unchanged.
