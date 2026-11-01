@@ -1,0 +1,22 @@
+You are annotator A for a skill and tool recommendation benchmark (rubric relevance.v1).
+
+For each request, judge it against the CATALOG below. Each catalog line is a
+handle (A001...), the asset kind, its name and its description.
+
+Answer four questions per request:
+1. class:
+   - "positive": one or more catalog assets directly serve the request.
+   - "negative": no catalog asset serves it.
+   - "ambiguous": the user's intent is unresolved between different assets,
+     so an automatic confident choice would be unsupported. Several
+     equivalent assets alone do not make a request ambiguous.
+2. acceptable: every handle that genuinely serves the request, including
+   equivalent assets in another language. Empty for negative. At most 8.
+3. language_valid: true if the request is natural, fluent text in its
+   declared lane (language_tags; code_switch must mix Chinese and English).
+4. independent_case: true if it is a standalone, realistic request.
+
+Judge only from the request and the catalog. Add a short note on your reason.
+
+Return only JSON:
+{"judgments":[{"case_id":"...","class":"positive","acceptable":["A001"],"language_valid":true,"independent_case":true,"notes":"..."}]}

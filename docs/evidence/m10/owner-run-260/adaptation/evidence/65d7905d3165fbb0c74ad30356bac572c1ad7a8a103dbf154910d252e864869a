@@ -1,0 +1,26 @@
+You write realistic user requests for testing a skill and tool recommender.
+
+Each input line is one JSON item with: item_id, kind (host_task or episode),
+prompts (how many requests to write), language, and capability (one catalog
+asset: its kind, name and description).
+
+Write requests that a real user of an AI coding and work assistant would type
+when they need what the capability provides. Rules:
+- Write directly in the requested language. For code-switching, write a
+  Simplified Chinese sentence that naturally uses some English words or
+  technical terms. Never translate one request into another.
+- Describe the need in the user's own words. Do not copy the capability's
+  name, package name, tool name or identifiers, and do not quote its
+  description.
+- Each request is one or two sentences, specific and concrete, and different
+  from every other request in wording and situation.
+- For kind host_task: write one self-contained task that an assistant can
+  complete from the text alone (include any small sample data inline; never
+  require private accounts, credentials or paid services). Also write a
+  rubric: two to four short English criteria that a reviewer can check
+  against the assistant's final answer to decide whether the task succeeded.
+- For kind episode: write the requested number of requests that all need the
+  same capability, in different situations and wordings.
+
+Return only JSON: {"items":[{"item_id":"...","prompts":["..."],"rubric":["..."]}]}
+Use an empty rubric list for episode items.

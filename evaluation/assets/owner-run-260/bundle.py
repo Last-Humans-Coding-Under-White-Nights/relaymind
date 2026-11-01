@@ -96,8 +96,13 @@ class Bundle:
             (self.private / relative).parent.mkdir(parents=True, exist_ok=True)
             (self.private / relative).write_bytes(payload)
             self.resolver.append(
-                dict(id=evidence_id, hash_kind="original", hash=sha, bytes=len(payload),
-                     path=relative)
+                dict(
+                    id=evidence_id,
+                    hash_kind="original",
+                    hash=sha,
+                    bytes=len(payload),
+                    path=relative,
+                )
             )
         self.evidence[evidence_id] = dict(
             id=evidence_id, kind=kind, access=access, path=path, sha256=sha, bytes=len(payload)
@@ -114,8 +119,13 @@ class Bundle:
         self.document("catalog", catalog, publish=False, payload=catalog_raw)
         for item in catalog["evidence"]:
             data = (release / item["path"]).read_bytes()
-            self.file(item["id"], item["kind"], item["access"], data,
-                      publish=item["access"] == "redistributable")
+            self.file(
+                item["id"],
+                item["kind"],
+                item["access"],
+                data,
+                publish=item["access"] == "redistributable",
+            )
 
     def inventories(self) -> None:
         for kind in ("runner_inventory", "protocol_inventory"):
@@ -165,10 +175,17 @@ def main() -> None:
     parser.add_argument("--root-input", type=Path, required=True)
     parser.add_argument("--freeze", type=Path, required=True)
     parser.add_argument("--configs", type=Path, nargs="+", required=True)
-    parser.add_argument("--evidence-root", type=Path, required=True,
-                        help="directory the report's evidence paths are relative to")
-    parser.add_argument("--extra-evidence", type=Path,
-                        help="JSON {evidence_id: {path, kind}} of further evidence files")
+    parser.add_argument(
+        "--evidence-root",
+        type=Path,
+        required=True,
+        help="directory the report's evidence paths are relative to",
+    )
+    parser.add_argument(
+        "--extra-evidence",
+        type=Path,
+        help="JSON {evidence_id: {path, kind}} of further evidence files",
+    )
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--private", type=Path, required=True)
     args = parser.parse_args()
@@ -189,13 +206,20 @@ def main() -> None:
         data = (args.evidence_root / ref["path"]).read_bytes() if ref["path"] else None
         if data is None:
             raise SystemExit(f"unresolved evidence {ref['id']}")
-        bundle.file(ref["id"], "original", "redistributable", data, publish=True,
-                    relative=ref["path"])
+        bundle.file(
+            ref["id"], "original", "redistributable", data, publish=True, relative=ref["path"]
+        )
     if args.extra_evidence:
         for evidence_id, item in read(args.extra_evidence).items():
             data = Path(item["path"]).read_bytes()
-            bundle.file(evidence_id, item.get("kind", "original"), "redistributable", data,
-                        publish=item.get("publish", True), relative=item.get("relative"))
+            bundle.file(
+                evidence_id,
+                item.get("kind", "original"),
+                "redistributable",
+                data,
+                publish=item.get("publish", True),
+                relative=item.get("relative"),
+            )
     bundle.write(args.out / "report.json", report)
     print(json.dumps(dict(documents=len(bundle.documents), evidence=len(bundle.evidence))))
 
