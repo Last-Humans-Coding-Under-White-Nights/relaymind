@@ -1288,8 +1288,10 @@ pinned OpenClaw 2026.10.7, Ubuntu runner, commit 548588a, PR merge checkout
 (SHA-256 `933fb4e7c8b3057305fae165561825984a63325275b821be84b008dd574589f7`), which the registry's evidence revision names. The #256
 review fixes (ledger single settle and close, in-flight receipt recovery,
 honest gateway failure codes, attributable conversation blocks, independent
-registration) change the adapter bytes again: the entry is re-pinned to
-`d5b6048af14dce5b6069dea2bd1a7e8abf57077e08d8b20d390791389dd22572`, and the evidence recapture of these bytes is pending before merge;
+registration; then exclusive ledger ownership, admission-time key binding
+with dispatch markers, reserved block capacity and the post-read fence
+recheck) change the adapter bytes again: the entry is re-pinned to
+`943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`, and the evidence recapture of these bytes is pending before merge;
 the capture above records the earlier revision. As before, this is
 Linux functional evidence with disposable accounts, not macOS/Windows or
 customer acceptance. The person-ingress harness hardening raised in the #224 review
@@ -1369,7 +1371,7 @@ conversation after a failure. The MCP handler implements the closed request,
 the 512 KiB native row, the 60-second deadline with the separately bounded
 approval wait, the exact binding with a recomputed canonical schema hash,
 approval binding to the bound target and single use, the closed receipt and
-idempotency. Key claims, consumed approvals and conversation blocks are kept
+idempotency. Key bindings, dispatch markers, consumed approvals and conversation blocks are kept
 in a durable private ledger synced before dispatch, so a restart replays an
 unresolved key as indeterminate and never reuses an approval; without a
 ledger nothing is dispatched. Retention/erasure of ledger records and the
@@ -1383,7 +1385,7 @@ spec 0.65 names no qualified native boundary that can stop the next model
 request. HOST-EXACT-SKILL-USE (#239) and MCP use with real approvals (#204)
 remain open. The changed adapter bytes have a new exact revision, and the
 shipped `direct_actions`/`exact_skill_selection` entry is re-pinned to it
-(`d5b6048af14dce5b6069dea2bd1a7e8abf57077e08d8b20d390791389dd22572`), as for the spec 0.63 scope fix. Its evidence revision still
+(`943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`), as for the spec 0.63 scope fix. Its evidence revision still
 names the capture of the earlier revision `653902615edf…`
 (`openclaw-native-actions-20261101-adapter.json`, SHA-256 `933fb4e7c8b3…`);
 the evidence recapture of this revision is pending before merge. `tests/test_openclaw_install.py` fails when the registry and
