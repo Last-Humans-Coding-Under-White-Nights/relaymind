@@ -32,6 +32,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   recorded; the report binds the preregistered adaptation config, so the
   on-arm numbers are diagnostic only. The pending record
   `m10-owner-run-260-adaptation` lifts nothing until it is reviewed.
+- Third #278 review fixes for the #260 scripts (RM03, RM12, RM16, RM40, RM42,
+  RM44; AC31, AC33, AC36): `run_host.py` closes the gate, gateway and private
+  credential files when setup fails, bounds only the output field the client
+  sent and reports a reservation already held as `row_reserved`;
+  `harness.py` rejects repeated prompts within one item and judgments with an
+  unknown handle instead of storing them as negative; `judge.py adjudicate`
+  survives a malformed reply, writes after every batch and resumes without
+  paying twice; `bundle.py` marks unpublished extra evidence `restricted`;
+  `run_episodes.py` runs only recommendation settings that project to the
+  frozen off document and releases the verified embedding files on failure.
 - #260 review fixes: the pending adaptation record gains the
   `machine.os_version` its schema requires and now loads (test over every
   committed #260 record); `run_episodes.py` executes only the frozen
@@ -52,6 +62,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   451/600), the frozen lock, the episode and host freezes and both
   preregistration outputs. The corpus stays `development`, so nothing graded
   over it can qualify.
+  Five of the 11 class disagreements come from a parsing defect, not from the
+  annotators: positive answers with unpadded handles (`A54`) were stored as
+  negative (see the cohort README); the labels are kept as recorded.
 - #259 early installed-skill trial on the owner's Apple M1 8 GiB MacBook (RM16,
   RM39, RM40, RM44; AC30, AC31, AC36; spec 0.66 sections 12.6.5, 12.6.6) in
   `docs/evidence/m10/early-trial-m1-20261101/`: frozen inputs (one

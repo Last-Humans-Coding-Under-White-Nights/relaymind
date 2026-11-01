@@ -696,3 +696,214 @@ def test_a_answered_call_settles_its_reservation_to_the_reported_usage(tmp_path,
     saved = harness.Ledger(tmp_path / "ledger.json", cap=10**9)
     assert saved.total == 45
     assert saved.data["stages"]["draft"]["calls"] == 1
+
+
+# --- third review of #278 ------------------------------------------------------------
+
+bundle_script = _module("bundle")
+
+
+def test_a_failed_setup_still_closes_the_run(tmp_path, monkeypatch):
+    """RM12, RM16 (AC36): a setup failure still stops the gate and gateway and deletes
+    the private config files that hold the provider credentials."""
+    calls = []
+
+    class FakeRun:
+        def __init__(self, args):
+            pass
+
+        def setup(self):
+            calls.append("setup")
+            raise SystemExit("relay_setup_failed")
+
+        def close(self):
+            calls.append("close")
+
+    monkeypatch.setattr(run_host, "Run", FakeRun)
+    argv = ["run_host.py", "--model", MODEL]
+    for name in (
+        "tasks",
+        "freeze",
+        "lock",
+        "release-root",
+        "journal",
+        "environment",
+        "ledger",
+        "tarball",
+        "openclaw",
+        "work",
+        "evidence",
+        "output",
+    ):
+        argv += ["--" + name, str(tmp_path / name)]
+    monkeypatch.setattr(sys, "argv", argv)
+    with pytest.raises(SystemExit, match="relay_setup_failed"):
+        run_host.main()
+    assert calls == ["setup", "close"]
+
+
+def test_closing_a_partly_set_up_run_does_not_raise(tmp_path):
+    run = object.__new__(run_host.Run)
+    run.work = tmp_path / "work"
+    run.gateway = run.gate = None
+    run.close()
+
+
+def test_the_gate_bounds_the_output_field_the_client_sent(gated):
+    """RM03 (AC36): a request that names only max_completion_tokens is clamped in
+    that field and is not given a second, conflicting output field."""
+    upstream, gate = gated(usage=dict(prompt_tokens=1, completion_tokens=1))
+    gate.open_row("t1-native", 20_000)
+    post(gate.url, dict(model="m", messages=[], max_completion_tokens=50_000))
+    post(gate.url, dict(model="m", messages=[], max_completion_tokens=10))
+    assert [b.get("max_completion_tokens") for b in upstream.bodies] == [1_000, 10]
+    assert all("max_tokens" not in b for b in upstream.bodies)
+    gate.close_row()
+
+
+def test_a_row_reserved_before_reports_its_own_reason(tmp_path):
+    """RM16: a row whose key is already held in the ledger is not labelled budget_cap."""
+    run = object.__new__(run_host.Run)
+    run.frozen = run_host.frozen_arm_configs(FREEZE, CONFIGS, MODEL)
+    run.budget = budget(tmp_path)
+    assert run.budget.reserve("t1-native") is None
+    entry = next(c for c in FREEZE["configurations"] if c["arm"] == "native")
+    row, refs = run.execute(dict(id="t1", prompt_case_id="c1"), "native", entry)
+    assert (row["status"], row["reason"], refs) == ("not_run", "row_reserved", [])
+
+
+def write_cases_inputs(tmp_path, prompts):
+    root = tmp_path / "root"
+    root.mkdir()
+    write(root / "catalog.json", dict(assets=[], evidence=[], people=[]))
+    plan = tmp_path / "plan.json"
+    write(plan, dict(seed=1, items=[dict(item_id="e001", cohort="episode", lane="en_to_en")]))
+    drafts = tmp_path / "drafts.json"
+    write(drafts, {"e001": dict(prompts=prompts)})
+    log = tmp_path / "drafting-log.json"
+    log.write_text("{}", encoding="utf-8")
+    return type("Args", (), dict(root=root, plan=plan, drafts=drafts, drafting_log=log))()
+
+
+def test_two_equal_prompts_inside_one_item_are_rejected(tmp_path):
+    """RM40 (AC31): held-out cases stay independent; a drafted item whose prompts
+    repeat each other (after NFC and casefold) is rejected, not split into cases."""
+    args = write_cases_inputs(tmp_path, ["Find X", "b", "c", "find x", "e"])
+    with pytest.raises(SystemExit, match="duplicate_prompt e001"):
+        harness.cmd_cases(args)
+
+
+def test_a_judgment_with_no_known_handle_is_not_turned_into_a_negative():
+    """RM40 (AC31): a positive or ambiguous judgment whose handles are all unknown is
+    left for retry, never stored as negative with an empty acceptable set."""
+    names = {"asset:one": "A001", "asset:two": "A002"}
+    row = dict(case_id="c", language_valid=True, independent_case=True)
+    assert harness._classes(dict(row, **{"class": "positive", "acceptable": ["A002"]}), names)[
+        "acceptable"
+    ] == ["asset:two"]
+    assert (
+        harness._classes(dict(row, **{"class": "negative", "acceptable": []}), names)["cls"]
+        == "negative"
+    )
+    for label in ("positive", "ambiguous"):
+        for acceptable in (["A2"], [], ["A001", "A9"]):
+            with pytest.raises(ValueError, match="acceptable"):
+                harness._classes(dict(row, **{"class": label, "acceptable": acceptable}), names)
+
+
+def test_adjudication_keeps_paid_batches_when_a_later_reply_is_malformed(tmp_path, monkeypatch):
+    """RM16, RM44 (AC36): a malformed or unreasoned adjudicator reply leaves its items
+    for a rerun; the batches already answered are written and not asked again."""
+    blind = {i: dict(blind_id=i, request="r", rubric=["c"], answer="a") for i in ("x1", "x2", "x3")}
+    a = {"x1": verdict(), "x2": verdict(), "x3": verdict()}
+    b = {"x1": verdict(False), "x2": verdict(False), "x3": verdict(False)}
+    paths = dict(items=tmp_path / "items.json", a=tmp_path / "a.json", b=tmp_path / "b.json")
+    write(paths["items"], dict(items=list(blind.values())))
+    write(paths["a"], a)
+    write(paths["b"], b)
+    replies = iter(
+        [
+            dict(adjudications=[dict(blind_id="x1", success=True, reason="rubric met")]),
+            "not json",
+            dict(adjudications=[dict(blind_id="x3", success=False, reason=" ")]),
+        ]
+    )
+    asked = []
+
+    def chat(ledger, stage, messages, log, name):
+        asked.append([i["blind_id"] for i in json.loads(messages[1]["content"])])
+        reply = next(replies)
+        content = reply if isinstance(reply, str) else json.dumps(reply)
+        return dict(choices=[dict(message=dict(content=content))])
+
+    monkeypatch.setattr(judge.harness, "chat", chat)
+    args = type(
+        "Args",
+        (),
+        dict(
+            **paths,
+            output=tmp_path / "judgments.json",
+            log=tmp_path / "log",
+            ledger=tmp_path / "ledger.json",
+            cap=10**9,
+            batch=1,
+        ),
+    )()
+    with pytest.raises(judge.JudgingIncomplete, match="final_incomplete"):
+        judge.cmd_adjudicate(args)
+    saved = read(args.output)
+    assert saved["final"] == {"x1": dict(success=True, reason="rubric met")}
+    replies = iter(
+        [
+            dict(adjudications=[dict(blind_id="x2", success=False, reason="missing step")]),
+            dict(adjudications=[dict(blind_id="x3", success=True, reason="all criteria")]),
+        ]
+    )
+    asked.clear()
+    judge.cmd_adjudicate(args)
+    assert asked == [["x2"], ["x3"]]
+    done = read(args.output)
+    judge.check_judgments(done, blind)
+    assert {i: v["success"] for i, v in done["final"].items()} == {
+        "x1": True,
+        "x2": False,
+        "x3": True,
+    }
+
+
+def test_unpublished_extra_evidence_is_recorded_as_restricted(tmp_path):
+    """RM44 (AC36): evidence kept out of the published bundle is not called
+    redistributable in the input manifest."""
+    private, public = tmp_path / "private.txt", tmp_path / "public.txt"
+    private.write_bytes(b"private")
+    public.write_bytes(b"public")
+    bundle = bundle_script.Bundle(tmp_path / "out", tmp_path / "resolver")
+    bundle_script.add_extra_evidence(
+        bundle,
+        {
+            "extra:private": dict(path=str(private), publish=False),
+            "extra:public": dict(path=str(public)),
+        },
+    )
+    assert bundle.evidence["extra:private"]["access"] == "restricted"
+    assert bundle.evidence["extra:private"]["path"] is None
+    assert bundle.evidence["extra:public"]["access"] == "redistributable"
+
+
+def test_the_episode_run_rejects_production_settings_the_freeze_does_not_bind(monkeypatch):
+    """RM42 (AC33): the recommendation settings the run executes are the frozen ones."""
+    off = dict(generator=dict(runner_digest="r" * 64, protocol_digest="p" * 64), budget=1)
+    config = type("Config", (), dict(recommendations="settings"))()
+    seen = {}
+
+    def projection(production, release, *, runner_digest, protocol_digest):
+        seen["digests"] = (runner_digest, protocol_digest)
+        return dict(off, budget=production.budget)
+
+    monkeypatch.setattr(run_episodes.asset_evidence, "effective_asset_config", projection)
+    config.budget = 1
+    assert run_episodes.frozen_settings(config, "release", off) == "settings"
+    assert seen["digests"] == ("r" * 64, "p" * 64)
+    config.budget = 2
+    with pytest.raises(run_episodes.NotFrozen, match="production_config_mismatch"):
+        run_episodes.frozen_settings(config, "release", off)

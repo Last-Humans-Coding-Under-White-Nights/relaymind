@@ -464,9 +464,11 @@ def cmd_cases(args) -> None:
     for item in plan["items"]:
         draft = drafts[item["item_id"]]
         texts = [nfc(t) for t in draft["prompts"]]
-        if any(t.casefold() in seen or not t for t in texts):
+        folded = [t.casefold() for t in texts]
+        # Unique across items and within the item (a repeat would join two cases).
+        if not all(texts) or len(set(folded)) != len(folded) or seen.intersection(folded):
             raise SystemExit(f"duplicate_prompt {item['item_id']}")
-        seen.update(t.casefold() for t in texts)
+        seen.update(folded)
         ids = []
         for n, text in enumerate(texts):
             case_id = (
@@ -542,14 +544,22 @@ def cmd_cases(args) -> None:
 
 def _classes(row: dict, names: dict) -> dict:
     back = {v: k for k, v in names.items()}
-    chosen = sorted({back[h] for h in row.get("acceptable", []) if h in back})
     label = row.get("class")
     if label not in ("positive", "negative", "ambiguous"):
         raise ValueError("class")
+    given = row.get("acceptable") or []
     if label == "negative":
         chosen = []
-    elif not chosen:
-        label = "negative"
+    elif (
+        not isinstance(given, list)
+        or not given
+        or any(not isinstance(h, str) or h not in back for h in given)
+    ):
+        # An unknown or missing handle leaves the item for retry; the judgment is
+        # never changed to negative or narrowed to the handles that resolve.
+        raise ValueError("acceptable")
+    else:
+        chosen = sorted({back[h] for h in given})
     return dict(
         cls=label,
         acceptable=chosen,

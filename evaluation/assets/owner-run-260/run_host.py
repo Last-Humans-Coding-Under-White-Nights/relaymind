@@ -334,9 +334,11 @@ class RequestGate:
                     if type(asked) is not int or asked <= 0:
                         raise ValueError
                     output = min(output, asked)
-                value["max_tokens"] = output
-                if "max_completion_tokens" in value:
-                    value["max_completion_tokens"] = output
+                # The bound goes in the field(s) the client sent; max_tokens
+                # when it sent neither, never a second, conflicting field.
+                named = [n for n in ("max_tokens", "max_completion_tokens") if n in value]
+                for name in named or ["max_tokens"]:
+                    value[name] = output
             except ValueError:
                 row["refused"].append("request_invalid")
                 return None, "request_invalid"
@@ -649,7 +651,11 @@ class Run:
             self.gateway.stop()
         if self.gate is not None:
             self.gate.stop()
-        for path in (self.native.config_path, self.work / "gateway" / "relaymind.toml"):
+        native = getattr(self, "native", None)
+        paths = [self.work / "gateway" / "relaymind.toml"]
+        if native is not None:
+            paths.append(Path(native.config_path))
+        for path in paths:
             path.unlink(missing_ok=True)
 
     # -- one row -------------------------------------------------------------------
@@ -758,8 +764,10 @@ class Run:
         key = f"{task['id']}-{arm}"
         # The whole row budget is reserved durably before anything is dispatched;
         # a row that is never settled keeps it charged.
-        if self.budget.reserve(key) is not None:
-            return self.not_run(task, arm, "budget_cap")
+        refused = self.budget.reserve(key)
+        if refused is not None:
+            # budget_cap, or row_reserved: the key's reservation is already held.
+            return self.not_run(task, arm, refused)
         host = self.native if arm == "native" else self.relay
         model = f"{DIRECT}/{config['model']}" if arm == "native" else install_check.MODEL_REF
         sandbox = self.work / "sandboxes" / key
@@ -939,8 +947,10 @@ def main():
 
     signal.signal(signal.SIGINT, interrupt)
     signal.signal(signal.SIGTERM, interrupt)
-    run.setup()
     try:
+        # A failed setup still stops the gate and gateway and deletes the
+        # private config files that hold the provider credentials.
+        run.setup()
         report = run_host_plan(
             read(args.tasks),
             read(args.freeze),

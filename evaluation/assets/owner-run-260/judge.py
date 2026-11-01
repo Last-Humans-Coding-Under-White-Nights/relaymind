@@ -178,10 +178,28 @@ def cmd_adjudicate(args) -> None:
             )
         else:
             disputed.append(blind_id)
+    # A rerun keeps the adjudications already paid for over the same two judgments.
+    if args.output.exists():
+        earlier = read(args.output)
+        if earlier.get("judges") == dict(a=a, b=b):
+            for blind_id in disputed:
+                kept = earlier.get("final", {}).get(blind_id)
+                if _valid(kept) and str(kept.get("reason", "")).strip():
+                    final[blind_id] = kept
+
+    def document():
+        return dict(
+            format="relaymind.owner_run_success_judgments.v1",
+            judges=dict(a=a, b=b),
+            disputed=sorted(disputed),
+            final=final,
+        )
+
     ledger = harness.Ledger(args.ledger, args.cap)
     template = (HERE / "prompts" / "judge-adjudicator.txt").read_text(encoding="utf-8")
-    for start in range(0, len(disputed), args.batch):
-        batch = disputed[start : start + args.batch]
+    todo = [i for i in disputed if i not in final]
+    for start in range(0, len(todo), args.batch):
+        batch = todo[start : start + args.batch]
         request = [
             dict(
                 {k: items[i][k] for k in ("blind_id", "request", "rubric", "answer")},
@@ -195,18 +213,24 @@ def cmd_adjudicate(args) -> None:
         ]
         name = f"judge-adjudicator-{start // args.batch + 1:03d}"
         answer = harness.chat(ledger, "judge-adjudicator", messages, args.log, name)
-        for row in harness.answer_json(answer)["adjudications"]:
-            if row.get("blind_id") in batch and isinstance(row.get("success"), bool):
-                final[row["blind_id"]] = dict(success=row["success"], reason=str(row["reason"]))
-    document = dict(
-        format="relaymind.owner_run_success_judgments.v1",
-        judges=dict(a=a, b=b),
-        disputed=sorted(disputed),
-        final=final,
-    )
+        try:
+            rows = harness.answer_json(answer)["adjudications"]
+            if not isinstance(rows, list):
+                raise TypeError
+        except (ValueError, KeyError, TypeError):
+            print("unparsed", name, file=sys.stderr)
+            continue
+        for row in rows:
+            if not isinstance(row, dict) or row.get("blind_id") not in batch:
+                continue
+            reason = str(row.get("reason") or "").strip()
+            if isinstance(row.get("success"), bool) and reason:
+                final[row["blind_id"]] = dict(success=row["success"], reason=reason)
+        # Written after every batch; apply rechecks it, so a partial file is never applied.
+        write(args.output, document())
+    write(args.output, document())
     # A disputed item the adjudicator left out stops here; rerun the command.
-    check_judgments(document, items)
-    write(args.output, document)
+    check_judgments(document(), items)
     agree = len(items) - len(disputed)
     print(json.dumps(dict(items=len(items), agree=agree, disputed=len(disputed))))
 

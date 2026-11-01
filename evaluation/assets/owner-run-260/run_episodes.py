@@ -113,6 +113,21 @@ def frozen_adaptation(prepared: Path, model_dir: Path):
     return validate_adaptation_config(value, manifest), manifest
 
 
+def frozen_settings(config, release, off: dict):
+    """The recommendation settings of ``config``, which must project to the frozen off
+    document (with the generator digests the freeze recorded)."""
+    generator = off["generator"]
+    actual = asset_evidence.effective_asset_config(
+        config,
+        release,
+        runner_digest=generator["runner_digest"],
+        protocol_digest=generator["protocol_digest"],
+    )
+    if canonical_json(actual) != canonical_json(off):
+        raise NotFrozen("production_config_mismatch")
+    return config.recommendations
+
+
 def environment() -> dict:
     from relaymind.evaluation.asset_evidence import collect_benchmark_environment
 
@@ -136,17 +151,8 @@ def cmd_run(args) -> None:
     off, on = read(prepared / "effective-off.json"), read(prepared / "effective-on.json")
     freeze, episodes = read(prepared / "episode-freeze.json"), read(args.episodes)
     semantic, manifest = frozen_adaptation(prepared, args.model_dir)
-    stack = verify_embedding_files(manifest)
-    artifact = stack.__enter__()
-    engine = EmbeddingEngine(manifest, OnnxCpuBackend(artifact))
-
-    def stage(feedback):
-        return AdaptationStage(feedback, semantic, engine)
-
-    settings = production(args.production).recommendations
-    arms = locked_episode_arms(
-        release, dict(off=off, on=on), settings, args.work, adaptation_stage=stage
-    )
+    # The service settings are the frozen ones, not whatever the TOML now says.
+    settings = frozen_settings(production(args.production), release, off)
     stop = False
 
     def interrupt(signum, frame):
@@ -156,20 +162,30 @@ def cmd_run(args) -> None:
     signal.signal(signal.SIGINT, interrupt)
     signal.signal(signal.SIGTERM, interrupt)
     inputs = args.inputs_reference
-    report, evidence = asyncio.run(
-        run_adaptation_episodes(
-            episodes,
-            freeze,
-            release,
-            arms,
-            environment=read(args.environment),
-            qualification="provisional",
-            input_manifest=read(inputs) if inputs else dict(path=None, digest="0" * 64, bytes=0),
-            interrupted=lambda: stop,
-            journal=args.journal,
+    with verify_embedding_files(manifest) as artifact:
+        engine = EmbeddingEngine(manifest, OnnxCpuBackend(artifact))
+
+        def stage(feedback):
+            return AdaptationStage(feedback, semantic, engine)
+
+        arms = locked_episode_arms(
+            release, dict(off=off, on=on), settings, args.work, adaptation_stage=stage
         )
-    )
-    stack.__exit__(None, None, None)
+        report, evidence = asyncio.run(
+            run_adaptation_episodes(
+                episodes,
+                freeze,
+                release,
+                arms,
+                environment=read(args.environment),
+                qualification="provisional",
+                input_manifest=(
+                    read(inputs) if inputs else dict(path=None, digest="0" * 64, bytes=0)
+                ),
+                interrupted=lambda: stop,
+                journal=args.journal,
+            )
+        )
     write(args.output, report)
     reset_dir = args.output.parent / "reset-evidence"
     reset_dir.mkdir(parents=True, exist_ok=True)
@@ -189,7 +205,6 @@ def cmd_run(args) -> None:
     )
     summary = report["summary"]
     print(json.dumps(dict(summary=summary, machine=platform.machine())))
-    _ = canonical_json
 
 
 def main() -> None:
