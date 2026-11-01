@@ -1174,21 +1174,26 @@ no credentials, query or fragment); any other value is refused with
 record or an error message. Each step is recorded with
 its exit code; a failed step stops the rest, which are `not_run`. Each step's
 host standard output and standard error stay in separate private logs
-(`<step>.log` and `<step>.stderr.log`, for `install`, `configure`, `enable`
-and `inspect`) under the work directory. The record keeps only placeholders
-(`<openclaw>`, `<artifact>`), the configured `base_url`, exit codes and
-SHA-256 digests and sizes. Inspect passes when the JSON on standard output
-(warnings on standard error are ignored) shows the plugin `loaded` and enabled
-at the release version with no diagnostics. The gateway token is not stored
-here (operator guide step 5). A missing or unreadable tarball fails
+(`<step>.log` and `<step>.stderr.log`, each `0600`, for `install`,
+`configure`, `enable` and `inspect`) under the work directory. The record
+keeps only placeholders (`<openclaw>`, `<artifact>`), the configured
+`base_url`, exit codes, SHA-256 digests and sizes, and closed inspect codes:
+`status` and `version` only when they are a plain code or release version
+(otherwise `null`), `enabled`, and `diagnostics_count`. Diagnostic text can
+carry paths, user names or tokens, so it stays only in the private log, bound
+by `output_sha256`. Inspect passes when the JSON on standard output (warnings
+on standard error are ignored) shows the plugin `loaded` and enabled at the
+release version with no diagnostics. The gateway token is not stored here
+(operator guide step 5). A missing or unreadable tarball fails
 `release_checksum` and `frozen_package` in the preflight record; it does not
 stop the preflight.
 Configuring each arm's frozen host configuration is the operator's step;
 see the operator guide in `integrations/openclaw/README.md`.
 
 **Row observations.** The kit writes `plan.json` to the bundle first. For each
-planned ordinal it gives the task, lane, prompt case, arm, the arm's
-`host_config_digest` and the observation file name `row-NNNN.json`. The
+planned ordinal it gives the task (`task_id`, `lane`, `prompt_case_id`), the
+`arm`, the arm's `host_config_digest` and the observation file name
+`row-NNNN.json`. The
 operator runs that row on the host and saves
 `{schema_version:1,ordinal,task_id,arm,row,evidence:[{id,file,provenance}]}`.
 `row` is the section 12.6.5 `HostRow`, and each `file` is relative to the
@@ -1198,6 +1203,9 @@ observations directory. The rules:
   The stated identity is not trusted.
 - A file path that leaves the directory, an observation for another
   row/arm, or changed bytes under an already registered ID rejects (exit `2`).
+- Evidence files keep the 10 MiB original-byte limit of the companion
+  registry: a larger file rejects (`observation_evidence_too_large`), an absent
+  one `observation_evidence_missing`.
 - A row without an observation is exported `not_run` with reason
   `observation_missing`. With `--interactive` the kit asks first, and `skip`
   gives `operator_skipped`. If standard input closes, the kit stops asking:
@@ -1208,7 +1216,13 @@ observations directory. The rules:
   from native session/run records is the operator's evidence obligation; the
   kit never infers a row from a gateway trace or a selection receipt.
 
-**Bundle.** The bundle is a new directory:
+**Bundle.** The bundle is a new directory, private to the operator
+(directories `0700`, files `0600` on POSIX), because the frozen evidence is
+`access: restricted`. It is built in a hidden staging directory beside it and
+renamed into place only when complete; a rejected or blocked run leaves no
+bundle. Output paths (`--bundle`, `--work`, `--output`) are resolved once, so
+a path under a symlinked parent such as macOS `/tmp` is written to its real
+directory. The bundle holds:
 
 - copies of every document and evidence original in the frozen manifest, at
   the same relative paths;
@@ -1228,12 +1242,33 @@ are resolver-only: they stay in `inputs.json` as they are and are not copied.
 A root document (tasks, freeze or environment lock) with a null path blocks
 (`input_unresolved`).
 
-**Qualification.** `--qualification provisional` requires a passed preflight
-and a passed install, otherwise it is blocked (`preflight_failed`,
-`install_failed`) before any file is written. `fixture` runs anywhere.
-`qualified` is never produced. The tasks must have kind `early_trial`; an
-acceptance task set is refused (`early_trial_required`). An early trial grades
-`blocked` at best (exit `3`). The provisional per-arm token and call totals in
+**Qualification.** `--qualification provisional` checks the preflight and
+install records before any bundle file is written. A `passed` label alone is
+not accepted:
+
+- each record must have exactly the closed shape the kit writes (for the
+  install, the four lifecycle steps, with the configure step naming the
+  recorded `base_url` in the plugin's normal form), otherwise it rejects
+  (`preflight_record`, `install_record`; exit `2`);
+- a well-formed failed preflight or install, or no install record, blocks
+  (`preflight_failed`, `install_failed`; exit `3`);
+- the target machine checks are recomputed from the recorded environment and
+  the frozen lock, and the recorded host version must be the pinned one
+  (`preflight_contradiction`); a passed install must agree with its own steps
+  and inspection, the plugin loaded and enabled (`install_contradiction`);
+- the recorded environment must be the report environment, the release must
+  be exactly one frozen package with its evidence ID, the install archive must
+  be that release, and `--tarball`, when given, those bytes
+  (`preflight_binding`, `install_binding`, `package_binding`).
+
+These checks bind the records to the frozen inputs; they cannot prove the
+records were observed. The one-command `trial` keeps `preflight.json` and the
+install logs in its private work directory even when the run is then blocked.
+`fixture` runs anywhere. `qualified` is never produced. The tasks must have
+kind `early_trial`; an acceptance task set is refused
+(`early_trial_required`). An early trial grades `blocked` at best (exit `3`);
+a provisional label over fixture inputs is a qualification contradiction and
+rejects (exit `2`, #240). The provisional per-arm token and call totals in
 `grade.json` are the baseline three-arm costs #234 asks for, as provisional
 evidence only.
 
@@ -1305,7 +1340,14 @@ language's child fails or times out (15 minutes), the recorder still writes
 `manifest.json` with `complete: false`. It sets the language `reason` to
 `child_failed` or `child_timeout`, and every outcome-dependent step to
 `not_run` with `capture_missing`, or `capture_invalid` for a torn capture.
-Any partial files are still listed by digest. The command exits `0` only when
+Any partial files are still listed by digest, including every
+`screens/*.png` that `screens.json` does not name (a killed child never saves
+it). Such a screenshot belongs to no step. A torn `screens.json`, a listed file
+that is missing or outside the language directory, and an unlisted
+screenshot are named in the language's `media_problems` (`screens_invalid`,
+`screenshot_missing`, `screenshot_path`, `screenshot_unlisted`, and
+`capture_path`, `video_path` for unsafe capture or video files); any of them
+makes the manifest incomplete. The command exits `0` only when
 both languages are complete.
 
 The tier is `functional_fixture`, with a deterministic gateway and disposable
