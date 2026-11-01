@@ -1423,6 +1423,22 @@ direct-action profile above is qualified; exact selected skill/MCP use and
 post-approval currentness still require their own qualification. Missing genuine
 inputs do not block tooling implementation or explicitly unqualified fixture runs.
 
+#236/#237 run kit (tooling only): blind section 12.6.1 label templates, the
+adjudication worksheet and label freeze; host-task and episode preregistration
+checks that record the bound digests and acceptance-eligibility reasons; a
+crash-safe journal for `run-host` and the episode driver (completed work kept,
+unrecorded started work exported as `cancelled` with unknown cost, never rerun);
+an operator executor-program protocol; and capture of external call usage
+from RelayMind traces for the provider arms (`asset_labelling.py`,
+`asset_run_journal.py`, `asset_host_runner.py`, `asset_run_kit_cli.py`).
+Covered by deterministic fixtures only. #236 still needs genuine independent
+labels, frozen ≥100 acceptance episodes and host-authorised corrections. The
+episode driver's evaluation-only registration is not host correction
+authority, and no host-driven episode procedure is specified. #237 still needs
+≥100 preregistered tasks, a real host executor for all three arms, native-arm
+usage capture from the host, and the #240 qualified-evidence verifier. No gate
+is claimed.
+
 #234 early-trial kit: the `trial-*` commands of `scripts/asset_whole_task.py`
 (`asset_trial_kit.py`) add the Apple M1 8 GiB / pinned host / release-checksum
 preflight, the pinned-CLI plugin install, and the frozen plan run through the

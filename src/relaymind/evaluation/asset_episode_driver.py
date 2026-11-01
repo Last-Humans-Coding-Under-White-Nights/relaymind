@@ -31,16 +31,19 @@ from relaymind.evaluation.asset_benchmark import (
     execute_asset_slot,
 )
 from relaymind.evaluation.asset_episode_export import (
+    episode_preregistration,
     episode_summary,
     probe_plan,
     reset_preimage_digest,
 )
 from relaymind.evaluation.asset_metrics import grade_asset_result
+from relaymind.evaluation.asset_run_journal import RunJournal
 from relaymind.evaluation.asset_whole_task import WholeTaskRejected
 from relaymind.evaluation.asset_whole_task_corpus import release_labels
 
 _ADAPTER = "relaymind-evaluation-episodes"
 _CONTRACT = "relaymind-evaluation-episodes.v1"
+JOURNAL_FORMAT = "relaymind.s3_run_journal.v1"
 
 
 @dataclass
@@ -384,6 +387,22 @@ async def _run_episode(episode, cases, labels, open_arm, evidence, interrupted):
     return result
 
 
+def _restored(value: Mapping, episode_id: str, evidence: dict) -> dict:
+    """A journaled episode result and its reset evidence, bytes rechecked."""
+    for item in value["evidence"]:
+        payload = item["payload"].encode("utf-8")
+        if (
+            item["id"] != "reset:" + episode_id
+            or hashlib.sha256(payload).hexdigest() != item["sha256"]
+            or len(payload) != item["bytes"]
+        ):
+            raise WholeTaskRejected("journal_evidence")
+        evidence[item["id"]] = dict(item, payload=payload)
+    if value["result"].get("episode_id") != episode_id:
+        raise WholeTaskRejected("journal_evidence")
+    return copy.deepcopy(value["result"])
+
+
 # Correction and reset cases need not be labeled probes; they are graded only
 # through the probe rows, so a neutral label keeps their rows well formed.
 _NEGATIVE = {"class": "negative", "acceptable_asset_ids": []}
@@ -399,12 +418,18 @@ async def run_adaptation_episodes(
     qualification: str,
     input_manifest: Mapping,
     interrupted: Callable[[], bool],
+    journal: Path | None = None,
 ) -> tuple[dict, dict[str, dict]]:
     """Run every frozen episode and export ``(AssetAdaptationReportV1, reset evidence)``.
 
     The reset evidence maps ``reset:<episode_id>`` to ``{id, sha256, bytes,
     payload}`` holding the spec 0.64 document; it belongs in the companion
     evidence registry.
+
+    With ``journal``, progress is kept in a crash-safe run journal bound to the
+    preregistered episode, freeze and plan digests: a finished episode (in any
+    status) is restored, never rerun; an episode started before a crash and
+    never recorded is ``cancelled`` with reason ``interrupted_unrecorded``.
     """
     if qualification == "qualified":
         # Evaluation-only projection and registration are never qualified evidence.
@@ -413,20 +438,59 @@ async def run_adaptation_episodes(
     labels = release_labels(release)
     evidence: dict[str, dict] = {}
     results = []
-    for episode in episodes["episodes"]:
-        # An interruption ends the whole run, even if the check reports it once.
-        if interrupted():
-            results.extend(
-                _not_run_episode(later, labels, "interrupted")
-                for later in episodes["episodes"][len(results) :]
+    with contextlib.ExitStack() as stack:
+        book = None
+        if journal is not None:
+            record = episode_preregistration(episodes, freeze)
+            book = stack.enter_context(
+                RunJournal(
+                    journal,
+                    dict(
+                        format=JOURNAL_FORMAT,
+                        kind="adaptation",
+                        **{k: record[k] for k in ("input_digest", "freeze_digest", "plan_digest")},
+                    ),
+                )
             )
-            break
-        result = await _run_episode(episode, cases, labels, open_arm, evidence, interrupted)
-        results.append(result)
-        if result["status"] == "cancelled":
-            for later in episodes["episodes"][len(results) :]:
-                results.append(_not_run_episode(later, labels, "interrupted"))
-            break
+        for episode in episodes["episodes"]:
+            key, fresh = episode["id"], False
+            if book is not None and key in book.finished:
+                result = _restored(book.finished[key], key, evidence)
+            elif book is not None and key in book.started:
+                result = _not_run_episode(episode, labels, "interrupted_unrecorded")
+                result["status"] = "cancelled"
+                book.finish(key, dict(result=result, evidence=[]))
+            elif interrupted():
+                # An interruption ends the whole run, even if the check reports it once.
+                results.extend(
+                    _not_run_episode(later, labels, "interrupted")
+                    for later in episodes["episodes"][len(results) :]
+                )
+                break
+            else:
+                if book is not None:
+                    book.start(key)
+                own: dict[str, dict] = {}
+                fresh = True
+                result = await _run_episode(episode, cases, labels, open_arm, own, interrupted)
+                if book is not None:
+                    book.finish(
+                        key,
+                        dict(
+                            result=result,
+                            evidence=[
+                                dict(item, payload=item["payload"].decode("utf-8"))
+                                for item in own.values()
+                            ],
+                        ),
+                    )
+                evidence.update(own)
+            results.append(result)
+            # Only this run's own interruption ends it; a restored one does not.
+            if fresh and result["status"] == "cancelled":
+                for later in episodes["episodes"][len(results) :]:
+                    results.append(_not_run_episode(later, labels, "interrupted"))
+                break
     report = dict(
         schema_version=1,
         kind="adaptation",

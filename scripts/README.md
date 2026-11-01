@@ -10,7 +10,12 @@
 - `asset_whole_task.py` — plan and grade the spec 0.60 section 12.6.5 host trial,
   adaptation episode and platform exports (`plan-host`, `grade-host`,
   `grade-adaptation`, `grade-platform`); offline only, see
-  `docs/ASSET_BENCHMARK.md`. The `trial-preflight`, `trial-install`,
+  `docs/ASSET_BENCHMARK.md`. The run kit for #236/#237 adds blind label
+  templates and label freeze (`label-template`, `label-worksheet`,
+  `label-freeze`), preregistration checks (`preregister-host`,
+  `preregister-episodes`), a resumable journaled `run-host` over an operator
+  executor program, and `capture-costs` from RelayMind trace events; its runs
+  are only `fixture` or `provisional`. The `trial-preflight`, `trial-install`,
   `trial-run` and `trial` commands are the #234 early-trial kit (Apple M1
   8 GiB preflight, pinned-CLI plugin install, the frozen plan over
   operator-captured row observations, a digest bundle and offline grading).

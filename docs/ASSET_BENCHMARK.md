@@ -710,6 +710,81 @@ grader and the actual Apple Silicon macOS / native Windows review. Genuine
 episodes, paired host tasks and platform runs need real independent corpora,
 hosts and hardware; fixture runs establish no measured result.
 
+## Episode and host-task run kit (#236, #237)
+
+These commands of `scripts/asset_whole_task.py` cover the operator steps
+before and during the real adaptation-episode (#236; RM42/AC33) and paired
+host-task (#237; RM40–RM44; AC31–AC36) runs. They do not supply genuine
+people, labels, hosts or corrections, and every run they write is `fixture` or
+`provisional`: there is no `qualified` option. Grading stays with `grade-host`
+and `grade-adaptation`, which are already the one-command final grade.
+
+| Command | What it does |
+| --- | --- |
+| `label-template --catalog K --cases C --annotator A --output T` | One annotator's blind template (section 12.6.1): only each case's prompt (`lane`, `task_text`, `conversation`, `requested_kinds`, `language_tags`, `code_switched`), bound to the cases and catalog digests. No labels, families, splits, authors, other judgments or algorithm outputs. The annotator must be a declared `annotator` who is not a `tuner`. |
+| `label-worksheet --catalog K --cases C --judgments T1 T2 … --output W` | Checks the returned templates (unchanged binding and prompts, every case judged, exactly two distinct annotators per case) and writes the adjudicator's worksheet: both raw judgments, per-answer agreement and the recomputed agreement groups |
+| `label-freeze --catalog K --cases C --judgments T1 T2 … --worksheet W --output L` | Assembles `AssetLabelsV1` from the raw judgments and the completed adjudications. Raw judgments cannot change in the worksheet, agreement is recomputed, and the unchanged release validator checks roles, coverage and inclusion |
+| `preregister-host --tasks T --freeze F --output P` | Verifies the task set against its freeze and records the input, freeze and plan digests, task and lane counts, and acceptance eligibility (`kind_not_acceptance`, `below_minimum_tasks`). Missing required lanes are listed only: the spec states no per-lane host-task minimum |
+| `preregister-episodes --episodes E --freeze F [--lock L --evidence-root R] --output P` | The same for `AssetEpisodesV1`. With the corpus it also binds the episodes to it and counts probes outside the `held_out` split, probes with no included adjudication and correction targets missing from the pool. Reasons include `below_minimum_episodes`, `corpus_not_acceptance`, `corpus_not_frozen`, `unlabelled_probes` and, without the corpus, `corpus_unverified` |
+| `run-host --tasks T --freeze F --journal J --inputs M --environment E [--artifacts A] --qualification fixture\|provisional --output R -- PROGRAM ARGS…` | Executes the frozen plan through your host executor program and writes the `AssetHostReportV1` (see below). Exit `0` when every planned row has an outcome, `3` after an interruption |
+| `capture-costs --events V --provider P --attempt-prefix X --evidence-id I [--token-relationship R --relationship-evidence I2] [--first-ordinal N] --output O` | Turns RelayMind trace events (a JSON array of TraceEvent objects) into `HostAttempt` objects for the external model calls of the provider arms |
+
+Other exits: `2` rejected input, with a fixed reason on standard error.
+
+**Blinding is a process.** Give each annotator only their own template and the
+catalog. Only the adjudicator sees the worksheet. Separate files make blind,
+independent judgment possible; they do not prove it. Custodian review of the
+people, their competence and independence is still required (section 12.6.1).
+
+**Run journal.** `run-host` (and `run_adaptation_episodes(..., journal=PATH)`
+in Python) keeps progress in a private JSON-lines journal. It is not evidence.
+Its header binds the preregistered input, freeze and plan digests, so a journal
+cannot resume with changed inputs (`journal_binding`). Each row is recorded as
+`started` before work begins and `finished` with its outcome, flushed to disk
+each time.
+
+- A rerun restores finished rows and never executes them again.
+- A row that started but was never recorded (a crash) is exported as
+  `cancelled` with reason `interrupted_unrecorded`. It has no attempts and a
+  null verdict. It is not rerun, because its consumption is unknown, so the
+  cost coverage of that arm stays unknown and the gate blocks.
+- After SIGINT/SIGTERM, rows that never started are `not_run` (`interrupted`)
+  and a later run executes them.
+- Only one runner can hold a journal at a time (`journal_locked`). A killed
+  runner leaves `J.lock` behind. Check that no runner is still alive, then
+  remove the lock.
+
+For episodes, a finished episode is restored in whatever status it ended,
+together with its reset evidence. An episode that started but was never
+recorded is `cancelled` with reason `interrupted_unrecorded`.
+
+**Executor program.** `run-host` calls the program once per planned row. On
+standard input it gets
+`{format:"relaymind.host_executor_request.v1",ordinal,task,arm,arm_config}`.
+On standard output it must write `{row,evidence}`: one `HostRow` and its
+`EvidenceRef`s. Each row is checked before it is recorded: plan identity,
+evidence closure and conflicts, report-wide attempt IDs and the row rules
+above. A row that fails these checks, or a nonzero exit or unusable output, is
+recorded as `failed` with reason `executor_invalid_row` or `executor_error`,
+with no attempts and a null verdict. The host's output is never repaired.
+Only the host executes tools and grants approvals.
+
+**External cost capture.** For the `provider_only` and `recommendations` arms,
+the RelayMind gateway records each external model call
+(`model.started`/`model.finished`, actor `external`). `capture-costs` makes
+one attempt per call:
+
+- The provider-reported counts are copied with `usage_provenance: reported`.
+  A missing count stays null, never zero, and `total_tokens` stays null.
+- `calls` is `1` only for a finished call. An unfinished call, or one that
+  never reached the provider (`provider_unreachable`), has null calls.
+- The relationship between counts is `unknown` unless you name evidence for
+  it with `--relationship-evidence`.
+
+Local model calls are not attempts. The native arm calls its provider
+directly, so its usage must come from the host itself: this kit has no capture
+for it.
+
 ## Operations and platform run kit (#242)
 
 `scripts/asset_operations_run.py` prepares the real-world AC29 and AC37 runs
