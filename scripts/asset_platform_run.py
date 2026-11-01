@@ -264,12 +264,13 @@ def verify_platform(directory: Path) -> str | None:
     The grade goes to a temporary file: a committed run directory is bound by
     SHA-256 in its qualification record, so verify writes nothing into it.
     """
+    from relaymind.evaluation.asset_trial_kit import real_path
     from relaymind.evaluation.asset_whole_task_cli import main as grade
 
     directory = Path(directory)
     with tempfile.TemporaryDirectory(prefix="relaymind-platform-grade-") as scratch:
-        # resolve(): the grader refuses a symlinked ancestor such as /var on macOS.
-        output = Path(scratch).resolve() / "platform-grade.json"
+        # The grader refuses a symlinked ancestor such as /var on macOS.
+        output = real_path(Path(scratch) / "platform-grade.json")
         code = grade(
             [
                 "grade-platform",

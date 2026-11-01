@@ -46,40 +46,12 @@ def test_owner_run_records_live_where_section_12_6_6_says(machine):
     assert not list(OWNER_RUNS.glob("owner-platform-run-*.json"))
 
 
-def test_owner_run_subjects_keep_their_bytes_on_every_checkout():
-    """Every bound subject is checked out byte for byte (RM38; AC29; spec 0.66 12.6.6).
+def _git(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
 
-    The records bind each subject by SHA-256, including extensionless evidence,
-    ``verify.txt``, ``SHA256SUMS`` and ``.toml`` files. A file whose ``text``
-    attribute is unspecified gets CRLF line endings on a Windows checkout with
-    ``core.autocrlf=true``, and its digest no longer matches.
-    """
-    if shutil.which("git") is None or _git("rev-parse", "--git-dir").returncode != 0:
-        pytest.skip("needs a git checkout")
-    paths = [
-        f"docs/evidence/m10/{subject['path']}"
-        for record in EVIDENCE.glob("owner-platform-run-*.json")
-        for subject in json.loads(record.read_bytes())["subjects"]
-    ]
-    assert paths
-    result = subprocess.run(
-        ["git", "check-attr", "--stdin", "-z", "text", "eol"],
-        cwd=ROOT,
-        input="\0".join(paths) + "\0",
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    fields = result.stdout.split("\0")[:-1]
-    attrs: dict[str, dict[str, str]] = {}
-    for path, name, value in zip(fields[0::3], fields[1::3], fields[2::3], strict=True):
-        attrs.setdefault(path, {})[name] = value
-    converted = sorted(
-        path
-        for path, values in attrs.items()
-        if values["text"] != "unset" and values["eol"] != "lf"
-    )
-    assert converted == []
+
+def _tree(root: Path) -> dict[str, bytes]:
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
 
 
 def _verify_block() -> str:
@@ -105,10 +77,6 @@ def test_the_documented_verify_procedure_names_the_recorded_run_commit():
     assert f"run={_run_commit()}\n" in block
     # It never writes into the committed evidence: only into $GEN and $WORK.
     assert 'gen="${GEN:?' in block and 'work="${WORK:?' in block
-
-
-def _git(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
 
 
 def test_the_documented_verify_procedure_reproduces_verify_txt(tmp_path):
@@ -141,11 +109,7 @@ def test_the_documented_verify_procedure_reproduces_verify_txt(tmp_path):
     # A wrapper, not a symlink: a venv interpreter finds its packages by its path.
     (shim / "python").write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
     (shim / "python").chmod(0o755)
-    before = {
-        p.relative_to(OWNER_RUNS).as_posix(): p.read_bytes()
-        for p in OWNER_RUNS.rglob("*")
-        if p.is_file()
-    }
+    before = _tree(OWNER_RUNS)
     env = dict(os.environ)
     env.pop("PYTHONPATH", None)
     env["PATH"] = f"{shim}{os.pathsep}{env['PATH']}"
@@ -159,18 +123,11 @@ def test_the_documented_verify_procedure_reproduces_verify_txt(tmp_path):
         timeout=300,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    after = {
-        p.relative_to(OWNER_RUNS).as_posix(): p.read_bytes()
-        for p in OWNER_RUNS.rglob("*")
-        if p.is_file()
-    }
-    assert after == before
+    assert _tree(OWNER_RUNS) == before
 
 
 def _owner_run_records():
     """Every committed spec 12.6.6 record under docs/evidence/m10, at any depth."""
-    import json
-
     found = []
     for path in sorted(EVIDENCE.rglob("*.json")):
         try:
@@ -209,14 +166,13 @@ def test_every_m10_evidence_folder_keeps_its_exact_bytes_on_every_checkout():
 
     Records bind every file in an evidence folder by SHA-256, including
     extensionless captures, TOML and TXT files, so no file under a
-    ``docs/evidence/m10`` subfolder may be a text file Git converts.
+    ``docs/evidence/m10`` subfolder may be a text file Git converts. That
+    includes a file whose ``text`` attribute is unspecified: a Windows checkout
+    with ``core.autocrlf=true`` gives it CRLF line endings.
     """
-    import subprocess
-
-    root = Path(__file__).resolve().parents[1]
     files = subprocess.run(
         ["git", "ls-files", "docs/evidence/m10/*/**"],
-        cwd=root,
+        cwd=ROOT,
         capture_output=True,
         text=True,
         check=True,
@@ -226,15 +182,11 @@ def test_every_m10_evidence_folder_keeps_its_exact_bytes_on_every_checkout():
     # has no effect once ``text`` is unset.
     attrs = subprocess.run(
         ["git", "check-attr", "text", "--stdin"],
-        cwd=root,
+        cwd=ROOT,
         input="\n".join(files),
         capture_output=True,
         text=True,
         check=True,
     ).stdout.splitlines()
-    converted = sorted(
-        line.split(": ")[0]
-        for line in attrs
-        if line.endswith(": text: set") or line.endswith(": text: auto")
-    )
+    converted = sorted(line.split(": ")[0] for line in attrs if not line.endswith(": text: unset"))
     assert converted == []
