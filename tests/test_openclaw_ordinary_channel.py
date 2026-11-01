@@ -333,21 +333,45 @@ def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
     assert not api.ordinary_skill_pass(capture)
 
 
-def test_the_browser_observer_allows_every_method_the_ordinary_run_calls():
-    """#197: a method missing from the observer allowlist never reaches the host."""
+@pytest.mark.parametrize("observe", [False, True])
+def test_the_browser_observer_allows_every_method_the_ordinary_run_calls(tmp_path, observe):
+    """RM39/AC30 N5: ordinary runs retain the base grants; observation grants are opt-in."""
     import re
 
-    root = Path(__file__).resolve().parents[1] / "integrations/openclaw/test"
-    ordinary = (root / "host-ordinary-qualification/qualify.py").read_text(encoding="utf-8")
-    person = (root / "host-person-qualification/qualify.py").read_text(encoding="utf-8")
-    wire = (root / "host-person-qualification/browser-wire.mjs").read_text(encoding="utf-8")
-    called = set(re.findall(r'rpc\(\s*[^,]+,\s*"([a-z.]+)"', ordinary))
-    assert {"skills.library.save", "skills.library.list", "relaymind.recommendations"} <= called
-    requested = re.search(r"installNativeSocketObserver\(window, \[(.*?)\]\)", person, re.S)
-    extras = set(re.findall(r'"([a-z.]+)"', requested.group(1)))
-    base = {"rmqualification.person", "sessions.create", "sessions.reset"}
-    assert extras <= called
-    assert called <= base | extras
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    if observe:
+        extension.observation = api.LoadedUseGatewayObservation()
+    person = api.BASE.person_module()
+    plugin = ROOT / "integrations/openclaw/test/host-person-qualification"
+    script = person.socket_observer_script(plugin, extension)
+    requested = re.search(r"installNativeSocketObserver\(window, (\[.*?\])\);", script)
+    import json
+
+    extras = set(json.loads(requested.group(1)))
+    ordinary = {
+        "relaymind.recommendations",
+        "relaymind.skill",
+        "skills.library.save",
+        "skills.library.list",
+    }
+    observation = {
+        "sessions.messages.subscribe",
+        "chat.send",
+        "skills.library.read",
+        "skills.library.mutate",
+        "skills.library.activate",
+    }
+    assert extras == ordinary | (observation if observe else set())
+    assert "installNativeSocketObserver();" in person.socket_observer_script(plugin)
+    source = Path(api.__file__).read_text()
+    called = set(re.findall(r'rpc\(\s*[^,]+,\s*"([a-z.]+)"', source))
+    assert ordinary | observation <= called
+    assert (
+        called
+        <= {"rmqualification.person", "sessions.create", "sessions.reset"} | ordinary | observation
+    )
+    wire = (plugin / "browser-wire.mjs").read_text()
     allowed = re.search(r"some\(method => !\[(.*?)\]\.includes", wire).group(1)
     assert extras <= set(re.findall(r'"([a-z.]+)"', allowed))
 
@@ -778,6 +802,7 @@ def test_host_uses_packaged_provider_and_only_native_skill_read(tmp_path):
         runs=None,
         skill_text=CONTENT,
         skill_asset={},
+        observation=api.LoadedUseGatewayObservation(),
     )
     config = dict(
         plugins=dict(allow=[], load=dict(paths=[]), entries={}),
@@ -790,6 +815,8 @@ def test_host_uses_packaged_provider_and_only_native_skill_read(tmp_path):
     assert extension.environment()["RELAYMIND_APP_TOKEN"] == "app"
     assert "hooks" not in config["plugins"]["entries"]["relaymind-ordinary-observer"]
     assert all(path.name != "probe.test.ts" for path in extension.source_paths())
+
+    assert extension.config["diagnosticsPath"] == str(tmp_path / "provider-attempts.jsonl")
 
 
 def test_control_native_activation_is_retained_as_native_not_bridge_receipt():
@@ -1410,10 +1437,14 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
             return self
 
         def goto(self, *args, **kwargs):
+            assert kwargs["timeout"] == 10000
             if stage in {"ui_actions", "cleanup_deadline"}:
                 fail()
 
         def evaluate(self, *args):
+            return True
+
+        def wait_for_function(self, *args, **kwargs):
             return True
 
         def close(self):
@@ -1465,6 +1496,7 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
     assert extension.failure_diagnostics() == {
         "ordinary_failure_step": "ui_actions" if stage == "cleanup_deadline" else stage,
         "ordinary_error_class": "other" if stage == "cleanup_deadline" else "playwright_error",
+        **({"ordinary_ui_action": "open"} if stage in {"ui_actions", "cleanup_deadline"} else {}),
     }
 
 
@@ -1499,6 +1531,13 @@ def test_observation_is_opt_in_cli_and_separate_ci_step():
     assert "--observe-loaded-use" in ci
     assert "openclaw-loaded-use-observation-ubuntu" in ci
     assert "continue-on-error" not in ci
+    # The observation and its upload are the final steps of the existing job.
+    observation = ci.index("      - name: Native loaded skill observation")
+    assert observation > ci.index("      - name: Transport, plugin, and artifact tiers")
+    assert observation > ci.index("      - name: Pinned host lifecycle")
+    assert observation > ci.index("          name: openclaw-plugin-${{ matrix.os }}")
+    assert ci[observation:].count("      - ") == 2
+    assert "timeout-minutes: 6" in ci[observation:]
 
 
 @pytest.mark.parametrize("tail", [b'{"kind":', b'{"kind":"late"}'])
@@ -1744,7 +1783,10 @@ def test_missing_native_pin_has_a_fixed_control_failure(pins):
         )
 
 
-def test_observation_continues_controls_after_a_turn_fixture_failure(tmp_path, monkeypatch):
+@pytest.mark.parametrize("failure", ["ordinary_skill_turn_timeout", "not_text_content"])
+def test_observation_continues_controls_after_a_turn_fixture_failure(
+    tmp_path, monkeypatch, failure
+):
     """RM39/AC30 F6/F9: one incomplete turn retains evidence without starving later cases."""
     api = module()
     capture = loaded_fixture(api)
@@ -1818,14 +1860,18 @@ def test_observation_continues_controls_after_a_turn_fixture_failure(tmp_path, m
         visited.append(case["case"])
         case["requests"] = [dict(status=429)]
         if case["case"] == "positive":
-            raise ValueError("ordinary_skill_turn_timeout")
+            if failure == "not_text_content":
+                malformed = expected[0]
+                malformed["tools"][0]["event"]["result"]["content"] = [{"type": "image"}]
+                api.loaded_use_observation(malformed)
+            raise ValueError(failure)
 
     monkeypatch.setattr(extension, "loaded_use_turn", turn)
     extension.observe_loaded_use(rpc, None, {}, capture)
     assert visited == ["positive", "stale", "deleted", "reset"]
     partial = capture["ordinary_skill_loaded_use"]["cases"][0]
     assert partial["observed"] == "incomplete"
-    assert partial["failure_reason"] == "ordinary_skill_turn_timeout"
+    assert partial["failure_reason"] == failure
     assert partial["requests"] == [dict(status=429)]
 
 
@@ -2070,3 +2116,187 @@ def test_real_dom_run_ui_accepts_the_native_reset_dialog():
             ]
         finally:
             browser.close()
+
+
+def test_flag_off_host_configuration_matches_base_harness(tmp_path):
+    """RM39/AC30 N1: exact base b175f31 config, operator config, and environment."""
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    config = dict(
+        plugins=dict(allow=[], load=dict(paths=[]), entries={}),
+        agents=dict(defaults=dict(workspace=str(tmp_path))),
+        gateway=dict(controlUi={}),
+    )
+    extension.configure(config, tmp_path, "https://fixture.test")
+    # Captured from the base harness before loaded-use observation was added.
+    assert config == {
+        "agents": {"defaults": {"workspace": str(tmp_path)}},
+        "gateway": {"controlUi": {"experimental": {"customPlugins": True}}},
+        "plugins": {
+            "allow": ["relaymind-ordinary-observer"],
+            "load": {
+                "paths": [
+                    str(ROOT / "integrations/openclaw/test/host-ordinary-qualification/observer")
+                ]
+            },
+            "entries": {
+                "relaymind-ordinary-observer": {
+                    "enabled": True,
+                    "config": {"eventFile": str(tmp_path / "action-events.jsonl")},
+                }
+            },
+        },
+    }
+    assert extension.config == {
+        "baseUrl": "http://127.0.0.1:12345/v1",
+        "recommendations": {
+            "controlUiOrigin": "https://fixture.test",
+            "applicationTokenEnv": "RM_QUALIFICATION_APP_TOKEN",
+            "bindings": [],
+        },
+    }
+    assert extension.environment() == {
+        "RM_QUALIFICATION_APP_TOKEN": "app",
+        "RM_QUALIFICATION_ACTION_TOKEN": "action",
+    }
+    assert not (tmp_path / "provider-attempts.jsonl").exists()
+
+
+@pytest.mark.parametrize("observe", [False, True])
+def test_main_only_replaces_base_gateway_when_observation_is_requested(
+    tmp_path, monkeypatch, observe
+):
+    """RM39/AC30 N1: flag-off serves the exact recommendation-only base app."""
+    import json
+
+    import api_helpers
+    import recommendation_helpers
+
+    api = module()
+    setup = recommendation_helpers.setup
+    base_apps = []
+
+    def base_setup(*args, **kwargs):
+        result = setup(*args, **kwargs)
+        base_apps.append(result[0])
+        return result
+
+    monkeypatch.setattr(recommendation_helpers, "setup", base_setup)
+
+    class Server:
+        base_url = "http://127.0.0.1:12345"
+
+        def __init__(self, app):
+            assert (app is base_apps[0]) is (not observe)
+            assert (
+                any(getattr(route, "path", None) == "/v1/chat/completions" for route in app.routes)
+                is observe
+            )
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(api_helpers, "RunningServer", Server)
+    person = api.BASE.person_module()
+
+    def run(work, out, *, extension):
+        assert (extension.observation is not None) is observe
+        out.write_text(json.dumps(loaded_fixture(api)))
+        return 0
+
+    monkeypatch.setattr(person, "run_qualification", run)
+    monkeypatch.setattr(api.BASE, "person_module", lambda: person)
+    archive = tmp_path / "release.tgz"
+    archive.write_bytes(b"fixture")
+    assert (
+        api.main(
+            [
+                "--tarball",
+                str(archive),
+                "--work-dir",
+                str(tmp_path / "host"),
+                "--out",
+                str(tmp_path / "capture.json"),
+            ]
+            + (["--observe-loaded-use"] if observe else [])
+        )
+        == 0
+    )
+
+
+def test_observer_source_inventory_includes_runtime_package_metadata(tmp_path):
+    """RM39/AC30 N3: changing the host entry resolver must change source provenance."""
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    observer = Path(api.__file__).parent / "observer"
+    assert {p.name for p in extension.source_paths() if p.parent == observer} == {
+        "probe.mjs",
+        "openclaw.plugin.json",
+        "package.json",
+    }
+
+
+@pytest.mark.parametrize("tail_length", [8, 11, 17])
+def test_observer_window_resumes_from_consumed_bytes_after_torn_tail(
+    tmp_path, monkeypatch, tail_length
+):
+    """RM39/AC30 N2: deferred tails cannot move a later window into the middle of JSON."""
+    api = module()
+    path = tmp_path / "events.jsonl"
+    complete = '{"kind":"已读"}\n'.encode()
+    pending = '{"kind":"后来"}\n'.encode()
+    path.write_bytes(complete + pending[:tail_length])
+    monkeypatch.setattr(api.time, "sleep", lambda _: None)
+    events, offset = api.read_observer_events(path, with_offset=True)
+    assert events == [{"kind": "已读"}]
+    assert offset == len(complete)
+    with path.open("ab") as writer:
+        writer.write(pending[tail_length:] + b'{"kind":"next"}\n')
+    events, end = api.read_observer_events(path, offset, with_offset=True)
+    assert events == [{"kind": "后来"}, {"kind": "next"}]
+    assert end == path.stat().st_size
+    assert api.read_observer_events(path, end) == []
+
+
+def test_retirement_window_keeps_deferred_tail_at_record_boundary(tmp_path, monkeypatch):
+    """RM39/AC30 N2: the actual retirement window never starts inside a deferred record."""
+    import json
+
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    extension.event_file = tmp_path / "events.jsonl"
+    complete = b'{"kind":"earlier"}\n'
+    extension.event_file.write_bytes(complete + b'{"kind":"deferred"')
+    monkeypatch.setattr(api.time, "sleep", lambda _: None)
+    monkeypatch.setattr(
+        extension, "native_events", lambda: [{"requestId": "guard", "phase": "prepared"}]
+    )
+
+    class Page:
+        def evaluate(self, expression, params):
+            return "guard" if "rmqualification.person" in expression else "action"
+
+    class Entered:
+        def wait(self, timeout):
+            with extension.event_file.open("ab") as writer:
+                writer.write(
+                    b"}\n"
+                    + json.dumps(
+                        {
+                            "kind": "http_attempt",
+                            "path": "/relay/v1/feedback",
+                            "attempt_id": "original",
+                        }
+                    ).encode()
+                    + b"\n"
+                )
+            return True
+
+    extension.ui_page = Page()
+    extension.entered = Entered()
+    extension.before_retirement(Page(), {})
+    assert extension.retirement_start == len(complete)
+    assert extension.held_attempt["attempt_id"] == "original"

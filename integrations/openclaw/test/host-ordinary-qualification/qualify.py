@@ -326,7 +326,7 @@ _CASE_FIELDS = {
 }
 
 
-def read_observer_events(path, start=0):
+def read_observer_events(path, start=0, *, with_offset=False):
     """RM39/AC30: reread a torn tail once; every committed record is strict."""
     for attempt in range(2):
         with path.open("rb") as source:
@@ -346,7 +346,10 @@ def read_observer_events(path, start=0):
                 raise ValueError("ordinary_skill_native_event_invalid")
             events.append(value)
         if not tail or attempt:
-            return events
+            # Advance only across newline-terminated records from this read.
+            # A deferred tail belongs to the next window, including its first bytes.
+            offset = start + len(data) - len(tail)
+            return (events, offset) if with_offset else events
         time.sleep(0.05)
 
 
@@ -891,20 +894,23 @@ class OrdinaryComposition(BASE.ActionComposition):
             config=dict(eventFile=str(self.event_file)),
         )
         config["gateway"]["controlUi"]["experimental"] = dict(customPlugins=True)
-        config["agents"]["defaults"].update(
-            model=dict(primary="relaymind/relaymind-client-tools"),
-            heartbeat=dict(every="0m"),
-        )
-        config["tools"] = dict(allow=["skills_read"], toolSearch=False)
         self.host_config_path = work / "openclaw.json"
-        self.provider_attempt_file = work / "provider-attempts.jsonl"
-        self.provider_attempt_file.write_bytes(b"")
-        self.provider_attempt_file.chmod(0o600)
         if self.observation is not None:
+            config["agents"]["defaults"].update(
+                model=dict(primary="relaymind/relaymind-client-tools"),
+                heartbeat=dict(every="0m"),
+            )
+            config["tools"] = dict(allow=["skills_read"], toolSearch=False)
+            self.provider_attempt_file = work / "provider-attempts.jsonl"
+            self.provider_attempt_file.write_bytes(b"")
+            self.provider_attempt_file.chmod(0o600)
             self.config["diagnosticsPath"] = str(self.provider_attempt_file)
 
     def environment(self):
-        return dict(super().environment(), RELAYMIND_APP_TOKEN=self.application_token)
+        environment = super().environment()
+        if self.observation is not None:
+            environment["RELAYMIND_APP_TOKEN"] = self.application_token
+        return environment
 
     @ordinary_step("install")
     def prepare_host(self, host, environment, work, config_path):
@@ -941,6 +947,7 @@ class OrdinaryComposition(BASE.ActionComposition):
             Path(__file__),
             Path(__file__).parent / "observer" / "probe.mjs",
             Path(__file__).parent / "observer" / "openclaw.plugin.json",
+            Path(__file__).parent / "observer" / "package.json",
         ]
 
     def failure_reasons(self):
@@ -968,6 +975,7 @@ class OrdinaryComposition(BASE.ActionComposition):
             "ordinary_skill_generation_bound",
             "ordinary_skill_task_mismatch",
             "ordinary_skill_native_event_invalid",
+            "not_text_content",
         }
 
     def observe_backend(self):
@@ -1166,8 +1174,9 @@ class OrdinaryComposition(BASE.ActionComposition):
         with self.step("negative_actions"):
             self.ui_page = ui_page
             self.ui_person = ui_person
-            value["positive_events"] = read_observer_events(self.event_file)
-            start = len(self.event_file.read_bytes())
+            value["positive_events"], start = read_observer_events(
+                self.event_file, with_offset=True
+            )
             negative = []
             for target in (sessions[0], sessions[1]):
                 observed = rpc(
@@ -1505,7 +1514,7 @@ class OrdinaryComposition(BASE.ActionComposition):
 
     @ordinary_step("retirement_prepared")
     def before_retirement(self, page, session):
-        self.retirement_start = len(self.event_file.read_bytes())
+        _, self.retirement_start = read_observer_events(self.event_file, with_offset=True)
         self.ui_guard_request = self.ui_page.evaluate(
             "params => window.__rmPersonWire.startRpc('rmqualification.person',params)",
             dict(session, hold=True),
@@ -1666,8 +1675,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
     backend = args.work_dir.parent / (args.work_dir.name + "-gateway")
     backend.mkdir(mode=0o700)
-    _, service, runs, _ = setup(backend)
-    app, gateway, observation = loaded_use_gateway(backend / "inference", service)
+    app, service, runs, _ = setup(backend)
+    gateway, observation = None, None
+    if args.observe_loaded_use:
+        app, gateway, observation = loaded_use_gateway(backend / "inference", service)
     action_token = secrets.token_urlsafe(48)
     registration = ActionRegistrations(runs)  # Actual DEFAULT production resolver.
     registration.replace(
@@ -1714,7 +1725,7 @@ def main(argv=None):
                 release,
                 archive=args.tarball,
                 runs=runs,
-                observation=observation if args.observe_loaded_use else None,
+                observation=observation,
                 skill_text=skill_text,
                 skill_asset=dict(
                     asset_id=record.asset_id,
@@ -1733,7 +1744,8 @@ def main(argv=None):
         release.set()
         asyncio.run(service.stop())
         runs.close()
-        gateway.store.close()
+        if gateway is not None:
+            gateway.store.close()
 
 
 if __name__ == "__main__":

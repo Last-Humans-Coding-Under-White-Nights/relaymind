@@ -1108,20 +1108,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     finally:
                         context.close()
                 mark("proxy_signature_controls")
-                script = (plugin / "browser-wire.mjs").read_text(encoding="utf-8").replace(
-                    "export function installNativeSocketObserver",
-                    "function installNativeSocketObserver",
-                    1,
-                ) + "\ninstallNativeSocketObserver();\n"
-                if extension is not None:
-                    script = script.replace(
-                        "installNativeSocketObserver();",
-                        'installNativeSocketObserver(window, ["relaymind.recommendations", '
-                        '"relaymind.skill", "skills.library.save", "skills.library.list", '
-                        '"sessions.messages.subscribe", "chat.send", '
-                        '"skills.library.read", '
-                        '"skills.library.mutate", "skills.library.activate"]);',
-                    )
+                script = socket_observer_script(plugin, extension)
                 pages, sessions = [], []
 
                 def rpc(page, method, params):
@@ -1458,6 +1445,36 @@ SAFE_REASONS = frozenset(
         "unknown_step",
     }
 )
+
+
+def socket_observer_script(plugin: Path, extension: object | None = None) -> str:
+    """RM39/AC30: grant loaded-use RPCs only to the opt-in observation run."""
+    script = (
+        (plugin / "browser-wire.mjs")
+        .read_text(encoding="utf-8")
+        .replace(
+            "export function installNativeSocketObserver",
+            "function installNativeSocketObserver",
+            1,
+        )
+    )
+    if extension is None:
+        return script + "\ninstallNativeSocketObserver();\n"
+    methods = [
+        "relaymind.recommendations",
+        "relaymind.skill",
+        "skills.library.save",
+        "skills.library.list",
+    ]
+    if getattr(extension, "observation", None) is not None:
+        methods += [
+            "sessions.messages.subscribe",
+            "chat.send",
+            "skills.library.read",
+            "skills.library.mutate",
+            "skills.library.activate",
+        ]
+    return script + "\ninstallNativeSocketObserver(window, " + json.dumps(methods) + ");\n"
 
 
 def run_qualification(work: Path, output: Path, *, extension=None) -> int:
