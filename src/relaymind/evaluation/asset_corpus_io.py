@@ -123,28 +123,41 @@ def _finite(value: str) -> None:
     raise AssetCorpusError("invalid_number")
 
 
-def parse_json(payload: bytes) -> dict[str, Any]:
+def strict_loads(payload: bytes) -> Any:
+    """Any JSON value, rejecting duplicate keys and non-finite constants."""
     try:
-        value = json.loads(payload.decode("utf-8"), object_pairs_hook=_once, parse_constant=_finite)
-        pending = [value]
-        while pending:
-            current = pending.pop()
-            if isinstance(current, Mapping):
-                pending.extend(current.keys())
-                pending.extend(current.values())
-            elif isinstance(current, list):
-                pending.extend(current)
-            elif isinstance(current, str):
-                current.encode("utf-8")
-            elif isinstance(current, float) and not math.isfinite(current):
-                raise AssetCorpusError("invalid_number")
-        if not isinstance(value, dict):
-            raise AssetCorpusError("invalid_document")
-        return value
+        return json.loads(payload.decode("utf-8"), object_pairs_hook=_once, parse_constant=_finite)
     except AssetCorpusError:
         raise
     except (ValueError, UnicodeError, RecursionError, OverflowError):
         raise AssetCorpusError("invalid_json") from None
+
+
+def check_strict_value(value: Any) -> None:
+    """Finite numbers and valid UTF-8 text throughout a parsed value."""
+    pending = [value]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, Mapping):
+            pending.extend(current.keys())
+            pending.extend(current.values())
+        elif isinstance(current, list):
+            pending.extend(current)
+        elif isinstance(current, str):
+            try:
+                current.encode("utf-8")
+            except UnicodeError:
+                raise AssetCorpusError("invalid_json") from None
+        elif isinstance(current, float) and not math.isfinite(current):
+            raise AssetCorpusError("invalid_number")
+
+
+def parse_json(payload: bytes) -> dict[str, Any]:
+    value = strict_loads(payload)
+    check_strict_value(value)
+    if not isinstance(value, dict):
+        raise AssetCorpusError("invalid_document")
+    return value
 
 
 def _max_bytes(validator, limit, instance, schema):
