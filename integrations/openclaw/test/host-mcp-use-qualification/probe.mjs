@@ -64,8 +64,46 @@ const inventory = (method, result, status = result?.ok === true ? "ok" : "refuse
     ...effective ? {mcp_tools: rows.filter(row => row.server !== undefined), notices} : {}};
 };
 
+// Fixed host refusals from mcp-app-extensions (prepareMcpAppExtensionRuntime);
+// any other message is not copied into the capture.
+const DISCOVERY_REFUSALS = new Set([
+  "MCP Apps are disabled",
+  "MCP App session authority is unavailable",
+  "MCP App session changed",
+  "MCP App configuration changed; reopen the App",
+  "MCP App session runtime selection changed; reopen the App",
+  "The selected session harness is unavailable",
+  "The session harness cannot open MCP Apps",
+  "Open a conversation with this plugin before launching its App",
+]);
+// Bounded: both fixture servers use 5 s connection and request timeouts.
+const DISCOVERY_TIMEOUT_MS = 15000;
+
+// The pinned host lists MCP tools in tools.effective only from the session's
+// own runtime (peekSessionMcpRuntime). Public mcp.app.discover, under the same
+// authenticated person request and session target, acquires that runtime
+// (acquireSessionMcpRuntime) and awaits its catalog. It creates no App view and
+// calls no tool. Its outcome is recorded; a refusal never stops the read.
+async function discoverSession(dispatch, params, record) {
+  try {
+    const result = await dispatch("mcp.app.discover", params, {timeoutMs: DISCOVERY_TIMEOUT_MS});
+    if (result?.ok === true) {
+      record({method: "mcp.app.discover", status: "ok"});
+      return;
+    }
+    const code = result?.error?.code;
+    const message = result?.error?.message;
+    record({method: "mcp.app.discover", status: "refused",
+      error_code: typeof code === "string" && code.length > 0 && code.length <= 64 ? code : "unclassified",
+      message: DISCOVERY_REFUSALS.has(message) ? message : "unclassified"});
+  } catch {
+    record({method: "mcp.app.discover", status: "unavailable"});
+  }
+}
+
 export function observeDispatch(dispatch, record) {
   return async (method, params, options) => {
+    if (method === "tools.effective") await discoverSession(dispatch, params, record);
     const result = await dispatch(method, params, options);
     record(inventory(method, result));
     // Independent tools have no App view. Observe the public read-only route's

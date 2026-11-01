@@ -806,6 +806,7 @@ def test_inventory_projection_keeps_no_raw_params_or_payloads(node_runtime):
     assert "private-config" not in result.stdout
     events = json.loads(result.stdout)
     assert events == [
+        dict(method="mcp.app.discover", status="ok"),
         dict(
             method="tools.effective",
             status="ok",
@@ -911,6 +912,10 @@ def test_configure_keeps_provider_policy_and_installs_two_colliding_host_owned_s
     extension, config = configured_extension(tmp_path)
     assert "tools" not in config
     assert set(config["mcp"]["servers"]) == {"alpha.one", "alpha?one"}
+    # mcp.app.discover acquires the person session's MCP runtime only with
+    # MCP Apps enabled; no approval or tool policy changes.
+    assert config["mcp"]["apps"] == {"enabled": True}
+    assert set(config["mcp"]) == {"servers", "apps"}
     assert str(DIRECTORY) in config["plugins"]["load"]["paths"]
     assert extension.config["recommendations"]["bindings"] == []
     assert "relaymind-action-qualification" not in config["plugins"]["allow"]

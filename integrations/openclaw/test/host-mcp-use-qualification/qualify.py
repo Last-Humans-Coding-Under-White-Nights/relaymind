@@ -140,7 +140,9 @@ def composition_type(ordinary, *, forbidden=None):
                     connectionTimeoutMs=5000,
                     requestTimeoutMs=5000,
                 )
-            config["mcp"] = dict(servers=servers)
+            # MCP Apps enable public mcp.app.discover, which the person probe
+            # uses to start this session's MCP runtime before tools.effective.
+            config["mcp"] = dict(servers=servers, apps=dict(enabled=True))
 
         def prepare_host(self, host, environment, work, config_path):
             super().prepare_host(host, environment, work, config_path)

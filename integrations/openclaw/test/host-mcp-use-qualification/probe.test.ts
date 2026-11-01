@@ -21,17 +21,26 @@ const mcpEntry = (id: string, server: string): Entry => entry(id, "mcp", {
   pluginId: "bundle-mcp", mcpServer: server, mcpToolName: "append",
 });
 
-async function observe(effective: unknown, app: unknown = {ok: false, error: {code: "INVALID_REQUEST"}}) {
-  const calls: Array<{method: string; params: unknown}> = [];
+const DISCOVERED = {ok: true, payload: {servers: [], onboarding: []}};
+
+async function observe(effective: unknown, app: unknown = {ok: false, error: {code: "INVALID_REQUEST"}},
+  discover: unknown = DISCOVERED) {
+  const calls: Array<{method: string; params: unknown; options?: unknown}> = [];
   const events: Array<Record<string, unknown>> = [];
-  const dispatch = async (method: string, params: unknown) => {
-    calls.push({method, params});
+  const dispatch = async (method: string, params: unknown, options?: unknown) => {
+    calls.push({method, params, options});
+    if (method === "mcp.app.discover") {
+      if (discover instanceof Error) throw discover;
+      return discover;
+    }
     return method === "tools.effective" ? effective : app;
   };
   const result = await observeDispatch(dispatch, (event: Record<string, unknown>) => events.push(event))(
-    "tools.effective", {sessionKey: "s"}, {timeoutMs: 3000},
+    "tools.effective", {sessionKey: "s", agentId: "main"}, {timeoutMs: 3000},
   );
-  return {result, calls, events};
+  // The session-discovery record precedes the inventory records.
+  const discovered = events.shift();
+  return {result, calls, events, discovered};
 }
 
 test("projects the pinned host's grouped inventory with both colliding MCP tools", async () => {
@@ -45,8 +54,9 @@ test("projects the pinned host's grouped inventory with both colliding MCP tools
   const {result, calls, events} = await observe(inventory);
   expect(result).toEqual(inventory);
   expect(calls).toEqual([
-    {method: "tools.effective", params: {sessionKey: "s"}},
-    {method: "mcp.app.listTools", params: {}},
+    {method: "mcp.app.discover", params: {sessionKey: "s", agentId: "main"}, options: {timeoutMs: 15000}},
+    {method: "tools.effective", params: {sessionKey: "s", agentId: "main"}, options: {timeoutMs: 3000}},
+    {method: "mcp.app.listTools", params: {}, options: {timeoutMs: 3000}},
   ]);
   expect(events).toEqual([
     {method: "tools.effective", status: "ok", inventory: "listed",
@@ -122,5 +132,53 @@ test("a thrown listTools dispatch is unavailable", async () => {
   await observeDispatch(dispatch, (event: Record<string, unknown>) => events.push(event))(
     "tools.effective", {sessionKey: "s"}, {},
   );
-  expect(events[1]).toEqual({method: "mcp.app.listTools", status: "unavailable", inventory: "none", tool_names: []});
+  expect(events[2]).toEqual({method: "mcp.app.listTools", status: "unavailable", inventory: "none", tool_names: []});
+});
+
+// The pinned host lists MCP tools in tools.effective only from the session's
+// own MCP runtime (peekSessionMcpRuntime); mcp.app.discover acquires that
+// runtime through acquireSessionMcpRuntime and awaits its catalog.
+test("session MCP discovery runs once, before the inventory read, with the same target", async () => {
+  const {calls, discovered} = await observe({ok: true, payload: {groups: []}});
+  expect(calls.map(call => call.method)).toEqual(["mcp.app.discover", "tools.effective", "mcp.app.listTools"]);
+  expect(calls[0].params).toEqual(calls[1].params);
+  expect(discovered).toEqual({method: "mcp.app.discover", status: "ok"});
+});
+
+test.each([
+  ["MCP Apps are disabled"],
+  ["The selected session harness is unavailable"],
+  ["The session harness cannot open MCP Apps"],
+  ["MCP App session authority is unavailable"],
+  ["MCP App session changed"],
+])("a known discovery refusal is recorded and the inventory is still read: %s", async message => {
+  const {calls, discovered, events} = await observe({ok: true, payload: {groups: []}}, undefined,
+    {ok: false, error: {code: "UNAVAILABLE", message}});
+  expect(discovered).toEqual({method: "mcp.app.discover", status: "refused", error_code: "UNAVAILABLE", message});
+  expect(calls.map(call => call.method)).toContain("tools.effective");
+  expect(events[0]).toMatchObject({method: "tools.effective", inventory: "empty"});
+});
+
+test("an unknown discovery refusal message is not copied", async () => {
+  const {discovered} = await observe({ok: true, payload: {groups: []}}, undefined,
+    {ok: false, error: {code: "UNAVAILABLE", message: "connect failed: private-config /home/user"}});
+  expect(discovered).toEqual({method: "mcp.app.discover", status: "refused", error_code: "UNAVAILABLE",
+    message: "unclassified"});
+  const odd = await observe({ok: true, payload: {groups: []}}, undefined, {ok: false, error: {code: "x".repeat(65)}});
+  expect(odd.discovered).toEqual({method: "mcp.app.discover", status: "refused", error_code: "unclassified",
+    message: "unclassified"});
+});
+
+test("a thrown discovery dispatch is unavailable and the inventory is still read", async () => {
+  const {calls, discovered} = await observe({ok: true, payload: {groups: []}}, undefined, Error("private"));
+  expect(discovered).toEqual({method: "mcp.app.discover", status: "unavailable"});
+  expect(calls.map(call => call.method)).toEqual(["mcp.app.discover", "tools.effective", "mcp.app.listTools"]);
+});
+
+test("other methods pass through without discovery", async () => {
+  const calls: string[] = [];
+  const events: unknown[] = [];
+  const dispatch = async (method: string) => { calls.push(method); return {ok: true, payload: {}}; };
+  await observeDispatch(dispatch, (event: unknown) => events.push(event))("sessions.list", {}, {});
+  expect(calls).toEqual(["sessions.list"]);
 });
