@@ -40,6 +40,47 @@ def read(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+class JudgingIncomplete(ValueError):
+    """The spec 12.6.6 two-judge rule is not met; nothing is adjudicated or applied."""
+
+
+def _valid(row) -> bool:
+    return isinstance(row, dict) and type(row.get("success")) is bool
+
+
+def check_judges(blind_items, a: dict, b: dict) -> None:
+    """Both judges gave one valid raw verdict for every blind item, and no other."""
+    expected = set(blind_items)
+    for name, raw in (("a", a), ("b", b)):
+        if not isinstance(raw, dict) or set(raw) - expected:
+            raise JudgingIncomplete(f"judge_{name}_unknown_item")
+        if expected - set(raw):
+            raise JudgingIncomplete(f"judge_{name}_incomplete")
+        if not all(_valid(raw[i]) for i in expected):
+            raise JudgingIncomplete(f"judge_{name}_invalid")
+
+
+def check_judgments(document: dict, mapping: dict) -> None:
+    """Before applying: both raw judgments and one consistent final verdict per item.
+
+    Agreed items keep the agreed verdict; every disputed item needs an
+    adjudicated verdict with a nonempty reason.
+    """
+    a, b = document["judges"]["a"], document["judges"]["b"]
+    check_judges(mapping, a, b)
+    final = document["final"]
+    if set(final) != set(mapping) or not all(_valid(final[i]) for i in mapping):
+        raise JudgingIncomplete("final_incomplete")
+    disputed = sorted(i for i in mapping if a[i]["success"] != b[i]["success"])
+    if sorted(document["disputed"]) != disputed:
+        raise JudgingIncomplete("disputed_mismatch")
+    for item in mapping:
+        if item not in disputed and final[item]["success"] != a[item]["success"]:
+            raise JudgingIncomplete("final_contradicts_agreement")
+        if item in disputed and not str(final[item].get("reason", "")).strip():
+            raise JudgingIncomplete("final_unreasoned")
+
+
 def write(path, value):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_bytes((canonical_json(value) + "\n").encode("utf-8"))
@@ -125,10 +166,12 @@ def cmd_judge(args) -> None:
 def cmd_adjudicate(args) -> None:
     items = {i["blind_id"]: i for i in read(args.items)["items"]}
     a, b = read(args.a), read(args.b)
+    # Spec 12.6.6: two complete raw judgments before any adjudication.
+    check_judges(items, a, b)
     final = {}
     disputed = []
     for blind_id in items:
-        if blind_id in a and blind_id in b and a[blind_id]["success"] == b[blind_id]["success"]:
+        if a[blind_id]["success"] == b[blind_id]["success"]:
             final[blind_id] = dict(
                 success=a[blind_id]["success"],
                 reason="Both judges agree; the adjudication rule adopts the verdict.",
@@ -155,16 +198,16 @@ def cmd_adjudicate(args) -> None:
         for row in harness.answer_json(answer)["adjudications"]:
             if row.get("blind_id") in batch and isinstance(row.get("success"), bool):
                 final[row["blind_id"]] = dict(success=row["success"], reason=str(row["reason"]))
-    write(
-        args.output,
-        dict(
-            format="relaymind.owner_run_success_judgments.v1",
-            judges=dict(a=a, b=b),
-            disputed=sorted(disputed),
-            final=final,
-        ),
+    document = dict(
+        format="relaymind.owner_run_success_judgments.v1",
+        judges=dict(a=a, b=b),
+        disputed=sorted(disputed),
+        final=final,
     )
-    agree = sum(1 for i in items if i in a and i in b and a[i]["success"] == b[i]["success"])
+    # A disputed item the adjudicator left out stops here; rerun the command.
+    check_judgments(document, items)
+    write(args.output, document)
+    agree = len(items) - len(disputed)
     print(json.dumps(dict(items=len(items), agree=agree, disputed=len(disputed))))
 
 
@@ -173,7 +216,12 @@ def cmd_apply(args) -> None:
 
     report, tasks, freeze = read(args.report), read(args.tasks), read(args.freeze)
     mapping = read(args.map)["map"]
-    verdicts = read(args.judgments)["final"]
+    document = read(args.judgments)
+    check_judgments(document, mapping)
+    completed = {(r["task_id"], r["arm"]) for r in report["rows"] if r["status"] == "completed"}
+    if {(m["task_id"], m["arm"]) for m in mapping.values()} != completed:
+        raise JudgingIncomplete("blind_map_coverage")
+    verdicts = document["final"]
     by_row = {(m["task_id"], m["arm"]): verdicts.get(b) for b, m in mapping.items()}
     files = {}
     for name, path in (("blind-map", args.map), ("success-judgments", args.judgments)):
@@ -191,13 +239,12 @@ def cmd_apply(args) -> None:
         )
     for row in report["rows"]:
         if row["status"] == "completed":
-            verdict = by_row.get((row["task_id"], row["arm"]))
-            if verdict is not None:
-                row["success"] = verdict["success"]
-                row["evidence_ids"] = sorted(
-                    {*row["evidence_ids"], "judging:blind-map", "judging:success-judgments"},
-                    key=str.encode,
-                )
+            verdict = by_row[(row["task_id"], row["arm"])]
+            row["success"] = verdict["success"]
+            row["evidence_ids"] = sorted(
+                {*row["evidence_ids"], "judging:blind-map", "judging:success-judgments"},
+                key=str.encode,
+            )
         elif row["status"] in ("failed", "timeout"):
             row["success"] = False
     report["evidence"] = sorted(
