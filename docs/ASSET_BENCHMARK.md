@@ -662,9 +662,14 @@ unverified input still keeps the report below `qualified`. The label commands
 take `--labelling owner_machine` for the owner plus one recorded machine
 annotator (`owner_machine.v1`; the owner may also be the tuner, the machine
 annotator holds the annotator role only, the owner adjudicates every case and
-every disagreement needs a nonempty reason). A `negative` record with scope `host_operation` closes the
-`skill_loaded_use` or `mcp_use` gate with the operation disabled
-(`known_host_limitations`). The module is
+every disagreement needs a nonempty reason; only the owner custodian may
+also tune). A platform record may carry the corpus review, and any freeze,
+tasks or labels it binds must be the resolved inputs. Every Time field must be
+a real UTC instant (`invalid_record_time`). Under spec 12.6.6 an approved
+`negative` record with scope `host_operation` closes the `skill_loaded_use`
+or `mcp_use` gate with the operation disabled; `known_host_limitations`
+returns those records for the roadmap, docs and reports to list. No approved
+negative record exists yet, so none is listed. The module is
 `relaymind.evaluation.asset_qualification_record`.
 
 **Native configuration validation (spec 0.65; #240).** Host, provider, sampling

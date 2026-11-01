@@ -13,8 +13,10 @@ logins and approval time are written into the record after the merge.
 digest; any mismatch rejects. A record only lifts the
 ``qualified_evidence_review`` reason of a report it binds, and only once its
 review is complete; it never lifts a fixture input or another unverified
-input. A ``negative`` record closes a host-operation gate with the operation
-disabled and listed as a known host limitation (``known_host_limitations``).
+input. Per the specification, an approved ``negative`` record closes a
+host-operation gate with the operation disabled; ``known_host_limitations``
+returns the approved ones for the roadmap, docs and reports to list. Loading a
+record enables or disables nothing by itself.
 
 Software cannot authenticate the reviewer, the machine or the annotators from
 strings and hashes; the record is the reviewed assertion the specification
@@ -22,10 +24,12 @@ names, and the git history and pull request review are its audit trail.
 """
 
 import hashlib
+import re
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -70,8 +74,26 @@ _HOST_SCOPES = {"early_trial": "host_trial", "acceptance": "host_acceptance"}
 _AGREEMENT_PROFILES = frozenset({"owner_machine"})
 
 
-def _time(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+_TIME = re.compile(r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z")
+
+
+def _time(value: str) -> tuple[datetime, Decimal]:
+    """A spec Time (UTC RFC 3339 with Z) as a comparable instant.
+
+    The schema checks only the shape; an impossible date or clock value
+    (month 13, 30 February, hour 24, minute 60 or a leap second) rejects with
+    the closed reason ``invalid_record_time``. Fractional seconds of any
+    length are kept exactly.
+    """
+    match = _TIME.fullmatch(value)
+    try:
+        if match is None:
+            raise ValueError(value)
+        *parts, fraction = match.groups()
+        instant = datetime(*(int(part) for part in parts), tzinfo=UTC)
+    except ValueError:
+        raise WholeTaskRejected("invalid_record_time") from None
+    return instant, Decimal("0." + (fraction or "0"))
 
 
 def _reject(reason: str):
@@ -123,8 +145,19 @@ def _check_rules(record: Mapping) -> None:
         annotators["owner_annotator_id"] == annotators["machine"]["annotator_id"]
     ):
         _reject("labelling_profile")
-    if labelling == "not_applicable" and record["corpus_review"]:
-        _reject("labelling_profile")
+    # Every Time field is a real instant, whether or not it is compared.
+    for value in (
+        record["recorded_at"],
+        record["runs_started_at"],
+        (record["preregistration"] or {}).get("committed_at"),
+        record["review"]["approved_at"],
+    ):
+        if value is not None:
+            _time(value)
+    # The corpus review belongs to a record whose report resolves a corpus
+    # (host, adaptation and platform scopes); others carry none.
+    if scope not in REPORT_SCOPES and record["corpus_review"] is not None:
+        _reject("record_corpus_review")
     # Preregistration: a commit and its time before any run.
     prereg, started = record["preregistration"], record["runs_started_at"]
     if scope in _PREREGISTERED and prereg is None:
@@ -235,16 +268,17 @@ class QualificationRecord:
         if self.outcome != "positive" or REPORT_SCOPES.get(self.scope) != kind:
             _reject("qualification_record_scope")
         root = inputs.root
-        if kind == "host":
-            if _HOST_SCOPES.get(root.get("kind")) != self.scope:
-                _reject("qualification_record_scope")
-            bound = {"tasks": root, "freeze": inputs.freeze}
-        elif kind == "adaptation":
-            bound = {"episodes": root, "freeze": inputs.freeze}
-        else:
-            return
-        for role, document in bound.items():
-            if self.canonical.get(role) != canonical_digest(document):
+        if kind == "host" and _HOST_SCOPES.get(root.get("kind")) != self.scope:
+            _reject("qualification_record_scope")
+        # Platform reports resolve the host tasks and freeze.
+        root_role = "episodes" if kind == "adaptation" else "tasks"
+        resolved = {root_role: root, "freeze": inputs.freeze}
+        # Host and adaptation scopes require their inputs (load_record); a
+        # platform record may bind them. Labels are compared in check_labels.
+        for role, digest in self.canonical.items():
+            if role == "labels":
+                continue
+            if role not in resolved or digest != canonical_digest(resolved[role]):
                 _reject("record_input_mismatch")
 
     def check_labels(self, labels: Mapping, people: Mapping) -> None:
@@ -255,12 +289,13 @@ class QualificationRecord:
         the named owner adjudicates every case.
         """
         method = labels["agreement"]["method"]
+        # Bound labels are the resolved labels for every scope (12.6.6).
+        if "labels" in self.canonical and self.canonical["labels"] != canonical_digest(labels):
+            _reject("record_input_mismatch")
         if self.labelling == "not_applicable":
             return
         if method != METHODS[self.labelling]:
             _reject("labelling_mismatch")
-        if "labels" in self.canonical and self.canonical["labels"] != canonical_digest(labels):
-            _reject("record_input_mismatch")
         if self.labelling == "owner_machine":
             annotators = self.document["annotators"]
             owner, machine = annotators["owner_annotator_id"], annotators["machine"]["annotator_id"]

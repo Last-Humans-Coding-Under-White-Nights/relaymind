@@ -18,8 +18,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   output reports its `labelling`. Label commands take `--labelling
   owner_machine` (`owner_machine.v1`: the owner may also tune, the machine
   annotator never); the record's Cohen's kappa is recomputed from the labels.
-  Negative `host_operation` records list disabled operations as known host
-  limitations. Fixture-tested only; no record exists and no gate has passed.
+  Every bound freeze, tasks, episodes or labels subject must be the report's
+  resolved input, platform records included; a platform record may carry the
+  corpus review; Time fields must be real UTC instants
+  (`invalid_record_time`). Under `owner_machine` only the owner custodian may
+  also tune. `known_host_limitations` returns approved negative
+  `host_operation` records for the roadmap, docs and reports to list; nothing
+  consumes it until such a record is approved. Fixture-tested only; no
+  record exists and no gate has passed.
 
 - Native host configuration preflight (#250; RM16/RM39/RM40/RM44;
   AC31/AC35/AC36/AC37): a bounded Node checker uses pinned OpenClaw 2026.10.7
@@ -288,7 +294,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   session incarnation and pinned-byte re-verification does not count);
   `exact_route_absent` means no supported route invokes an independent,
   non-App MCP tool by its exact native identity (App view routes such as
-  `mcp.app.callTool` do not count).
+  `mcp.app.callTool` do not count). The record's `corpus_review` is allowed
+  on host, adaptation and platform records (a platform report resolves the same
+  frozen corpus) and is null on walkthrough and host_operation records; under
+  `owner_machine` the tuner exclusion is waived for the owner custodian only.
   "Customer" wording about who runs trials becomes owner/operator. No metric,
   threshold or budget changes.
 - Specification 0.64 → 0.65 (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;

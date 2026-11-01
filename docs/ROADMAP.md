@@ -1571,13 +1571,12 @@ is claimed.
 (`asset_trial_kit.py`) add the Apple M1 8 GiB / pinned host / release-checksum
 preflight, the pinned-CLI plugin install, and the frozen plan run through the
 existing driver over operator-captured row observations, bundled with
-SHA-256 digests and graded offline. They are verified over fixture bundles and a
-host double only. The owner-run trial itself (#259), its frozen inputs and genuine
 SHA-256 digests and graded offline. The bundle is private, the install record
 keeps no host free text, and the provisional gate binds closed preflight/install
 records to the frozen package. They are verified over fixture bundles and a
-host double only. The customer trial itself, its frozen inputs and genuine
-native row observations remain open; no provisional cost has been recorded.
+host double only. The owner-run trial itself (#259), its frozen inputs and
+genuine native row observations remain open; no provisional cost has been
+recorded.
 
 #201 native benchmark contract checkpoint (spec 0.61): explicit local-cold
 preparation records actual gateway worker jobs/readiness, setup and owned cleanup
