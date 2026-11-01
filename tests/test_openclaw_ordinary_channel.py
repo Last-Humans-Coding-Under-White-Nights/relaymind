@@ -333,6 +333,8 @@ def test_exact_skill_selection_evidence_passes():
         "ui_unavailable",
         "negative_admitted",
         "negative_missing",
+        "mapping_missing_source_version",
+        "mapping_other_source_version",
     ],
 )
 def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
@@ -348,6 +350,10 @@ def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
         value["library_list"]["payload"]["entries"][0]["skillId"] = bad_id
     elif change == "mapping_missing_asset":
         value["mapping"].pop("assetId")
+    elif change == "mapping_missing_source_version":
+        value["mapping"].pop("sourceVersion")
+    elif change == "mapping_other_source_version":
+        value["mapping"]["sourceVersion"] = "v2"
     elif change.startswith("mapping_") and change.endswith("_asset"):
         value["mapping"]["assetId"] = {
             "mapping_empty_asset": "",
@@ -421,7 +427,12 @@ def test_the_browser_observer_allows_every_method_the_ordinary_run_calls():
     person = (root / "host-person-qualification/qualify.py").read_text(encoding="utf-8")
     wire = (root / "host-person-qualification/browser-wire.mjs").read_text(encoding="utf-8")
     called = set(re.findall(r'rpc\(\s*[^,]+,\s*"([a-z.]+)"', ordinary))
-    assert {"skills.library.save", "skills.library.list", "relaymind.recommendations"} <= called
+    assert {
+        "skills.library.save",
+        "skills.library.list",
+        "relaymind.recommendations",
+        "relaymind.skill",
+    } <= called
     requested = re.search(r"installNativeSocketObserver\(window, \[(.*?)\]\)", person, re.S)
     extras = set(re.findall(r'"([a-z.]+)"', requested.group(1)))
     base = {"rmqualification.person", "sessions.create", "sessions.reset"}
