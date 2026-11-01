@@ -797,9 +797,10 @@ for it.
   process's memory: `ps` resident set size on POSIX, `tasklist` working set on
   Windows. `memory_counter` names the counter used.
   - **Base config.** `--base-config` is your own TOML for the store, skills,
-    sandbox and model tables. Every path in it must be absolute: the kit writes
-    the generated config into the run directory, so it refuses a relative path
-    rather than let its meaning change. The kit adds `[server]`,
+    sandbox and model tables. A missing file is refused before the catalog is
+    generated or any gateway is launched. Every path in it must be absolute:
+    the kit writes the generated config into the run directory, so it refuses a
+    relative path rather than let its meaning change. The kit adds `[server]`,
     `[recommendations]` and the catalog source itself, and refuses a base config
     that already has them.
   - **Readiness and logs.** A startup counts only once recommendations report
@@ -814,7 +815,8 @@ for it.
   - The input digest is the verified host-task digest from that manifest. Each
     original must be registered in it as `install-check` (or
     `ordinary-capture`) with matching bytes, and its registered path is used.
-  - The observed `--platform` must agree with the manifest's environment lock.
+  - The observed `--platform` document must be a JSON object and must agree with
+    the manifest's environment lock.
   - Install, configure and uninstall come from the lifecycle steps. A failed or
     timed-out step fails the group, and steps that never ran stay `not_run`. The
     record's own `remove-credential` step already requires every
@@ -831,6 +833,9 @@ python scripts/asset_operations_run.py platform --install-check install-check.js
   --ordinary ordinary.json --inputs inputs.json --platform environment.json \
   --output platform.json
 ```
+
+Both commands create the output's parent directory. A configuration, input or
+write failure prints the reason and exits with code 2 instead of a traceback.
 
 The full 60-second mixed workload (`run_workload`) still needs rescan and
 rebuild hooks into a running process. The AC29 and AC37 numbers that count

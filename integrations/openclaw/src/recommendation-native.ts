@@ -13,6 +13,7 @@ import { createNativeActionHandler } from "./recommendation-native-actions.ts";
 import { createNativeSkillHandler } from "./recommendation-native-skill.ts";
 import { createNativeMcpHandler } from "./recommendation-native-mcp.ts";
 import type { NativeMcpRoute } from "./recommendation-native-mcp.ts";
+import type { NativeUseLedger } from "./recommendation-native-ledger.ts";
 import { NATIVE_QUALIFICATIONS } from "./recommendation-native-qualification.ts";
 import { registryResolver } from "./recommendation-native-registry.ts";
 import type { QualificationResolver } from "./recommendation-native-registry.ts";
@@ -148,7 +149,7 @@ export function registerQualifiedNativeMethods(
   api: OpenClawPluginApi,
   dependencies: () => ReturnType<typeof nativeRecommendationDependencies>,
   qualification: QualificationResolver,
-  host: { mcpRoute?: NativeMcpRoute },
+  host: { mcpRoute?: NativeMcpRoute; ledger?: NativeUseLedger },
 ): void {
   if (!qualification("direct_actions")) {
     api.logger.warn(
@@ -175,16 +176,19 @@ export function registerQualifiedNativeMethods(
     );
   const mcp = qualification("mcp_use")?.mcp;
   const route = host.mcpRoute;
+  // Spec 0.65 7.6.2 condition 1: no use without durable dispatch history.
+  const ledger = host.ledger;
   if (
     mcp &&
     route &&
+    ledger &&
     route.route === mcp.route &&
     route.transport === mcp.transport &&
     route.toolScope === mcp.toolScope
   )
     api.registerGatewayMethod(
       "relaymind.mcp",
-      createNativeMcpHandler({ ...shared, qualification, route }),
+      createNativeMcpHandler({ ...shared, qualification, route, ledger }),
       options,
     );
 }

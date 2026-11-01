@@ -58,13 +58,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   handler implements the closed request, the 60-second preparation/dispatch
   deadline with the separately bounded approval wait, exact native binding with
   a recomputed canonical schema hash, closed argument validation, approval
-  binding and single use, the closed receipt and same-scope idempotency. All
-  native RPC requests are now capped at 512 KiB. Neither operation is in the
-  shipped registry, no production MCP route exists, and `relaymind.mcp` is not
-  registered; the tests use injected fixture resolvers and routes only. The
-  changed adapter bytes have a new exact revision, so the shipped
-  direct-action/exact-selection entry no longer matches until a fresh CI
-  capture re-pins it.
+  binding to the bound server/tool/schema/session and single use, the closed
+  receipt and same-scope idempotency. Key claims, consumed allow-once
+  approvals and blocked conversations are kept in a durable private ledger
+  synced before dispatch (`src/recommendation-native-ledger.ts`): after a
+  restart an unresolved key replays as indeterminate and never dispatches
+  again, and a full or unreadable ledger refuses. Without a ledger nothing is
+  dispatched. A pre-dispatch refusal does not consume its key. Host schema
+  patterns are admitted only in a provably bounded anchored subset, a schema
+  whose gateway hash cannot be recomputed here (for example `0.0`) is
+  `unavailable`, and all native RPC requests are capped at 512 KiB. Neither
+  operation is in the shipped registry, no production MCP route exists, and
+  `relaymind.mcp` is not registered; the tests use injected fixture resolvers
+  and routes only. The shipped direct-action/exact-selection entry is re-pinned
+  to the new adapter revision `653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`; its evidence revision still names the
+  capture of the earlier bytes, and the fresh ordinary installed-host capture of
+  this revision is the open pre-merge gate. A release-artifact test now fails
+  when the registry and the built adapter digest drift.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,
@@ -91,13 +101,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `scripts/asset_operations_run.py startup` measures ten real `relaymind serve` startups over a generated 300-skill bilingual catalog, using the existing AC29 driver. It waits for recommendations to be ready and samples memory on POSIX and Windows.
   - `platform` builds an `AssetPlatformReportV1` from install-check and ordinary installed-host records, bound to the companion input manifest. Skill use is never inferred from a selection receipt.
   - All output is labeled `fixture`.
+- Exact native Skill Library selection through the ordinary installed host
+  (#197; RM39, AC30): the qualification saves a skill with
+  `skills.library.save`, maps it to the chosen asset, selects it with
+  `relaymind.skill` and checks `skills.library.list`. The evidence predicate
+  binds skill ID, revision, asset ID, content hash and source version, and
+  requires the unmapped-skill, cross-session and own-session foreign-person
+  refusals with their exact error codes. Browser failures and the overall
+  deadline remain failures through skill selection.
+
 - Stabilize installed OpenClaw qualification on loaded runners (RM16/RM39;
   AC30): use bounded ten-second host-event waits, keep fixture holds alive
   through retirement observation, and capture only fixed ordinary substeps and
   error classes. Browser failures and the overall deadline now remain failures
-  through skill selection; the 570-second harness and 12-minute CI bounds and
-  all evidence predicates remain unchanged. Fresh evidence must bind the changed
-  harness sources.
+  through UI actions and finalization; the 570-second harness and 12-minute CI
+  bounds and all evidence predicates remain unchanged. Fresh evidence must bind
+  the changed harness sources.
 
 - Section 12.6.5 verifier closure and episode driver (#229, #202, #205, #207):
   - The frozen corpus is verified from the input manifest, and host tasks and episodes are bound to it.
