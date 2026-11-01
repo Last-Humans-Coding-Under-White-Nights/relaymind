@@ -182,6 +182,8 @@ _GENERATOR_ANCHORS = {
             ("ef222b8befa59a1edb4cdc3a0718bb4c1f5bdda0ab9dca0cb1d21f42c020872c", 2244),
             # Reviewed semantic/refresh integration adds only optional embedding extras.
             ("950dff8707e05c8b16e3ea6c55e32c2a78597b3318f236c16023eab8da5b4cc2", 2397),
+            # Reviewed CI change: adds only the pytest-xdist dev dependency (#244).
+            ("bce29a33637ef40030f8c4157559c75d55f0c67a242e0b23bbce6f087de4eb13", 2501),
         }
     ),
     "scripts/asset_selection_benchmark.py": frozenset(
