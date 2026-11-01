@@ -352,6 +352,7 @@ def ordinary_skill_pass(capture):
 
 LOADED_USE_FINAL = "Native skill observation complete."
 _SCOPE_FIELDS = ("sessionKey", "sessionId", "lifecycleRevision")
+_TURN_FIELDS = ("chat", "tools", "requests", "terminal", "subscription", "provider_attempts")
 _CASE_FIELDS = {
     "case",
     "task",
@@ -534,8 +535,40 @@ def _loaded_round_trip(case, *, require_selected=True):
         return False
 
 
+# The pinned 2026.10.7 host gates sessions.reset on operator.admin, which the
+# configured person policy does not grant (CI run 41286397320). This exact
+# native refusal before any turn is a recorded host outcome, not a harness
+# error and not a rejection control that RelayMind performed (#255).
+_RESET_SCOPE_REFUSAL = {
+    "code": "FORBIDDEN",
+    "message": "missing scope: operator.admin",
+    "details": {
+        "code": "MISSING_SCOPE",
+        "missingScope": "operator.admin",
+        "requiredScopes": ["operator.admin"],
+    },
+}
+
+
+def _reset_refused(case):
+    """The exact person-scope sessions.reset refusal, with the session unchanged."""
+    change, before = case["intervention"], case["before"]
+    return (
+        case["case"] == "reset"
+        and isinstance(change, dict)
+        and change["method"] == "sessions.reset"
+        and change["params"]
+        == dict(key=before["sessionKey"], expectedSessionId=before["sessionId"], reason="reset")
+        and change["frame"].get("ok") is False
+        and change["frame"].get("error") == _RESET_SCOPE_REFUSAL
+        and case["current"] == before
+    )
+
+
 def loaded_use_observation(case):
     """Closed observations, with no stale/deleted/reset acceptance rule invented."""
+    if _reset_refused(case):
+        return "control_refused"
     if case["chat"]["frame"].get("ok") is False or case["terminal"].get("state") in {
         "error",
         "aborted",
@@ -555,6 +588,8 @@ def _control_observed(case):
         name, before, current = case["case"], case["before"], case["current"]
         if name == "positive":
             return case["intervention"] is None and before == current
+        if _reset_refused(case):
+            return True
         change = case["intervention"]
         if change["frame"].get("ok") is not True:
             return False
@@ -692,6 +727,23 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
                     or pins[0]["name"] != selected["name"]
                 ):
                     return False
+            if _reset_refused(case):
+                # No turn ran: any turn evidence or another outcome is inconsistent.
+                if (
+                    any(case[field] for field in _TURN_FIELDS)
+                    or case["advertised_revision"] is not None
+                    or case["observed"] != "control_refused"
+                ):
+                    return False
+                for field, identity in (
+                    ("session", case["before"]["sessionKey"]),
+                    ("skill", selected["skillId"]),
+                    ("task", case["task"]),
+                ):
+                    if not identity or identity in seen[field]:
+                        return False
+                    seen[field].add(identity)
+                continue
             if case["case"] == "positive":
                 original = capture["ordinary_skill"]
                 person = capture["ordinary_actions"]["ui_person"]["frame"]["payload"]
@@ -1611,6 +1663,10 @@ class OrdinaryComposition(BASE.ActionComposition):
                     raise ValueError("ordinary_skill_control_failed") from None
             if not _control_observed(case):
                 raise ValueError("ordinary_skill_control_failed")
+            if _reset_refused(case):
+                # The host refused the control before any turn; nothing to observe.
+                case["observed"] = "control_refused"
+                continue
             try:
                 self.loaded_use_turn(rpc, page, selected_session, case)
             except ValueError as error:
