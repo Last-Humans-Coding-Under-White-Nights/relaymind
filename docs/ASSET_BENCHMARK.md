@@ -829,17 +829,28 @@ for it.
     the stored job outcome and event chain. It is evaluation-only: it opens no
     socket and adds no endpoint.
   - **Memory.** Resident memory of the workload gateway is sampled every 250 ms.
-    Only the gateway process is covered. Lexical recommendations start no child
-    process or embedding device here, so the grader's memory increment stays
-    unknown; the raw gateway-only numbers are kept in `memory_samples`.
+    The sampled PID is the one the gateway reports for itself at startup
+    (`Gateway-Pid:`), not the launcher's: on a native Windows venv the launcher
+    is a separate process. `memory_samples` records `baseline_pid` and
+    `workload_pid`. Only the gateway process is covered. Lexical
+    recommendations start no child process or embedding device here, so the
+    grader's memory increment stays unknown; the raw gateway-only numbers are
+    kept in `memory_samples`.
+  - **Phases.** `memory.phases` names only what was sampled. The workload
+    samples cover rebuild, import and query. Startup is listed, and its samples
+    join the peak, only when all ten startup samples are known; a startup that
+    missed its deadline has none. `memory.complete` also needs the baseline and
+    known workload samples.
   - **Report.** It holds every sample, the runner's environment
     (`collect_benchmark_environment`: OS, architecture, CPU, RAM, Python) and
     CI variables, the spec bounds for reading, and the unchanged
     `summarize_operations` result. It is always `fixture` / `not_applicable`.
   - **Exit codes.** A slow startup, a late batch or a failed request is a
-    recorded result (exit 0). Exit 2 means a harness error: no gateway, a
-    control call without a reply, or unavailable job evidence. The report is
-    still written in that case.
+    recorded result (exit 0). Exit 2 means a harness error: a baseline or
+    workload gateway that does not start or exits before readiness (for
+    example `workload_gateway_exited`), a control call without a reply, or
+    unavailable job evidence. The report, with every sample already collected,
+    is still written in that case.
   - **Default periodic scan.** The 30-second local scan stays at its default.
     On a loaded machine it can delay an import batch past 1,000 ms; that is
     recorded as observed.
@@ -865,6 +876,11 @@ for it.
   - A capture of the Linux-only person-ingress harness taken on another
     platform (`linux_runner_required`) leaves the five ordinary actions
     `not_run` with `ordinary_harness_linux_only`.
+  - A recorded ordinary product failure (`ordinary_product_failure`: the
+    capture failed inside a recommendation UI action after setup completed,
+    with a value or browser-timeout error) makes that action's step `failed`
+    with reason `ordinary_<action>_failed`. `correct` and `inspect` map to
+    feedback. The other ordinary steps stay `not_run`.
   - An operations report registered as `operations-report` becomes the
     dedicated `operations_evidence`.
 
@@ -903,7 +919,10 @@ so ordinary pull requests stay fast. Each platform runs:
 3. `asset_platform_run.py ordinary`, the ordinary installed-host qualification
    (recommend, choose, feedback, delete, reset). Its person-ingress harness
    needs a Linux x86-64 runner. On macOS and Windows its truthful
-   `linux_runner_required` capture is kept, and the step passes;
+   `linux_runner_required` capture is kept, and the step passes. A recorded
+   product failure of one UI action also passes the step; it becomes a failed
+   platform step. A setup failure, a closed browser or a missing capture fails
+   it;
 4. `asset_platform_run.py platform`, which writes the runner's `environment.json`,
    a fixture companion bundle locked to it, and `platform.json`. The bundle is
    built from the test fixtures of `tests/test_asset_whole_task_inputs.py`, not

@@ -28,17 +28,19 @@ from pathlib import Path
 from relaymind.canonical import canonical_digest
 from relaymind.evaluation.asset_evidence import collect_benchmark_environment
 from relaymind.evaluation.asset_operations import (
-    MemoryObservation,
     StartupSample,
     WorkloadSamples,
     measure_startups,
 )
 from relaymind.evaluation.asset_operations_run import (
+    LAUNCH_ERRORS,
     UNUSED_KEY_ENV,
     MemorySampler,
     development_base_config,
     generate_catalog,
+    launch_failure,
     memory_counter,
+    memory_observation,
     operations_report,
     platform_report,
     rss_bytes,
@@ -149,9 +151,6 @@ def _startup(args) -> dict:
     )
 
 
-_PHASES = ("startup", "rebuild", "import", "query")
-
-
 def _operations(args) -> tuple[dict, bool]:
     """The AC29 run on this machine; returns the report and whether the harness held.
 
@@ -181,19 +180,23 @@ def _operations(args) -> tuple[dict, bool]:
         _startup_samples(work / "startups", catalog, lambda n: base_for(f"startup-{n}"), env)
     )
 
+    baseline_pid = None
+
     async def baseline() -> int | None:
+        nonlocal baseline_pid
         async with serve_baseline(work / "baseline", base_config=base_for("baseline"), env=env) as (
             pid,
             _client,
         ):
+            baseline_pid = pid
             await asyncio.sleep(1.0)  # Settle after the first answer before sampling.
             return rss_bytes(pid)
 
     try:
         baseline_bytes = asyncio.run(baseline())
-    except (OSError, TimeoutError) as error:
+    except LAUNCH_ERRORS as error:
         baseline_bytes = None
-        harness.append(f"baseline_{type(error).__name__}")
+        harness.append(launch_failure("baseline", error))
 
     workload = WorkloadSamples(provenance="fixture", environment=environment)
     imports = work / "imports"
@@ -212,22 +215,15 @@ def _operations(args) -> tuple[dict, bool]:
 
     try:
         harness.extend(asyncio.run(run()))
-    except (OSError, TimeoutError) as error:
-        harness.append(f"workload_{type(error).__name__}")
+    except LAUNCH_ERRORS as error:
+        harness.append(launch_failure("workload", error))
     harness.extend(
         e for e in workload.errors if e in ("owned_task_failed", "job_evidence_unavailable")
     )
-    peak = None if sampler is None else sampler.peak
-    memory = MemoryObservation(
-        baseline_bytes=baseline_bytes,
-        peak_bytes=peak,
-        counter_source=memory_counter(),
-        # Lexical recommendations start no child process or embedding device here;
-        # those coverages are not measured, so the grader leaves memory unknown.
-        coverage=("gateway",),
-        phases=_PHASES,
-        complete=baseline_bytes is not None and sampler is not None and sampler.complete,
+    memory = memory_observation(
+        baseline_bytes, startup_memory, [] if sampler is None else sampler.samples
     )
+    peak = memory.peak_bytes
     report = operations_report(
         startups,
         workload,
@@ -242,6 +238,8 @@ def _operations(args) -> tuple[dict, bool]:
         ),
         memory_samples=dict(
             counter=memory_counter(),
+            baseline_pid=baseline_pid,
+            workload_pid=None if sampler is None else sampler.pid,
             baseline_bytes=baseline_bytes,
             startup_bytes=startup_memory,
             workload_bytes=[] if sampler is None else sampler.samples,

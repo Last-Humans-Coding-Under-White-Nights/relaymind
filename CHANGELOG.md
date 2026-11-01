@@ -24,6 +24,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `operations_evidence`.
   - Only harness errors fail the job. Reports stay `fixture`; CI runners are
     not the acceptance platforms, and no gate is claimed.
+  - Review fixes: a gateway that exits before readiness is a recorded harness
+    error, and the report is still written. A failed ordinary UI action is a
+    failed platform step, not a harness error. Memory phases name only what
+    was sampled. The sampled PID is the gateway's own, which is recorded.
 - Episode and host-task run kit (#236, #237; RM40–RM44; AC31–AC36): blind
   label templates, adjudication worksheet and `AssetLabelsV1` freeze;
   `preregister-host`/`preregister-episodes` checks; a resumable, crash-safe
