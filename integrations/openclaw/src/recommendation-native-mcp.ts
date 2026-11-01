@@ -401,6 +401,19 @@ function boundedPattern(pattern: string): boolean {
   }
   return true;
 }
+// One compiled pattern per schema node (no global flag, so test() is
+// stateless), reused only for the identical pattern text; the schema object
+// lives only as long as its operation.
+const PATTERNS = new WeakMap<object, { text: string; regex: RegExp }>();
+function compiled(schema: Record<string, any>): RegExp {
+  const text: string = schema.pattern;
+  let entry = PATTERNS.get(schema);
+  if (entry === undefined || entry.text !== text) {
+    entry = { text, regex: new RegExp(text, "u") };
+    PATTERNS.set(schema, entry);
+  }
+  return entry.regex;
+}
 /**
  * Validates arguments against the exact exposed schema. An object field that
  * the schema does not declare is refused unless additionalProperties is
@@ -457,7 +470,7 @@ function conforms(value: unknown, schema: Record<string, any>): boolean {
       return false;
     if (schema.pattern !== undefined) {
       if (length > MAX_PATTERN_INPUT) refuse("unavailable");
-      if (!new RegExp(schema.pattern, "u").test(value)) return false;
+      if (!compiled(schema).test(value)) return false;
     }
   }
   if (Array.isArray(value)) {
@@ -699,6 +712,13 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         // Recover only the historical receipt, after current authorization;
         // never dispatch again.
         await registered();
+        // The registration check awaited: an in-flight attempt may have
+        // dispatched or settled meanwhile, so read the history again.
+        try {
+          previous = history.lookup(scopeKey) ?? previous;
+        } catch {
+          return closed("unavailable");
+        }
         if (previous.digest !== digest)
           return options.respond(
             true,

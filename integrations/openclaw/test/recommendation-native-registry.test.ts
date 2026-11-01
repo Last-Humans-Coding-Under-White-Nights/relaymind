@@ -106,3 +106,30 @@ it.each([null, undefined, {}, "entries"])(
     expect(resolve("direct_actions")).toBeUndefined();
   },
 );
+
+/**
+ * RM37/RM39; AC28/AC30/AC35 (spec 0.65 section 7.6.1): the exact adapter
+ * bytes are the loaded bytes and cannot change while the process runs, so a
+ * resolver digests them once rather than rereading the package (a blocking
+ * walk of up to 8 MiB) on every native request; a failed digest stays failed.
+ */
+it("digests the adapter bytes once per resolver", () => {
+  let calls = 0;
+  const resolve = registryResolver([entry()], "2026.10.7", () => {
+    calls += 1;
+    return REVISION;
+  });
+  for (let i = 0; i < 5; i++) {
+    expect(resolve("direct_actions")).toBeDefined();
+    expect(resolve("mcp_use")).toBeUndefined();
+  }
+  expect(calls).toBe(1);
+  let failures = 0;
+  const failing = registryResolver([entry()], "2026.10.7", () => {
+    failures += 1;
+    throw Error("native_build_required");
+  });
+  expect(failing("direct_actions")).toBeUndefined();
+  expect(failing("direct_actions")).toBeUndefined();
+  expect(failures).toBe(1);
+});
