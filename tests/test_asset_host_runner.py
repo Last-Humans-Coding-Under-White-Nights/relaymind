@@ -705,3 +705,106 @@ def test_missing_credentials_never_evidences_a_dispatch():
         [started(1, "c1"), end], provider="p", attempt_prefix="a-", evidence_id="t"
     )
     assert attempt["calls"] is None
+
+
+# --- review 5729343917 -------------------------------------------------------------
+
+
+def test_a_missing_taskkill_still_kills_the_executor(monkeypatch):
+    """Review 4436631691: a taskkill that cannot start never skips process.kill()."""
+    from relaymind.evaluation import asset_host_runner
+
+    killed = []
+
+    class Process:
+        pid = 4242
+
+        def kill(self):
+            killed.append(True)
+
+    def missing(*args, **kwargs):
+        raise FileNotFoundError("taskkill")
+
+    monkeypatch.setattr(asset_host_runner.sys, "platform", "win32")
+    monkeypatch.setattr(asset_host_runner.subprocess, "run", missing)
+    asset_host_runner._kill_group(Process())
+    assert killed == [True]
+
+
+@pytest.mark.parametrize("drop", ["row", "evidence"])
+def test_a_malformed_journaled_row_rejects_with_a_fixed_reason(tmp_path, drop):
+    """Review 4436631695: a finished entry without row or evidence is rejected, not a KeyError."""
+    from relaymind.canonical import canonical_json
+
+    freeze, tasks = setup(1)
+    journal = tmp_path / "run.jsonl"
+    run(tasks, freeze, lambda t, a, c: captured(row(t["id"], a)), journal)
+    lines = journal.read_bytes().rstrip(b"\n").split(b"\n")
+    records = [json.loads(line) for line in lines]
+    finished = next(r for r in records if r["type"] == "finished")
+    del finished["value"][drop]
+    journal.write_bytes(b"".join((canonical_json(r) + "\n").encode() for r in records))
+    with pytest.raises(WholeTaskRejected, match="executor_output"):
+        run(tasks, freeze, lambda t, a, c: captured(row(t["id"], a)), journal)
+
+
+def test_relationship_evidence_needs_a_named_token_relationship():
+    """Review 4436631701: relationship evidence is never recorded under an unknown relationship."""
+    events = [started(1, "c1"), finished(2, "c1", USAGE)]
+    with pytest.raises(ValueError, match="token_relationship"):
+        attempts_from_trace(
+            events,
+            provider="p",
+            attempt_prefix="a-",
+            evidence_id="trace",
+            relationship_evidence_id="provider-usage-doc",
+        )
+
+
+def test_a_journal_directory_created_concurrently_is_used(tmp_path, monkeypatch):
+    """Review 4436631707: a parent created by another runner after the check is not an error."""
+    import pathlib
+
+    journal = tmp_path / "new" / "run.jsonl"
+    journal.parent.mkdir(mode=0o700)
+    real = pathlib.Path.exists
+    monkeypatch.setattr(pathlib.Path, "exists", lambda p: False if p == journal.parent else real(p))
+    header = dict(type="header", kind="host", input_digest=H)
+    with RunJournal(journal, header):
+        pass
+    monkeypatch.undo()
+    assert journal.is_file()
+
+
+def test_a_failed_journal_open_closes_its_file(tmp_path, monkeypatch):
+    """Review 4436631717: the journal file handle is closed when opening fails."""
+    opened = []
+
+    def failing(self, record):
+        opened.append(self._file)
+        raise OSError("no space")
+
+    monkeypatch.setattr(RunJournal, "_append", failing)
+    journal = tmp_path / "run.jsonl"
+    with pytest.raises(OSError, match="no space"):
+        RunJournal(journal, dict(type="header", kind="host", input_digest=H))
+    assert opened and opened[0].closed
+    assert not (tmp_path / "run.jsonl.lock").exists()
+
+
+@pytest.mark.parametrize("key", [1, None, ("1",)])
+def test_a_journal_key_must_be_a_string(tmp_path, key):
+    """Review 4436631720: a key the journal could not reopen is never written."""
+    journal = tmp_path / "run.jsonl"
+    header = dict(type="header", kind="host", input_digest=H)
+    with RunJournal(journal, header) as j:
+        before = journal.read_bytes()
+        with pytest.raises(JournalError, match="journal_corrupt"):
+            j.start(key)
+        j.start("1")
+        after_start = journal.read_bytes()
+        with pytest.raises(JournalError, match="journal_corrupt"):
+            j.finish(key, dict(value=1))
+        assert journal.read_bytes() == after_start != before
+    with RunJournal(journal, header) as j:
+        assert j.started == {"1"}
