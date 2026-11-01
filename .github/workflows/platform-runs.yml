@@ -176,14 +176,20 @@ jobs:
       - name: Verify with the existing graders
         if: always()
         timeout-minutes: 5
+        # The step runs under bash -e -o pipefail: keep verify's exit status,
+        # write the summary even when it failed, then fail with that status.
         run: |
+          set +e
           python scripts/asset_platform_run.py verify "$EVIDENCE" | tee "$EVIDENCE/verify.txt"
+          code=${PIPESTATUS[0]}
+          set -e
           {
             echo "### Platform run on ${{ matrix.os }} (fixture; not an acceptance platform)"
             echo '```'
             cat "$EVIDENCE/verify.txt"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
 
       - uses: actions/upload-artifact@v4
         if: always()

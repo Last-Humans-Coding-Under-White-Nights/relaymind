@@ -75,6 +75,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     after the reply stream ended fails at once with `control_closed`, a job
     reported in two replies is kept once in its latest state, and memory
     phases are listed only when a workload sample is known.
+  - Fourth review fixes: the verify step writes its job summary even when
+    verify fails, then fails with verify's exit code. `platform-runner-files`
+    binds only tracked files, so local files such as `.DS_Store` never change
+    it, and a test checks that every bound file checks out with LF (or as
+    exact bytes). A gateway that exits before its token is `gateway_exited`,
+    not a token timeout; the gateway child ends quietly when the parent has
+    closed its pipe; ordinary-step failure messages go to stderr.
 - Episode and host-task run kit (#236, #237; RM40–RM44; AC31–AC36): blind
   label templates, adjudication worksheet and `AssetLabelsV1` freeze;
   `preregister-host`/`preregister-episodes` checks; a resumable, crash-safe
