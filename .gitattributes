@@ -26,3 +26,6 @@
 # Verbatim OpenClaw 2026.10.7 bundled SKILL.md copies, pinned by SHA-256 in tests.
 /tests/fixtures/openclaw-bundled-skills/** text eol=lf
 /docs/evidence/m10/windows-platform-run-2026-11-01/** -text whitespace=cr-at-eol
+# Every file in an M10 evidence folder is bound by SHA-256 in a record, including
+# extensionless captures, TOML and TXT files, so none may be converted on checkout.
+/docs/evidence/m10/*/** -text

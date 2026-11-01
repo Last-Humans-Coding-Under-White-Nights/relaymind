@@ -18,3 +18,39 @@ def test_platform_record_loads_with_the_current_schema(path):
 
 def test_the_windows_platform_record_is_present():
     assert any("windows" in path.name for path in RECORDS)
+
+
+def test_every_m10_evidence_folder_keeps_its_exact_bytes_on_every_checkout():
+    """RM16/AC29: digest-bound M10 evidence must not get CRLF on a Windows checkout.
+
+    Records bind every file in an evidence folder by SHA-256, including
+    extensionless captures, TOML and TXT files, so no file under a
+    ``docs/evidence/m10`` subfolder may be a text file Git converts.
+    """
+    import subprocess
+
+    root = Path(__file__).resolve().parents[1]
+    files = subprocess.run(
+        ["git", "ls-files", "docs/evidence/m10/*/**"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert files
+    # Git converts newlines only for files it treats as text; ``eol`` alone
+    # has no effect once ``text`` is unset.
+    attrs = subprocess.run(
+        ["git", "check-attr", "text", "--stdin"],
+        cwd=root,
+        input="\n".join(files),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    converted = sorted(
+        line.split(": ")[0]
+        for line in attrs
+        if line.endswith(": text: set") or line.endswith(": text: auto")
+    )
+    assert converted == []
