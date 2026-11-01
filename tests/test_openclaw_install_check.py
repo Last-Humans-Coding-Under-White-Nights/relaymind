@@ -902,3 +902,144 @@ def test_each_exchange_runs_in_its_own_state_directory_inside_the_host_home(
     step = next(s for s in export["steps"] if s["name"] == "text-exchange")
     shown = step["argv"][step["argv"].index("--state-dir") + 1]
     assert shown.startswith(install_check.HOST_HOME)
+
+
+@pytest.mark.parametrize("encoded", [False, True])
+def test_runtime_default_model_is_redacted(tmp_path, encoded):
+    """RM12/AC24: the operator's default model never enters lifecycle evidence."""
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    raw = "Runtime: model=relaymind/client | default_model=private/provider-model | shell=pwsh\n"
+    text = json.dumps(raw) if encoded else raw
+    result = install_check._sanitize(text, ctx)
+    assert "private/provider-model" not in result
+    assert "default_model=<default-model>" in result
+    assert "model=relaymind/client" in result
+    assert (json.loads(result) if encoded else result).endswith(" | shell=pwsh\n")
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        '{"default_model": "private/provider-model", "mode": "local"}',
+        '{"default_model":"private/provider-model","mode":"local"}',
+        '{"defaultModel": "private/provider-model", "mode": "local"}',
+        "defaultModel=private/provider-model | mode=local",
+    ],
+)
+@pytest.mark.parametrize("encoded", [False, True])
+def test_quoted_and_camel_case_default_models_are_redacted(tmp_path, raw, encoded):
+    """RM12/AC24: JSON key/value forms and JSON error strings are redacted too."""
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    text = json.dumps({"error": f"invalid config: {raw}"}) if encoded else raw
+    result = install_check._sanitize(text, ctx)
+    assert "private/provider-model" not in result
+    assert "<default-model>" in result
+    shown = json.loads(result)["error"] if encoded else result
+    assert "mode" in shown and "local" in shown
+    if raw.startswith("{"):
+        assert json.loads(shown.removeprefix("invalid config: "))["mode"] == "local"
+
+
+@pytest.mark.parametrize("key", ["default_model", "defaultModel"])
+@pytest.mark.parametrize("separator", [": ", " = ", "="])
+@pytest.mark.parametrize(
+    "value",
+    ["private/provider-model", '"private provider"', "'private provider'", "`private provider`"],
+)
+@pytest.mark.parametrize("encoded", [False, True])
+def test_plain_text_default_model_spellings_are_redacted(tmp_path, key, separator, value, encoded):
+    """RM12/AC24: config/error text must not export the private default model."""
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    raw = f"config: {key}{separator}{value} | mode=local\n"
+    text = json.dumps({"error": raw}) if encoded else raw
+    result = install_check._sanitize(text, ctx)
+    assert "private" not in result
+    shown = json.loads(result)["error"] if encoded else result
+    assert shown == f"config: {key}{separator}<default-model> | mode=local\n"
+
+
+def test_a_non_string_default_model_is_left_as_is(tmp_path):
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    assert install_check._sanitize('{"default_model": null}', ctx) == '{"default_model": null}'
+
+
+@pytest.mark.parametrize("key", ["default_model", "defaultModel"])
+@pytest.mark.parametrize(
+    ("template", "expected"),
+    [
+        # Python dict repr / JS object literal: single-quoted key and value.
+        (
+            "{{'{key}': 'private/provider-model', 'mode': 'local'}}",
+            "{{'{key}': '<default-model>', 'mode': 'local'}}",
+        ),
+        # Single-quoted key with a double-quoted value.
+        (
+            "{{'{key}': \"private/provider-model\", 'mode': 'local'}}",
+            "{{'{key}': \"<default-model>\", 'mode': 'local'}}",
+        ),
+        # YAML forms: quoted key, bare or quoted value.
+        (
+            "'{key}': private/provider-model\nmode: local\n",
+            "'{key}': <default-model>\nmode: local\n",
+        ),
+        (
+            "\"{key}\": 'private/provider-model'\nmode: local\n",
+            "\"{key}\": '<default-model>'\nmode: local\n",
+        ),
+    ],
+)
+@pytest.mark.parametrize("encoded", [False, True])
+def test_single_quoted_default_model_keys_are_redacted(tmp_path, key, template, expected, encoded):
+    """RM12/AC24: Python, JS and YAML spellings of the key are redacted too."""
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    raw = template.format(key=key)
+    text = json.dumps({"error": raw}) if encoded else raw
+    result = install_check._sanitize(text, ctx)
+    assert "private" not in result and "provider-model" not in result
+    shown = json.loads(result)["error"] if encoded else result
+    assert shown == expected.format(key=key)
+
+
+@pytest.mark.parametrize("key", ["default_model", "defaultModel"])
+@pytest.mark.parametrize(
+    "model",
+    ['private/provider-model-"custom"', 'private\\"provider-model', "private/provider-model\\"],
+)
+@pytest.mark.parametrize("encoded", [False, True])
+def test_escaped_quotes_inside_a_json_value_are_redacted_whole(tmp_path, key, model, encoded):
+    """RM12/AC24: an escaped quote never ends the value early.
+
+    The whole model name is replaced, and JSON input stays parseable JSON,
+    also when that JSON is itself encoded inside a JSON error string.
+    """
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    raw = json.dumps({key: model, "mode": "local"})
+    text = json.dumps({"error": raw}) if encoded else raw
+    result = install_check._sanitize(text, ctx)
+    assert "private" not in result and "provider-model" not in result and "custom" not in result
+    shown = json.loads(result)["error"] if encoded else result
+    assert json.loads(shown) == {key: "<default-model>", "mode": "local"}
+
+
+def test_an_escaped_quote_in_a_single_quoted_value_is_redacted_whole(tmp_path):
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    raw = r"{'default_model': 'private\'s-model', 'mode': 'local'}"
+    result = install_check._sanitize(raw, ctx)
+    assert result == "{'default_model': '<default-model>', 'mode': 'local'}"
+
+
+@pytest.mark.parametrize("encoded", [False, True])
+def test_an_unterminated_quoted_default_model_is_redacted_to_its_end(tmp_path, encoded):
+    """RM12/AC24: with no closing quote, the rest of the line (or of the
+    enclosing JSON string, whose escaped newlines are not line ends) is
+    redacted rather than leaked."""
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    raw = 'config: default_model: "private provider\nmode=local\n'
+    text = json.dumps({"error": raw}) if encoded else raw
+    result = install_check._sanitize(text, ctx)
+    assert "private" not in result
+    shown = json.loads(result)["error"] if encoded else result
+    if encoded:
+        assert shown == 'config: default_model: "<default-model>'
+    else:
+        assert shown == 'config: default_model: "<default-model>\nmode=local\n'

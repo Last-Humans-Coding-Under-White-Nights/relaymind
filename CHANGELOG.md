@@ -8,6 +8,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- #274 native Windows platform evidence (RM38; AC29, AC37), with a pending
+  qualification draft in `docs/evidence/m10/windows-platform-run-2026-11-01/`.
+  The 15 install-check lifecycle steps pass. The separate platform report
+  leaves recommend, choose, feedback, delete, reset, skill use, MCP use and
+  restart `not_run`; qualification remains fixture. The operations harness
+  ignores proxy settings for its loopback client, covered by a test-first
+  real-gateway regression.
+  Review fixes sample the interpreter PID rather than a Windows venv redirector,
+  redact the host default model before export, and retain the complete evidence
+  in a digest-bound release attachment with a compact repository record.
+  Review corrections pin historical verification to its matching harness
+  commit, document the invalid companion locator and archived record plus
+  missing startup memory samples, and redact additional plain-text default
+  model spellings without changing captured evidence.
+
 - #255 host use settlement (RM16/RM37/RM39; AC30/AC35; spec 0.66 sections
   7.6.1, 7.6.2, 12.6.6) adds one pending negative `host_operation` record for
   OpenClaw 2026.10.7, with the VPS host surface inventory and the CI/VPS
