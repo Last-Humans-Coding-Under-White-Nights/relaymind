@@ -180,20 +180,22 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 不共享拉丁标识的中文内存泄漏请求仍未命中英文原始目标；这些诊断不证明翻译能力、
 语义质量或独立人工标注达标。开始使用工具不要求客户提供外部数据集或人工评审组。
 生产语义模型资格验证，以及已安装宿主的 M10 执行、审批、纠正演练仍是单独的工作；
-参见[当前状态](ROADMAP.md#m10--multilingual-asset-recommendations-spec-064)。
+参见[当前状态](ROADMAP.md#m10--multilingual-asset-recommendations-spec-065)。
 
 ## 整任务试验、适配回合与平台导出
 
-规范 0.60/0.64 第 12.6.5 节的离线工具服务于 #198（早期已安装技能试验）、#202（适配回合）、
+规范 0.60/0.64/0.65 第 12.6.5 节的离线工具服务于 #198（早期已安装技能试验）、#202（适配回合）、
 #204（宿主 MCP 使用行）、#205（成对整任务）和 #206（平台生命周期）。它们校验冻结输入、
 确定性地规划执行、通过真实推荐生命周期驱动适配回合，并重新评分导出的报告。工具不运行宿主、
 不授予审批，也不执行任何工具：宿主试验的执行器由调用方提供，只有宿主执行工具。
-本节是摘要；各项检查的规范性完整说明以英文版 [ASSET_BENCHMARK.md](ASSET_BENCHMARK.md#whole-host-trials-adaptation-episodes-and-platform-exports-spec-060064-section-1265) 为准。
+本节是摘要；各项检查的规范性完整说明以英文版 [ASSET_BENCHMARK.md](ASSET_BENCHMARK.md#whole-host-trials-adaptation-episodes-and-platform-exports-spec-060064065-section-1265) 为准。
 所有汇总都从经过验证的行重新计算，存储的汇总与之不符时报告被拒绝。`plan-host` 先依据 `HostFreezeV1` 校验
 `AssetHostTasksV1`，并按 `{seed,task_id,arm}` 的 SHA-256 排列各组；评分命令的输出文件总是记录 `status`、`gate`
 和固定的安全 `reason`，`plan-host` 只写出计划，被拒绝时不写文件并把原因输出到标准错误。引用的配置为严格 JSON 或 TOML
 （不超过 4 MiB）；尚不支持关联锁（related locks），遇到时阻塞。重置证据必须是规范化（canonical）JSON 原始字节，
 非规范字节或重复键会被拒绝。
+规范 0.65（#240）要求提供并验证第 12.6.5 节规定的固定版本原生校验证据及适用的 schema／提取证据；
+在此之前，宿主、提供方、采样和预算配置文档保持未验证状态，不能据此通过正式验收。
 
 | 命令 | 作用 |
 | --- | --- |
