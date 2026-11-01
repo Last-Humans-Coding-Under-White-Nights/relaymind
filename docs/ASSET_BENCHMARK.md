@@ -937,7 +937,12 @@ so ordinary pull requests stay fast. Each platform runs:
 4. `asset_platform_run.py platform`, which writes the runner's `environment.json`,
    a fixture companion bundle locked to it, and `platform.json`. The bundle is
    built from the test fixtures of `tests/test_asset_whole_task_inputs.py`, not
-   genuine host tasks;
+   genuine host tasks. Without an install-check record it writes
+   `platform-not-built.json` (`install_check_missing`) instead, exits 2, and
+   `verify` reports that record as a failure. An output directory that already
+   holds a `bundle/` is refused (`platform_out_dir_exists`). Input and write
+   errors, and an ordinary-step timeout (`ordinary_timeout`), exit 2 with the
+   reason instead of a traceback;
 5. `asset_platform_run.py verify`, which grades everything again with the
    existing graders. Each operations summary is recomputed by
    `summarize_operations` from the stored samples. Each platform report is

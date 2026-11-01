@@ -28,6 +28,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     error, and the report is still written. A failed ordinary UI action is a
     failed platform step, not a harness error. Memory phases name only what
     was sampled. The sampled PID is the gateway's own, which is recorded.
+    A missing install-check record is written as `platform-not-built.json`
+    and fails `verify`. An existing bundle directory is refused, and
+    `asset_platform_run.py` exits 2 with a reason on input errors and on an
+    ordinary-step timeout. The gateway control child answers every command
+    even when its job store fails, and its reader ignores a closed loop.
 - Episode and host-task run kit (#236, #237; RM40–RM44; AC31–AC36): blind
   label templates, adjudication worksheet and `AssetLabelsV1` freeze;
   `preregister-host`/`preregister-episodes` checks; a resumable, crash-safe
