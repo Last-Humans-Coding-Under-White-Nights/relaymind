@@ -1,0 +1,213 @@
+name: Platform runs
+
+# M10 platform runs on GitHub-hosted runners (#241, #235; RM38, RM39, RM44;
+# AC29, AC37): the lexical AC29 operations workload (a fixture; lexical-only
+# evidence never closes AC29) and the packaged installation
+# lifecycle with its AssetPlatformReportV1 on Apple Silicon macOS
+# (macos-latest, arm64), native x86-64 Windows (windows-latest) and Linux
+# (ubuntu-latest). Spec 0.65 section 12.6.5: CI runners do not satisfy the
+# Apple Silicon macOS / named native x86-64 Windows acceptance, so every report
+# is labeled fixture and every platform gate is not_applicable. The job fails
+# only on a harness error; a slow runner or a failed product step is recorded
+# in the uploaded reports, never hidden and never turned into a pass.
+# Separate from CI so ordinary pull requests stay fast; see docs/ASSET_BENCHMARK.md.
+# The path filter is the platform run's dependency closure: the gateway and
+# graders (src/relaymind), the driver scripts, the plugin the lifecycle and the
+# ordinary harness install and drive (integrations/openclaw), the test helpers
+# and fixtures the bundle and the harness load, the default skills and
+# sandbox seed of the development config, and the specification the bundle's
+# protocol inventory binds (tests/test_asset_platform_run.py checks it).
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/platform-runs.yml
+      - .gitattributes
+      - pyproject.toml
+      - docs/SPECIFICATION.md
+      - src/relaymind/**
+      - scripts/asset_platform_run.py
+      - scripts/asset_operations_run.py
+      - scripts/asset_whole_task.py
+      - scripts/openclaw_install_check.py
+      - integrations/openclaw/**
+      - skills/**
+      - tests/test_asset_whole_task_inputs.py
+      - tests/whole_task_helpers.py
+      - tests/api_helpers.py
+      - tests/gateway_helpers.py
+      - tests/helpers.py
+      - tests/recommendation_helpers.py
+      - tests/test_asset_catalog.py
+      - tests/test_asset_sources.py
+      - tests/fixtures/asset-benchmark/**
+      - tests/fixtures/sandbox/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-runs-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  platform-run:
+    strategy:
+      # Each platform reports its own result.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    # Every step has its own limit, and their sum (120) stays below the job's,
+    # so a long step that reaches its own limit still leaves time for the
+    # always-run report, verify and upload steps.
+    timeout-minutes: 125
+    defaults:
+      run:
+        shell: bash
+    env:
+      EVIDENCE: platform-evidence
+      WORK: platform-work
+      LABEL: GitHub Actions ${{ matrix.os }} runner (not an acceptance platform)
+    steps:
+      - uses: actions/checkout@v4
+        timeout-minutes: 5
+
+      - uses: actions/setup-node@v4
+        timeout-minutes: 5
+        with:
+          # The lower bound of the pinned host's engines, as in the CI job.
+          node-version: '24.22.1'
+          cache: npm
+          cache-dependency-path: integrations/openclaw/package-lock.json
+
+      - uses: actions/setup-python@v5
+        timeout-minutes: 5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        timeout-minutes: 15
+        run: |
+          pip install -e ".[dev]"
+          npm ci --prefix integrations/openclaw
+          mkdir -p "$EVIDENCE" "$WORK"
+
+      # First, on a quiet runner: ten clean launches from the 300-asset
+      # generated catalog, the gateway without recommendations as memory
+      # baseline, and the 60-second 2 req/s workload with four 25-record
+      # import batches during a derived rebuild. Exit 2 only for a harness error.
+      # The exit code is kept in operations.exit and the step passes, so a
+      # harness error here never skips the packaged lifecycle steps below; the
+      # Harness result step fails the job on it at the end.
+      - name: Operations workload (AC29)
+        timeout-minutes: 20
+        run: |
+          set +e
+          python scripts/asset_operations_run.py operations \
+            --work "$WORK/operations" --assets 300 --label "$LABEL" \
+            --output "$EVIDENCE/operations.json"
+          code=$?
+          set -e
+          echo "$code" > "$EVIDENCE/operations.exit"
+          echo "operations exit $code"
+
+      - name: Release artifact
+        timeout-minutes: 10
+        working-directory: integrations/openclaw
+        run: |
+          npm run pack:release -- ../../release/openclaw
+          cp ../../release/openclaw/release.json ../../release/openclaw/SHA256SUMS "../../$EVIDENCE/"
+
+      # The install, configure, enable, inspect, exchanges, disable, uninstall
+      # and cleanup lifecycle through the pinned host's CLI. A failed step is a
+      # product finding kept in the export (and still fails the CI workflow's
+      # openclaw-plugin job); only a missing or unreadable export fails here.
+      - name: Pinned host lifecycle (install to uninstall)
+        timeout-minutes: 15
+        run: |
+          tarball="release/openclaw/$(node -p "require('./release/openclaw/release.json').filename")"
+          set +e
+          python scripts/openclaw_install_check.py --tarball "$tarball" \
+            --out "$EVIDENCE/install-check.json" \
+            --label "$LABEL, Node $(node --version)" \
+            -- node integrations/openclaw/node_modules/openclaw/openclaw.mjs
+          code=$?
+          set -e
+          echo "$code" > "$EVIDENCE/install-check.exit"
+          echo "install check exit $code"
+          python -c "import json,sys; json.load(open(sys.argv[1], encoding='utf-8'))" \
+            "$EVIDENCE/install-check.json"
+
+      - name: Install browser for the ordinary host
+        timeout-minutes: 10
+        run: playwright install --with-deps --only-shell chromium
+
+      # Recommend, choose, feedback, delete and reset through the installed
+      # host. Its person-ingress harness needs a Linux x86-64 runner; elsewhere
+      # the truthful linux_runner_required capture is kept and the step passes.
+      # A recorded product failure of one UI action is kept as a failed platform
+      # step; setup failures and a missing capture fail the step.
+      - name: Ordinary installed-host actions
+        timeout-minutes: 15
+        run: |
+          # 780 s, so the script's own ordinary_timeout fires before the step limit.
+          python scripts/asset_platform_run.py ordinary \
+            --tarball "release/openclaw/$(node -p "require('./release/openclaw/release.json').filename")" \
+            --work-dir "${RUNNER_TEMP}/relaymind-platform-ordinary" \
+            --out "$EVIDENCE/ordinary.json" --timeout 780
+
+      # Also after an earlier failed step, so the evidence that exists is
+      # reported; the earlier failure still fails the job. Without
+      # install-check.json the script writes platform/platform-not-built.json
+      # (install_check_missing) and exits 2; verify then reports it as FAIL.
+      - name: Platform report
+        if: always()
+        timeout-minutes: 5
+        run: |
+          args=(--install-check "$EVIDENCE/install-check.json" --out-dir "$EVIDENCE/platform")
+          [ -f "$EVIDENCE/ordinary.json" ] && args+=(--ordinary "$EVIDENCE/ordinary.json")
+          [ -f "$EVIDENCE/operations.json" ] && args+=(--operations "$EVIDENCE/operations.json")
+          python scripts/asset_platform_run.py platform "${args[@]}"
+
+      - name: Verify with the existing graders
+        if: always()
+        timeout-minutes: 5
+        # The step runs under bash -e -o pipefail: keep verify's exit status,
+        # write the summary even when it failed, then fail with that status.
+        run: |
+          set +e
+          python scripts/asset_platform_run.py verify "$EVIDENCE" | tee "$EVIDENCE/verify.txt"
+          code=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "### Platform run on ${{ matrix.os }} (fixture; not an acceptance platform)"
+            echo '```'
+            cat "$EVIDENCE/verify.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        timeout-minutes: 5
+        with:
+          name: platform-run-${{ matrix.os }}-${{ github.run_attempt }}
+          path: |
+            platform-evidence/
+            platform-work/**/*.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      # Last, after the evidence is uploaded: an operations harness error (or a
+      # run that never recorded its exit code) fails the job.
+      - name: Harness result
+        if: always()
+        timeout-minutes: 5
+        run: |
+          code=$(cat "$EVIDENCE/operations.exit" 2>/dev/null || echo missing)
+          echo "operations exit $code"
+          [ "$code" = 0 ]

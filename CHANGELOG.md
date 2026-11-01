@@ -6,6 +6,65 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Platform runs on GitHub-hosted runners (#241, #235; RM38, RM39, RM44; AC29,
+  AC37): a separate `Platform runs` workflow on `macos-latest`,
+  `windows-latest` and `ubuntu-latest`.
+  - `scripts/asset_operations_run.py operations` runs the lexical portion of
+    the AC29 protocol as a fixture (it does not close AC29): ten clean
+    startups, a recommendations-disabled memory baseline, and the 60-second
+    2 req/s workload with four 25-record metadata-import batches and a derived
+    rebuild. The workload goes through the existing `run_workload` and
+    `summarize_operations` over an evaluation-only gateway control channel
+    (`asset_operations_child`).
+  - `scripts/asset_platform_run.py` runs the ordinary host step (Linux-only
+    harness honestly recorded elsewhere) and builds the platform report over
+    fixture companion inputs locked to the runner. Its `verify` grades
+    downloaded artifacts again.
+  - Platform reports now name `mcp_use_disabled`, `restart_not_observed` and
+    `ordinary_harness_linux_only`, and can bind the operations report as
+    `operations_evidence`.
+  - Only harness errors fail the job. Reports stay `fixture`; CI runners are
+    not the acceptance platforms, and no gate is claimed.
+  - Review fixes: a gateway that exits before readiness is a recorded harness
+    error, and the report is still written. A failed ordinary UI action is a
+    failed platform step, not a harness error. Memory phases name only what
+    was sampled. The sampled PID is the gateway's own, which is recorded.
+    A missing install-check record is written as `platform-not-built.json`
+    and fails `verify`. An existing bundle directory is refused, and
+    `asset_platform_run.py` exits 2 with a reason on input errors and on an
+    ordinary-step timeout. The gateway control child answers every command
+    even when its job store fails, and its reader ignores a closed loop.
+  - Second review fixes: a startup launch that fails before readiness is a
+    harness error (`startup_<n>_<reason>`, exit 2) in `operations` and
+    `startup`; `verify` fails an operations report with harness errors, and a
+    platform report without its bundle or a bundle without its report. The
+    control child binds the job the request awaited (`job_id`), never the
+    newest listed job, and reports an unbindable job as a harness error. The
+    bundle registers `platform-runner-files`, the digests of the driver
+    scripts, workflow, ordinary harness and test helpers the run executes,
+    and `verify` checks them against the checkout. The workflow's path filter
+    covers the run's dependency closure, and every step has a time limit that
+    fits inside the job's. A non-object environment lock exits 2, and a
+    reused `--work` starts from the requested catalog and new stores. The
+    docs call the run the lexical AC29 fixture portion and no longer quote
+    uncommitted local numbers.
+  - Third review fixes: an operations harness error no longer skips the
+    release and lifecycle steps; its exit code is kept in `operations.exit`
+    and a final `Harness result` step fails the job on it. The ordinary step
+    passes `--timeout 780`, so its own `ordinary_timeout` fires before the
+    step limit. The test files and workflow the run binds check out with LF
+    line endings on Windows, so a `windows-latest` report verifies on another
+    checkout. The control channel reads lines up to 16 MiB, a control call
+    after the reply stream ended fails at once with `control_closed`, a job
+    reported in two replies is kept once in its latest state, and memory
+    phases are listed only when a workload sample is known.
+  - Fourth review fixes: the verify step writes its job summary even when
+    verify fails, then fails with verify's exit code. `platform-runner-files`
+    binds only tracked files, so local files such as `.DS_Store` never change
+    it, and a test checks that every bound file checks out with LF (or as
+    exact bytes). A gateway that exits before its token is `gateway_exited`,
+    not a token timeout; the gateway child ends quietly when the parent has
+    closed its pipe; ordinary-step failure messages go to stderr.
 - Episode and host-task run kit (#236, #237; RM40–RM44; AC31–AC36): blind
   label templates, adjudication worksheet and `AssetLabelsV1` freeze;
   `preregister-host`/`preregister-episodes` checks; a resumable, crash-safe

@@ -19,6 +19,10 @@
   `trial-run` and `trial` commands are the #234 early-trial kit (Apple M1
   8 GiB preflight, pinned-CLI plugin install, the frozen plan over
   operator-captured row observations, a digest bundle and offline grading).
+- `asset_operations_run.py` — the AC29 operations run kit (`startup`,
+  `operations`, `platform`); `asset_platform_run.py` — the `Platform runs`
+  workflow steps (`ordinary`, `platform`, `verify`) on GitHub-hosted runners
+  (#241, #235). Fixture output only; see `docs/ASSET_BENCHMARK.md`.
 - `asset_selection_benchmark.py` — formal locked-profile run, explicit optional
   preparation and offline JSON/Markdown comparison (RM35/RM40/RM44). The
   [formal guide](../docs/ASSET_BENCHMARK.md) covers resolver/privacy commitments,
