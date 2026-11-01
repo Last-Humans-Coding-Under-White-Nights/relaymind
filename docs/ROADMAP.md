@@ -1105,9 +1105,16 @@ define local locators as resolved `SKILL.md` paths and return that record in
 the scoped view; no home-path abbreviation/redaction rule is specified.
 The adapter revision is repinned to the built bytes that combine these
 changes with the #256 review fixes
-(`adb212d0b9f337df3d03a870711d23d5b348b135d24545913a0304dded22cfa9`);
-evidenceRevision is unchanged: **recapture pending before merge**. Browser fixtures do not establish
-native host qualification for those bytes.
+(`adb212d0b9f337df3d03a870711d23d5b348b135d24545913a0304dded22cfa9`).
+The ordinary installed-host run of these exact bytes (pinned OpenClaw
+2026.10.7, Ubuntu runner, CI run 41318309491, commit 7d9ea47, PR merge
+checkout b679c12) passed the ordinary-pass and ordinary-skill-pass predicates
+with all 15 harness sources matching. Its unmodified capture replaces
+[openclaw-native-actions-20261101-adapter.json](evidence/m10/openclaw-native-actions-20261101-adapter.json)
+(SHA-256 `3ce075676c337ab2cbcc290de756fed43a64e9482233493953d91d35cc9c3a1f`),
+which the registry's evidence revision now names. Browser fixtures alone do
+not establish native host qualification for those bytes; as before, this is
+Linux functional evidence with disposable accounts.
 
 The #192 implementation supplies independent catalog discovery: closed records
 and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
