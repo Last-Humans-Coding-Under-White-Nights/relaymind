@@ -812,8 +812,11 @@ one attempt per call:
 - `--events` and `--artifacts` are read with the same bounded strict reader as
   every other input: a symlink, an oversized file, duplicate keys or
   non-finite numbers reject.
-- The relationship between counts is `unknown` unless you name evidence for
-  it with `--relationship-evidence`.
+- The relationship between counts is `unknown` unless you name it with
+  `--token-relationship` and its evidence with `--relationship-evidence`.
+  Each needs the other: a relationship without evidence rejects
+  (`relationship_evidence`), and evidence under an `unknown` relationship
+  rejects (`token_relationship`).
 - A finish without an earlier start of the same call (`trace_order`), or a
   repeated start or finish of one call (`trace_duplicate_call`), rejects the
   trace: a repeated receipt is never a new attempt.
