@@ -238,7 +238,7 @@ def blind(args) -> None:
     for path in sorted(observations.glob("row-*.json")):
         observation = json.loads(path.read_text())
         row = observation["row"]
-        if row["status"] != "completed":
+        if row["status"] == "not_run":
             continue
         number = f"{observation['ordinal']:04d}"
         transcript = observations / "evidence" / number / "host-transcript.jsonl"
