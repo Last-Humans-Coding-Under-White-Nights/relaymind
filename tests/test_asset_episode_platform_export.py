@@ -606,6 +606,63 @@ def test_a_later_contradiction_is_rejected_before_an_unresolved_reset_blocks():
         grade_adaptation_report(report, episodes, episode_freeze(), labels, reset_preimages={})
 
 
+# --- spec 0.64 reset evidence (#229) ---------------------------------------------
+
+
+def reset_entry(episode_id, baseline, after, change=None):
+    from relaymind.canonical import canonical_json
+
+    document = dict(schema_version=1, episode_id=episode_id, baseline=baseline, after=after)
+    document.update(change or {})
+    payload = canonical_json(document).encode()
+    return {"reset:" + episode_id: dict(id="reset:" + episode_id, payload=payload)}
+
+
+def test_reset_evidence_documents_become_preimages():
+    from relaymind.evaluation.asset_episode_export import reset_preimages
+
+    e = episode("e1")
+    evidence = reset_entry("e1", reset_array(e), reset_array(e, "asset-b"))
+    evidence["other"] = dict(id="other", payload=b"not reset evidence")
+    assert reset_preimages(evidence) == {"e1": (reset_array(e), reset_array(e, "asset-b"))}
+
+
+@pytest.mark.parametrize(
+    "change",
+    [{"schema_version": 2}, {"episode_id": "e2"}, {"extra": 1}, {"baseline": "x"}],
+)
+def test_malformed_reset_evidence_rejects(change):
+    from relaymind.evaluation.asset_episode_export import reset_preimages
+
+    e = episode("e1")
+    evidence = reset_entry("e1", reset_array(e), reset_array(e), change)
+    with pytest.raises(WholeTaskRejected, match="reset_evidence"):
+        reset_preimages(evidence)
+
+
+def test_non_json_reset_evidence_rejects():
+    from relaymind.evaluation.asset_episode_export import reset_preimages
+
+    with pytest.raises(WholeTaskRejected, match="reset_evidence"):
+        reset_preimages({"reset:e1": dict(id="reset:e1", payload=b"\xff")})
+
+
+def test_graded_reset_evidence_verifies_a_claimed_reset():
+    from relaymind.evaluation.asset_episode_export import reset_preimages
+
+    episodes = episodes_doc()
+    labels = labels_for(episodes)
+    results = [episode_result(e, labels) for e in episodes["episodes"]]
+    report = adaptation_report(episodes, results)
+    evidence = {}
+    for e in episodes["episodes"]:
+        evidence.update(reset_entry(e["id"], reset_array(e), reset_array(e)))
+    summary = grade_adaptation_report(
+        report, episodes, episode_freeze(), labels, reset_preimages=reset_preimages(evidence)
+    )
+    assert summary["reset_passed"] == 2
+
+
 def test_episode_summary_rejects_a_probe_without_a_label():
     """#230 review: standalone use names the problem instead of a KeyError."""
     episodes = episodes_doc()
@@ -614,3 +671,24 @@ def test_episode_summary_rejects_a_probe_without_a_label():
     missing = report["episodes"][0]["probes"][0]["case_id"]
     with pytest.raises(WholeTaskRejected, match="probe_label"):
         episode_summary(report, episodes, {k: v for k, v in labels.items() if k != missing})
+
+
+@pytest.mark.parametrize("pair", [None, 7, "ab"])
+def test_a_non_sequence_reset_preimage_pair_rejects(pair):
+    """#232 review: a malformed pair names reset_evidence, not a TypeError."""
+    episodes = episodes_doc()
+    labels = labels_for(episodes)
+    report = adaptation_report(episodes, [episode_result(e, labels) for e in episodes["episodes"]])
+    with pytest.raises(WholeTaskRejected, match="reset_evidence"):
+        grade_adaptation_report(
+            report, episodes, episode_freeze(), labels, reset_preimages={"e1": pair}
+        )
+
+
+@pytest.mark.parametrize("item", [None, {}, {"payload": 123}, {"payload": "text"}, 7])
+def test_a_malformed_reset_evidence_entry_rejects(item):
+    """RM42/AC33 (spec 0.64): every malformed reset entry rejects, never crashes."""
+    from relaymind.evaluation.asset_episode_export import reset_preimages
+
+    with pytest.raises(WholeTaskRejected, match="reset_evidence"):
+        reset_preimages({"reset:e1": item})

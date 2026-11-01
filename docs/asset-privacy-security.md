@@ -110,4 +110,4 @@ artifacts, runtimes and devices remain unqualified. The native benchmark
 comparison records that exact scope. The M10 installed host/approval/correction
 walkthrough, independent quality
 and whole-task evaluation, and operational macOS/native Windows gates remain
-specific separate deliverables in [ROADMAP](ROADMAP.md#m10--multilingual-asset-recommendations-spec-063).
+specific separate deliverables in [ROADMAP](ROADMAP.md#m10--multilingual-asset-recommendations-spec-064).

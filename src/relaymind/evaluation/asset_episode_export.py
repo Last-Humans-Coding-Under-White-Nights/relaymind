@@ -10,6 +10,7 @@ authority; accepted corrections must carry the authentic product receipts.
 from collections.abc import Mapping, Sequence
 
 from relaymind.canonical import canonical_digest, canonical_json
+from relaymind.evaluation.asset_corpus_io import AssetCorpusError, parse_json
 from relaymind.evaluation.asset_metrics import asset_rate, grade_asset_result
 from relaymind.evaluation.asset_whole_task import (
     WholeTaskBlocked,
@@ -85,6 +86,44 @@ def reset_preimage_digest(preimage: Sequence[Mapping]) -> str:
     return canonical_digest([dict(item) for item in preimage])
 
 
+_RESET_DOCUMENT = {"schema_version", "episode_id", "baseline", "after"}
+
+
+def reset_preimages(evidence: Mapping[str, Mapping]) -> dict[str, tuple]:
+    """Spec 0.64 reset evidence: ``reset:<episode_id>`` registry entries.
+
+    Each entry's original bytes are the closed JSON object
+    ``{schema_version:1, episode_id, baseline, after}``. Returns the
+    (baseline, after) preimages by episode ID; their content and digests are
+    checked by the grader. A malformed document rejects.
+    """
+    found = {}
+    for evidence_id, item in evidence.items():
+        if not evidence_id.startswith("reset:"):
+            continue
+        if not isinstance(item, Mapping) or not isinstance(item.get("payload"), bytes):
+            raise WholeTaskRejected("reset_evidence")
+        try:
+            document = parse_json(item["payload"])
+        except (ValueError, UnicodeError, AssetCorpusError):
+            raise WholeTaskRejected("reset_evidence") from None
+        if item["payload"] != canonical_json(document).encode("utf-8"):
+            # The spec 0.64 document is canonical JSON, byte for byte.
+            raise WholeTaskRejected("reset_evidence")
+        if (
+            not isinstance(document, dict)
+            or set(document) != _RESET_DOCUMENT
+            or document["schema_version"] != 1
+            or type(document["schema_version"]) is not int
+            or document["episode_id"] != evidence_id.removeprefix("reset:")
+            or not isinstance(document["baseline"], list)
+            or not isinstance(document["after"], list)
+        ):
+            raise WholeTaskRejected("reset_evidence")
+        found[document["episode_id"]] = (document["baseline"], document["after"])
+    return found
+
+
 def _check_reset_preimage(preimage: Sequence[Mapping], case_ids: Sequence[str]) -> None:
     """Complete product results: exact candidate records and a published decision."""
     if (
@@ -117,7 +156,7 @@ def _top1(row: Mapping, label: Mapping) -> bool:
     return result["final_candidates"][0]["asset_id"] in set(label["acceptable_asset_ids"])
 
 
-def _check_probe_row(row: Mapping, case_id: str, ordinal: int, label: Mapping) -> None:
+def _check_probe_row(row: Mapping, case_id: str, ordinal: int, label: Mapping, offer=None) -> None:
     validate_whole_task("Row", row)
     if row["slot"] != dict(phase="measured", repetition=0, case_id=case_id, ordinal=ordinal):
         raise WholeTaskRejected("probe_slot")
@@ -144,6 +183,29 @@ def _check_probe_row(row: Mapping, case_id: str, ordinal: int, label: Mapping) -
         raise WholeTaskRejected("probe_revision")
     if row["grade"] != grade_asset_result(label, result):
         raise WholeTaskRejected("probe_grade")
+    identity = (row["request_digest"], row["offered_projection_digest"], row["catalog_revision"])
+    if any(value is None for value in identity) and any(v is not None for v in identity):
+        raise WholeTaskRejected("probe_offer")
+    declared_inference = any(
+        (cost["value"]["calls"] or 0) > 0
+        or any(
+            (cost["value"][k] or 0) > 0
+            for k in ("input_tokens", "output_tokens", "cached_tokens", "reasoning_tokens")
+        )
+        for cost in row["observed_costs"]
+    )
+    dispatched = (
+        status == "ready"
+        or bool(row["attempts"])
+        or bool(row["embeddings"])
+        or declared_inference
+        or None not in identity
+    )
+    if offer is not None and dispatched:
+        # Any dispatched probe, ready or not, binds its exact offered request
+        # and catalog projection; only a pre-dispatch failure may omit it.
+        if None in identity or identity[:2] != offer(row["catalog_revision"]):
+            raise WholeTaskRejected("probe_offer")
 
 
 def _check_episode(
@@ -151,6 +213,7 @@ def _check_episode(
     episode: Mapping,
     labels: Mapping[str, Mapping],
     preimages: Mapping[str, tuple] | None,
+    offers=None,
 ) -> bool | None | object:
     """Verify one EpisodeResult; return the verified reset equality, None or PENDING."""
     status = result["status"]
@@ -176,8 +239,13 @@ def _check_episode(
         label = labels.get(probe["case_id"])
         if label is None:
             raise WholeTaskRejected("probe_label")
-        _check_probe_row(probe["off"], probe["case_id"], ordinal, label)
-        _check_probe_row(probe["on"], probe["case_id"], ordinal, label)
+        for arm in ("off", "on"):
+            offer = (
+                None
+                if offers is None
+                else (lambda revision, c=probe["case_id"], a=arm: offers(c, a, revision))
+            )
+            _check_probe_row(probe[arm], probe["case_id"], ordinal, label, offer)
     if status == "not_run" and any(
         p[arm]["status"] != "not_run" for p in result["probes"] for arm in ("off", "on")
     ):
@@ -203,12 +271,13 @@ def _check_episode(
     return equal
 
 
-def _verified(report, episodes, labels, preimages) -> list[bool | None]:
+def _verified(report, episodes, labels, preimages, offers=None) -> list[bool | None]:
     by_id = {e["id"]: e for e in episodes["episodes"]}
     if [r["episode_id"] for r in report["episodes"]] != list(by_id):
         raise WholeTaskRejected("episode_conservation")
     return [
-        _check_episode(r, by_id[r["episode_id"]], labels, preimages) for r in report["episodes"]
+        _check_episode(r, by_id[r["episode_id"]], labels, preimages, offers)
+        for r in report["episodes"]
     ]
 
 
@@ -284,18 +353,29 @@ def grade_adaptation_report(
     *,
     reset_preimages: Mapping[str, tuple] | None = None,
     registry: Mapping[str, Mapping] | None = None,
+    offers=None,
 ) -> dict:
     """Verify an AssetAdaptationReportV1 and return its recomputed summary.
 
     ``labels`` maps each probe case ID to its frozen ``{class,
     acceptable_asset_ids}``. ``reset_preimages`` maps an episode ID to its
-    (baseline, after) reset arrays resolved from evidence. A claimed reset
+    (baseline, after) reset arrays resolved from evidence. ``offers`` (see
+    ``asset_whole_task_corpus.corpus_offers``) recomputes every dispatched
+    probe's offer; library callers that omit it skip that binding, while the
+    command line always supplies it. A claimed reset
     without its preimages is never credited: after all structural checks, a
     known gate failure is returned, otherwise the grade is blocked
     (``reset_evidence_unresolved``).
     """
     input_digest = verify_episodes(episodes, freeze)
     validate_whole_task("AssetAdaptationReportV1", report)
+    # Every supplied reset document is checked, whether or not a reset is claimed.
+    planned = {e["id"]: e for e in episodes["episodes"]}
+    for episode_id, pair in (reset_preimages or {}).items():
+        if episode_id not in planned or not isinstance(pair, (tuple, list)) or len(pair) != 2:
+            raise WholeTaskRejected("reset_evidence")
+        for items in pair:
+            _check_reset_preimage(items, planned[episode_id]["reset_probe_case_ids"])
     if report["input_digest"] != input_digest:
         raise WholeTaskRejected("input_binding")
     if (report["off_config_digest"], report["on_config_digest"]) != (
@@ -303,7 +383,7 @@ def grade_adaptation_report(
         freeze["on_config_digest"],
     ):
         raise WholeTaskRejected("config_binding")
-    checked = _verified(report, episodes, labels, reset_preimages)
+    checked = _verified(report, episodes, labels, reset_preimages, offers)
     verify_evidence(report["evidence"], set(), registry)
     pending = [value is PENDING for value in checked]
     # The stored summary must agree with the report's own rows and claims
