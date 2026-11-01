@@ -341,3 +341,30 @@ def test_offline_semantic_preimage_uses_the_shared_bounded_parser(payload):
 
     with pytest.raises(AssetCorpusError):
         semantic_document(payload, "json", semantic=True)
+
+
+def test_cancellation_before_the_request_starts_is_a_cancelled_row():
+    """RM40/AC31: a cancel before the recommendation exists is recorded, not a crash."""
+    import asyncio
+
+    from relaymind.evaluation.asset_benchmark import execute_asset_slot
+
+    class Budget:
+        def elapsed_ms(self):
+            return 0
+
+    class Service:
+        def new_budget(self):
+            return Budget()
+
+        def precheck(self, request):
+            raise asyncio.CancelledError
+
+    case = dict(task_text="t", conversation=[], language_tags=["en"], code_switched=False)
+    normal = dict(requested_kinds=["skill"], selection_scope="installed")
+    label = {"class": "easy", "acceptable_asset_ids": ["a"]}
+    row, status, recommendation_id = asyncio.run(
+        execute_asset_slot(Service(), None, normal, case, dict(ordinal=0), label)
+    )
+    assert row["status"] == "cancelled" and row["reason"] == "cancelled"
+    assert recommendation_id is None
