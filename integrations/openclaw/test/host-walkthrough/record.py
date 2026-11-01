@@ -110,18 +110,36 @@ _NUMBERED = {
 }
 
 
-# The number part of a numbered-label regex: digits, digit classes and quantifiers only.
-_NUMBER_PART = re.compile(r"(?:\\d|[0-9\[\]+*?{},-])+")
-_NUMBER_SAMPLES = range(1, 100)
+# The number part of a numbered-label regex: a sequence of digit atoms (``\d``, a
+# digit, or a class of digits and digit ranges), each with an optional greedy
+# quantifier. Whatever it matches is digits only, of any length.
+_DIGIT_ATOM = r"(?:\\d|[0-9]|\[(?:[0-9](?:-[0-9])?)+\])"
+_QUANTIFIER = r"(?:[*+?]|\{[0-9]+(?:,[0-9]*)?\}|\{,[0-9]+\})?"
+_NUMBER_PART = re.compile(rf"(?:{_DIGIT_ATOM}{_QUANTIFIER})+")
+# Probe numbers that expose a regex which also names a numbered label beside a
+# fixed one (e.g. ``Choose \w+``); recognition itself never depends on them.
+_NUMBER_PROBES = (
+    *map(str, range(1, 100)),
+    *(digit * width for digit in "0123456789" for width in range(3, 13)),
+    *("1" + "0" * width for width in range(2, 12)),
+)
 
 
 def _numbered_families(name: re.Pattern) -> list:
-    """The numbered labels (``Choose N``, ``Correct to N``) a regex names for some N."""
-    return [
-        key
-        for key in _NUMBERED
-        if any(name.fullmatch(f"{_ENGLISH[key]} {n}") for n in _NUMBER_SAMPLES)
-    ]
+    """The numbered labels (``Choose N``, ``Correct to N``) a regex names.
+
+    A family is named by its literal prefix and a digit-only number part, for
+    any positive N as in translate(); a regex that matches a probe number of a
+    family without that form names it too, and is then refused as ambiguous.
+    """
+    families = []
+    for key in _NUMBERED:
+        prefix = _ENGLISH[key] + " "
+        tail = name.pattern[len(prefix) :]
+        structural = name.pattern.startswith(prefix) and _NUMBER_PART.fullmatch(tail)
+        if structural or any(name.fullmatch(prefix + n) for n in _NUMBER_PROBES):
+            families.append(key)
+    return families
 
 
 def _translate_pattern(name: re.Pattern, language: str) -> re.Pattern:
@@ -610,6 +628,8 @@ def _signal_group(group: int, signum: int) -> bool:
 def _stop_group(process: subprocess.Popen, grace: float) -> None:
     """Stop the child's whole process group: SIGTERM, a bounded wait, then SIGKILL.
 
+    An empty group is never signalled again, so a reused PGID is never hit.
+
     The person-ingress harness starts a gateway and a proxy and stops them in a
     ``finally`` block; SIGTERM lets it do so, and SIGKILL leaves nothing behind
     if it cannot within ``grace`` seconds.
@@ -621,7 +641,11 @@ def _stop_group(process: subprocess.Popen, grace: float) -> None:
             if process.poll() is not None and not _signal_group(group, 0):
                 break
             time.sleep(0.05)
-    _signal_group(group, signal.SIGKILL)
+        else:
+            # SIGKILL only a group still alive: an emptied PGID may be reused.
+            process.poll()
+            if _signal_group(group, 0):
+                _signal_group(group, signal.SIGKILL)
     process.wait()
 
 
@@ -690,6 +714,10 @@ def record(args) -> int:
     # One child and one media directory per language: a repeat is refused first.
     if len(set(args.languages)) != len(args.languages):
         return _refused("languages_repeated")
+    # Neither may hold the other: the work root is private, the output is shared.
+    real_work, real_out = work_root.resolve(), out.resolve()
+    if real_work == real_out or real_work in real_out.parents or real_out in real_work.parents:
+        return _refused("work_root_out_dir_overlap")
     fonts = font_snapshot = None
     if args.font_dir is not None:
         _font_paths(args.font_dir)  # refuse a directory without fonts before creating anything
