@@ -12,6 +12,8 @@ import time
 from pathlib import Path
 
 TOTAL_SECONDS = 570
+# Host event publication may lag on a loaded runner; SIGALRM still bounds the trial.
+HOST_EVENT_WAIT_SECONDS = 10
 HOST_VERSION = "2026.10.7"
 AUTHCRUNCH_VERSION = "1.5.0"
 AUTHCRUNCH_SHA256 = "86a1ed8446bca803149bdcf1335005b840033a17c41680a067d7de11dfbaeca9"
@@ -51,7 +53,12 @@ PERSON_RPC_EVENT_REASONS = {
         {"admission_refused", "initial_authority_retired", "post_await_authority_retired"}
     ),
     "probe_failed": frozenset(
-        {"fixture_hold_timeout", "fixture_pause_failed", "inventory_unavailable"}
+        {
+            "fixture_hold_timeout",
+            "fixture_pause_failed",
+            "inventory_unavailable",
+            "workspace_unavailable",
+        }
     ),
 }
 _PRIVATE = tuple(
@@ -71,12 +78,21 @@ def _private_ipv4(value: object) -> bool:
 
 def eligible_private_ipv4(interfaces: list[dict]) -> list[str]:
     """Use actual UP non-loopback interface records, never broad is_private."""
+    if not isinstance(interfaces, list):
+        raise ValueError("network_inventory_invalid")
     addresses = set()
     for interface in interfaces:
+        if not isinstance(interface, dict):
+            raise ValueError("network_inventory_invalid")
         flags = interface.get("flags", [])
+        records = interface.get("addr_info", [])
+        if not isinstance(flags, list) or not isinstance(records, list):
+            raise ValueError("network_inventory_invalid")
         if "UP" not in flags or "LOOPBACK" in flags:
             continue
-        for value in interface.get("addr_info", []):
+        for value in records:
+            if not isinstance(value, dict):
+                raise ValueError("network_inventory_invalid")
             address = value.get("local")
             if value.get("family") == "inet" and _private_ipv4(address):
                 addresses.add(address)
@@ -85,10 +101,18 @@ def eligible_private_ipv4(interfaces: list[dict]) -> list[str]:
 
 def discover_network() -> list[str]:
     """Read only actual interface state; no interface setup or user IP override."""
-    result = subprocess.run(["ip", "-j", "address"], capture_output=True, timeout=5, check=True)
+    try:
+        result = subprocess.run(["ip", "-j", "address"], capture_output=True, timeout=5, check=True)
+    except subprocess.TimeoutExpired:
+        raise ValueError("network_inventory_deadline") from None
+    except (OSError, subprocess.SubprocessError):
+        raise ValueError("network_inventory_unavailable") from None
     if len(result.stdout) > 1024 * 1024:
         raise ValueError("network_inventory_size")
-    value = json.loads(result.stdout)
+    try:
+        value = json.loads(result.stdout)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise ValueError("network_inventory_invalid") from None
     if not isinstance(value, list):
         raise ValueError("network_inventory_invalid")
     return eligible_private_ipv4(value)
@@ -308,6 +332,127 @@ def session_create_receipt(observed: dict, account_email: str) -> dict:
         raise ValueError("native_session_create_binding") from None
 
 
+PERSON_RECEIPT_FIELDS = (
+    "requestId",
+    "authenticatedUserId",
+    "profileId",
+    "sessionKey",
+    "sessionId",
+    "lifecycleRevision",
+    "deviceId",
+    "connectionId",
+)
+
+
+def event_phase(event: dict) -> str | None:
+    """An observed event's phase only when it is a string."""
+    phase = event.get("phase")
+    return phase if isinstance(phase, str) else None
+
+
+def native_rpc_envelope(observed: object) -> dict:
+    """A browser RPC reply bound to its request: string IDs, matching frame ID."""
+    if (
+        not isinstance(observed, dict)
+        or not isinstance(observed.get("id"), str)
+        or not observed["id"]
+        or not isinstance(observed.get("socket_id"), str)
+        or not observed["socket_id"]
+        or not isinstance(observed.get("frame"), dict)
+        or observed["frame"].get("id") != observed["id"]
+    ):
+        raise ValueError("native_response_binding")
+    return observed
+
+
+# Fixed discriminators the browser observer rejects with; nothing else is exported.
+RPC_TRANSPORT_REASONS = (
+    "native_rpc_timeout",
+    "native_socket_retired",
+    "native_socket_unavailable",
+    "native_send_failed",
+)
+
+
+def native_rpc(page, method: str, params: dict) -> dict:
+    """One ordinary RPC through the page; transport rejection keeps a fixed reason."""
+    try:
+        observed = page.evaluate(
+            "({method,params}) => window.__rmPersonWire.rpc(method, params)",
+            dict(method=method, params=params),
+        )
+    except TimeoutError:
+        raise
+    except Exception as error:
+        # Playwright's own TimeoutError is not the built-in one; the overall
+        # deadline above still passes through unchanged.
+        if type(error).__name__ == "TimeoutError" and type(error).__module__.startswith(
+            "playwright"
+        ):
+            raise ValueError("native_rpc_timeout") from None
+        text = str(error)
+        reason = next((r for r in RPC_TRANSPORT_REASONS if r in text), "native_rpc_transport")
+        raise ValueError(reason) from None
+    return native_rpc_envelope(observed)
+
+
+WIRE_READY = "() => window.__rmPersonWire?.state().ready === true"
+
+
+def wait_for_wire_ready(page, seconds: float, failure: BaseException) -> None:
+    """Wait for the browser observer across single-page navigations, bounded.
+
+    A raw evaluate loop fails with "execution context was destroyed" when the
+    Control UI navigates after load; Playwright's wait survives that. Its own
+    timeout raises the caller's fixed failure; the overall deadline passes on.
+    """
+    try:
+        page.wait_for_function(WIRE_READY, timeout=seconds * 1000, polling=100)
+    except TimeoutError:
+        raise
+    except Exception as error:
+        if type(error).__name__ == "TimeoutError" and type(error).__module__.startswith(
+            "playwright"
+        ):
+            raise failure from None
+        raise
+
+
+def native_error_code(frame: dict) -> str | None:
+    """A host error code only from a mapping error; any other shape has none."""
+    error = frame.get("error") if isinstance(frame, dict) else None
+    code = error.get("code") if isinstance(error, dict) else None
+    if not isinstance(code, str) or not code.replace("_", "").isalnum() or len(code) > 64:
+        return None
+    return code
+
+
+def session_params(receipt: dict) -> dict:
+    """Person RPC params from the validated create receipt, never the raw reply."""
+    return dict(
+        sessionKey=receipt["session_key"],
+        expectedSessionId=receipt["session_id"],
+        expectedLifecycleRevision=receipt["lifecycle_revision"],
+    )
+
+
+def person_rpc_receipt(result: dict, account_email: str) -> dict:
+    """The bound person receipt; any other envelope or payload shape is an identity failure."""
+    frame = result.get("frame") if isinstance(result, dict) else None
+    receipt = frame.get("payload") if isinstance(frame, dict) else None
+    if (
+        not isinstance(receipt, dict)
+        or not isinstance(result.get("id"), str)
+        or frame.get("ok") is not True
+        or frame.get("id") != result["id"]
+        or any(not isinstance(receipt.get(k), str) or not receipt[k] for k in PERSON_RECEIPT_FIELDS)
+        or receipt["requestId"] != result["id"]
+        or receipt["authenticatedUserId"] != account_email
+    ):
+        raise ValueError("native_person_identity_binding")
+    return receipt
+
+
 def write_capture(path: Path, capture: dict) -> None:
     """Sanitized capture only; raw homes, stores, cookies and keys stay private."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -358,6 +503,9 @@ def project_person_rpc_failure(path: Path, request_id: str) -> dict:
         return dict(status="event_file_oversize", **empty)
     observations = []
     for line in raw.splitlines():
+        # Only JSON whitespace makes a blank line; other bytes stay corrupt.
+        if not line.strip(b" \t\r"):
+            continue
         try:
             event = json.loads(line)
         except (UnicodeDecodeError, json.JSONDecodeError):
@@ -398,6 +546,9 @@ def project_held_native_events(path: Path, request_id: str) -> dict:
         return dict(status="event_file_oversize", **empty)
     observations = []
     for line in raw.splitlines():
+        # Only JSON whitespace makes a blank line; other bytes stay corrupt.
+        if not line.strip(b" \t\r"):
+            continue
         try:
             event = json.loads(line)
         except (UnicodeDecodeError, json.JSONDecodeError):
@@ -410,6 +561,8 @@ def project_held_native_events(path: Path, request_id: str) -> dict:
         if not isinstance(connection_id, str) or not 0 < len(connection_id) <= 128:
             return dict(status="event_file_invalid", **empty)
         phase, reason = event.get("phase"), event.get("reason")
+        if not isinstance(phase, str) or (reason is not None and not isinstance(reason, str)):
+            return dict(status="event_file_invalid", **empty)
         if phase in {"prepared", "admitted"} and reason is None:
             observation = {"phase": phase, "reason": None}
         elif (
@@ -439,7 +592,7 @@ def read_bound_peer(page, address: str, email: str) -> dict:
             return response.json();
         }"""
     )
-    if peer.get("peer") != address or peer.get("email") != email:
+    if not isinstance(peer, dict) or peer.get("peer") != address or peer.get("email") != email:
         raise ValueError("actual_peer_binding")
     return peer
 
@@ -617,6 +770,13 @@ def download_authcrunch(path: Path) -> None:
                 target.write(chunk)
         if count != AUTHCRUNCH_BYTES:
             raise ValueError("artifact_size")
+    except (TimeoutError, OSError) as error:
+        path.unlink(missing_ok=True)
+        # A socket or connection timeout is the same download deadline.
+        reason = getattr(error, "reason", None)
+        if isinstance(error, TimeoutError) or isinstance(reason, TimeoutError):
+            raise TimeoutError("artifact_deadline") from None
+        raise
     except BaseException:
         path.unlink(missing_ok=True)
         raise
@@ -668,7 +828,8 @@ def read_native_events(path: Path) -> list[dict]:
     complete, _, _partial = raw.rpartition(b"\n")
     events = []
     for line in complete.split(b"\n"):
-        if not line:
+        # Blank, whitespace-only and CRLF blank lines carry no event.
+        if not line.strip(b" \t\r"):
             continue
         try:
             event = json.loads(line)
@@ -961,20 +1122,8 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                 pages, sessions = [], []
 
                 def rpc(page, method, params):
-                    observed = page.evaluate(
-                        "({method,params}) => window.__rmPersonWire.rpc(method, params)",
-                        dict(method=method, params=params),
-                    )
-                    if observed["frame"].get("id") != observed["id"]:
-                        raise ValueError("native_response_binding")
-                    error = observed["frame"].get("error") or {}
-                    error_code = error.get("code")
-                    if (
-                        not isinstance(error_code, str)
-                        or not error_code.replace("_", "").isalnum()
-                        or len(error_code) > 64
-                    ):
-                        error_code = None
+                    observed = native_rpc(page, method, params)
+                    error_code = native_error_code(observed["frame"])
                     capture["events"].append(
                         dict(
                             id="request:" + observed["id"],
@@ -1057,23 +1206,15 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     )
                     mark(prefix + "_login")
                     capture["phase"] = prefix + "_pairing"
-                    deadline = time.monotonic() + 60
-                    while not page.evaluate("() => window.__rmPersonWire?.state().ready === true"):
-                        if time.monotonic() >= deadline:
-                            raise TimeoutError("native_ui_pairing_timeout")
-                        time.sleep(0.05)
+                    wait_for_wire_ready(page, 60, TimeoutError("native_ui_pairing_timeout"))
                     mark(prefix + "_pairing")
                     capture["phase"] = prefix + "_session"
                     created = rpc(page, "sessions.create", session_create_params())
                     if created["frame"].get("ok") is not True:
                         raise ValueError("native_session_create_denied")
-                    session = created["frame"]["payload"]
-                    params = dict(
-                        sessionKey=session["key"],
-                        expectedSessionId=session["sessionId"],
-                        expectedLifecycleRevision=session["entry"]["lifecycleRevision"],
-                    )
-                    capture["events"].append(session_create_receipt(created, account["email"]))
+                    created_receipt = session_create_receipt(created, account["email"])
+                    params = session_params(created_receipt)
+                    capture["events"].append(created_receipt)
                     sessions.append(params)
                     mark(prefix + "_session")
                     capture["phase"] = prefix + "_person_rpc"
@@ -1083,12 +1224,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                             events_path, result["id"]
                         )
                         raise ValueError("native_person_rpc_denied")
-                    receipt = result["frame"]["payload"]
-                    if (
-                        receipt["requestId"] != result["id"]
-                        or receipt["authenticatedUserId"] != account["email"]
-                    ):
-                        raise ValueError("native_person_identity_binding")
+                    receipt = person_rpc_receipt(result, account["email"])
                     capture["events"].append(
                         dict(
                             id=result["id"],
@@ -1124,7 +1260,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     extension.persons_ready(rpc, pages, sessions, capture)
                 capture["phase"] = "cross_account_denied"
                 denied = rpc(pages[1], "rmqualification.person", sessions[0])
-                denial_code = (denied["frame"].get("error") or {}).get("code")
+                denial_code = native_error_code(denied["frame"])
                 if denied["frame"].get("ok") is not False or denial_code not in {
                     "FORBIDDEN",
                     "INVALID_REQUEST",
@@ -1150,7 +1286,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     dict(sessions[0], hold=True),
                 )
                 held_request_id = request_id
-                deadline = time.monotonic() + 3
+                deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
                 while not any(
                     event.get("requestId") == request_id and event.get("phase") == "prepared"
                     for event in native_events()
@@ -1170,7 +1306,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                 if extension is not None:
                     extension.before_retirement(pages[0], sessions[0])
                 contexts[0].close()
-                deadline = time.monotonic() + 3
+                deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
                 while not any(
                     event.get("requestId") == request_id
                     and event.get("connectionId") == connection_id
@@ -1184,10 +1320,10 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                 if extension is not None:
                     extension.after_retirement(capture)
                 release_path.write_bytes(b"release\n")
-                deadline = time.monotonic() + 5
+                deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
                 while not any(
                     event.get("requestId") == request_id
-                    and event.get("phase") in {"guard_denied", "probe_failed"}
+                    and event_phase(event) in {"guard_denied", "probe_failed"}
                     for event in native_events()
                 ):
                     if time.monotonic() >= deadline:
@@ -1206,7 +1342,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     event
                     for event in observed_events
                     if event.get("requestId") == request_id
-                    and event.get("phase") in {"guard_denied", "probe_failed"}
+                    and event_phase(event) in {"guard_denied", "probe_failed"}
                 )
                 capture["events"].append(
                     dict(
@@ -1305,6 +1441,13 @@ SAFE_REASONS = frozenset(
         "native_event_invalid",
         "network_inventory_size",
         "network_inventory_invalid",
+        "network_inventory_unavailable",
+        "network_inventory_deadline",
+        "native_rpc_timeout",
+        "native_socket_retired",
+        "native_rpc_transport",
+        "native_socket_unavailable",
+        "native_send_failed",
         "qualification_port",
         "qualification_accounts",
         "login_subphase_invalid",
@@ -1355,6 +1498,8 @@ def run_qualification(work: Path, output: Path, *, extension=None) -> int:
             _run_private_trial(work, candidates[0], capture)
         else:
             _run_private_trial(work, candidates[0], capture, extension=extension)
+        if extension is not None and hasattr(extension, "finalize"):
+            extension.finalize(capture)
         capture["checks"]["person_composition"] = person_composition_pass(capture)
         if not capture["checks"]["person_composition"]:
             capture.update(status="failed", reason="person_composition_unverified")
@@ -1369,6 +1514,8 @@ def run_qualification(work: Path, output: Path, *, extension=None) -> int:
                 if previous.get("status") in {"passed", "failed", "not_run"}:
                     step["status"] = previous["status"]
             capture = safe
+        if extension is not None and hasattr(extension, "failure_diagnostics"):
+            capture.update(extension.failure_diagnostics())
         capture.update(status="failed", reason=reason, error_type=type(error).__name__)
         for step in capture["steps"]:
             if step["name"] == capture.get("phase"):

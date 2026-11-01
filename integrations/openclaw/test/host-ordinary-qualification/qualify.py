@@ -7,8 +7,12 @@ import json
 import secrets
 import subprocess
 import sys
+import threading
 import time
+from contextlib import contextmanager
+from functools import wraps
 from pathlib import Path
+from queue import Queue
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tests"), str(ROOT / "scripts")]
@@ -23,6 +27,65 @@ def base_module():
 
 
 BASE = base_module()
+
+
+ORDINARY_OBSERVE_SECONDS = 5
+ORDINARY_UI_ACTIONS = frozenset(
+    {"open", "recommend", "choose", "correct", "inspect", "delete", "reset"}
+)
+
+
+HOST_EVENT_WAIT_SECONDS = BASE.person_module().HOST_EVENT_WAIT_SECONDS
+ORDINARY_FAILURE_STEPS = frozenset(
+    {
+        "configure",
+        "install",
+        "sources",
+        "persons_ready",
+        "entry_read",
+        "ui_actions",
+        "negative_actions",
+        "retirement_prepared",
+        "retirement_attempt",
+        "retirement_abort",
+        "finalize",
+    }
+)
+
+
+def ordinary_error_class(error):
+    # native_rpc translates browser errors into safe ValueErrors. Inspect its
+    # original exception only for classification; never export exception text.
+    original = error
+    if isinstance(error, ValueError) and str(error).startswith("native_rpc_"):
+        original = error.__context__ or error
+    classes = type(original).__mro__
+    browser_classes = {c.__name__ for c in classes if c.__module__.startswith("playwright.")}
+    if "TimeoutError" in browser_classes:
+        return "playwright_timeout"
+    if "TargetClosedError" in browser_classes or (
+        "Error" in browser_classes
+        and (
+            "Target closed" in str(original)
+            or "Target page, context or browser has been closed" in str(original)
+        )
+    ):
+        return "playwright_target_closed"
+    if browser_classes:
+        return "playwright_error"
+    return "value_error" if isinstance(error, ValueError) else "other"
+
+
+def ordinary_step(name):
+    def decorate(method):
+        @wraps(method)
+        def run(self, *args, **kwargs):
+            with self.step(name):
+                return method(self, *args, **kwargs)
+
+        return run
+
+    return decorate
 
 
 def private_json(path, data):
@@ -185,7 +248,41 @@ class OrdinaryComposition(BASE.ActionComposition):
     def __init__(self, *args, archive, runs, **kwargs):
         super().__init__(*args, **kwargs)
         self.archive, self.runs = archive.resolve(strict=True), runs
+        self._failure = {}
+        self._ui_action = None
 
+    @contextmanager
+    def step(self, name):
+        if name not in ORDINARY_FAILURE_STEPS:
+            raise ValueError("ordinary_step_failed")
+        try:
+            yield
+        except Exception as error:
+            if self._failure:
+                raise
+            error_class = ordinary_error_class(error)
+            self._failure = dict(ordinary_failure_step=name, ordinary_error_class=error_class)
+            if name == "ui_actions" and self._ui_action in ORDINARY_UI_ACTIONS:
+                self._failure["ordinary_ui_action"] = self._ui_action
+            if isinstance(error, TimeoutError) and str(error) == "overall_deadline_exceeded":
+                raise
+            if error_class.startswith("playwright_"):
+                raise ValueError("ordinary_" + error_class) from None
+            if isinstance(error, ValueError) and str(error) in (
+                self.failure_reasons() | BASE.person_module().SAFE_REASONS
+            ):
+                raise
+            raise ValueError("ordinary_step_failed") from None
+
+    def set_ui_action(self, action):
+        if action not in ORDINARY_UI_ACTIONS:
+            raise ValueError("ordinary_step_failed")
+        self._ui_action = action
+
+    def failure_diagnostics(self):
+        return dict(self._failure)
+
+    @ordinary_step("configure")
     def configure(self, config, work, origin):
         super().configure(config, work, origin)
         # No companion factory is installed in this run.
@@ -203,6 +300,7 @@ class OrdinaryComposition(BASE.ActionComposition):
         config["gateway"]["controlUi"]["experimental"] = dict(customPlugins=True)
         self.host_config_path = work / "openclaw.json"
 
+    @ordinary_step("install")
     def prepare_host(self, host, environment, work, config_path):
         # Operator installation is the ordinary pinned CLI, no constructor override.
         log = work / "private-ordinary-install.log"
@@ -231,6 +329,7 @@ class OrdinaryComposition(BASE.ActionComposition):
             raise ValueError("ordinary_install_failed")
         self.host_config = json.loads(config_path.read_bytes())
 
+    @ordinary_step("sources")
     def source_paths(self):
         return super().source_paths() + [
             Path(__file__),
@@ -239,16 +338,43 @@ class OrdinaryComposition(BASE.ActionComposition):
 
     def failure_reasons(self):
         return super().failure_reasons() | {
+            "ordinary_step_failed",
+            "ordinary_playwright_timeout",
+            "ordinary_playwright_target_closed",
+            "ordinary_playwright_error",
             "ordinary_install_failed",
             "ordinary_entry_unavailable",
             "ordinary_guard_refused",
             "ordinary_ui_timeout",
+            "ordinary_observe_timeout",
             "ordinary_zero_http_failed",
             "ordinary_abort_unobserved",
             "ordinary_observer_blind",
         }
 
     def observe_backend(self):
+        # sql_read includes an unbounded lock acquisition. Keep it off the browser
+        # thread; a daemon cannot prevent process exit if the gateway stays stuck.
+        # Do not use an executor context manager, whose exit would join forever.
+        outcome = Queue(maxsize=1)
+
+        def read():
+            try:
+                outcome.put((self._read_backend(), None))
+            except Exception as error:
+                outcome.put((None, error))
+
+        worker = threading.Thread(target=read, daemon=True, name="ordinary-observe")
+        worker.start()
+        worker.join(ORDINARY_OBSERVE_SECONDS)
+        if worker.is_alive():
+            raise ValueError("ordinary_observe_timeout")
+        value, error = outcome.get_nowait()
+        if error is not None:
+            raise error
+        return value
+
+    def _read_backend(self):
         with self.runs.sql_read() as db:
             return dict(
                 views=[
@@ -278,6 +404,7 @@ class OrdinaryComposition(BASE.ActionComposition):
                 ],
             )
 
+    @ordinary_step("persons_ready")
     def persons_ready(self, rpc, pages, sessions, capture):
         account = capture["accounts"][0]
         person = next(
@@ -299,143 +426,161 @@ class OrdinaryComposition(BASE.ActionComposition):
         self.host_config["plugins"]["allow"] = list(
             dict.fromkeys([*self.host_config["plugins"]["allow"], "relaymind"])
         )
-        self.host_config["plugins"]["entries"]["relaymind"] = dict(enabled=True, config=self.config)
-        private_json(self.host_config_path, self.host_config)
-        value = dict(
-            installation=self.installation, default_registration=True, constructor_override=False
-        )
-        capture["ordinary_actions"] = value
-        deadline = time.monotonic() + 25
-        while True:
-            probe = rpc(
-                pages[0],
-                "relaymind.recommendations",
-                dict(
-                    sessions[0],
-                    input=dict(kind="listFeedback", page=dict(limit=1)),
-                    idempotencyKey="ordinary-entry-read",
-                ),
+        with self.step("entry_read"):
+            self.host_config["plugins"]["entries"]["relaymind"] = dict(
+                enabled=True, config=self.config
             )
-            if probe["frame"].get("ok") is True:
-                value["entry_read"] = probe
-                events = [json.loads(line) for line in self.event_file.read_bytes().splitlines()]
-                attempts = [
-                    event
-                    for event in events
-                    if event["kind"] == "http_attempt" and event["path"] == "/relay/v1/feedback"
-                ]
-                if not any(
-                    any(
-                        result["kind"] == "http"
-                        and result.get("attempt_id") == attempt["attempt_id"]
-                        and result["status"] == 200
-                        for result in events
-                    )
-                    for attempt in attempts
-                ):
-                    raise ValueError("ordinary_observer_blind")
-                value["entry_events"] = events
-                break
-            error = probe["frame"].get("error") or {}
-            details = error.get("details") or {}
-            pending_scope = error.get("code") == "FORBIDDEN" and details == {
-                "code": "MISSING_SCOPE",
-                "missingScope": "operator.admin",
-                "requiredScopes": ["operator.admin"],
-            }
-            message = error.get("message", "")
-            safe_messages = {
-                "missing scope: operator.admin",
-                "missing scope: operator.write",
-                "Gateway requester authority changed",
-                "native_action_unavailable",
-                "unknown method: relaymind.recommendations",
-            }
-            value.setdefault("entry_failures", []).append(
-                {
-                    "request_id": probe["id"],
-                    "socket_id": probe["socket_id"],
-                    "error_code": error.get("code"),
-                    "message": message
-                    if message in safe_messages
-                    else "unclassified_native_refusal",
-                    "pending_publication": pending_scope,
+            private_json(self.host_config_path, self.host_config)
+            value = dict(
+                installation=self.installation,
+                default_registration=True,
+                constructor_override=False,
+            )
+            capture["ordinary_actions"] = value
+            deadline = time.monotonic() + 25
+            while True:
+                probe = rpc(
+                    pages[0],
+                    "relaymind.recommendations",
+                    dict(
+                        sessions[0],
+                        input=dict(kind="listFeedback", page=dict(limit=1)),
+                        idempotencyKey="ordinary-entry-read",
+                    ),
+                )
+                if probe["frame"].get("ok") is True:
+                    value["entry_read"] = probe
+                    events = [
+                        json.loads(line) for line in self.event_file.read_bytes().splitlines()
+                    ]
+                    attempts = [
+                        event
+                        for event in events
+                        if event["kind"] == "http_attempt" and event["path"] == "/relay/v1/feedback"
+                    ]
+                    if not any(
+                        any(
+                            result["kind"] == "http"
+                            and result.get("attempt_id") == attempt["attempt_id"]
+                            and result["status"] == 200
+                            for result in events
+                        )
+                        for attempt in attempts
+                    ):
+                        raise ValueError("ordinary_observer_blind")
+                    value["entry_events"] = events
+                    break
+                error = probe["frame"].get("error") or {}
+                details = error.get("details") or {}
+                pending_scope = error.get("code") == "FORBIDDEN" and details == {
+                    "code": "MISSING_SCOPE",
+                    "missingScope": "operator.admin",
+                    "requiredScopes": ["operator.admin"],
                 }
-            )
-            if not pending_scope and message != "unknown method: relaymind.recommendations":
-                raise ValueError("ordinary_guard_refused")
-            if time.monotonic() >= deadline:
-                raise ValueError("ordinary_entry_unavailable")
-            pages[0].wait_for_timeout(500)
-        value["production_registry_enabled"] = True
-        ui_page = pages[0].context.new_page()
-        try:
-            suffix = sessions[0]["sessionKey"].removeprefix("agent:main:")
-            if "/" in suffix or not suffix.startswith("person-"):
-                raise ValueError("ordinary_guard_refused")
-            ui_page.goto(self.origin + "/chat/main/" + suffix, wait_until="domcontentloaded")
-            deadline = time.monotonic() + 20
-            while not ui_page.evaluate("() => window.__rmPersonWire?.state().ready === true"):
+                message = error.get("message", "")
+                safe_messages = {
+                    "missing scope: operator.admin",
+                    "missing scope: operator.write",
+                    "Gateway requester authority changed",
+                    "native_action_unavailable",
+                    "unknown method: relaymind.recommendations",
+                }
+                value.setdefault("entry_failures", []).append(
+                    {
+                        "request_id": probe["id"],
+                        "socket_id": probe["socket_id"],
+                        "error_code": error.get("code"),
+                        "message": message
+                        if message in safe_messages
+                        else "unclassified_native_refusal",
+                        "pending_publication": pending_scope,
+                    }
+                )
+                if not pending_scope and message != "unknown method: relaymind.recommendations":
+                    raise ValueError("ordinary_guard_refused")
                 if time.monotonic() >= deadline:
                     raise ValueError("ordinary_entry_unavailable")
-                ui_page.wait_for_timeout(100)
-            ui_person = rpc(ui_page, "rmqualification.person", sessions[0])
-            payload = ui_person["frame"].get("payload") or {}
-            if ui_person["frame"].get("ok") is not True or any(
-                payload.get(field) != person.get(field)
-                for field in (
-                    "profileId",
-                    "authenticatedUserId",
-                    "sessionKey",
-                    "sessionId",
-                    "lifecycleRevision",
-                    "workspaceDir",
+                pages[0].wait_for_timeout(500)
+        with self.step("ui_actions"):
+            value["production_registry_enabled"] = True
+            self.set_ui_action("open")
+            ui_page = pages[0].context.new_page()
+            try:
+                suffix = sessions[0]["sessionKey"].removeprefix("agent:main:")
+                if "/" in suffix or not suffix.startswith("person-"):
+                    raise ValueError("ordinary_guard_refused")
+                ui_page.goto(
+                    self.origin + "/chat/main/" + suffix,
+                    wait_until="domcontentloaded",
+                    timeout=10000,
                 )
+                BASE.person_module().wait_for_wire_ready(
+                    ui_page, 20, ValueError("ordinary_entry_unavailable")
+                )
+                ui_person = rpc(ui_page, "rmqualification.person", sessions[0])
+                payload = ui_person["frame"].get("payload") or {}
+                if ui_person["frame"].get("ok") is not True or any(
+                    payload.get(field) != person.get(field)
+                    for field in (
+                        "profileId",
+                        "authenticatedUserId",
+                        "sessionKey",
+                        "sessionId",
+                        "lifecycleRevision",
+                        "workspaceDir",
+                    )
+                ):
+                    raise ValueError("ordinary_guard_refused")
+                value["ui_person"] = ui_person
+                value["ui"] = run_ui(ui_page, sessions[0], self.observe_backend, self.set_ui_action)
+            except Exception:
+                try:
+                    ui_page.close()
+                except TimeoutError:
+                    raise  # Never swallow the overall SIGALRM during cleanup.
+                except Exception:
+                    pass  # A closed page cannot replace the original failure.
+                raise
+        with self.step("negative_actions"):
+            self.ui_page = ui_page
+            self.ui_person = ui_person
+            value["positive_events"] = [
+                json.loads(line) for line in self.event_file.read_bytes().splitlines()
+            ]
+            start = len(self.event_file.read_bytes())
+            negative = []
+            for target in (sessions[0], sessions[1]):
+                observed = rpc(
+                    pages[1],
+                    "relaymind.recommendations",
+                    dict(
+                        target,
+                        input=dict(kind="listFeedback", page=dict(limit=1)),
+                        idempotencyKey=secrets.token_hex(16),
+                    ),
+                )
+                negative.append(dict(observed=observed, target=target))
+            value["negative_receipts"] = negative
+            value["negative_events"] = [
+                json.loads(line) for line in self.event_file.read_bytes()[start:].splitlines()
+            ]
+            if any(item["observed"]["frame"].get("ok") is not False for item in negative) or any(
+                event["kind"] == "http_attempt" for event in value["negative_events"]
             ):
-                raise ValueError("ordinary_guard_refused")
-            value["ui_person"] = ui_person
-            value["ui"] = run_ui(ui_page, sessions[0], self.observe_backend)
-        except Exception:
-            ui_page.close()
-            raise
-        self.ui_page = ui_page
-        self.ui_person = ui_person
-        value["positive_events"] = [
-            json.loads(line) for line in self.event_file.read_bytes().splitlines()
-        ]
-        start = len(self.event_file.read_bytes())
-        negative = []
-        for target in (sessions[0], sessions[1]):
-            observed = rpc(
-                pages[1],
-                "relaymind.recommendations",
-                dict(
-                    target,
-                    input=dict(kind="listFeedback", page=dict(limit=1)),
-                    idempotencyKey=secrets.token_hex(16),
-                ),
-            )
-            negative.append(dict(observed=observed, target=target))
-        value["negative_receipts"] = negative
-        value["negative_events"] = [
-            json.loads(line) for line in self.event_file.read_bytes()[start:].splitlines()
-        ]
-        if any(item["observed"]["frame"].get("ok") is not False for item in negative) or any(
-            event["kind"] == "http_attempt" for event in value["negative_events"]
-        ):
-            raise ValueError("ordinary_zero_http_failed")
+                raise ValueError("ordinary_zero_http_failed")
 
     def native_events(self):
         path = self.work / "native-events.jsonl"
         return [json.loads(line) for line in path.read_bytes().splitlines()]
 
+    @ordinary_step("retirement_prepared")
     def before_retirement(self, page, session):
         self.retirement_start = len(self.event_file.read_bytes())
         self.ui_guard_request = self.ui_page.evaluate(
             "params => window.__rmPersonWire.startRpc('rmqualification.person',params)",
             dict(session, hold=True),
         )
-        deadline = time.monotonic() + 3
+        deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
         while not any(
             event.get("requestId") == self.ui_guard_request and event.get("phase") == "prepared"
             for event in self.native_events()
@@ -443,23 +588,25 @@ class OrdinaryComposition(BASE.ActionComposition):
             if time.monotonic() >= deadline:
                 raise ValueError("ordinary_abort_unobserved")
             time.sleep(0.01)
-        super().before_retirement(self.ui_page, session)
-        events = [
-            json.loads(line)
-            for line in self.event_file.read_bytes()[self.retirement_start :].splitlines()
-        ]
-        attempts = [
-            event
-            for event in events
-            if event["kind"] == "http_attempt" and event["path"] == "/relay/v1/feedback"
-        ]
-        if len(attempts) != 1:
-            raise ValueError("ordinary_abort_unobserved")
-        self.held_attempt = attempts[0]
+        with self.step("retirement_attempt"):
+            super().before_retirement(self.ui_page, session)
+            events = [
+                json.loads(line)
+                for line in self.event_file.read_bytes()[self.retirement_start :].splitlines()
+            ]
+            attempts = [
+                event
+                for event in events
+                if event["kind"] == "http_attempt" and event["path"] == "/relay/v1/feedback"
+            ]
+            if len(attempts) != 1:
+                raise ValueError("ordinary_abort_unobserved")
+            self.held_attempt = attempts[0]
 
+    @ordinary_step("retirement_abort")
     def after_retirement(self, capture):
         self.release.set()
-        deadline = time.monotonic() + 3
+        deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
         while time.monotonic() < deadline:
             events = [
                 json.loads(line)
@@ -499,6 +646,7 @@ class OrdinaryComposition(BASE.ActionComposition):
             time.sleep(0.01)
         raise ValueError("ordinary_abort_unobserved")
 
+    @ordinary_step("finalize")
     def finalize(self, capture):
         relevant = [
             event
@@ -508,12 +656,13 @@ class OrdinaryComposition(BASE.ActionComposition):
         capture["ordinary_actions"]["retirement"]["ui_guard_events"] = relevant
 
 
-def run_ui(page, session, observe):
+def run_ui(page, session, observe, record_action=lambda action: None):
     snapshots = {}
+    record_action("open")
     # Real native navigation preserves the authenticated socket; no fabricated client.
     page.get_by_role("link", name="RelayMind recommendations", exact=True).click(timeout=10000)
     page.get_by_label("Task", exact=True).fill(
-        "hello greeting ordinary native person " + secrets.token_hex(4)
+        "hello greeting ordinary native person " + secrets.token_hex(4), timeout=10000
     )
 
     def settle(name, predicate):
@@ -526,22 +675,28 @@ def run_ui(page, session, observe):
             page.wait_for_timeout(100)
         raise ValueError("ordinary_ui_timeout")
 
-    page.get_by_role("button", name="Recommend", exact=True).click()
+    record_action("recommend")
+    page.get_by_role("button", name="Recommend", exact=True).click(timeout=10000)
     settle("recommend", lambda s: len(s["views"]) == 1 and s["views"][0]["state"] == "ready")
-    page.get_by_role("button", name="Choose 1", exact=True).click()
+    record_action("choose")
+    page.get_by_role("button", name="Choose 1", exact=True).click(timeout=10000)
     settle("choice", lambda s: s["views"][0]["state"] == "chosen")
-    page.get_by_role("button", name="Correct to 1", exact=True).click()
+    record_action("correct")
+    page.get_by_role("button", name="Correct to 1", exact=True).click(timeout=10000)
     settle("correction", lambda s: len(s["records"]) == 1)
-    page.get_by_role("button", name="Inspect feedback", exact=True).click()
+    record_action("inspect")
+    page.get_by_role("button", name="Inspect feedback", exact=True).click(timeout=10000)
     page.get_by_role("button", name="Delete feedback", exact=True).wait_for(timeout=10000)
     snapshots["inspect"] = observe()
-    page.get_by_role("button", name="Delete feedback", exact=True).click()
+    record_action("delete")
+    page.get_by_role("button", name="Delete feedback", exact=True).click(timeout=10000)
     settle(
         "delete",
         lambda s: not s["records"] and any(a["operation"] == "delete" for a in s["audits"]),
     )
+    record_action("reset")
     page.once("dialog", lambda dialog: dialog.accept())
-    page.get_by_role("button", name="Reset feedback", exact=True).click()
+    page.get_by_role("button", name="Reset feedback", exact=True).click(timeout=10000)
     settle("reset", lambda s: any(a["operation"] == "reset" for a in s["audits"]))
     return dict(
         snapshots=snapshots,
@@ -552,7 +707,6 @@ def run_ui(page, session, observe):
 
 def main(argv=None):
     import argparse
-    import threading
 
     from api_helpers import RunningServer
     from recommendation_helpers import setup
@@ -600,7 +754,7 @@ def main(argv=None):
     async def hold_private_read(request, call_next):
         if hold.is_set() and request.method == "GET" and request.url.path == "/relay/v1/feedback":
             entered.set()
-            await asyncio.to_thread(release.wait, 5)
+            await asyncio.to_thread(release.wait, HOST_EVENT_WAIT_SECONDS)
         return await call_next(request)
 
     asyncio.run(service.refresh_catalog())
@@ -620,8 +774,6 @@ def main(argv=None):
                 args.work_dir, args.out, extension=extension
             )
         capture = json.loads(args.out.read_bytes())
-        if code == 0:
-            extension.finalize(capture)
         capture["checks"]["ordinary_actions"] = ordinary_pass(capture)
         BASE.person_module().write_capture(args.out, capture)
         return 0 if code == 0 and capture["checks"]["ordinary_actions"] else 2
