@@ -1078,8 +1078,8 @@ See `docs/evidence/m10/host-use-settlement-20261101.md`. The first VPS run could
 not start a person tier (no private interface, missing Chromium libraries), so
 the first substantive captures came from CI run 41286397320. A second VPS run at
 62c4dcd, after the owner's setup, also ran; the MCP record binds its MCP
-capture. Person ingress
-passes there. MCP use is `blocked` (`exact_route_unqualified`). The reset case
+capture. Person ingress passes there. MCP use is `blocked`
+(`exact_route_unqualified`). The reset case
 is now `control_refused` on the real host. That run exited 2 because the
 62c4dcd predicate expected one pin in the session's selection listing while
 the host lists every pin of the owner profile; the selected-skill pin check
