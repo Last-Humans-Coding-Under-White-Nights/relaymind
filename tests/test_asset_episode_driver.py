@@ -515,3 +515,18 @@ def test_a_not_run_episode_never_needs_its_labels(tmp_path):
     release, freeze, episodes, arms = setup(tmp_path)
     result = _not_run_episode(episodes["episodes"][0], {}, "interrupted")
     assert result["status"] == "not_run" and result["probes"]
+
+
+def test_a_refused_reset_keeps_its_own_reason(tmp_path, monkeypatch):
+    """RM42/AC33: a refused reset ends the episode as reset_refused, not internal_error."""
+    from relaymind.evaluation import asset_episode_driver
+
+    async def refused(*args, **kwargs):
+        raise WholeTaskRejected("reset_refused")
+
+    monkeypatch.setattr(asset_episode_driver, "_reset", refused)
+    release, freeze, episodes, report, evidence = run(tmp_path)
+    result = report["episodes"][0]
+    assert result["status"] == "failed" and result["reason"] == "reset_refused"
+    assert [c["status"] for c in result["corrections"]] == ["accepted"] * 3
+    assert result["reset_equal"] is None

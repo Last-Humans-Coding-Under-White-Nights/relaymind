@@ -76,9 +76,12 @@ def resolve_corpus(
             raise WholeTaskRejected("invalid_corpus_lock")
         # The release verifier reads redistributable evidence at the path the
         # catalog declares; everything else is resolved by evidence ID.
+        listed = catalog.get("evidence", [])
+        if not isinstance(listed, list):
+            raise WholeTaskRejected("invalid_corpus_lock")
         declared = {
             item["id"]: item["path"]
-            for item in catalog.get("evidence", [])
+            for item in listed
             if isinstance(item, dict)
             and isinstance(item.get("id"), str)
             and isinstance(item.get("path"), str)
