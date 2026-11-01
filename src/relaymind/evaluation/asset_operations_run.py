@@ -70,6 +70,9 @@ _PID_PREFIX = "Gateway-Pid: "
 _PID_ENTRY = "import os; print('Gateway-Pid: ' + str(os.getpid()), flush=True); "
 _CONTROL_PREFIX = b"Control-Reply: "
 _CONTROL_SECONDS = 60.0
+# One child stdout line may be a control reply carrying several job event
+# chains, far above asyncio's default 64 KiB line limit.
+_STREAM_LIMIT = 16 * 1024 * 1024
 _GRACE_SECONDS = 10.0
 SOURCE_ID = "operations"
 IMPORT_SOURCE_ID = "operations-import"
@@ -414,6 +417,7 @@ async def _gateway(
             stdout=asyncio.subprocess.PIPE,
             stderr=stderr,
             env=_child_env(env),
+            limit=_STREAM_LIMIT,
         )
     drain = None
     replies: dict[int, asyncio.Future] = {}
@@ -426,6 +430,10 @@ async def _gateway(
         future = asyncio.get_running_loop().create_future()
         replies[ordinal] = future
         try:
+            # The reply reader fails every waiting request when it stops; a
+            # request made after that would otherwise wait out its window.
+            if drain is None or drain.done():
+                raise ConnectionError("control_closed")
             line = json.dumps(dict(fields, id=ordinal, op=op), ensure_ascii=True) + "\n"
             process.stdin.write(line.encode("ascii"))
             await process.stdin.drain()
@@ -741,7 +749,14 @@ def workload_plan(
                 channel_errors.append(f"{op}_job_evidence_unavailable")
                 raise RuntimeError(f"{op}_job_evidence_unavailable")
             raise RuntimeError(f"{op}_refused")
-        jobs.extend(reply.get("jobs") or ())
+        # A job reported again (first running, later finished) replaces its
+        # earlier record, so each job is one record in its latest state.
+        for job in reply.get("jobs") or ():
+            known = [n for n, seen in enumerate(jobs) if seen.get("job_id") == job.get("job_id")]
+            if known:
+                jobs[known[0]] = job
+            else:
+                jobs.append(job)
         if reply.get("job_id") is None:
             channel_errors.append(f"{op}_{reply.get('binding') or 'job_missing'}")
         return reply
@@ -857,7 +872,10 @@ def memory_observation(
     """
     startup_known = len(startup_bytes) == 10 and None not in startup_bytes
     workload_known = bool(workload_bytes) and None not in workload_bytes
-    phases = (("startup",) if startup_known else ()) + (_WORKLOAD_PHASES if workload_bytes else ())
+    workload_sampled = any(b is not None for b in workload_bytes)
+    phases = (("startup",) if startup_known else ()) + (
+        _WORKLOAD_PHASES if workload_sampled else ()
+    )
     known = [
         b for b in (*workload_bytes, *(startup_bytes if startup_known else ())) if b is not None
     ]

@@ -48,6 +48,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     reused `--work` starts from the requested catalog and new stores. The
     docs call the run the lexical AC29 fixture portion and no longer quote
     uncommitted local numbers.
+  - Third review fixes: an operations harness error no longer skips the
+    release and lifecycle steps; its exit code is kept in `operations.exit`
+    and a final `Harness result` step fails the job on it. The ordinary step
+    passes `--timeout 780`, so its own `ordinary_timeout` fires before the
+    step limit. The test files and workflow the run binds check out with LF
+    line endings on Windows, so a `windows-latest` report verifies on another
+    checkout. The control channel reads lines up to 16 MiB, a control call
+    after the reply stream ended fails at once with `control_closed`, a job
+    reported in two replies is kept once in its latest state, and memory
+    phases are listed only when a workload sample is known.
 - Episode and host-task run kit (#236, #237; RM40–RM44; AC31–AC36): blind
   label templates, adjudication worksheet and `AssetLabelsV1` freeze;
   `preregister-host`/`preregister-episodes` checks; a resumable, crash-safe
