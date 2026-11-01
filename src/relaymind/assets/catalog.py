@@ -417,5 +417,8 @@ class SourceCapture:
     received_bytes: int
     batch_durations_ms: tuple[float, ...] = ()
     # Spec 0.66 section 4.6.1: candidates a partial local scan rejected on their own.
-    rejected_count: int = 0
     exclusions: tuple[Mapping[str, Any], ...] = ()
+
+    @property
+    def rejected_count(self) -> int:
+        return len(self.exclusions)

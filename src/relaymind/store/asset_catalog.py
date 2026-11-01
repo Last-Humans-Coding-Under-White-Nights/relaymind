@@ -392,8 +392,7 @@ class AssetCatalogStore:
         if (
             ids & capture.removed_asset_ids
             or (not capture.complete and capture.removed_asset_ids)
-            or (capture.complete and (capture.rejected_count or capture.exclusions))
-            or capture.rejected_count != len(capture.exclusions)
+            or (capture.complete and capture.exclusions)
         ):
             raise AssetValidationError("invalid_capture")
         return PreparedPublication(capture, tuple(rows), frozenset(ids), tuple(records))
