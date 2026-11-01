@@ -224,6 +224,33 @@ def test_one_bad_file_admits_the_good_ones_and_retains_its_prior_record(tmp_path
     assert healed.removed_asset_ids == frozenset({package_id("weather")})
 
 
+@pytest.mark.parametrize(
+    "bad_skill",
+    [
+        b"\xff\xfe not utf-8",
+        b"---\nname: a\n---\nmissing description\n",
+        b"---\nname: a\ndescription: x\n---\n" + b"x" * (10 * 1024 * 1024 + 1),
+    ],
+)
+def test_symlinked_manifest_beside_a_rejected_skill_fails_the_whole_scan(tmp_path, bad_skill):
+    """RM34/AC25, spec 0.66 section 4.6.1: path safety is checked before content admission.
+
+    A malformed SKILL.md must not hide a symlinked optional manifest and turn a
+    path-safety failure into a partial generation.
+    """
+    root = tmp_path / "skills"
+    skill(root / "good")
+    (root / "bad").mkdir()
+    (root / "bad" / "SKILL.md").write_bytes(bad_skill)
+    outside = tmp_path / "outside-manifest.json"
+    outside.write_text('{"version":"1"}')
+    symlink(root / "bad" / "skill.manifest.json", outside)
+    with pytest.raises(sources.SourceFailure) as caught:
+        capture(root)
+    assert caught.value.reason == "invalid_data"
+    assert not isinstance(caught.value, sources.CandidateRejected)
+
+
 def test_scan_level_failures_still_fail_the_whole_scan(tmp_path):
     """RM34/AC25: path safety, budgets and a missing root are not per-file rejections."""
     root = bundled(tmp_path / "skills")

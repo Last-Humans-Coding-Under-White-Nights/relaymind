@@ -170,6 +170,9 @@ def _trial_preflight(args, environment: dict) -> dict:
 def _trial(args) -> int:
     """#234: the early-trial kit commands (spec 0.65 section 12.6.5)."""
     try:
+        # Checked before any host command or file; a refused value is never echoed.
+        if hasattr(args, "base_url"):
+            args.base_url = asset_trial_kit.check_base_url(args.base_url)
         if args.command == "trial-preflight":
             record = _trial_preflight(args, asset_trial_kit.observed_environment())
             atomic_bytes(args.output, json_bytes(record))

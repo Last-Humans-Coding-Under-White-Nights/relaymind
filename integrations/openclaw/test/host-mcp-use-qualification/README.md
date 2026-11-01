@@ -37,12 +37,28 @@ counter/result in a separate `effect` record joined to the `call` by `call_id`.
 Host-only exposed-name/schema/session/requester fields come from a separate
 `host_calls` receipt, never from the server. Revision 2 adds a bounded optional field, so stale-schema tests can
 distinguish exact authorization from argument validity. No input accepts a path.
-The host CLI probes both servers; the person probe records only method, status
-and tool names from the response to
-`tools.effective` through `dispatchGatewayMethod` in its original authenticated
-request. It does not parse an exposed name to manufacture provenance.
+The host CLI probes both servers. The pinned host lists MCP tools in
+`tools.effective` only from the session's own MCP runtime; without one it
+returns an `mcp-not-yet-connected` notice. So, in its original authenticated
+request, the person probe first calls public `mcp.app.discover` with the same
+session target. That acquires the session's MCP runtime and awaits its catalog;
+it creates no App view and calls no tool. The probe records the outcome, with
+only fixed host refusal messages, and a refusal never stops the inventory read.
+For this route the fixture host enables MCP Apps and selects the shipped
+`relaymind/relaymind-client-tools` model (the default `openai` model selects an
+unregistered harness, which `mcp.app.discover` refuses), with a zero heartbeat.
+No approval or tool policy changes. The person probe then calls
+`tools.effective` through `dispatchGatewayMethod`. The pinned host returns `{groups: [{tools: [entry]}], notices?}`, with
+entries keyed by `id` and MCP entries carrying `mcpServer`/`mcpToolName`. The
+probe records only method, status, an explicit `inventory` outcome (`listed`,
+`empty`, `malformed` or `none`), bounded tool IDs, the host's own MCP
+server/original mapping (and `deniedBySession`) and notice IDs. Any other
+shape is `malformed`, never an empty list. It does not parse an exposed name to
+manufacture provenance. Discovery passes only when one `tools.effective`
+inventory lists both colliding `append` tools under distinct exposed names, not
+session-denied, and no inventory is malformed.
 The same authenticated scope probes `mcp.app.listTools` with no view ID and
-records the same bounded projection; it does not invent a view for an independent tool. This
+records names from its MCP `tools/list` shape; it does not invent a view for an independent tool. This
 negative route probe cannot establish that all other host compositions fail.
 
 The current driver stops at that discovery checkpoint. It has no qualified

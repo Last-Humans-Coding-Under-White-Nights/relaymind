@@ -98,7 +98,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   configured (#269; RM39/RM44; AC30/AC36 tooling). The kit now follows the
   operator guide's lifecycle: install, configure `baseUrl` (`--base-url`,
   default `http://127.0.0.1:8080/v1`), enable, inspect. It records each step,
-  and inspect must report the plugin loaded and enabled. Verified with a host
+  and inspect must report the plugin loaded and enabled. `--base-url` must meet
+  the plugin's `baseUrl` rules (loopback http/https `/v1` root, no
+  credentials, query or fragment); any other value is refused before any host
+  command runs and is never written out. Verified with a host
   double that models the disabled fresh install; not yet rerun on the
   owner's M1 (#259).
 - Ordinary local skill discovery (#268; RM34/AC25; spec 0.66 section 4.6.1)
@@ -137,6 +140,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   enforces a timeout; input resolution rejects invalid native preflights and
   retains validator identities by config digest. Offline resolution can consume
   captured verdicts without Node; native fixture tests run in the OpenClaw CI job.
+  The isolated state (no operator HOME or credentials) installs the packaged
+  RelayMind plugin when the config names `relaymind`, so ordinary installed
+  discovery validates its settings without `plugins.load.paths`. A referenced
+  plugin whose schema the host did not inspect (undiscovered, or a discovery
+  owner the host preserved uninspected) is `unavailable` with reason
+  `plugin_schema_not_inspected`, never `valid`; every verdict carries a closed
+  `reason`.
   Qualified captured-evidence verification remains open in #240.
 - Platform runs on GitHub-hosted runners (#241, #235; RM38, RM39, RM44; AC29,
   AC37): a separate `Platform runs` workflow on `macos-latest`,
@@ -160,6 +170,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     error, and the report is still written. A failed ordinary UI action is a
     failed platform step, not a harness error. Memory phases name only what
     was sampled. The sampled PID is the gateway's own, which is recorded.
+    A missing install-check record is written as `platform-not-built.json`
+    and fails `verify`. An existing bundle directory is refused, and
+    `asset_platform_run.py` exits 2 with a reason on input errors and on an
+    ordinary-step timeout. The gateway control child answers every command
+    even when its job store fails, and its reader ignores a closed loop.
 - Episode and host-task run kit (#236, #237; RM40–RM44; AC31–AC36): blind
   label templates, adjudication worksheet and `AssetLabelsV1` freeze;
   `preregister-host`/`preregister-episodes` checks; a resumable, crash-safe
@@ -169,7 +184,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   claimed. Review fixes: the worksheet requires two distinct annotators,
   malformed worksheets, unwritable outputs and a lone `--evidence-root`
   reject with exit 2, traces with out-of-order or repeated call events reject,
-  and `run-host --executor-timeout` bounds a hung executor program.
+  and `run-host --executor-timeout` bounds a hung executor program. Second
+  review: the run journal binds the execution identity (environment,
+  artifacts, input manifest, qualification) and is owner-only; cancelled and
+  gateway-bounded calls keep their own outcome, with dispatch counted only
+  when evidenced; `--events`/`--artifacts` use the bounded strict reader;
+  executor output is capped while read; host task sets missing a required
+  lane are not acceptance-eligible.
 - Early installed-skill trial kit (#234; RM39, RM44; AC30, AC36; spec 0.65
   section 12.6.5): `scripts/asset_whole_task.py trial-preflight`,
   `trial-install`, `trial-run` and `trial`.
@@ -266,6 +287,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   records, observe approval identity and resolution, and rescan final captures
   for secrets. The CI timeout is four minutes; missing run traces and native
   exact-use receipts still prevent qualification.
+- Fix the MCP capability tier's `tools.effective` projection (#204; RM39/AC35):
+  the pinned host returns grouped entries (`groups[].tools[].id`), so the old
+  flat `payload.tools` projection always recorded an empty list. The probe now
+  records an explicit `listed`/`empty`/`malformed` outcome, the host's MCP
+  server/original mapping and notice IDs, and discovery requires both colliding
+  fixture tools in the session inventory. Earlier captures' empty
+  `tools.effective` lists came from the projection, not the host. The person
+  probe now starts the session's MCP runtime with public `mcp.app.discover`
+  before the read (MCP Apps enabled, the shipped RelayMind model selected, zero
+  heartbeat). A Linux x86-64 VPS run of the CI command (not committed) listed
+  both colliding tools; exact use stays blocked.
+  A refused `chat.send` retains its request window, correlated provider records
+  and native hooks; any such activity fails the case closed
+  (`ordinary_skill_refusal_contradicted`) instead of an activity-free refusal.
 
 - Operations and platform run kit (#242, toward #241, #235, #234; RM38, RM39, RM44; AC29, AC37):
   - `scripts/asset_operations_run.py startup` measures ten real `relaymind serve` startups over a generated 300-skill bilingual catalog, using the existing AC29 driver. It waits for recommendations to be ready and samples memory on POSIX and Windows.
@@ -278,7 +313,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   binds skill ID, revision, asset ID, content hash and source version, and
   requires the unmapped-skill, cross-session and own-session foreign-person
   refusals with their exact error codes. Browser failures and the overall
-  deadline remain failures through skill selection.
+  deadline remain failures through skill selection. The listing must show the
+  selection itself: its `session.sessionKey` is the authenticated target
+  session and its `session.selections` are exactly the selected skill at the
+  selected revision, both when the harness captures it and in the predicate,
+  so a no-op or wrong-session activation fails. The committed capture
+  satisfies this check; its recorded harness digest predates the change.
 
 - CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation or native-preparation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
 - CI: the shared asset benchmark fixture uses a deterministic recommendation
@@ -333,6 +373,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   catalog, and the closed qualification record with PR approval. A reviewed
   negative record closes the loaded-use or MCP-use gate on the pinned host with
   the operation disabled as a known host limitation (sections 7.6.1, 7.6.2).
+  `stop_point_absent` means no host point can fence the next model request as
+  section 7.6.1 requires (a stop-only point without fresh person authority,
+  session incarnation and pinned-byte re-verification does not count);
+  `exact_route_absent` means no supported route invokes an independent,
+  non-App MCP tool by its exact native identity (App view routes such as
+  `mcp.app.callTool` do not count).
   "Customer" wording about who runs trials becomes owner/operator. No metric,
   threshold or budget changes.
   A later 0.66 addition (#260) adds `machine_drafted_owner_approved` prompt

@@ -632,17 +632,32 @@ def _skill_document(
     )
 
 
+def _check_regular(info: SourceInfo) -> None:
+    """A symlink/reparse point or non-regular file fails the whole scan."""
+    if info.is_reparse or not info.is_regular:
+        raise SourceFailure("invalid_data")
+
+
 def _local_candidate(
     stage: _Stage, source: SourceConfig, package: str, relative: str, context: CaptureContext
 ):
-    """Stage and project one candidate; CandidateRejected names only its own bytes."""
+    """Stage and project one candidate; CandidateRejected names only its own bytes.
+
+    Path safety of SKILL.md and the optional manifest is a scan-level check
+    (spec 0.66 section 4.6.1). It runs for both paths before any content
+    admission, so a malformed SKILL.md can never hide an unsafe manifest.
+    """
+    manifest = "skill.manifest.json" if package == "." else f"{package}/skill.manifest.json"
+    _check_regular(stage.info(relative))
+    has_manifest = stage.exists(manifest)
+    if has_manifest:
+        _check_regular(stage.info(manifest))
     original, digest = stage.read(relative, MAX_ASSET_BYTES)
     metadata, body = _candidate(lambda: _frontmatter(original, context))
     if not isinstance(metadata.get("metadata", {}), dict):
         raise CandidateRejected("invalid_data")
-    manifest = "skill.manifest.json" if package == "." else f"{package}/skill.manifest.json"
     fallback = {}
-    if stage.exists(manifest):
+    if has_manifest:
         raw, _ = stage.read(manifest, MAX_METADATA_BYTES)
         fallback = _candidate(lambda: _json(raw, context))
     return _candidate(
