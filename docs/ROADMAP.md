@@ -1297,7 +1297,8 @@ session-selection harness (CI run 41318389858, commit c0bd6f4, PR merge
 checkout c22ad40) passed the ordinary-pass and ordinary-skill-pass predicates
 with all 15 harness sources matching; its capture
 `openclaw-native-actions-20261101-adapter.json` (SHA-256
-`35436e519245…`) is the registry's evidence revision. As before, this is
+`35436e519245…`) was the registry's evidence revision until the ledger fixes
+below were recaptured. As before, this is
 Linux functional evidence with disposable accounts, not macOS/Windows or
 customer acceptance. The person-ingress harness hardening raised in the #224 review
 (#228) changed evidence-bound harness files; a fresh ordinary installed-host
@@ -1416,11 +1417,15 @@ shipped `direct_actions`/`exact_skill_selection` entry is re-pinned to it
 ledger takes over a stale owner lock without ever removing a live owner's
 lock (per-owner lock files; one owner under any interleaving) and writes each
 record completely across short writes before acknowledging it; these changed
-bytes are that new revision. Its evidence revision still names the capture of
-the previous revision `943e1f0e…` (CI run 41318389858,
-`openclaw-native-actions-20261101-adapter.json`, SHA-256 `35436e519245…`), so
-the evidence must be recaptured from CI for the new adapter revision before
-merge. `tests/test_openclaw_install.py` fails when the registry and
+bytes are that new revision. The ordinary installed-host run of these exact
+bytes (CI run 41322540111, pinned OpenClaw 2026.10.7, Ubuntu runner, commit
+7af9cc2, PR merge checkout ad97e0b) passed the ordinary-pass and
+ordinary-skill-pass predicates with all 15 harness sources matching the #247
+harness; its unmodified capture replaces
+`openclaw-native-actions-20261101-adapter.json` (SHA-256
+`6b8947df711e70c0d87f1f50d8a43e1ffb57b2a68699ff69d6457249f4b828b2`), which
+the registry's evidence revision now names. As before, this is Linux
+functional evidence with disposable accounts. `tests/test_openclaw_install.py` fails when the registry and
 the built adapter digest of the release artifact drift.
 
 #240 host_config evidence must validate with the pinned host's own validator
