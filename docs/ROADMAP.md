@@ -1276,7 +1276,12 @@ registry enabled, explicit choice, feedback, inspection/delete/reset, account
 isolation and connection retirement. Its unmodified capture is
 [openclaw-native-actions-20261101.json](evidence/m10/openclaw-native-actions-20261101.json)
 (SHA-256 `d5c186ac552b6028cd47c9bd4679f79259eab1092d20dd95b48c36fa35437a39`), which the registry's evidence revision names. The 31 October
-capture remains the record of the earlier revision. As before, this is
+capture remains the record of the earlier revision. The loaded-use fence and
+the conditional MCP use path (#239/#204) change the adapter bytes again; the
+registry now pins the new exact revision
+`c618b8c267663c2bfe2480ce8b60b07cfdae27acc6404e8bb1d249200acb3e76`, and its
+evidence revision is replaced by the fresh ordinary installed-host capture of
+these exact bytes before this change is merged. As before, this is
 Linux functional evidence with disposable accounts, not macOS/Windows or
 customer acceptance. The person-ingress harness hardening raised in the #224 review
 (#228) changed evidence-bound harness files; a fresh ordinary installed-host
