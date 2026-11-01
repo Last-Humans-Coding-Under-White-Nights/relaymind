@@ -17,6 +17,7 @@ import type {
 } from "./recommendation-native-authority.ts";
 import type { NativeSkillBinding } from "./recommendation-native-config.ts";
 import type { QualificationResolver } from "./recommendation-native-registry.ts";
+import type { NativeUseLedger } from "./recommendation-native-ledger.ts";
 
 /** Fixed refusal codes, a subset of the section 7.6.2 receipt vocabulary. */
 export type NativeUseCode =
@@ -58,6 +59,8 @@ interface Dependencies extends NativeScopeDependencies {
   ) => Promise<UserActionClient>;
   wallNow: () => number;
   dispatch?: typeof dispatchGatewayMethod;
+  /** Durable conversation blocks; without it no managed use proceeds. */
+  ledger?: NativeUseLedger;
 }
 const MAX_SKILL_BYTES = 1048576;
 function refuse(code: NativeUseCode): never {
@@ -80,14 +83,29 @@ function incarnation(use: {
  * session incarnation; already delivered text is not claimed to be removed.
  */
 export function createSkillLoadedUseFence(dependencies: Dependencies) {
-  const blocked = new Set<string>();
+  // A restart must not lift a block, so blocks live in the durable ledger.
+  const block = (use: ManagedSkillUse) => {
+    try {
+      dependencies.ledger?.block(incarnation(use));
+    } catch {
+      /* An unwritable ledger refuses every later use through isBlocked. */
+    }
+  };
+  const isBlocked = (use: ManagedSkillUse): boolean => {
+    if (!dependencies.ledger) refuse("unavailable");
+    try {
+      return dependencies.ledger.isBlocked(incarnation(use));
+    } catch {
+      refuse("unavailable");
+    }
+  };
   async function verify(
     options: NativeActionOptions,
     use: ManagedSkillUse,
   ): Promise<string> {
     // Unqualified: no gateway request, no native dispatch.
     if (!dependencies.qualification("skill_loaded_use")) refuse("unqualified");
-    if (blocked.has(incarnation(use))) refuse("binding_changed");
+    if (isBlocked(use)) refuse("binding_changed");
     let authority: ReturnType<typeof prepareNativeAuthority> | undefined;
     try {
       try {
@@ -221,7 +239,7 @@ export function createSkillLoadedUseFence(dependencies: Dependencies) {
         refuse("binding_changed");
       return loaded.content;
     } catch (error) {
-      blocked.add(incarnation(use));
+      block(use);
       throw error instanceof NativeUseRefusal
         ? error
         : new NativeUseRefusal("unavailable");
@@ -251,11 +269,11 @@ export function createSkillLoadedUseFence(dependencies: Dependencies) {
         !delivered.equals(Buffer.from(content, "utf8")) ||
         createHash("sha256").update(delivered).digest("hex") !== use.contentHash
       ) {
-        blocked.add(incarnation(use));
+        block(use);
         refuse("binding_changed");
       }
     },
     /** A blocked conversation needs a fresh session, authority and choice. */
-    isBlocked: (use: ManagedSkillUse) => blocked.has(incarnation(use)),
+    isBlocked,
   };
 }

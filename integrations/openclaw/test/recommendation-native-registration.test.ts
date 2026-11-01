@@ -42,7 +42,11 @@ const SCOPE = {
   toolScope: "independent-tool",
   maxApprovalWaitMs: 30000,
 };
-function registered(operations: string[], route?: object) {
+function registered(
+  operations: string[],
+  route?: object,
+  ledger: object | null = {},
+) {
   const names: string[] = [];
   const api: any = {
     registerGatewayMethod: (name: string) => names.push(name),
@@ -56,7 +60,7 @@ function registered(operations: string[], route?: object) {
       operations.includes(operation)
         ? ({ mcp: operations.includes("mcp_use") ? SCOPE : undefined } as any)
         : undefined,
-    { mcpRoute: route as any },
+    { mcpRoute: route as any, ledger: (ledger ?? undefined) as any },
   );
   return names;
 }
@@ -78,6 +82,10 @@ it("registers relaymind.mcp only for a qualified mcp_use entry and its exact rou
   expect(registered(["direct_actions", "mcp_use"], route)).toEqual([
     "relaymind.recommendations",
     "relaymind.mcp",
+  ]);
+  // Without durable dispatch history the RPC stays reserved.
+  expect(registered(["direct_actions", "mcp_use"], route, null)).toEqual([
+    "relaymind.recommendations",
   ]);
   // skill_loaded_use defines no RPC; the fence enforces it.
   expect(registered(["direct_actions", "skill_loaded_use"])).toEqual([
