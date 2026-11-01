@@ -67,14 +67,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   synced before dispatch (`src/recommendation-native-ledger.ts`): after a
   restart an unresolved key replays as indeterminate and never dispatches
   again, and a full or unreadable ledger refuses. Without a ledger nothing is
-  dispatched. A pre-dispatch refusal does not consume its key. Host schema
+  dispatched. An admitted key is bound to its request at admission, so its
+  pre-dispatch refusal is its historical receipt and a different request
+  under it is `idempotency_conflict`. Host schema
   patterns are admitted only in a provably bounded anchored subset, a schema
   whose gateway hash cannot be recomputed here (for example `0.0`) is
   `unavailable`, and all native RPC requests are capped at 512 KiB. Neither
   operation is in the shipped registry, no production MCP route exists, and
   `relaymind.mcp` is not registered; the tests use injected fixture resolvers
   and routes only. The shipped direct-action/exact-selection entry is re-pinned
-  to the new adapter revision `d5b6048af14dce5b6069dea2bd1a7e8abf57077e08d8b20d390791389dd22572`; its evidence revision still names
+  to the new adapter revision `943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`; its evidence revision still names
   the capture of the earlier revision `653902615edf…` (CI run 41286397320,
   SHA-256 `933fb4e7c8b3…`), and the evidence recapture of this revision is
   pending before merge. A release-artifact test now fails when the registry
@@ -84,6 +86,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   gateway transport, overload and deadline failures report `unavailable` or
   `timeout`; only failures attributable to the verified person and session
   block a conversation; and each native method registers on its own entry.
+  A second review added: one live ledger owner per path (an exclusive lock
+  file, taken over only from an exited owner); separate dispatch markers, so a
+  key bound before a restart that never dispatched recovers as
+  `not_dispatched`; reserved block capacity, with managed use refused once no
+  further block could be recorded; and a fence recheck of registration,
+  choice and operator association after the exact native read.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,

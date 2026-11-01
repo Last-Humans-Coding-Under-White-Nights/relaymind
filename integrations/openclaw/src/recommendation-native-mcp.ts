@@ -688,13 +688,11 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
       } catch {
         return closed("unavailable");
       }
-      const running = previous ? undefined : inFlight.get(scopeKey);
-      const pending = previous ?? running;
-      if (pending) {
+      if (previous) {
         // Recover only the historical receipt, after current authorization;
         // never dispatch again.
         await registered();
-        if (pending.digest !== digest)
+        if (previous.digest !== digest)
           return options.respond(
             true,
             {
@@ -709,12 +707,14 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
             } satisfies McpUseReceipt,
             undefined,
           );
-        if (previous)
-          // A durable claim is written only once dispatch may begin, so an
-          // unresolved claim is genuinely indeterminate (fails closed).
+        if (previous.receipt)
+          return options.respond(true, previous.receipt, undefined);
+        // The dispatch marker is synced before native dispatch may begin, so
+        // an unresolved dispatched key is genuinely indeterminate.
+        if (previous.dispatched)
           return options.respond(
             true,
-            previous.receipt ?? {
+            {
               ...previous.base,
               outcome: "indeterminate",
               code: "transport_unknown",
@@ -723,14 +723,28 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
             },
             undefined,
           );
-        // Still preparing in this process: wait for that attempt's actual
-        // receipt rather than inventing one before dispatch.
-        const outcome = await Promise.race([running!.done, aborted(signal)]);
-        current();
-        if (outcome === ABORTED || outcome === undefined)
-          return closed("unavailable");
-        await registered();
-        return options.respond(true, outcome, undefined);
+        const running = inFlight.get(scopeKey);
+        if (running) {
+          // Still preparing in this process: wait for that attempt's actual
+          // receipt rather than inventing one before dispatch.
+          const outcome = await Promise.race([running.done, aborted(signal)]);
+          current();
+          if (outcome === ABORTED || outcome === undefined)
+            return closed("unavailable");
+          await registered();
+          return options.respond(true, outcome, undefined);
+        }
+        // Bound before a restart and provably never dispatched: that lost
+        // attempt's outcome is not_dispatched; the key is not reused.
+        const lost: McpUseReceipt = {
+          ...previous.base,
+          outcome: "not_dispatched",
+          code: "unavailable",
+          nativeRunId: null,
+          nativeCallId: null,
+        };
+        settle(history, scopeKey, lost);
+        return options.respond(true, lost, undefined);
       }
       base = {
         operationId: dependencies.operationId?.() ?? randomUUID(),
@@ -738,8 +752,14 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         assetId: params.assetId,
         contentHash: params.contentHash,
       };
-      // A pre-dispatch refusal proves no dispatch and does not consume the
-      // key; the durable claim is written only once dispatch may begin.
+      // Spec 0.65 7.6.2 condition 1: the admitted key is bound to this
+      // request durably now; its outcome, including a pre-dispatch refusal,
+      // becomes its historical receipt.
+      try {
+        history.claim(scopeKey, digest, base);
+      } catch {
+        return closed("unavailable");
+      }
       inFlight.set(scopeKey, {
         digest,
         done: new Promise((resolve) => {
@@ -936,7 +956,7 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
       if (sha256(canonicalText(args, false)!) !== argumentsDigest)
         refuse("binding_changed");
       try {
-        history.claim(scopeKey, digest, base);
+        history.markDispatched(scopeKey);
       } catch {
         refuse("unavailable");
       }
@@ -1000,7 +1020,7 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         nativeCallId: dispatched ? nativeCallId : null,
       };
       if (final) throw error; // The response itself failed; the outcome stands.
-      if (dispatched && !settled) {
+      if (!settled) {
         settled = true;
         settle(ledger, ownedKey, receipt);
       }

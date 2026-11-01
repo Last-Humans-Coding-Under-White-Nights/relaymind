@@ -974,10 +974,14 @@ result.
   size, and its version is the release version.
 
 **Install.** The install changes the operator's actual host (the same command
-as the operator guide). Host output stays in private `install.log` and
-`inspect.log` under the work directory. The record keeps only placeholders
-(`<openclaw>`, `<artifact>`), exit codes and SHA-256 digests. Inspect passes
-when the plugin is `loaded` at the release version with no diagnostics.
+as the operator guide). Host standard output and standard error stay in
+separate private logs (`install.log`, `install.stderr.log`, `inspect.log`,
+`inspect.stderr.log`) under the work directory. The record keeps only
+placeholders (`<openclaw>`, `<artifact>`), exit codes and SHA-256 digests.
+Inspect passes when the JSON on standard output (warnings on standard error
+are ignored) shows the plugin `loaded` at the release version with no
+diagnostics. A missing or unreadable tarball fails `release_checksum` and
+`frozen_package` in the preflight record; it does not stop the preflight.
 Configuring each arm's frozen host configuration is the operator's step;
 see the operator guide in `integrations/openclaw/README.md`.
 
@@ -995,7 +999,9 @@ observations directory. The rules:
   row/arm, or changed bytes under an already registered ID rejects (exit `2`).
 - A row without an observation is exported `not_run` with reason
   `observation_missing`. With `--interactive` the kit asks first, and `skip`
-  gives `operator_skipped`. Ctrl-C (then Enter, at a prompt) exports the
+  gives `operator_skipped`. If standard input closes, the kit stops asking:
+  that row and every later row without a saved observation stay
+  `observation_missing`. Ctrl-C (then Enter, at a prompt) exports the
   remaining rows `not_run` (`interrupted`).
 - A provisional run refuses `fixture` evidence. Producing these observations
   from native session/run records is the operator's evidence obligation; the
@@ -1014,6 +1020,12 @@ observations directory. The rules:
 - `SHA256SUMS` over every file, which `shasum -a 256 -c SHA256SUMS` can check.
 
 The bundle grades again on its own with `grade-host --inputs B/inputs.json`.
+`trial-run` may run on another machine: the report's environment is the one
+recorded in `--preflight` (a preflight without one is rejected), never the
+machine running the command. Manifest documents and evidence with a null path
+are resolver-only: they stay in `inputs.json` as they are and are not copied.
+A root document (tasks, freeze or environment lock) with a null path blocks
+(`input_unresolved`).
 
 **Qualification.** `--qualification provisional` requires a passed preflight
 and a passed install, otherwise it is blocked (`preflight_failed`,
@@ -1077,8 +1089,13 @@ the steps in order, the harness and recorder source digests, and `complete`.
 
 If the predicate fails, the step named by the harness failure is `failed` with
 the harness reason. Earlier steps with screenshots are `not_verified`, and
-later ones are `not_run`. A screenshot alone never makes a step recorded. The
-command exits `0` only when both languages are complete.
+later ones are `not_run`. A screenshot alone never makes a step recorded. If a
+language's child fails or times out (15 minutes), the recorder still writes
+`manifest.json` with `complete: false`. It sets the language `reason` to
+`child_failed` or `child_timeout`, and every outcome-dependent step to
+`not_run` with `capture_missing`, or `capture_invalid` for a torn capture.
+Any partial files are still listed by digest. The command exits `0` only when
+both languages are complete.
 
 The tier is `functional_fixture`, with a deterministic gateway and disposable
 fixture accounts. It is not a customer, human or live-model walkthrough and

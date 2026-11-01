@@ -163,7 +163,6 @@ def _assess(**overrides):
     values = dict(
         kind="host",
         claimed="qualified",
-        corpus_purpose="acceptance",
         corpus_status="unverified",
         evidence=[{"provenance": "observed"}],
         artifacts=[{"provenance": "observed"}],
@@ -196,7 +195,7 @@ def test_no_assessment_reaches_qualified_without_a_defined_review_record():
 
 
 def test_fixture_signals_take_precedence():
-    assert _assess(corpus_purpose="fixture").assessed == "fixture"
+    assert _assess(corpus_status="fixture").assessed == "fixture"
     assert _assess(evidence=[{"provenance": "fixture"}]).assessed == "fixture"
 
 
@@ -223,14 +222,14 @@ def test_platform_reports_need_an_actual_target_platform(os, architecture, targe
 
 
 def test_enforcement_rejects_contradictions_and_never_passes_unqualified_claims():
-    fixture = _assess(corpus_purpose="fixture")
+    fixture = _assess(corpus_status="fixture")
     with pytest.raises(WholeTaskRejected, match="qualification_contradiction"):
         enforce_qualification(fixture, "blocked")
     provisional = _assess()
     # A known failure still takes precedence; nothing unqualified passes.
     assert enforce_qualification(provisional, "fail") == "fail"
     assert enforce_qualification(provisional, "pass") == "blocked"
-    assert enforce_qualification(_assess(claimed="fixture", corpus_purpose="fixture"), "x") == "x"
+    assert enforce_qualification(_assess(claimed="fixture", corpus_status="fixture"), "x") == "x"
 
 
 def test_lower_claims_are_kept():
