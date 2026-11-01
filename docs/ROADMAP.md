@@ -1301,7 +1301,10 @@ selections are refused: an unmapped skill (`INVALID_REQUEST`), a cross-session
 foreign person (`FORBIDDEN`) and a foreign person on its own session, refused by
 RelayMind's own authority check (`INVALID_REQUEST`). The predicate also binds
 the asset ID, content hash and source version, and requires the saved revision
-in `skills.library.list`. The ordinary installed-host run (OpenClaw 2026.10.7,
+in `skills.library.list`, whose `session` must be the authenticated target
+session with exactly that skill and revision as its selection. The committed
+capture below satisfies this stricter check, but it was recorded with the
+earlier harness, so its harness digests need a recapture. The ordinary installed-host run (OpenClaw 2026.10.7,
 Ubuntu runner, CI run 41295359455, commit de6d5d9, PR merge checkout
 f5e3e39) passed both the
 ordinary-pass and ordinary-skill-pass predicates, with all 15 harness sources

@@ -37,6 +37,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   before the read (MCP Apps enabled, the shipped RelayMind model selected, zero
   heartbeat). A Linux x86-64 VPS run of the CI command (not committed) listed
   both colliding tools; exact use stays blocked.
+  A refused `chat.send` retains its request window, correlated provider records
+  and native hooks; any such activity fails the case closed
+  (`ordinary_skill_refusal_contradicted`) instead of an activity-free refusal.
 
 - Operations and platform run kit (#242, toward #241, #235, #234; RM38, RM39, RM44; AC29, AC37):
   - `scripts/asset_operations_run.py startup` measures ten real `relaymind serve` startups over a generated 300-skill bilingual catalog, using the existing AC29 driver. It waits for recommendations to be ready and samples memory on POSIX and Windows.
@@ -49,7 +52,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   binds skill ID, revision, asset ID, content hash and source version, and
   requires the unmapped-skill, cross-session and own-session foreign-person
   refusals with their exact error codes. Browser failures and the overall
-  deadline remain failures through skill selection.
+  deadline remain failures through skill selection. The listing must show the
+  selection itself: its `session.sessionKey` is the authenticated target
+  session and its `session.selections` are exactly the selected skill at the
+  selected revision, both when the harness captures it and in the predicate,
+  so a no-op or wrong-session activation fails. The committed capture
+  satisfies this check; its recorded harness digest predates the change.
 
 - CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation or native-preparation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
 - CI: the shared asset benchmark fixture uses a deterministic recommendation
