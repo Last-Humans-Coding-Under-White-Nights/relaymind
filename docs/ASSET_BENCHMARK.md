@@ -837,9 +837,26 @@ for it.
     `--work` never mixes separate runs.
   - **Completeness.** `complete` is true only when all ten startups were useful
     and every memory sample is known.
-- `operations` is the whole AC29 run on one machine (#241). It runs ten clean
-  startups from the generated `--assets` catalog (default 300), each with a new
-  empty store unless you give `--base-config`. It samples a gateway with
+  - **Reused work and harness errors.** `work/catalog` is removed and generated
+    again, so it holds exactly `--assets` skills. A launch that raises before
+    its gateway is ready (it exits, its token never arrives, no port) is a
+    harness error, named `startup_<ordinal>_<reason>` in `harness_errors`: the
+    report is still written and the command exits 2. A launch that the
+    one-second deadline cancels is a slow startup (`deadline_exceeded`), a
+    recorded result. A gateway that would fail only after that deadline cannot
+    be told apart from a slow one at this point.
+- `operations` runs the lexical portion of the AC29 protocol on one machine, as
+  a fixture (#241). It is not the whole AC29 run: spec 0.65 section 12.6 says
+  lexical-only evidence does not close the protocol. Not measured here are
+  all-phase worker and device memory coverage (the report covers only the
+  gateway process), embedding, rebuild and inference contention, separate
+  download, scan-detection and OpenClaw startup times, the committed
+  300-asset acceptance catalog and the interactive host approvals. It runs ten
+  clean startups from the generated `--assets` catalog (default 300), each with
+  a new empty store unless you give `--base-config`. A reused `--work` is
+  cleared first of the kit's own subdirectories (`catalog`, `config`,
+  `imports`, `startups`, `baseline`, `workload`); an operator's
+  `--base-config` store is never touched. It samples a gateway with
   recommendations disabled as the memory baseline. It then runs the existing
   60-second driver (`run_workload`): 120 slots at 2 requests per second,
   concurrency one, a derived lexical rebuild at the start, and four 25-record
@@ -853,7 +870,14 @@ for it.
     `relaymind.evaluation.asset_operations_child`. This is the unchanged
     launcher plus one JSON command per standard-input line, which calls the
     gateway's own `AssetCatalogService.rescan` / `rebuild`. Each reply carries
-    the stored job outcome and event chain. It is evaluation-only: it opens no
+    the stored job outcome and event chain, and `job_id`, the job the request
+    awaited: the catalog owner runs one job at a time and answers a request
+    when its job is recorded finished, so that is the latest-finished job of
+    that source that was not finished when the request began. A periodic or
+    repair job that started after it is listed but never bound. When no job or
+    more than one qualifies, `job_id` is null with `job_missing` or
+    `job_ambiguous`, recorded as the harness error `rescan_job_missing`,
+    `rebuild_job_ambiguous` and so on. It is evaluation-only: it opens no
     socket and adds no endpoint.
   - **Memory.** Resident memory of the workload gateway is sampled every 250 ms.
     The sampled PID is the one the gateway reports for itself at startup
@@ -873,9 +897,10 @@ for it.
     CI variables, the spec bounds for reading, and the unchanged
     `summarize_operations` result. It is always `fixture` / `not_applicable`.
   - **Exit codes.** A slow startup, a late batch or a failed request is a
-    recorded result (exit 0). Exit 2 means a harness error: a baseline or
-    workload gateway that does not start or exits before readiness (for
-    example `workload_gateway_exited`), a control call without a reply, or
+    recorded result (exit 0). Exit 2 means a harness error: a startup, baseline
+    or workload gateway that does not start or exits before readiness (for
+    example `startup_3_gateway_exited` or `workload_gateway_exited`), a
+    control call without a reply, a job the reply could not bind, or
     unavailable job evidence. A control reply of `job_evidence_unavailable`
     (the gateway could not read its job store) is recorded as
     `rescan_job_evidence_unavailable` or `rebuild_job_evidence_unavailable`,
@@ -926,6 +951,8 @@ python scripts/asset_operations_run.py platform --install-check install-check.js
 
 All three commands create the output's parent directory. A configuration, input
 or write failure prints the reason and exits with code 2 instead of a traceback.
+That includes a manifest whose environment lock is not a JSON object
+(`environment_lock_invalid`).
 
 The AC29 and AC37 numbers that count come only from the Apple M1 8 GiB macOS
 and native x86-64 Windows machines; those runs remain open in #241, #235 and
@@ -936,11 +963,13 @@ and native x86-64 Windows machines; those runs remain open in #241, #235 and
 The separate workflow `.github/workflows/platform-runs.yml` (`Platform runs`)
 runs the kit on `macos-latest` (Apple Silicon, arm64), `windows-latest` (native
 x86-64 Windows) and `ubuntu-latest`. It starts by hand (`workflow_dispatch`)
-or on a pull request that changes the workflow, its scripts or the kit modules,
-so ordinary pull requests stay fast. Each platform runs:
+or on a pull request that changes a file the run depends on: `src/relaymind`,
+its scripts, `integrations/openclaw`, the default skills, the test helpers and
+fixtures the bundle and the ordinary harness load, `pyproject.toml` and the
+specification. Other pull requests stay fast. Each platform runs:
 
-1. `asset_operations_run.py operations`, the AC29 run above, first, while the
-   runner is quiet;
+1. `asset_operations_run.py operations`, the lexical AC29 fixture run above,
+   first, while the runner is quiet;
 2. the release artifact (`npm run pack:release`) and the pinned host's
    install-to-uninstall lifecycle (`scripts/openclaw_install_check.py`). A failed
    lifecycle step is kept in the export and its exit code in
@@ -957,7 +986,15 @@ so ordinary pull requests stay fast. Each platform runs:
 4. `asset_platform_run.py platform`, which writes the runner's `environment.json`,
    a fixture companion bundle locked to it, and `platform.json`. The bundle is
    built from the test fixtures of `tests/test_asset_whole_task_inputs.py`, not
-   genuine host tasks. Without an install-check record it writes
+   genuine host tasks. The bundle's `runner_inventory` is the S3 grader's own,
+   closed to `src/relaymind`, `pyproject.toml` and
+   `scripts/asset_whole_task.py`. The other files the platform run executes or
+   loads are bound by the registered evidence `platform-runner-files` (path,
+   SHA-256 and size of each): the workflow, `asset_operations_run.py`,
+   `asset_platform_run.py`, `openclaw_install_check.py`, the ordinary
+   installed-host harness with the action and person harnesses it is built on,
+   and the test helpers the bundle and the harness import. The release tarball
+   is bound by `release.json` and `SHA256SUMS`. Without an install-check record it writes
    `platform-not-built.json` (`install_check_missing`) instead, exits 2, and
    `verify` reports that record as a failure. An output directory that already
    holds a `bundle/` is refused (`platform_out_dir_exists`). Input and write
@@ -965,10 +1002,14 @@ so ordinary pull requests stay fast. Each platform runs:
    reason instead of a traceback;
 5. `asset_platform_run.py verify`, which grades everything again with the
    existing graders. Each operations summary is recomputed by
-   `summarize_operations` from the stored samples. Each platform report is
-   graded by `grade-platform` (it must be `not_applicable`), and its steps are
-   derived again from the registered originals. The result also goes to the
-   job summary.
+   `summarize_operations` from the stored samples, and a report with any
+   `harness_errors` fails. Each platform report is graded by `grade-platform`
+   (it must be `not_applicable`), its `platform-runner-files` must equal this
+   checkout's files, and its steps are derived again from the registered
+   originals with this checkout's driver. A `platform.json` without its
+   `bundle/` (`platform_bundle_missing`), or a bundle without its report
+   (`platform_report_missing`), fails. The result also goes to the job
+   summary.
 
 The job fails only on a harness error; it never uses `continue-on-error`. A
 slow runner, a late batch or a failed lifecycle step stays visible in the
@@ -994,8 +1035,8 @@ python scripts/asset_platform_run.py verify \
   docs/evidence/<date>-asset-platform-runs-github-runners/<run-id>
 ```
 
-`verify` prints one line per report and exits 1 when any report fails a grader
-or none is found. Run it from a checkout at the run's commit
+`verify` prints one line per report and exits 1 when any report fails a grader,
+records harness errors, is missing its other half, or none is found. Run it from a checkout at the run's commit
 (`runner.variables.GITHUB_SHA` in `operations.json`; for a pull request this is
 its merge commit). The inventory check compares the bundle with the running
 grader.

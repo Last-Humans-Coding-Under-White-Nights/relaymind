@@ -522,7 +522,7 @@ def test_the_workflow_runs_on_the_three_hosted_platforms():
         "src/relaymind/evaluation/asset_operations_run.py",
         "src/relaymind/evaluation/asset_operations_child.py",
     ):
-        assert path in paths
+        assert _covered(path, paths), path
     (job,) = workflow["jobs"].values()
     assert job["strategy"]["fail-fast"] is False
     assert set(job["strategy"]["matrix"]["os"]) == {
@@ -530,7 +530,7 @@ def test_the_workflow_runs_on_the_three_hosted_platforms():
         "windows-latest",
         "ubuntu-latest",
     }
-    assert job["timeout-minutes"] <= 90
+    assert job["timeout-minutes"] <= 130
     assert workflow["permissions"] == {"contents": "read"}
 
 
@@ -851,3 +851,136 @@ def test_the_stdin_reader_forwards_lines_then_eof():
         return [queue.get_nowait() for _ in range(queue.qsize())]
 
     assert asyncio.run(go()) == ["a\n", "b\n", None]
+
+
+# --- review 264 (second review) ---------------------------------------------------------
+
+
+def test_verify_fails_an_operations_report_with_harness_errors(tmp_path, capsys):
+    """RM38/AC29 (review 264 H2): a run that exited 2 never verifies as ok."""
+    out = _bundle_dir(tmp_path)
+    report = json.loads((out / "operations.json").read_text())
+    report["harness_errors"] = ["baseline_gateway_exited"]
+    (out / "operations.json").write_text(json.dumps(report))
+    assert _script().verify_operations(out / "operations.json") == "harness_errors"
+    assert _script().main(["verify", str(out)]) == 1
+    line = capsys.readouterr().out
+    assert "FAIL" in line and "baseline_gateway_exited" in line
+
+
+def test_verify_rejects_a_non_list_harness_error_field(tmp_path):
+    out = _bundle_dir(tmp_path)
+    report = json.loads((out / "operations.json").read_text())
+    report["harness_errors"] = "none"
+    (out / "operations.json").write_text(json.dumps(report))
+    assert _script().verify_operations(out / "operations.json") == "invalid_report"
+
+
+def _platform_run(tmp_path) -> Path:
+    run = tmp_path / "run"
+    check = _write(tmp_path / "install.json", _install_check())
+    argv = ["platform", "--install-check", str(check), "--out-dir", str(run / "platform")]
+    assert _script().main(argv) == 0
+    return run
+
+
+def test_verify_fails_a_platform_report_without_its_bundle(tmp_path, capsys):
+    """RM39/AC37 (review 264 M2): a partial download is a failure, never skipped."""
+    import shutil
+
+    run = _platform_run(tmp_path)
+    shutil.rmtree(run / "platform" / "bundle")
+    assert _script().main(["verify", str(run)]) == 1
+    assert "FAIL (platform_bundle_missing)" in capsys.readouterr().out
+
+
+def test_verify_fails_a_bundle_without_its_platform_report(tmp_path, capsys):
+    run = _platform_run(tmp_path)
+    (run / "platform" / "platform.json").unlink()
+    assert _script().main(["verify", str(run)]) == 1
+    assert "FAIL (platform_report_missing)" in capsys.readouterr().out
+
+
+def test_verify_passes_a_complete_platform_run(tmp_path, capsys):
+    run = _platform_run(tmp_path)
+    assert _script().main(["verify", str(run)]) == 0
+    assert "FAIL" not in capsys.readouterr().out
+
+
+def test_the_workflow_keeps_time_for_the_always_steps():
+    """Review 264 M3: every step has its own limit and they fit inside the job's."""
+    (job,) = _workflow()["jobs"].values()
+    limits = [step.get("timeout-minutes") for step in job["steps"]]
+    assert None not in limits, [s.get("name", s.get("uses")) for s in job["steps"]]
+    assert sum(limits) < job["timeout-minutes"]
+
+
+def _covered(path: str, patterns) -> bool:
+    from fnmatch import fnmatchcase
+
+    # GitHub's ``**`` matches any number of directories; fnmatch's ``*`` crosses ``/``.
+    return any(fnmatchcase(path, p.replace("**", "*")) for p in patterns)
+
+
+def test_the_path_filter_covers_the_platform_runner_inventory():
+    """Review 264 M5/M6: a change to any bound runner file triggers the platform run."""
+    module = _script()
+    paths = _workflow()[True]["pull_request"]["paths"]
+    files = module.platform_runner_files()
+    for needed in (
+        "scripts/asset_platform_run.py",
+        "scripts/asset_operations_run.py",
+        "scripts/asset_whole_task.py",
+        ".github/workflows/platform-runs.yml",
+        "pyproject.toml",
+        "integrations/openclaw/test/host-ordinary-qualification/qualify.py",
+        "integrations/openclaw/test/host-action-qualification/qualify.py",
+        "integrations/openclaw/test/host-person-qualification/qualify.py",
+        "tests/test_asset_whole_task_inputs.py",
+        "tests/whole_task_helpers.py",
+        "src/relaymind/evaluation/asset_operations_run.py",
+    ):
+        assert needed in files, needed
+    for path in [*files, "docs/SPECIFICATION.md", "integrations/openclaw/package.json"]:
+        assert _covered(path, paths), path
+    # Still a filter: an unrelated change does not start the three-platform run.
+    assert not _covered("docs/ROADMAP.md", paths)
+
+
+def _runner_files(platform_dir: Path) -> tuple[dict, Path]:
+    manifest = json.loads((platform_dir / "bundle" / "inputs.json").read_text())
+    (entry,) = [e for e in manifest["evidence"] if e["id"] == "platform-runner-files"]
+    path = platform_dir / "bundle" / entry["path"]
+    payload = path.read_bytes()
+    assert (entry["sha256"], entry["bytes"]) == (hashlib.sha256(payload).hexdigest(), len(payload))
+    return json.loads(payload), path
+
+
+def test_the_platform_bundle_binds_the_files_the_platform_run_executes(tmp_path):
+    """Review 264 M5: registered evidence digests the actual driver and ordinary harness."""
+    run = _platform_run(tmp_path)
+    inventory, _path = _runner_files(run / "platform")
+    bound = {f["path"]: f["sha256"] for f in inventory["files"]}
+    assert sorted(bound) == _script().platform_runner_files()
+    for path, digest in bound.items():
+        assert digest == hashlib.sha256((ROOT / path).read_bytes()).hexdigest(), path
+    report = json.loads((run / "platform" / "platform.json").read_text())
+    manifest = json.loads((run / "platform" / "bundle" / "inputs.json").read_text())
+    from relaymind.canonical import canonical_digest
+
+    # The report binds the manifest, and the manifest binds the runner files.
+    assert report["input_manifest"]["digest"] == canonical_digest(manifest)
+    assert _script().verify_platform(run / "platform") is None
+
+
+def test_verify_fails_a_platform_run_from_other_runner_files(tmp_path):
+    """Review 264 M5: verify re-derives with this checkout's driver, so it must match."""
+    run = _platform_run(tmp_path)
+    inventory, path = _runner_files(run / "platform")
+    inventory["files"][0]["sha256"] = "0" * 64
+    path.write_text(json.dumps(inventory, indent=1) + "\n", encoding="utf-8")
+    module = _script()
+    assert module._check_runner_files(run / "platform") == "platform_runner_files_changed"
+    path.unlink()
+    assert module._check_runner_files(run / "platform") == "platform_runner_files_missing"
+    assert module.verify_platform(run / "platform") is not None

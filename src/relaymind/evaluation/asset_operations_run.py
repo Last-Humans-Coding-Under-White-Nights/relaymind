@@ -717,7 +717,10 @@ def workload_plan(
     A refused rescan or rebuild is a product outcome and fails its batch or
     rebuild in the driver. A control call that never gets a reply, or whose
     reply is ``job_evidence_unavailable``, is a harness error, recorded in
-    ``channel_errors``; jobs already collected stay.
+    ``channel_errors``; jobs already collected stay. The batch and rebuild
+    identities are the reply's ``job_id``, the job the request awaited; a reply
+    without one (``job_missing`` or ``job_ambiguous``) leaves the identity
+    unbound and is a harness error, never the first listed job.
     """
     imports = Path(imports)
     batch_job_ids: dict[str, str] = {}
@@ -739,6 +742,8 @@ def workload_plan(
                 raise RuntimeError(f"{op}_job_evidence_unavailable")
             raise RuntimeError(f"{op}_refused")
         jobs.extend(reply.get("jobs") or ())
+        if reply.get("job_id") is None:
+            channel_errors.append(f"{op}_{reply.get('binding') or 'job_missing'}")
         return reply
 
     def make(batch: int) -> ImportBatch:
@@ -766,15 +771,15 @@ def workload_plan(
 
         async def rescan() -> None:
             reply = await call("rescan", source_id=IMPORT_SOURCE_ID)
-            if reply.get("jobs"):
-                batch_job_ids[batch_id] = reply["jobs"][0]["job_id"]
+            if reply.get("job_id") is not None:
+                batch_job_ids[batch_id] = reply["job_id"]
 
         return ImportBatch(batch_id, IMPORT_OFFSETS[batch], probes, receive, rescan)
 
     async def rebuild() -> None:
         reply = await call("rebuild")
-        if reply.get("jobs"):
-            rebuild_job_id[:] = [reply["jobs"][0]["job_id"]]
+        if reply.get("job_id") is not None:
+            rebuild_job_id[:] = [reply["job_id"]]
 
     return WorkloadPlan(
         [make(b) for b in range(4)], rebuild, batch_job_ids, jobs, channel_errors, rebuild_job_id

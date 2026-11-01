@@ -631,7 +631,11 @@ def test_deadline_failures_never_count_as_useful_startups(first_useful_at):
 
 
 def test_startup_memory_stays_with_its_launch_and_work_can_be_reused(tmp_path, monkeypatch):
-    """RM38/AC29: missing process samples keep their ordinal across repeated runs."""
+    """RM38/AC29: missing process samples keep their ordinal across repeated runs.
+
+    A launch that raises is a harness error (exit 2, review 264 H1); the report
+    with every collected sample is still written.
+    """
     module = _script()
     base = _empty_base(tmp_path)
 
@@ -650,8 +654,9 @@ def test_startup_memory_stays_with_its_launch_and_work_can_be_reused(tmp_path, m
     monkeypatch.setattr(module, "rss_bytes", lambda pid: pid * 1024)
     for _ in range(2):
         out = tmp_path / "startup.json"
-        assert module.main(_startup_argv(base, tmp_path / "work", 5, out)) == 0
+        assert module.main(_startup_argv(base, tmp_path / "work", 5, out)) == 2
         report = json.loads(out.read_text())
+        assert report["harness_errors"] == ["startup_0_OSError", "startup_4_OSError"]
         pids = [None, 101, 102, 103, None, 105, 106, 107, 108, 109]
         assert [s["pid"] for s in report["samples"]] == pids
         assert report["memory_bytes"] == [None if p is None else p * 1024 for p in pids]
@@ -944,7 +949,7 @@ def test_unavailable_job_evidence_is_a_harness_error_that_keeps_collected_jobs(t
     """RM38/AC29: the evidence failure reaches channel_errors; earlier jobs stay."""
     job = {"job_id": "j0", "source_id": kit.IMPORT_SOURCE_ID, "events": []}
     replies = [
-        {"id": 1, "ok": True, "revision": 1, "changed": True, "jobs": [job]},
+        {"id": 1, "ok": True, "revision": 1, "changed": True, "jobs": [job], "job_id": "j0"},
         {"id": 2, "ok": False, "error": "job_evidence_unavailable", "evidence_error": "OSError"},
         {"id": 3, "ok": False, "error": "ValueError", "reason": None},
     ]
@@ -965,3 +970,246 @@ def test_unavailable_job_evidence_is_a_harness_error_that_keeps_collected_jobs(t
     assert plan.channel_errors == ["rescan_job_evidence_unavailable"]
     assert plan.job_evidence() == [job]
     assert plan.identities()["batch_job_ids"] == {"batch-0": "j0"}
+
+
+# --- review 264 (second review): startup harness errors, input and work reuse ----------
+
+
+def _healthy_baseline_and_workload(module, monkeypatch, launched=None):
+    """Baseline and workload gateways that start; only ``serve`` is left to the test."""
+
+    @contextlib.asynccontextmanager
+    async def baseline(work, *, base_config, env=None):
+        async with httpx.AsyncClient(base_url="http://test") as client:
+            yield os.getpid(), client
+
+    @contextlib.asynccontextmanager
+    async def controlled(work, catalog, *, base_config, imports=None, env=None):
+        if launched is not None:
+            launched.append(base_config)
+        yield SimpleNamespace(pid=os.getpid())
+
+    async def workload(gateway, imports, samples):
+        return SimpleNamespace(channel_errors=[])
+
+    monkeypatch.setattr(module, "serve_baseline", baseline)
+    monkeypatch.setattr(module, "serve_controlled", controlled)
+    monkeypatch.setattr(module, "run_operations_workload", workload)
+
+
+def _failing_serve(error):
+    @contextlib.asynccontextmanager
+    async def launch(work, catalog, *, base_config, env=None):
+        raise error
+        yield
+
+    return launch
+
+
+def _operations_argv(work, out, assets=2):
+    return ["operations", "--work", str(work), "--assets", str(assets), "--output", str(out)]
+
+
+def test_a_startup_only_launch_failure_is_a_harness_error(tmp_path, monkeypatch):
+    """RM38/AC29 (review 264 H1): ten startup gateways that never start exit 2.
+
+    Baseline and workload still start, so only the startup samples carry the
+    failure; the report is still written and verify does not pass it.
+    """
+    module = _script()
+    _healthy_baseline_and_workload(module, monkeypatch)
+    monkeypatch.setattr(module, "serve", _failing_serve(RuntimeError("gateway_exited")))
+    out = tmp_path / "operations.json"
+    code = module.main(_operations_argv(tmp_path / "w", out))
+    assert code == 2
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report["harness_errors"] == [f"startup_{n}_gateway_exited" for n in range(10)]
+    assert all(s["error"] == "startup_failed" for s in report["startups"])
+    from helpers import load_script_module
+
+    assert load_script_module("asset_platform_run").verify_operations(out) == "harness_errors"
+
+
+def test_a_slow_startup_stays_a_product_sample(tmp_path, monkeypatch):
+    """RM38/AC29: a startup cancelled by its one-second deadline is not a harness error."""
+    module = _script()
+    _healthy_baseline_and_workload(module, monkeypatch)
+
+    @contextlib.asynccontextmanager
+    async def slow(work, catalog, *, base_config, env=None):
+        await asyncio.Event().wait()  # Never ready; the driver's deadline cancels it.
+        yield
+
+    monkeypatch.setattr(module, "serve", slow)
+    out = tmp_path / "operations.json"
+    assert module.main(_operations_argv(tmp_path / "w", out)) == 0
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report["harness_errors"] == []
+    assert {s["error"] for s in report["startups"]} == {"deadline_exceeded"}
+
+
+def test_the_startup_command_exits_two_on_a_launch_failure(tmp_path, monkeypatch, capsys):
+    """RM38/AC29 (review 264 H1): the startup command draws the same line."""
+    module = _script()
+    base = _empty_base(tmp_path)
+    monkeypatch.setattr(module, "serve", _failing_serve(OSError("no port")))
+    out = tmp_path / "startup.json"
+    assert module.main(_startup_argv(base, tmp_path / "work", 2, out)) == 2
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report["harness_errors"] == [f"startup_{n}_OSError" for n in range(10)]
+    assert report["complete"] is False
+    assert "harness errors" in capsys.readouterr().err
+
+
+def test_a_non_object_environment_lock_exits_two(tmp_path, capsys):
+    """RM39/AC37 (review 264 L1): a list lock is a closed input error, not a traceback."""
+    bundle = _platform_bundle(tmp_path)
+    bundle.documents = [d for d in bundle.documents if d["id"] != "environment_lock"]
+    bundle.add("environment_lock", [])
+    bundle.write_manifest()
+    code = _platform_main(tmp_path, bundle, tmp_path / "out.json")
+    assert code == 2 and not (tmp_path / "out.json").exists()
+    assert "environment_lock_invalid" in capsys.readouterr().err
+
+
+def test_reusing_work_gives_the_requested_catalog_and_fresh_stores(tmp_path, monkeypatch):
+    """RM38/AC29 (review 264 L2): a second run never sees the first run's skills or stores."""
+    module = _script()
+    launched = []
+    _healthy_baseline_and_workload(module, monkeypatch, launched)
+    monkeypatch.setattr(module, "measure_startups", _no_startups)
+    work = tmp_path / "w"
+    assert module.main(_operations_argv(work, tmp_path / "one.json", assets=4)) == 0
+    store = launched[-1].parent / "runs.sqlite3"
+    store.write_bytes(b"stale")
+    (work / "imports" / "originals" / "stale.md").write_text("stale")
+    assert module.main(_operations_argv(work, tmp_path / "two.json", assets=2)) == 0
+    assert len(list((work / "catalog").iterdir())) == 2
+    assert not store.exists()
+    assert not (work / "imports" / "originals" / "stale.md").exists()
+    report = json.loads((tmp_path / "two.json").read_text(encoding="utf-8"))
+    assert report["catalog"]["assets"] == 2
+
+
+def test_reusing_work_for_startup_regenerates_only_the_requested_catalog(tmp_path, monkeypatch):
+    """RM38/AC29 (review 264 L2): the startup command also starts from a fresh catalog."""
+    module = _script()
+    base = _empty_base(tmp_path)
+    monkeypatch.setattr(module, "measure_startups", _no_startups)
+    work = tmp_path / "work"
+    assert module.main(_startup_argv(base, work, 4, tmp_path / "one.json")) == 0
+    assert module.main(_startup_argv(base, work, 2, tmp_path / "two.json")) == 0
+    assert len(list((work / "catalog").iterdir())) == 2
+
+
+async def _no_startups(launch, body, *, samples):
+    return None
+
+
+def _job(job_id, source_id, state, started, finished=None):
+    return dict(
+        job_id=job_id, source_id=source_id, state=state, started_at=started, finished_at=finished
+    )
+
+
+class _BindingStore:
+    """``job_outcomes`` before and after one request (newest ``started_at`` first)."""
+
+    def __init__(self, before, after):
+        self.outcomes = [tuple(before), tuple(after)]
+
+    def job_outcomes(self):
+        return self.outcomes.pop(0) if len(self.outcomes) > 1 else self.outcomes[0]
+
+    def job_events(self, job_id):
+        return ({"job_id": job_id},)
+
+
+def _bind(store, op="rescan"):
+    from relaymind.evaluation.asset_operations_child import handle
+    from relaymind.store.asset_catalog import Publication
+
+    class Catalog:
+        def __init__(self):
+            self.store = store
+
+        async def rescan(self, source_id):
+            return Publication(1, False, (), ())
+
+        async def rebuild(self):
+            return Publication(1, False, (), ())
+
+    app = SimpleNamespace(state=SimpleNamespace(asset_catalog=Catalog()))
+    command = {"id": 1, "op": op}
+    if op == "rescan":
+        command["source_id"] = "s"
+    return asyncio.run(handle(app, command))
+
+
+def test_the_child_binds_the_awaited_job_not_a_newer_one():
+    """RM38/AC29 (review 264 M1): a job that started later is not the request's job.
+
+    The catalog owner runs one job at a time and answers the request when its
+    job is recorded finished, so the awaited job is the latest finished new job
+    of that source; a periodic or repair job started after it is still running.
+    """
+    old = _job("old", "s", "succeeded", "2026-11-01T00:00:00.000Z", "2026-11-01T00:00:00.100Z")
+    mine = _job("mine", "s", "succeeded", "2026-11-01T00:00:02.000Z", "2026-11-01T00:00:02.500Z")
+    later = _job("later", "s", "running", "2026-11-01T00:00:03.000Z")
+    reply = _bind(_BindingStore([old], [later, mine, old]))
+    assert reply["ok"] is True and reply["job_id"] == "mine"
+    assert [j["job_id"] for j in reply["jobs"]] == ["later", "mine"]
+
+
+def test_the_child_binds_a_shared_job_that_was_already_running():
+    """A request that joins a running job of its source binds that job."""
+    shared_running = _job("shared", None, "running", "2026-11-01T00:00:01.000Z")
+    shared_done = dict(shared_running, state="succeeded", finished_at="2026-11-01T00:00:02.000Z")
+    repair = _job("repair", None, "running", "2026-11-01T00:00:03.000Z")
+    reply = _bind(_BindingStore([shared_running], [repair, shared_done]), op="rebuild")
+    assert reply["job_id"] == "shared"
+
+
+@pytest.mark.parametrize(
+    "after,binding",
+    [
+        ([], "job_missing"),
+        (
+            [
+                _job("a", "s", "succeeded", "2026-11-01T00:00:02.000Z", "2026-11-01T00:00:04.000Z"),
+                _job("b", "s", "failed", "2026-11-01T00:00:01.000Z", "2026-11-01T00:00:04.000Z"),
+            ],
+            "job_ambiguous",
+        ),
+    ],
+)
+def test_the_child_never_guesses_a_job(after, binding):
+    reply = _bind(_BindingStore([], after))
+    assert reply["ok"] is True and reply["job_id"] is None and reply["binding"] == binding
+
+
+def test_an_unbound_job_is_a_harness_error_not_the_first_listed_job(tmp_path):
+    """RM38/AC29 (review 264 M1): the plan binds ``job_id``, never ``jobs[0]``."""
+    later = {"job_id": "later", "source_id": kit.IMPORT_SOURCE_ID, "events": []}
+    mine = {"job_id": "mine", "source_id": kit.IMPORT_SOURCE_ID, "events": []}
+    replies = [
+        {"id": 1, "ok": True, "revision": 1, "changed": True, "jobs": [later, mine],
+         "job_id": "mine"},
+        {"id": 2, "ok": True, "revision": 2, "changed": True, "jobs": [mine], "job_id": None,
+         "binding": "job_ambiguous"},
+        {"id": 3, "ok": True, "revision": 2, "changed": False, "jobs": [later], "job_id": "later"},
+    ]  # fmt: skip
+
+    async def control(op, **fields):
+        return replies.pop(0)
+
+    plan = kit.workload_plan(tmp_path / "imports", control)
+
+    async def go():
+        await plan.batches[0].rescan()
+        await plan.batches[1].rescan()
+        await plan.rebuild()
+
+    asyncio.run(go())
+    assert plan.identities() == {"rebuild_job_id": "later", "batch_job_ids": {"batch-0": "mine"}}
+    assert plan.channel_errors == ["rescan_job_ambiguous"]
