@@ -27,10 +27,9 @@ from relaymind.evaluation.asset_benchmark_io import (
 from relaymind.evaluation.asset_corpus_io import (
     DOCUMENT_BYTES,
     AssetCorpusError,
-    _finite,
-    _once,
-    parse_json,
+    check_strict_value,
     read_local,
+    strict_loads,
 )
 from relaymind.evaluation.asset_host_runner import (
     RUN_QUALIFICATIONS,
@@ -116,23 +115,12 @@ def _read(path: Path) -> dict:
 
 
 def _read_array(path: Path, limit: int, reason: str) -> list:
-    """A bounded strict JSON array, under the same rules as every other input.
-
-    The bytes come from the bounded ordinary-file reader; duplicate keys and
-    non-finite numbers are rejected as by the strict object parser.
-    """
+    """A bounded strict JSON array, under the same rules as every other input."""
     path = Path(path).absolute()
-    payload = read_local(path.parent, path.name, limit)
-    try:
-        value = json.loads(payload.decode("utf-8"), object_pairs_hook=_once, parse_constant=_finite)
-    except AssetCorpusError:
-        raise
-    except (ValueError, UnicodeError, RecursionError, OverflowError):
-        raise AssetCorpusError("invalid_json") from None
+    value = strict_loads(read_local(path.parent, path.name, limit))
     if not isinstance(value, list):
         raise ValueError(reason)
-    # The strict parser's walk: finite numbers and valid UTF-8 text throughout.
-    parse_json(json.dumps(dict(value=value), allow_nan=True).encode("utf-8"))
+    check_strict_value(value)
     return value
 
 
