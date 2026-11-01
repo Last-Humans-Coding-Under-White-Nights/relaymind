@@ -915,3 +915,31 @@ def test_runtime_default_model_is_redacted(tmp_path, encoded):
     assert "default_model=<default-model>" in result
     assert "model=relaymind/client" in result
     assert (json.loads(result) if encoded else result).endswith(" | shell=pwsh\n")
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        '{"default_model": "private/provider-model", "mode": "local"}',
+        '{"default_model":"private/provider-model","mode":"local"}',
+        '{"defaultModel": "private/provider-model", "mode": "local"}',
+        "defaultModel=private/provider-model | mode=local",
+    ],
+)
+@pytest.mark.parametrize("encoded", [False, True])
+def test_quoted_and_camel_case_default_models_are_redacted(tmp_path, raw, encoded):
+    """RM12/AC24: JSON key/value forms and JSON error strings are redacted too."""
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    text = json.dumps({"error": f"invalid config: {raw}"}) if encoded else raw
+    result = install_check._sanitize(text, ctx)
+    assert "private/provider-model" not in result
+    assert "<default-model>" in result
+    shown = json.loads(result)["error"] if encoded else result
+    assert "mode" in shown and "local" in shown
+    if raw.startswith("{"):
+        assert json.loads(shown.removeprefix("invalid config: "))["mode"] == "local"
+
+
+def test_a_non_string_default_model_is_left_as_is(tmp_path):
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    assert install_check._sanitize('{"default_model": null}', ctx) == '{"default_model": null}'
