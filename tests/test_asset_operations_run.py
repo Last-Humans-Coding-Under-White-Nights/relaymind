@@ -77,6 +77,17 @@ def test_memory_of_a_missing_process_is_unknown():
     assert rss_bytes(2**22 + 12345) is None
 
 
+def test_memory_of_undecodable_process_output_is_unknown(monkeypatch):
+    """RM38/AC29: unreadable process output yields no sample instead of a crash."""
+    import relaymind.evaluation.asset_operations_run as kit
+
+    def undecodable(*args, **kwargs):
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+    monkeypatch.setattr(kit.subprocess, "run", undecodable)
+    assert rss_bytes(123) is None
+
+
 # --- the real gateway --------------------------------------------------------------
 
 
@@ -158,6 +169,89 @@ def _patch_child(monkeypatch, script: Path):
     import relaymind.evaluation.asset_operations_run as kit
 
     monkeypatch.setattr(kit, "_child_argv", lambda config: [sys.executable, str(script)])
+
+
+class _ReadinessResponse:
+    status_code = 200
+
+    def __init__(self, body):
+        self._body = body
+
+    def json(self):
+        return self._body
+
+
+class _ReadinessClient:
+    """A readiness client that replays bodies, or raises them, in order."""
+
+    def __init__(self, bodies):
+        self.bodies = list(bodies)
+        self.calls = 0
+
+    async def get(self, path):
+        self.calls += 1
+        body = self.bodies.pop(0)
+        if isinstance(body, BaseException):
+            raise body
+        return _ReadinessResponse(body)
+
+
+def test_readiness_tolerates_non_mapping_and_undecodable_bodies():
+    """RM38/AC29: a non-dict or undecodable readiness body is retried, not fatal."""
+    from types import SimpleNamespace
+
+    import httpx
+
+    from relaymind.evaluation.asset_operations_run import _wait_ready
+
+    client = _ReadinessClient(
+        [
+            [],
+            True,
+            "ready",
+            httpx.DecodingError("bad body"),
+            {"state": "starting"},
+            {"state": "ready"},
+        ]
+    )
+    asyncio.run(_wait_ready(client, time.monotonic() + 5, SimpleNamespace(returncode=None)))
+    assert client.calls == 6
+
+
+def test_readiness_keeps_retrying_a_non_mapping_body_until_the_deadline():
+    """RM38/AC29: a non-mapping body never escapes as AttributeError."""
+    from types import SimpleNamespace
+
+    from relaymind.evaluation.asset_operations_run import _wait_ready
+
+    client = _ReadinessClient([[]] * 100)
+    with pytest.raises(TimeoutError, match="gateway_not_ready"):
+        asyncio.run(_wait_ready(client, time.monotonic() + 0.1, SimpleNamespace(returncode=None)))
+    assert client.calls > 1
+
+
+def test_a_process_that_ignores_kill_is_not_awaited_forever(monkeypatch, capsys):
+    """RM38/AC29: a hung gateway cannot block shutdown after the grace period."""
+    import relaymind.evaluation.asset_operations_run as kit
+
+    class HungProcess:
+        returncode = None
+
+        def terminate(self):
+            pass
+
+        def kill(self):
+            pass
+
+        async def wait(self):
+            await asyncio.Event().wait()
+
+    monkeypatch.setattr(kit, "_GRACE_SECONDS", 0.05)
+    began = time.monotonic()
+    reaped = asyncio.run(kit._stop(HungProcess()))
+    assert reaped is False
+    assert time.monotonic() - began < 5
+    assert "could not be reaped" in capsys.readouterr().err
 
 
 def test_a_silent_child_cannot_outlast_the_token_deadline(tmp_path, monkeypatch):
@@ -492,6 +586,30 @@ def test_startup_refuses_a_missing_base_config_before_any_work(tmp_path, monkeyp
     assert "base_config_not_found" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("assets", ["0", "-1"])
+def test_startup_refuses_a_non_positive_asset_count_before_any_work(
+    tmp_path, monkeypatch, capsys, assets
+):
+    """RM38/AC29: the AC29 catalog size must be a positive count."""
+    module = _script()
+    generated = []
+    launched = []
+    base = tmp_path / "base.toml"
+    base.write_text("")
+
+    monkeypatch.setattr(module, "generate_catalog", lambda *a, **k: generated.append(a))
+    monkeypatch.setattr(module, "serve", lambda *a, **k: launched.append(a))
+    out = tmp_path / "startup.json"
+    code = module.main(
+        [
+            "startup", "--base-config", str(base), "--work", str(tmp_path / "work"),
+            "--assets", assets, "--output", str(out),
+        ]
+    )  # fmt: skip
+    assert code == 2 and not generated and not launched and not out.exists()
+    assert "assets_must_be_positive" in capsys.readouterr().err
+
+
 def test_startup_command_records_ten_real_startups(tmp_path, monkeypatch):
     base = _base(tmp_path, monkeypatch)
     out = tmp_path / "startup.json"
@@ -525,7 +643,9 @@ def test_startup_report_is_incomplete_without_useful_startups():
 
     module = _script()
     samples = [StartupSample(i, 0.0, None, 100 + i, (), "timeout", "timeout") for i in range(10)]
-    report = module.startup_report(samples, [1] * 10, assets=300, base_digest="d", counter="x")
+    report = module.startup_report(
+        samples, [1] * 10, assets=300, base_config_digest="d", counter="x"
+    )
     assert report["useful_startups"] == 0 and report["complete"] is False
 
 
@@ -539,7 +659,9 @@ def test_startup_report_is_incomplete_without_every_memory_sample(count, memory)
     from relaymind.evaluation.asset_operations import StartupSample
 
     samples = [StartupSample(i, 0.0, 0.5, 100 + i, (), "useful", None) for i in range(count)]
-    report = _script().startup_report(samples, memory, assets=300, base_digest="d", counter="x")
+    report = _script().startup_report(
+        samples, memory, assets=300, base_config_digest="d", counter="x"
+    )
     assert report["useful_startups"] == count
     assert report["complete"] is False
 
@@ -549,8 +671,11 @@ def test_startup_report_is_complete_with_ten_useful_startups_and_memory_samples(
     from relaymind.evaluation.asset_operations import StartupSample
 
     samples = [StartupSample(i, 0.0, 0.5, 100 + i, (), "useful", None) for i in range(10)]
-    report = _script().startup_report(samples, [1] * 10, assets=300, base_digest="d", counter="x")
+    report = _script().startup_report(
+        samples, [1] * 10, assets=300, base_config_digest="d", counter="x"
+    )
     assert report["complete"] is True
+    assert report["base_config_digest"] == "d"
 
 
 @pytest.mark.parametrize("first_useful_at", [None, 1.5])
@@ -562,7 +687,9 @@ def test_deadline_failures_never_count_as_useful_startups(first_useful_at):
         StartupSample(i, 0.0, first_useful_at, 100 + i, (), "failed", "deadline_exceeded")
         for i in range(10)
     ]
-    report = _script().startup_report(samples, [1] * 10, assets=300, base_digest="d", counter="x")
+    report = _script().startup_report(
+        samples, [1] * 10, assets=300, base_config_digest="d", counter="x"
+    )
     assert report["useful_startups"] == 0
     assert report["complete"] is False
 
@@ -770,6 +897,34 @@ def test_known_config_paths_must_be_absolute(tmp_path, key, value):
     base.write_text(f"{key} = {encoded}\n")
     with pytest.raises(ValueError, match="base_config_relative_path: " + key):
         _config(tmp_path, base, tmp_path, 1234)
+
+
+def test_reusing_a_work_directory_starts_each_launch_with_clean_logs(tmp_path, monkeypatch):
+    """RM38/AC29: a reused work directory never mixes separate launches' logs."""
+    import relaymind.evaluation.asset_operations_run as kit
+
+    body = (
+        "print('startup diagnostic', flush=True)\n"
+        "print('Application token: t', flush=True)\n"
+        "import time\ntime.sleep(30)\n"
+    )
+    _patch_child(monkeypatch, _fake_python(tmp_path, body))
+
+    async def ready(client, deadline, process):
+        return None
+
+    monkeypatch.setattr(kit, "_wait_ready", ready)
+    base = tmp_path / "base.toml"
+    base.write_text("")
+
+    async def go():
+        for _ in range(2):
+            async with serve(tmp_path / "w", tmp_path, base_config=base, timeout=10):
+                pass
+            assert (tmp_path / "w" / "stdout.log").read_text() == "startup diagnostic\n"
+
+    asyncio.run(go())
+    assert (tmp_path / "w" / "stderr.log").read_text() == ""
 
 
 @pytest.mark.parametrize("token", [False, True])
