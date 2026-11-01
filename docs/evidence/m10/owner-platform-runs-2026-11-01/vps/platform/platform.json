@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "qualification": "fixture",
+  "input_digest": "e7bff7db91e84b3f3f98cec9e75267b540d564659bd011d27ad574bb50e7d24e",
+  "input_manifest": {
+    "path": "inputs.json",
+    "digest": "6554b20b0ccddf6ee37de183a5b217111d85db107b122326c4ce5f7f9ba54871",
+    "bytes": 13903
+  },
+  "platform": {
+    "os": "Linux",
+    "os_version": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+    "architecture": "x86_64",
+    "cpu": "Intel Xeon Processor (Skylake, IBRS)",
+    "ram_bytes": 11998482432,
+    "gpu": null,
+    "python": "3.12.0",
+    "dependencies_digest": "8970a7e5571eb0984ec3cc10f4fb06922bb6a7288fb3482582c08066270612a3",
+    "runtime": null,
+    "runtime_version": null,
+    "runtime_config_digest": null
+  },
+  "artifacts": [],
+  "steps": [
+    {
+      "name": "install",
+      "status": "passed",
+      "evidence_ids": [
+        "install-check"
+      ],
+      "reason": null
+    },
+    {
+      "name": "configure",
+      "status": "passed",
+      "evidence_ids": [
+        "install-check"
+      ],
+      "reason": null
+    },
+    {
+      "name": "recommend",
+      "status": "passed",
+      "evidence_ids": [
+        "ordinary-capture"
+      ],
+      "reason": null
+    },
+    {
+      "name": "choose",
+      "status": "passed",
+      "evidence_ids": [
+        "ordinary-capture"
+      ],
+      "reason": null
+    },
+    {
+      "name": "skill_use",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "skill_use_not_observed"
+    },
+    {
+      "name": "mcp_use",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "mcp_use_disabled"
+    },
+    {
+      "name": "feedback",
+      "status": "passed",
+      "evidence_ids": [
+        "ordinary-capture"
+      ],
+      "reason": null
+    },
+    {
+      "name": "delete",
+      "status": "passed",
+      "evidence_ids": [
+        "ordinary-capture"
+      ],
+      "reason": null
+    },
+    {
+      "name": "reset",
+      "status": "passed",
+      "evidence_ids": [
+        "ordinary-capture"
+      ],
+      "reason": null
+    },
+    {
+      "name": "restart",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "restart_not_observed"
+    },
+    {
+      "name": "uninstall",
+      "status": "passed",
+      "evidence_ids": [
+        "install-check"
+      ],
+      "reason": null
+    }
+  ],
+  "operations_evidence": null,
+  "approvals_evidence": [],
+  "evidence": [
+    {
+      "id": "install-check",
+      "path": "evidence/86355c3b3ba0bc98efa8c3942f9a2325d0ae2932d5a3ae593f3e8171a569f00a",
+      "sha256": "8348c8ab479358523446dff5db24bc1e853f033791f75005d78d775fd6d183c7",
+      "bytes": 129060,
+      "provenance": "observed"
+    },
+    {
+      "id": "ordinary-capture",
+      "path": "evidence/1fa8b7800aa738093608f650c1d5aef296cff49beeff8eef2ef154322c07f2eb",
+      "sha256": "8c4c2950c0a9a6fb30d0df4c8c379af1c5fd731262248d441e6ab1cac67fc179",
+      "bytes": 169651,
+      "provenance": "observed"
+    }
+  ],
+  "gate": "not_applicable"
+}

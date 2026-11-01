@@ -1768,6 +1768,36 @@ Review recapture uses interpreter-reported PIDs for memory (12 MiB gateway-only
 increase), redacts the host default model, and moves the full reproducibility
 bundle to a SHA-256-bound release attachment. The earlier memory figure is
 invalid and superseded. The compact repository record retains the gate misses.
+The initial proxy-related operations failure is retained alongside the rerun.
 The evidence README pins reproduction to `8d406e94` with Python 3.12 and
 documents the broken companion locator, unsupported startup memory phase and
 unloadable archived capture record. The digest-bound capture remains unchanged.
+
+#261 MacBook and VPS runs (RM38, RM39, RM40, RM44; AC29, AC31, AC37; spec 0.66;
+`docs/evidence/m10/owner-platform-runs-2026-11-01/`, two pending platform
+records `docs/evidence/m10/owner-platform-run-*.json`). On the target Apple M1
+8 GiB MacBook, over the generated 300-skill catalog: 0/10 startups within 1,000
+ms (a diagnostic shows about 1.2–1.3 s to ready), 120/120 useful slots (service
+p95 46.6 ms), 3/4 batches visible within 1,000 ms, and a gateway-only memory
+increment of 8,372,224 bytes. The kit's sampled PID is the gateway process on
+macOS. The packaged lifecycle passed with the same release bytes as on Windows.
+On the Ubuntu VPS (`linux_host`), the ordinary actions harness passed:
+recommend, choose, feedback, delete and reset. All reports stay `fixture` /
+`not_applicable`. The 100 genuine MCP tools of section 12.6.6 are frozen from
+locally running open-source servers in `evaluation/assets/acceptance-mcp-v1/`.
+Still open: the full 300-asset acceptance catalog (100 original Chinese and 100
+original English skills, pairs, rights review), non-fixture AC29 reports within
+the bounds, restart and a real interactive allow/deny, and review of both
+records. The reports verify only with the run commit's own grader (its
+inventory check compares the running package); the evidence README gives that
+procedure and a test runs it on POSIX systems, skipping Windows even when bash
+and tar are installed.
+
+Correction to that digest-bound README's Verify section (RM16; spec 12.6.5,
+12.6.6): a later checkout can reject the reports with `inventory_membership`
+when the source file set differs, or `unsupported_generator` when the file
+set matches but a digest or size differs. At review commit `33201078`, both
+reports reject with `inventory_membership`. The README's claim that a later
+commit always produces `unsupported_generator` is too narrow. Use its
+procedure with the recorded run commit `2f4ddecc3da0efd632df89ed0d63f3cc1d72c00f`
+to reproduce `verify.txt`; the bound README and evidence remain unchanged.

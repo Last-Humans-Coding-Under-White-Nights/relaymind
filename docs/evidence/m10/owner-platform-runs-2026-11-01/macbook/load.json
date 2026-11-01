@@ -1,0 +1,22 @@
+{
+  "note": "Load averages around the AC29 operations run (sysctl vm.loadavg, 1-minute). The run started only after the 1-minute load stayed below 4.0 for 30 s; other owner applications (browser, editor, terminal host) stayed open.",
+  "gate": "gate_passes=3 checks=29",
+  "started_utc": "2026-11-01T12:05:25Z",
+  "before_1_5_15": [
+    2.92,
+    9.47,
+    7.77
+  ],
+  "after_1_5_15": [
+    2.24,
+    7.84,
+    7.29
+  ],
+  "during_1min": {
+    "samples": 72,
+    "min": 2.24,
+    "max": 3.1,
+    "median": 2.67
+  },
+  "logical_cpus": 8
+}

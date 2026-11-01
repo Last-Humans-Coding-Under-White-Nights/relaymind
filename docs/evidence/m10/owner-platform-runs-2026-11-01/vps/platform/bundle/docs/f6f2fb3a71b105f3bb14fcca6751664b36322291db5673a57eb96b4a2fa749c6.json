@@ -1,0 +1,1 @@
+{"architecture":"x86_64","cpu":"Intel Xeon Processor (Skylake, IBRS)","dependencies_digest":"8970a7e5571eb0984ec3cc10f4fb06922bb6a7288fb3482582c08066270612a3","gpu":null,"os":"Linux","os_version":"Linux-7.0.0-38-generic-x86_64-with-glibc2.43","python":"3.12.0","ram_bytes":11998482432,"runtime":null,"runtime_config_digest":null,"runtime_version":null}

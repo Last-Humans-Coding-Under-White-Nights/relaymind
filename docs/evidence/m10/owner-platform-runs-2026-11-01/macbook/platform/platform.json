@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "qualification": "fixture",
+  "input_digest": "e7bff7db91e84b3f3f98cec9e75267b540d564659bd011d27ad574bb50e7d24e",
+  "input_manifest": {
+    "path": "inputs.json",
+    "digest": "b936dafc75deedbf4034949823fbec7d4b2f98ed3c8556852a57d0827f2b69f8",
+    "bytes": 14143
+  },
+  "platform": {
+    "os": "Darwin",
+    "os_version": "macOS 27.0.1",
+    "architecture": "arm64",
+    "cpu": "Apple M1",
+    "ram_bytes": 8589934592,
+    "gpu": [
+      {
+        "model": "Apple M1",
+        "device": null,
+        "cores": "7"
+      }
+    ],
+    "python": "3.12.0",
+    "dependencies_digest": "c69b1799b0e0a68c875d5dda19a24e346332840efb4d1d38839b895c2ddd9f1e",
+    "runtime": null,
+    "runtime_version": null,
+    "runtime_config_digest": null
+  },
+  "artifacts": [],
+  "steps": [
+    {
+      "name": "install",
+      "status": "passed",
+      "evidence_ids": [
+        "install-check"
+      ],
+      "reason": null
+    },
+    {
+      "name": "configure",
+      "status": "passed",
+      "evidence_ids": [
+        "install-check"
+      ],
+      "reason": null
+    },
+    {
+      "name": "recommend",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "ordinary_harness_linux_only"
+    },
+    {
+      "name": "choose",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "ordinary_harness_linux_only"
+    },
+    {
+      "name": "skill_use",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "skill_use_not_observed"
+    },
+    {
+      "name": "mcp_use",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "mcp_use_disabled"
+    },
+    {
+      "name": "feedback",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "ordinary_harness_linux_only"
+    },
+    {
+      "name": "delete",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "ordinary_harness_linux_only"
+    },
+    {
+      "name": "reset",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "ordinary_harness_linux_only"
+    },
+    {
+      "name": "restart",
+      "status": "not_run",
+      "evidence_ids": [],
+      "reason": "restart_not_observed"
+    },
+    {
+      "name": "uninstall",
+      "status": "passed",
+      "evidence_ids": [
+        "install-check"
+      ],
+      "reason": null
+    }
+  ],
+  "operations_evidence": {
+    "id": "operations-report",
+    "path": "evidence/dbb463780af0692d03112b9308c5a906282d16febb34cad17af6982735506190",
+    "sha256": "be6b84d3b0855e3bf1ba6bd3bd4781c83f51a2f0e9db51b2433f1d187755a146",
+    "bytes": 6985749,
+    "provenance": "observed"
+  },
+  "approvals_evidence": [],
+  "evidence": [
+    {
+      "id": "install-check",
+      "path": "evidence/86355c3b3ba0bc98efa8c3942f9a2325d0ae2932d5a3ae593f3e8171a569f00a",
+      "sha256": "e15c41b522aabf9a96ac018197a841fcf0843fb7b0b4c1b5b76fd7505c668f14",
+      "bytes": 131318,
+      "provenance": "observed"
+    },
+    {
+      "id": "operations-report",
+      "path": "evidence/dbb463780af0692d03112b9308c5a906282d16febb34cad17af6982735506190",
+      "sha256": "be6b84d3b0855e3bf1ba6bd3bd4781c83f51a2f0e9db51b2433f1d187755a146",
+      "bytes": 6985749,
+      "provenance": "observed"
+    },
+    {
+      "id": "ordinary-capture",
+      "path": "evidence/1fa8b7800aa738093608f650c1d5aef296cff49beeff8eef2ef154322c07f2eb",
+      "sha256": "d0f3bef549549bb070904b4286f22017c0cbc6d0cf71e378850990753ceed4ef",
+      "bytes": 1397,
+      "provenance": "observed"
+    }
+  ],
+  "gate": "not_applicable"
+}

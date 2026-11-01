@@ -1,0 +1,2 @@
+{"status": "graded", "gate": "not_applicable", "reason": null}
+platform/platform.json: ok (Linux x86_64: install=passed, configure=passed, recommend=passed, choose=passed, skill_use=not_run, mcp_use=not_run, feedback=passed, delete=passed, reset=passed, restart=not_run, uninstall=passed)

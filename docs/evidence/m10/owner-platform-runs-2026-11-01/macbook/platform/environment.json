@@ -1,0 +1,19 @@
+{
+  "os": "Darwin",
+  "os_version": "macOS 27.0.1",
+  "architecture": "arm64",
+  "cpu": "Apple M1",
+  "ram_bytes": 8589934592,
+  "gpu": [
+    {
+      "model": "Apple M1",
+      "device": null,
+      "cores": "7"
+    }
+  ],
+  "python": "3.12.0",
+  "dependencies_digest": "c69b1799b0e0a68c875d5dda19a24e346332840efb4d1d38839b895c2ddd9f1e",
+  "runtime": null,
+  "runtime_version": null,
+  "runtime_config_digest": null
+}

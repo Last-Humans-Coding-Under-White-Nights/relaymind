@@ -93,7 +93,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   an `original` record rejects drafted cases but allows translated or generated
   validation cases. The trial's `record` step now matches the current checker,
   and a repeated machine pass keeps the earlier call bytes. Second review of
-  #276: `machine_dual` `check_labels` checks the catalog Persons' roles;
+  #276: an approved record of the `machine_dual_owner_approved` or
+  `machine_drafted_owner_approved` profile needs a preregistration
+  (`preregistration_missing`), since the owner approves the lock before it;
+  `machine_dual` `check_labels` checks the catalog Persons' roles;
   `QualificationRecord.check_grade` rejects a grade that does not carry the
   record's labelling and prompt authorship. The M1 trial record now names
   `2b4e439`, the commit holding its `harness_sha256` bytes, and has a null
@@ -108,6 +111,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   bound. Maintained trial scripts record dispatch before host execution and
   bind superseded drafts through the catalog, cases and lock. Archived harness
   and evidence bytes stay unchanged; the trial README documents their gaps.
+- #261 MacBook and Ubuntu VPS platform evidence (RM38, RM39, RM40, RM44; AC29,
+  AC31, AC37; spec 0.66 sections 12.6.5, 12.6.6) in
+  `docs/evidence/m10/owner-platform-runs-2026-11-01/`, with two pending
+  platform records in `docs/evidence/m10/owner-platform-run-*.json`. MacBook:
+  0/10 startups within 1,000 ms, 120/120 useful slots, 3/4 timely batches; the
+  packaged lifecycle passed. The kit samples the gateway's own PID on macOS.
+  VPS: the ordinary actions harness passed. The 100 genuine MCP tools are
+  captured from locally running open-source servers and frozen by digest in
+  `evaluation/assets/acceptance-mcp-v1/`; the full 300-asset acceptance catalog
+  is still missing. All reports remain `fixture`. Review fixes: the records
+  live where section 12.6.6 puts them; the README's verify procedure runs the
+  run commit's own grader on copies (the commit is kept reachable by a merge)
+  and a test runs it; `asset_platform_run.py verify` no longer writes into the
+  evidence it grades; a test recomputes the MCP capture's lock, digests and
+  selection; the README states that the report's `memory.complete` does not
+  mean complete coverage and which private harness address remains in the VPS
+  capture.
 - #274 native Windows platform evidence (RM38; AC29, AC37), with a pending
   qualification draft in `docs/evidence/m10/windows-platform-run-2026-11-01/`.
   The 15 install-check lifecycle steps pass. The separate platform report

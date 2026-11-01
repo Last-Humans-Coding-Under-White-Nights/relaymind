@@ -453,6 +453,32 @@ def test_verify_rejects_a_changed_evidence_original(tmp_path):
     assert _script().verify_platform(out).startswith("grade_exit_")
 
 
+def _tree(root: Path) -> dict[str, bytes]:
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+
+@pytest.mark.parametrize("grade_ok", [True, False])
+def test_verify_never_writes_into_the_evidence_it_grades(tmp_path, grade_ok):
+    """Verify leaves every evidence byte alone (RM38; AC29; spec 12.6.6).
+
+    Committed run directories are bound by SHA-256 in qualification records,
+    so grading them again must not replace a file, including a stored
+    ``platform-grade.json``, whether the grade succeeds or is rejected.
+    """
+    out = tmp_path / "platform"
+    check = _write(tmp_path / "install.json", _install_check())
+    assert _script().main(["platform", "--install-check", str(check), "--out-dir", str(out)]) == 0
+    (out / "platform-grade.json").write_text('{"stored": "grade"}\n')
+    if not grade_ok:
+        manifest = json.loads((out / "bundle" / "inputs.json").read_text())
+        (entry,) = [e for e in manifest["evidence"] if e["id"] == "install-check"]
+        (out / "bundle" / entry["path"]).write_text(json.dumps(_install_check("failed")))
+    before = _tree(tmp_path)
+    reason = _script().verify_platform(out)
+    assert (reason is None) is grade_ok
+    assert _tree(tmp_path) == before
+
+
 def test_verify_command_grades_a_downloaded_run_directory(tmp_path, capsys):
     run = tmp_path / "platform-run-ubuntu-latest"
     check = _write(tmp_path / "install.json", _install_check())

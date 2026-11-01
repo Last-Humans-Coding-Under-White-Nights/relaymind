@@ -1062,7 +1062,9 @@ specification. Other pull requests stay fast. Each platform runs:
    checkout's files, and its steps are derived again from the registered
    originals with this checkout's driver. A `platform.json` without its
    `bundle/` (`platform_bundle_missing`), or a bundle without its report
-   (`platform_report_missing`), fails. The result also goes to the job
+   (`platform_report_missing`), fails. The grade is written to a temporary
+   file, never into the run directory, so verifying committed evidence changes
+   none of its bound bytes. The result also goes to the job
    summary.
 
 The job fails only on a harness error; it never uses `continue-on-error`. A

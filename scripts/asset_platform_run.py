@@ -28,6 +28,7 @@ import json
 import platform
 import subprocess
 import sys
+import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -258,24 +259,31 @@ def verify_operations(path: Path) -> str | None:
 
 
 def verify_platform(directory: Path) -> str | None:
-    """None when grade-platform accepts the report as a fixture (not_applicable)."""
+    """None when grade-platform accepts the report as a fixture (not_applicable).
+
+    The grade goes to a temporary file: a committed run directory is bound by
+    SHA-256 in its qualification record, so verify writes nothing into it.
+    """
+    from relaymind.evaluation.asset_trial_kit import real_path
     from relaymind.evaluation.asset_whole_task_cli import main as grade
 
     directory = Path(directory)
-    output = directory / "platform-grade.json"
-    code = grade(
-        [
-            "grade-platform",
-            "--report", str(directory / "platform.json"),
-            "--inputs", str(directory / "bundle" / "inputs.json"),
-            "--resolver", str(directory / "bundle" / "resolver.json"),
-            "--output", str(output),
-        ]
-    )  # fmt: skip
-    try:
-        result = json.loads(output.read_bytes())
-    except (OSError, ValueError):
-        return f"grade_exit_{code}"
+    with tempfile.TemporaryDirectory(prefix="relaymind-platform-grade-") as scratch:
+        # The grader refuses a symlinked ancestor such as /var on macOS.
+        output = real_path(Path(scratch) / "platform-grade.json")
+        code = grade(
+            [
+                "grade-platform",
+                "--report", str(directory / "platform.json"),
+                "--inputs", str(directory / "bundle" / "inputs.json"),
+                "--resolver", str(directory / "bundle" / "resolver.json"),
+                "--output", str(output),
+            ]
+        )  # fmt: skip
+        try:
+            result = json.loads(output.read_bytes())
+        except (OSError, ValueError):
+            return f"grade_exit_{code}"
     if code != 0 or result.get("gate") != "not_applicable":
         return f"grade_exit_{code}_{result.get('reason')}"
     return _check_runner_files(directory) or _rederive_platform(directory)

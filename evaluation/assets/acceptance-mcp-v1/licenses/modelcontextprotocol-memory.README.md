@@ -1,0 +1,371 @@
+# Knowledge Graph Memory Server
+
+A basic implementation of persistent memory using a local knowledge graph. This lets Claude remember information about the user across chats.
+
+Published on npm as [`@modelcontextprotocol/server-memory`](https://www.npmjs.com/package/@modelcontextprotocol/server-memory).
+
+## Core Concepts
+
+### Entities
+Entities are the primary nodes in the knowledge graph. Each entity has:
+- A unique name (identifier)
+- An entity type (e.g., "person", "organization", "event")
+- A list of observations
+
+Example:
+```json
+{
+  "name": "John_Smith",
+  "entityType": "person",
+  "observations": ["Speaks fluent Spanish"]
+}
+```
+
+### Relations
+Relations define directed connections between entities. They are always stored in active voice and describe how entities interact or relate to each other.
+
+Example:
+```json
+{
+  "from": "John_Smith",
+  "to": "Anthropic",
+  "relationType": "works_at"
+}
+```
+### Observations
+Observations are discrete pieces of information about an entity. They are:
+
+- Stored as strings
+- Attached to specific entities
+- Can be added or removed independently
+- Should be atomic (one fact per observation)
+
+Example:
+```json
+{
+  "entityName": "John_Smith",
+  "observations": [
+    "Speaks fluent Spanish",
+    "Graduated in 2019",
+    "Prefers morning meetings"
+  ]
+}
+```
+
+## API
+
+### Tools
+- **create_entities**
+  - Create multiple new entities in the knowledge graph
+  - Input: `entities` (array of objects)
+    - Each object contains:
+      - `name` (string): Entity identifier
+      - `entityType` (string): Type classification
+      - `observations` (string[]): Associated observations
+  - Ignores entities with existing names (and repeats of a name earlier in the same call); their observations are not added
+  - Returns the created entities. When any were skipped, the structured result also lists their names in `skipped`, and a second text item says which were skipped (use `add_observations` to extend an existing entity)
+
+- **create_relations**
+  - Create multiple new relations between entities
+  - Input: `relations` (array of objects)
+    - Each object contains:
+      - `from` (string): Source entity name
+      - `to` (string): Target entity name
+      - `relationType` (string): Relationship type in active voice
+  - Skips duplicate relations
+  - Fails if either the source or target entity doesn't exist
+
+- **add_observations**
+  - Add new observations to existing entities
+  - Input: `observations` (array of objects)
+    - Each object contains:
+      - `entityName` (string): Target entity
+      - `contents` (string[]): New observations to add
+  - Returns added observations per entity
+  - Fails if entity doesn't exist
+
+- **delete_entities**
+  - Remove entities and their relations
+  - Input: `entityNames` (string[])
+  - Cascading deletion of associated relations
+  - No error if an entity doesn't exist; the response reports which names were not found
+
+- **delete_observations**
+  - Remove specific observations from entities
+  - Input: `deletions` (array of objects)
+    - Each object contains:
+      - `entityName` (string): Target entity
+      - `observations` (string[]): Observations to remove
+  - No error if an observation doesn't exist; the response reports how many were deleted
+
+- **delete_relations**
+  - Remove specific relations from the graph
+  - Input: `relations` (array of objects)
+    - Each object contains:
+      - `from` (string): Source entity name
+      - `to` (string): Target entity name
+      - `relationType` (string): Relationship type
+  - No error if a relation doesn't exist; the response reports how many were deleted
+
+- **read_graph**
+  - Read the entire knowledge graph
+  - No input required
+  - Returns complete graph structure with all entities and relations
+
+- **search_nodes**
+  - Search for nodes based on query
+  - Input: `query` (string)
+  - Searches across:
+    - Entity names
+    - Entity types
+    - Observation content
+  - Returns matching entities and their relations
+
+- **open_nodes**
+  - Retrieve specific nodes by name
+  - Input: `names` (string[])
+  - Returns:
+    - Requested entities
+    - Relations between requested entities
+  - Silently skips non-existent nodes
+
+### Resources
+
+- **knowledge-graph** (`memory://knowledge-graph`)
+  - The full knowledge graph as a readable MCP Resource
+  - MIME type: `application/json`
+  - Returns the same shape as `read_graph` (entities and relations)
+  - Mutation tools (`create_entities`, `create_relations`, `add_observations`, `delete_entities`, `delete_observations`, `delete_relations`) emit `notifications/resources/updated` for this URI, so subscribed clients see live changes
+  - How a client subscribes depends on its protocol version: a 2026-07-28 client names the URI in the `resourceSubscriptions` of its `subscriptions/listen` request and gets the updates on that stream; a 2025-era client calls `resources/subscribe`
+
+## Protocol versions
+
+The server serves both protocol eras on stdio from the same process. The client's first message picks the era of the connection: a 2026-07-28 client opens with `server/discover` and sends its protocol version, identity and capabilities with each request, and a 2025-era client opens with the `initialize` handshake. The tools and the resource are the same on both.
+
+## Requirements
+
+Node.js 24 or later, when the server runs through `npx` or from source.
+
+# Usage with Claude Desktop
+
+### Setup
+
+Add this to your claude_desktop_config.json:
+
+#### Docker
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "docker",
+      "args": ["run", "-i", "-v", "claude-memory:/app/dist", "--rm", "mcp/memory"]
+    }
+  }
+}
+```
+
+#### NPX
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    }
+  }
+}
+```
+
+On Windows, use `cmd /c` to launch `npx`:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    }
+  }
+}
+```
+
+#### NPX with custom setting
+
+The server can be configured using the following environment variables:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "/path/to/custom/memory.jsonl"
+      }
+    }
+  }
+}
+```
+
+On Windows, use:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "/path/to/custom/memory.jsonl"
+      }
+    }
+  }
+}
+```
+
+- `MEMORY_FILE_PATH`: Path to the memory storage JSONL file (default: `memory.jsonl` in the server directory)
+
+When `MEMORY_FILE_PATH` is not set and the server directory still holds a legacy `memory.json` but no `memory.jsonl`, the server renames `memory.json` to `memory.jsonl` at startup. If that rename fails, the server exits with an error naming both paths and the cause, rather than starting on an empty graph; fix the cause (a permission problem, say) and restart, or set `MEMORY_FILE_PATH` to choose a file explicitly.
+
+#### Sharing one memory file between clients
+
+Each MCP client starts its own server process, so two clients using the same `MEMORY_FILE_PATH` (or both using the default) are two processes writing one file. Every write tool takes an exclusive lock file, `<memory file>.lock`, next to the memory file while it reads, changes and saves the graph, so writes from different processes take turns and none is lost. The lock file exists only while a write is in progress, so the directory holding the memory file must be writable (it already must be, for the atomic save).
+
+- A lock left behind by a server that crashed mid-write is removed automatically: at once if its process is known to have exited on the same machine, otherwise once it has gone 30 seconds without being refreshed (a server holding the lock refreshes it every 15 seconds while it works). Only one waiting server breaks a stale lock at a time, guarded by a momentary `<memory file>.lock.break` file.
+- A write that cannot get the lock within 60 seconds fails with a tool error rather than overwriting the file.
+- The lock relies on exclusive file creation, which local filesystems provide; a network filesystem that does not honour it cannot be shared safely this way.
+
+# VS Code Installation Instructions
+
+For quick installation, use one of the one-click installation buttons below:
+
+[![Install with NPX in VS Code](https://img.shields.io/badge/VS_Code-NPM-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=memory&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-memory%22%5D%7D) [![Install with NPX in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-NPM-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=memory&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-memory%22%5D%7D&quality=insiders)
+
+[![Install with Docker in VS Code](https://img.shields.io/badge/VS_Code-Docker-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=memory&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22-v%22%2C%22claude-memory%3A%2Fapp%2Fdist%22%2C%22--rm%22%2C%22mcp%2Fmemory%22%5D%7D) [![Install with Docker in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Docker-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=memory&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22-v%22%2C%22claude-memory%3A%2Fapp%2Fdist%22%2C%22--rm%22%2C%22mcp%2Fmemory%22%5D%7D&quality=insiders)
+
+For manual installation, you can configure the MCP server using one of these methods:
+
+**Method 1: User Configuration (Recommended)**
+Add the configuration to your user-level MCP configuration file. Open the Command Palette (`Ctrl + Shift + P`) and run `MCP: Open User Configuration`. This will open your user `mcp.json` file where you can add the server configuration.
+
+**Method 2: Workspace Configuration**
+Alternatively, you can add the configuration to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
+
+> For more details about MCP configuration in VS Code, see the [official VS Code MCP documentation](https://code.visualstudio.com/docs/copilot/customization/mcp-servers).
+
+#### NPX
+
+```json
+{
+  "servers": {
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    }
+  }
+}
+```
+
+On Windows, use:
+
+```json
+{
+  "servers": {
+    "memory": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    }
+  }
+}
+```
+
+#### Docker
+
+```json
+{
+  "servers": {
+    "memory": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "-v",
+        "claude-memory:/app/dist",
+        "--rm",
+        "mcp/memory"
+      ]
+    }
+  }
+}
+```
+
+### System Prompt
+
+The prompt for utilizing memory depends on the use case. Changing the prompt will help the model determine the frequency and types of memories created.
+
+Here is an example prompt for chat personalization. You could use this prompt in the "Custom Instructions" field of a [Claude.ai Project](https://www.anthropic.com/news/projects). 
+
+```
+Follow these steps for each interaction:
+
+1. User Identification:
+   - You should assume that you are interacting with default_user
+   - If you have not identified default_user, proactively try to do so.
+
+2. Memory Retrieval:
+   - Always begin your chat by saying only "Remembering..." and retrieve all relevant information from your knowledge graph
+   - Always refer to your knowledge graph as your "memory"
+
+3. Memory
+   - While conversing with the user, be attentive to any new information that falls into these categories:
+     a) Basic Identity (age, gender, location, job title, education level, etc.)
+     b) Behaviors (interests, habits, etc.)
+     c) Preferences (communication style, preferred language, etc.)
+     d) Goals (goals, targets, aspirations, etc.)
+     e) Relationships (personal and professional relationships up to 3 degrees of separation)
+
+4. Memory Update:
+   - If any new information was gathered during the interaction, update your memory as follows:
+     a) Create entities for recurring organizations, people, and significant events
+     b) Connect them to the current entities using relations
+     c) Store facts about them as observations
+```
+
+## Building
+
+Docker:
+
+```sh
+docker build -t mcp/memory -f src/memory/Dockerfile . 
+```
+
+For Awareness: a prior mcp/memory volume contains an index.js file that could be overwritten by the new container. If you are using a docker volume for storage, delete the old docker volume's `index.js` file before starting the new container.
+
+## License
+
+This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
