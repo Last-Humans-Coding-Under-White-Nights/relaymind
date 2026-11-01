@@ -191,6 +191,8 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.66 with the precise negative-finding definitions.
+            ("8c00f5154b64da1f1ad00352aadea9cee419e4b96e24f757ec1cd812259abf13", 623250),
             # Reviewed 0.66 with the #266 record input, scope and identity rules.
             ("f4f70b0640207baf78442bd8c7596f23461c9319920adfd37effa29e1148ed51", 622923),
             # Reviewed 0.66 with the LHCWN repository rename.

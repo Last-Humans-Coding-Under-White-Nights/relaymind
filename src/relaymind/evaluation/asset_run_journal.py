@@ -3,8 +3,12 @@
 Spec 0.65 section 12.6.5 (RM16, RM42, RM44; AC33, AC36). A journal is a private
 working file, never an export or evidence: one canonical JSON record per line,
 appended and flushed to disk before the driver moves on. Its first record is
-a header binding the preregistered input, freeze and plan digests, so a journal
-cannot be resumed against changed inputs. ``started`` is written before any
+a header binding the preregistered input, freeze and plan digests and the
+digest of the run's execution identity (environment, artifacts, input manifest
+and qualification label), so a journal cannot be resumed against changed
+inputs or under another identity: earlier rows are never attributed to it.
+The journal holds row and reset evidence, so it is created owner-only (0600,
+in a new 0700 directory) and restored to 0600 on resume. ``started`` is written before any
 work begins and ``finished`` holds the conserved outcome, so a crash leaves a
 started entry that the driver must account for, never silently rerun.
 
@@ -18,7 +22,7 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
-from relaymind.canonical import canonical_json
+from relaymind.canonical import canonical_digest, canonical_json
 from relaymind.evaluation.asset_corpus_io import AssetCorpusError, parse_json
 
 RECORD_BYTES = 256 * 1024 * 1024
@@ -30,9 +34,18 @@ class JournalError(ValueError):
     """A fixed safe journal failure reason."""
 
 
-def bound_header(kind: str, record: Mapping) -> dict:
-    """The journal header binding a run to its preregistered digests."""
-    return dict(format=JOURNAL_FORMAT, kind=kind, **{k: record[k] for k in _BOUND})
+def bound_header(kind: str, record: Mapping, identity: Mapping) -> dict:
+    """The journal header binding a run to its preregistered digests and identity.
+
+    ``identity`` holds every run-wide fact the report asserts besides its
+    rows (environment, artifacts, input manifest, qualification label).
+    """
+    return dict(
+        format=JOURNAL_FORMAT,
+        kind=kind,
+        **{k: record[k] for k in _BOUND},
+        identity_digest=canonical_digest(dict(identity)),
+    )
 
 
 def _fsync_directory(path: Path) -> None:
@@ -54,7 +67,8 @@ class RunJournal:
         self.started: set[str] = set()
         self.finished: dict[str, dict] = {}
         self._lock = self.path.parent / (self.path.name + ".lock")
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.path.parent.exists():
+            self.path.parent.mkdir(parents=True, mode=0o700)
         try:
             fd = os.open(self._lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         except FileExistsError:
@@ -71,10 +85,13 @@ class RunJournal:
         if self.path.is_symlink() or self.path.exists() and not self.path.is_file():
             raise JournalError("journal_unsafe")
         if not self.path.exists():
-            self._file = open(self.path, "xb")  # noqa: SIM115 - held until close()
+            flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_BINARY", 0)
+            self._file = os.fdopen(os.open(self.path, flags, 0o600), "wb")
             self._append(dict(self.header, type="header"))
             _fsync_directory(self.path.parent)
             return
+        if os.name != "nt":
+            os.chmod(self.path, 0o600)
         payload = self.path.read_bytes()
         complete, _, torn = payload.rpartition(b"\n")
         lines = complete.split(b"\n") if complete else []
