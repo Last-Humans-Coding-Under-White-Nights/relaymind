@@ -244,3 +244,22 @@ jobs:
             ci-evidence/
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Native loaded skill observation (outcomes do not qualify use)
+        if: matrix.os == 'ubuntu-latest'
+        timeout-minutes: 6
+        run: |
+          python integrations/openclaw/test/host-ordinary-qualification/qualify.py \
+            --observe-loaded-use \
+            --tarball "release/openclaw/$(node -p "require('./release/openclaw/release.json').filename")" \
+            --work-dir "${RUNNER_TEMP}/relaymind-loaded-use-observation" \
+            --out ci-evidence/openclaw-loaded-use-observation-ubuntu.json
+
+      - name: Upload native loaded skill observation
+        uses: actions/upload-artifact@v4
+        if: always() && matrix.os == 'ubuntu-latest'
+        with:
+          name: openclaw-loaded-use-observation-ubuntu-${{ github.run_attempt }}
+          path: ci-evidence/openclaw-loaded-use-observation-ubuntu.json
+          if-no-files-found: warn
+          retention-days: 30
