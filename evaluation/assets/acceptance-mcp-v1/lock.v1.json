@@ -1,0 +1,155 @@
+{
+  "kind": "relaymind-acceptance-mcp-capture-lock",
+  "version": 1,
+  "document": {
+    "path": "capture.v1.json",
+    "digest": "470c5747e461aae2a65ee91103c99e1468adf1dd5d2e3cf72dbcdf5a271d586b"
+  },
+  "files": [
+    {
+      "path": "capture_mcp_tools.py",
+      "sha256": "562afddfcd87cb19bdc10b3fb25039e6dffcc7251eeb64f6b14b6e057ece98e1",
+      "bytes": 7929
+    },
+    {
+      "path": "freeze_mcp_capture.py",
+      "sha256": "09128e05e2b0611e67f98e21a0dda311363acde594c2e78d36f46a6444b694ae",
+      "bytes": 5235
+    },
+    {
+      "path": "licenses/chromedevtools-chrome-devtools-mcp.LICENSE",
+      "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd",
+      "bytes": 11357
+    },
+    {
+      "path": "licenses/microsoft-playwright-mcp.LICENSE",
+      "sha256": "9a7110fc2d2f964038e5dc49128f908f29f47a574c961cba16085914e879cbda",
+      "bytes": 11552
+    },
+    {
+      "path": "licenses/modelcontextprotocol-everything.README.md",
+      "sha256": "a980ad5029702e5cf81a9bb96e03a14c6aa2686b1b2ad53924d46f421d9ac3b3",
+      "bytes": 8685
+    },
+    {
+      "path": "licenses/modelcontextprotocol-fetch.LICENSE",
+      "sha256": "8cc7c6e33b24ed4ee8fcccc33eccf102549d04fa4cb9737cecc9770dad1080ff",
+      "bytes": 1059
+    },
+    {
+      "path": "licenses/modelcontextprotocol-filesystem.README.md",
+      "sha256": "29c91673b2c0eae97c40f71a76971ec6478a5cbbd4ade63fa5cce84cc50b39e8",
+      "bytes": 20494
+    },
+    {
+      "path": "licenses/modelcontextprotocol-git.LICENSE",
+      "sha256": "8cc7c6e33b24ed4ee8fcccc33eccf102549d04fa4cb9737cecc9770dad1080ff",
+      "bytes": 1059
+    },
+    {
+      "path": "licenses/modelcontextprotocol-memory.README.md",
+      "sha256": "1f9b3f0783efedda126a46354e8c59a9918f565613531f20333f51420167f8f6",
+      "bytes": 13526
+    },
+    {
+      "path": "licenses/modelcontextprotocol-sequential-thinking.README.md",
+      "sha256": "0a68f52824ad0651c34fb24796386a19240ad9eacf7c3b97c5fdebbddb8939c6",
+      "bytes": 7836
+    },
+    {
+      "path": "licenses/modelcontextprotocol-time.METADATA",
+      "sha256": "b76e50ca61260167950db4585b32a0cd567f9bf8c724e8de566813bc888d1229",
+      "bytes": 11727
+    },
+    {
+      "path": "originals/chromedevtools-chrome-devtools-mcp.initialize.json",
+      "sha256": "3ffdce1270392d1cc8668b8be1594ac1b75dd853ec65b0efedc6a2f68ae25811",
+      "bytes": 221
+    },
+    {
+      "path": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "bytes": 29705
+    },
+    {
+      "path": "originals/microsoft-playwright-mcp.initialize.json",
+      "sha256": "1b76c24829b38721e379ad5cfc0a3dce3ed189ae89bffdbf9751d75b70abc61f",
+      "bytes": 183
+    },
+    {
+      "path": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "bytes": 21104
+    },
+    {
+      "path": "originals/modelcontextprotocol-everything.initialize.json",
+      "sha256": "b5fe4684d852b13f6d01e30dcce3d3db1e7a3429fcc9af112fed3e4d4ea9c45d",
+      "bytes": 3935
+    },
+    {
+      "path": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "bytes": 10407
+    },
+    {
+      "path": "originals/modelcontextprotocol-fetch.initialize.json",
+      "sha256": "24b50ea041c6d548115d3a7c1d489cd6d9781d0fcfde3c5eced9e78229d234f7",
+      "bytes": 254
+    },
+    {
+      "path": "originals/modelcontextprotocol-fetch.tools-list.0.json",
+      "sha256": "e0b21ef8859bf8dcec7103b0d4471c35c55d49d4faf0b2d3722b0d11f9fe36e8",
+      "bytes": 1194
+    },
+    {
+      "path": "originals/modelcontextprotocol-filesystem.initialize.json",
+      "sha256": "71c0cb9a5a440abf9913bff8f525ecc171e8305e30430fd7294ee58a32256079",
+      "bytes": 179
+    },
+    {
+      "path": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "bytes": 12613
+    },
+    {
+      "path": "originals/modelcontextprotocol-git.initialize.json",
+      "sha256": "e40b80e213acf35330c465e66f4712cd8c02f138be73aa741e79c24ce6934351",
+      "bytes": 252
+    },
+    {
+      "path": "originals/modelcontextprotocol-git.tools-list.0.json",
+      "sha256": "ba162e09a358e08b13ed7f49e85235024d291576ad22b51f4e00c237e81999fc",
+      "bytes": 6253
+    },
+    {
+      "path": "originals/modelcontextprotocol-memory.initialize.json",
+      "sha256": "8bc141a5cb574c183807df5f9d09f92cc736a5fc9d5d036b41f55284e4c8c461",
+      "bytes": 218
+    },
+    {
+      "path": "originals/modelcontextprotocol-memory.tools-list.0.json",
+      "sha256": "111cd4b28224fe1ce4dcab6ea4c5d5d70bb0b1f92b9501101e3cdb08ae1dfc00",
+      "bytes": 10839
+    },
+    {
+      "path": "originals/modelcontextprotocol-sequential-thinking.initialize.json",
+      "sha256": "9726c19ed379a71cf1ee699213891d09763827072d5b8e8eefbda926a3c724bd",
+      "bytes": 181
+    },
+    {
+      "path": "originals/modelcontextprotocol-sequential-thinking.tools-list.0.json",
+      "sha256": "98dde6e976ec7e967c4777ac193e9d35349bbaaad6dad33dfeaadbebe02c27b1",
+      "bytes": 4656
+    },
+    {
+      "path": "originals/modelcontextprotocol-time.initialize.json",
+      "sha256": "3fdae18b337d62daa8a3d7496a30d0cfbbb390f56e0dd2192254651c0c893ef7",
+      "bytes": 253
+    },
+    {
+      "path": "originals/modelcontextprotocol-time.tools-list.0.json",
+      "sha256": "405f4f6a083df0c41c74f61ef31c480402940415c180a58dbb34cbb059efc2ea",
+      "bytes": 2305
+    }
+  ]
+}

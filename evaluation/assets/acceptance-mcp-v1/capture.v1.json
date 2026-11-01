@@ -1,0 +1,1545 @@
+{
+  "kind": "relaymind-acceptance-mcp-capture",
+  "version": 1,
+  "captured_at": "2026-11-01T12:15:07Z",
+  "capture_machine_role": "linux_host",
+  "capture_tool": {
+    "path": "capture_mcp_tools.py",
+    "sha256": "562afddfcd87cb19bdc10b3fb25039e6dffcc7251eeb64f6b14b6e057ece98e1"
+  },
+  "protocol_version_requested": "2025-06-18",
+  "servers": [
+    {
+      "id": "modelcontextprotocol-filesystem",
+      "package": {
+        "ecosystem": "npm",
+        "name": "@modelcontextprotocol/server-filesystem",
+        "version": "2.1.0"
+      },
+      "launch": [
+        "<node>",
+        "<npm>/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js",
+        "<fsroot>"
+      ],
+      "source_url": "https://github.com/modelcontextprotocol/servers",
+      "license": {
+        "spdx": "MIT",
+        "path": "licenses/modelcontextprotocol-filesystem.README.md",
+        "evidence": "README.md",
+        "sha256": "29c91673b2c0eae97c40f71a76971ec6478a5cbbd4ade63fa5cce84cc50b39e8",
+        "bytes": 20494
+      },
+      "server_info": {
+        "name": "secure-filesystem-server",
+        "version": "2.1.0"
+      },
+      "protocol_version": "2025-06-18",
+      "originals": [
+        {
+          "kind": "initialize",
+          "path": "originals/modelcontextprotocol-filesystem.initialize.json",
+          "sha256": "71c0cb9a5a440abf9913bff8f525ecc171e8305e30430fd7294ee58a32256079",
+          "bytes": 179
+        },
+        {
+          "kind": "tools_list",
+          "path": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+          "sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+          "bytes": 12613
+        }
+      ]
+    },
+    {
+      "id": "modelcontextprotocol-memory",
+      "package": {
+        "ecosystem": "npm",
+        "name": "@modelcontextprotocol/server-memory",
+        "version": "2.0.1"
+      },
+      "launch": [
+        "<node>",
+        "<npm>/node_modules/@modelcontextprotocol/server-memory/dist/index.js"
+      ],
+      "source_url": "https://github.com/modelcontextprotocol/servers",
+      "license": {
+        "spdx": "MIT",
+        "path": "licenses/modelcontextprotocol-memory.README.md",
+        "evidence": "README.md",
+        "sha256": "1f9b3f0783efedda126a46354e8c59a9918f565613531f20333f51420167f8f6",
+        "bytes": 13526
+      },
+      "server_info": {
+        "name": "memory-server",
+        "version": "2.0.1"
+      },
+      "protocol_version": "2025-06-18",
+      "originals": [
+        {
+          "kind": "initialize",
+          "path": "originals/modelcontextprotocol-memory.initialize.json",
+          "sha256": "8bc141a5cb574c183807df5f9d09f92cc736a5fc9d5d036b41f55284e4c8c461",
+          "bytes": 218
+        },
+        {
+          "kind": "tools_list",
+          "path": "originals/modelcontextprotocol-memory.tools-list.0.json",
+          "sha256": "111cd4b28224fe1ce4dcab6ea4c5d5d70bb0b1f92b9501101e3cdb08ae1dfc00",
+          "bytes": 10839
+        }
+      ]
+    },
+    {
+      "id": "modelcontextprotocol-everything",
+      "package": {
+        "ecosystem": "npm",
+        "name": "@modelcontextprotocol/server-everything",
+        "version": "2.1.0"
+      },
+      "launch": [
+        "<node>",
+        "<npm>/node_modules/@modelcontextprotocol/server-everything/dist/index.js",
+        "stdio"
+      ],
+      "source_url": "https://github.com/modelcontextprotocol/servers",
+      "license": {
+        "spdx": "MIT",
+        "path": "licenses/modelcontextprotocol-everything.README.md",
+        "evidence": "README.md",
+        "sha256": "a980ad5029702e5cf81a9bb96e03a14c6aa2686b1b2ad53924d46f421d9ac3b3",
+        "bytes": 8685
+      },
+      "server_info": {
+        "name": "mcp-servers/everything",
+        "title": "Everything Reference Server",
+        "version": "2.1.0"
+      },
+      "protocol_version": "2025-06-18",
+      "originals": [
+        {
+          "kind": "initialize",
+          "path": "originals/modelcontextprotocol-everything.initialize.json",
+          "sha256": "b5fe4684d852b13f6d01e30dcce3d3db1e7a3429fcc9af112fed3e4d4ea9c45d",
+          "bytes": 3935
+        },
+        {
+          "kind": "tools_list",
+          "path": "originals/modelcontextprotocol-everything.tools-list.0.json",
+          "sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+          "bytes": 10407
+        }
+      ]
+    },
+    {
+      "id": "modelcontextprotocol-sequential-thinking",
+      "package": {
+        "ecosystem": "npm",
+        "name": "@modelcontextprotocol/server-sequential-thinking",
+        "version": "2.0.0"
+      },
+      "launch": [
+        "<node>",
+        "<npm>/node_modules/@modelcontextprotocol/server-sequential-thinking/dist/index.js"
+      ],
+      "source_url": "https://github.com/modelcontextprotocol/servers",
+      "license": {
+        "spdx": "MIT",
+        "path": "licenses/modelcontextprotocol-sequential-thinking.README.md",
+        "evidence": "README.md",
+        "sha256": "0a68f52824ad0651c34fb24796386a19240ad9eacf7c3b97c5fdebbddb8939c6",
+        "bytes": 7836
+      },
+      "server_info": {
+        "name": "sequential-thinking-server",
+        "version": "2.0.0"
+      },
+      "protocol_version": "2025-06-18",
+      "originals": [
+        {
+          "kind": "initialize",
+          "path": "originals/modelcontextprotocol-sequential-thinking.initialize.json",
+          "sha256": "9726c19ed379a71cf1ee699213891d09763827072d5b8e8eefbda926a3c724bd",
+          "bytes": 181
+        },
+        {
+          "kind": "tools_list",
+          "path": "originals/modelcontextprotocol-sequential-thinking.tools-list.0.json",
+          "sha256": "98dde6e976ec7e967c4777ac193e9d35349bbaaad6dad33dfeaadbebe02c27b1",
+          "bytes": 4656
+        }
+      ]
+    },
+    {
+      "id": "modelcontextprotocol-git",
+      "package": {
+        "ecosystem": "pypi",
+        "name": "mcp-server-git",
+        "version": "2026.10.28"
+      },
+      "launch": [
+        "<python>",
+        "-m",
+        "mcp_server_git",
+        "--repository",
+        "<gitrepo>"
+      ],
+      "source_url": "https://github.com/modelcontextprotocol/servers",
+      "license": {
+        "spdx": "MIT",
+        "path": "licenses/modelcontextprotocol-git.LICENSE",
+        "evidence": "LICENSE",
+        "sha256": "8cc7c6e33b24ed4ee8fcccc33eccf102549d04fa4cb9737cecc9770dad1080ff",
+        "bytes": 1059
+      },
+      "server_info": {
+        "name": "mcp-git",
+        "version": "2026.10.28"
+      },
+      "protocol_version": "2025-06-18",
+      "originals": [
+        {
+          "kind": "initialize",
+          "path": "originals/modelcontextprotocol-git.initialize.json",
+          "sha256": "e40b80e213acf35330c465e66f4712cd8c02f138be73aa741e79c24ce6934351",
+          "bytes": 252
+        },
+        {
+          "kind": "tools_list",
+          "path": "originals/modelcontextprotocol-git.tools-list.0.json",
+          "sha256": "ba162e09a358e08b13ed7f49e85235024d291576ad22b51f4e00c237e81999fc",
+          "bytes": 6253
+        }
+      ]
+    },
+    {
+      "id": "modelcontextprotocol-fetch",
+      "package": {
+        "ecosystem": "pypi",
+        "name": "mcp-server-fetch",
+        "version": "2026.10.28"
+      },
+      "launch": [
+        "<python>",
+        "-m",
+        "mcp_server_fetch"
+      ],
+      "source_url": "https://github.com/modelcontextprotocol/servers",
+      "license": {
+        "spdx": "MIT",
+        "path": "licenses/modelcontextprotocol-fetch.LICENSE",
+        "evidence": "LICENSE",
+        "sha256": "8cc7c6e33b24ed4ee8fcccc33eccf102549d04fa4cb9737cecc9770dad1080ff",
+        "bytes": 1059
+      },
+      "server_info": {
+        "name": "mcp-fetch",
+        "version": "2026.10.28"
+      },
+      "protocol_version": "2025-06-18",
+      "originals": [
+        {
+          "kind": "initialize",
+          "path": "originals/modelcontextprotocol-fetch.initialize.json",
+          "sha256": "24b50ea041c6d548115d3a7c1d489cd6d9781d0fcfde3c5eced9e78229d234f7",
+          "bytes": 254
+        },
+        {
+          "kind": "tools_list",
+          "path": "originals/modelcontextprotocol-fetch.tools-list.0.json",
+          "sha256": "e0b21ef8859bf8dcec7103b0d4471c35c55d49d4faf0b2d3722b0d11f9fe36e8",
+          "bytes": 1194
+        }
+      ]
+    },
+    {
+      "id": "modelcontextprotocol-time",
+      "package": {
+        "ecosystem": "pypi",
+        "name": "mcp-server-time",
+        "version": "2026.10.28"
+      },
+      "launch": [
+        "<python>",
+        "-m",
+        "mcp_server_time",
+        "--local-timezone",
+        "UTC"
+      ],
+      "source_url": "https://github.com/modelcontextprotocol/servers",
+      "license": {
+        "spdx": "MIT",
+        "path": "licenses/modelcontextprotocol-time.METADATA",
+        "evidence": "METADATA",
+        "sha256": "b76e50ca61260167950db4585b32a0cd567f9bf8c724e8de566813bc888d1229",
+        "bytes": 11727
+      },
+      "server_info": {
+        "name": "mcp-time",
+        "version": "2026.10.28"
+      },
+      "protocol_version": "2025-06-18",
+      "originals": [
+        {
+          "kind": "initialize",
+          "path": "originals/modelcontextprotocol-time.initialize.json",
+          "sha256": "3fdae18b337d62daa8a3d7496a30d0cfbbb390f56e0dd2192254651c0c893ef7",
+          "bytes": 253
+        },
+        {
+          "kind": "tools_list",
+          "path": "originals/modelcontextprotocol-time.tools-list.0.json",
+          "sha256": "405f4f6a083df0c41c74f61ef31c480402940415c180a58dbb34cbb059efc2ea",
+          "bytes": 2305
+        }
+      ]
+    },
+    {
+      "id": "microsoft-playwright-mcp",
+      "package": {
+        "ecosystem": "npm",
+        "name": "@playwright/mcp",
+        "version": "0.0.84"
+      },
+      "launch": [
+        "<node>",
+        "<npm>/node_modules/@playwright/mcp/cli.js",
+        "--headless",
+        "--isolated"
+      ],
+      "source_url": "https://github.com/microsoft/playwright-mcp",
+      "license": {
+        "spdx": "Apache-2.0",
+        "path": "licenses/microsoft-playwright-mcp.LICENSE",
+        "evidence": "LICENSE",
+        "sha256": "9a7110fc2d2f964038e5dc49128f908f29f47a574c961cba16085914e879cbda",
+        "bytes": 11552
+      },
+      "server_info": {
+        "name": "Playwright",
+        "version": "1.65.0-alpha-2026-10-30"
+      },
+      "protocol_version": "2025-06-18",
+      "originals": [
+        {
+          "kind": "initialize",
+          "path": "originals/microsoft-playwright-mcp.initialize.json",
+          "sha256": "1b76c24829b38721e379ad5cfc0a3dce3ed189ae89bffdbf9751d75b70abc61f",
+          "bytes": 183
+        },
+        {
+          "kind": "tools_list",
+          "path": "originals/microsoft-playwright-mcp.tools-list.0.json",
+          "sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+          "bytes": 21104
+        }
+      ]
+    },
+    {
+      "id": "chromedevtools-chrome-devtools-mcp",
+      "package": {
+        "ecosystem": "npm",
+        "name": "chrome-devtools-mcp",
+        "version": "1.12.0"
+      },
+      "launch": [
+        "<node>",
+        "<npm>/node_modules/chrome-devtools-mcp/./build/src/bin/chrome-devtools-mcp.js",
+        "--headless",
+        "--isolated"
+      ],
+      "source_url": "https://github.com/ChromeDevTools/chrome-devtools-mcp",
+      "license": {
+        "spdx": "Apache-2.0",
+        "path": "licenses/chromedevtools-chrome-devtools-mcp.LICENSE",
+        "evidence": "LICENSE",
+        "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd",
+        "bytes": 11357
+      },
+      "server_info": {
+        "name": "chrome_devtools",
+        "title": "Chrome DevTools MCP server",
+        "version": "1.12.0"
+      },
+      "protocol_version": "2025-06-18",
+      "originals": [
+        {
+          "kind": "initialize",
+          "path": "originals/chromedevtools-chrome-devtools-mcp.initialize.json",
+          "sha256": "3ffdce1270392d1cc8668b8be1594ac1b75dd853ec65b0efedc6a2f68ae25811",
+          "bytes": 221
+        },
+        {
+          "kind": "tools_list",
+          "path": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+          "sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+          "bytes": 29705
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "click",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "d607ae2f9744c7206202ac28884cce22636bf91313d310f229ad589a5854e35c",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "close_page",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "4dd8f2c6def9d29f424ceb2425e0ccfc62a5f228111c04876fb88d4bb6959042",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "drag",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "4657f22eabd55238c458cb843a87d3cbee851e1195025958ccb4e0d360b8594a",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "emulate",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "8dcb17abb2a8d00fb810433055d9bd3ddfc24b3fd77c1513cb43685982d5f089",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "evaluate_script",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "e9a727496e360fda7e4598a90d708ed0cba0d44deac134bfac9e0e3a47fe6908",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "fill",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "02c4fa7845b25952f0a94c4ad76ccc253edc85fad905e7003c58c9ccf79f71e1",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "fill_form",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "9992ca135e79cb42934c76f2c1156fc163756bce9a6cee8919efd7dd6c54f2b2",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "get_console_message",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "2ff0917d561b22f4f770182f79bf63d08ede0f19ef0ebd40c829b70050b34007",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "get_css_styles",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "f6f3134bfb054138d7eb214758872c9e8911673100952dca8446a75cf889bfaf",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "get_network_request",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "4f707ec2a68d312398ce79fcffb26395c9ed4277f06bb41bb47c46cb8fe46450",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "handle_dialog",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "c50c3253fd8d612feb23c9c3027fe17ca5418252ca083797cdf4bb44b0747229",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "hover",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "5d77b0fcc66a5cc14adecc7a5b3266b15324639b30a178079b4125e880727015",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "lighthouse_audit",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "26cd877e07322817de158349ef07554992dc36ae172cd9e29e06963d9e92cf77",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "list_console_messages",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "5536f8a6b5cbea2dc4380adde1d53b893223e5352eb6ec3f915b13e601198290",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "list_network_requests",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "a31680c09c30d5845a39593509e2f5e320a73fbfbba797ac530b5e1633b0c0c7",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "list_pages",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "71fc596a20f27da3dec80050e5d1f553eba34aea24c2853b853488a811e6b892",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "navigate_page",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "311f68c0bb2327ba9732d10a915fdd2aee9c2a8241e8081545a282c611d04eb6",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "new_page",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "8e94580b1e45e9a84de471093deef9c2285602e5f3d71d7f88e4dd1161c090d7",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "performance_analyze_insight",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "703f506f571dc3f3933f1c374b21bb1ca42d49a0a0288c578946e9f36ba33101",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "performance_start_trace",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "b7395a3033703f0ff5f17b0deb266c2dfb44e6095e1f2fd624fbd5e961866069",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "performance_stop_trace",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "56a055c235f74c1993a66e1711987ccf4a84f0859fa46e2440d2702c5c1782dc",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "press_key",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "3b048d268032ece8c1289f3153a5a12fbb0925f4b5f3d81051041c66bb908759",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "resize_page",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "bbbf02209ee63c903b625062ec7df9c96fbaa9279543f80bda30b8309c3025cc",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "screencast_start",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "e333a50addfd6379efa298aa27582bb013a90b6422f43d16eb6f746111bbd27c",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "screencast_stop",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "6d9d14b333c9379fed3f60f49719d086239864a07e1a2e18a795d5f7e85c1dbb",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "select_page",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "e27120315084bc9bda4f610d7ccdee9bb105de7a94cbea41511ce9e36fca5215",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "take_heapsnapshot",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "813a66cf8670a719b7baa2d612bd61c0e1da7171823841acc60b860824b520ea",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "take_screenshot",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "f1da2ce09379988fb34eba3d55ad588d5e7850aea5dc0b3be589b9bf756d9d92",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "take_snapshot",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "7f8ba09ecd3286173bc772ff2241c87a99b53fc25a7f5d79ef52e9507917df43",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "type_text",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "c1e5421817377e6777a07eb4d8a803bac8750848451c6c6d9cb776d3627a18ab",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "upload_file",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "6753d5cfcc6ba27bea1f7de7d540b8f1456c89a88cb8f84930dec41532892ea4",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "chromedevtools-chrome-devtools-mcp",
+      "name": "wait_for",
+      "original": "originals/chromedevtools-chrome-devtools-mcp.tools-list.0.json",
+      "original_sha256": "1299dbeaaac4f19336b84252d91fc5ed59b5fe194cdcfea599cc0e0065b1e6a9",
+      "schema_hash": "516e59f22dbd2398daadb7b4b0a63c3ff2a4c3fb497ed1e4fffee61735b8979a",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_click",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "7fed82f52ae7018670d967e4429b63501948c80de2df2e9279ce4c103694d0d3",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_close",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "71fc596a20f27da3dec80050e5d1f553eba34aea24c2853b853488a811e6b892",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_console_messages",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "0d6cacf9f20123a6a4559c2bb05816020528d6529e6c1cb14520ea00fb9e23ef",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_drag",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "3dcca018f0b0e9341fee3c91b5420f82557a59a9d9763699e90970b2bd3ed1cb",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_drop",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "2f2a2c904744c935fc66547031c43b43466e86043f6c306624b536867b18d8e8",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_emulate_media",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "3b4bcf539a7e561f0e7e233035d5e616d295c9fe0bd5d3c165120b305d2edaeb",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_evaluate",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "04a3962dec15576f5ad84707db0251b84868e4d7dd4a5cf5e5e0ded786fc7d03",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_file_upload",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "c76aede191ef1e3bdd09ff177419a1e77a0e1f3f676bdd7c8053ac78e6a80086",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_fill_form",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "c991223a68247bd517c0fa1b61db444178ff6ad546e7214936d29b8de4c2f2ee",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_find",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "d060308e6e1797f03317b2368c4d658b0013b0eb00c5ae7534db13b4528f0c3e",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_handle_dialog",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "2d4cacf71e9fd7f902bebbc84f106614b891c2654de32b71b1f0d629a10d8b5c",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_hover",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "3b0a5a3333d051dba9f6b023c341eef00f0e5264bef37bc0a11f83156937e803",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_navigate",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "2165538e098634780eec628947d795a2619b4d2e3cef0e36d3084ac46abb94f7",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_navigate_back",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "71fc596a20f27da3dec80050e5d1f553eba34aea24c2853b853488a811e6b892",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_network_request",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "f0dbfd6ba87b3b7739e5b0aa6fa8c0d981aa214128eb3c1a8891caa46bd60b30",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_network_requests",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "e943ec891442cf3a071a3d090af243ca4e3db8924c7e95650672e47917d5da56",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_press_key",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "57a7f701ebf865e5a7a759c15e8d04bca12cb756c2e3f4ae7280070bb6e310e2",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_resize",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "4a80d1f511092cf5e94b689f81afd36ec42b0ac74a510f7220a7c9987af00b84",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_run_code_unsafe",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "6a9943c16c5666a93c77010063b536f864936fc22606c48e7bb3a36b5b7fd444",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_select_option",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "03b097752bdb41817ec0a6a259062598e5c85c1a8c7106d0f2fde506321096bd",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_snapshot",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "1d7650f3b9f3612bbb4f1511c77944e7b9ed6e98c9e012926a243c58f016df6f",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_tabs",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "fc3f534e7428342371db86b438fad5f52abbe45d43b6e18fd79fb3d23de782c8",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_take_screenshot",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "78dcb99cc226d741aa8c11a11ee0df62e15a9f9ab9db1a1ce4fdc5512d323d96",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_type",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "ed892740ebc14bb2a49467c08b8bb02717d50f1f3ef8ed06d51abf5ebb3249da",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "microsoft-playwright-mcp",
+      "name": "browser_wait_for",
+      "original": "originals/microsoft-playwright-mcp.tools-list.0.json",
+      "original_sha256": "2eb250c9e7b5b8fd9b9f7f3433c46e3b19a236b54f84b2faf6c5257fbfb92517",
+      "schema_hash": "cee58694f677034e21fc68446200888eb28469696b4ca9259047e15084fb22ff",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "echo",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "5e202c28db3b437e721f25cb1778a2c32085f346588ee3250d2dfa51115b20b7",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "get-annotated-message",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "c9a0d423322e17f0f14548d89f92543ffcb16d13ff4d0c684c2053ff77101bc7",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "get-env",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "93ab7499dc3c616f8db8780fed0d9f69270803cda913882ad2ef3943db8d7225",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "get-header-params",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "3ef614bec8b27bddc2b4f8247a0d4de21a21bc26f201fab826ee8931ce00fd05",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "get-resource-links",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "45ccd9967af43bfd86f9ec7d6028d2f75cdc4f37439ff6f8f0a4340175c8a4f5",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "get-resource-reference",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "ab2f9024a8f2cd4378a9727cafabdd472d8975e5eb0140e57b66c77d5d486513",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "get-structured-content",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "0aff509a9fee55363012d1ae6b6730900193ddc813b492a2addafa7038c87f29",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "get-sum",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "15a05f67c39a6b4061af1e74ed79124243e7812885791b87e52ea6a5716b1346",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "get-tiny-image",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "93ab7499dc3c616f8db8780fed0d9f69270803cda913882ad2ef3943db8d7225",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "gzip-file-as-resource",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "5f7ed593fb42fedd7bdab7fd59872bafbc967e06d47d003639a88466351db7e0",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "toggle-simulated-logging",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "93ab7499dc3c616f8db8780fed0d9f69270803cda913882ad2ef3943db8d7225",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "toggle-subscriber-updates",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "93ab7499dc3c616f8db8780fed0d9f69270803cda913882ad2ef3943db8d7225",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "trigger-list-changed",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "17fbc9960393f7451456d08e2ec74e943ab1c729db06ecb1f88dd4a027738c2d",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "trigger-log-messages",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "93ab7499dc3c616f8db8780fed0d9f69270803cda913882ad2ef3943db8d7225",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "trigger-long-running-operation",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "1bff11b1caf6761691b752d65b30dcf07ede95c665ceb593708cd1c47547fe2c",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-everything",
+      "name": "trigger-resource-update",
+      "original": "originals/modelcontextprotocol-everything.tools-list.0.json",
+      "original_sha256": "f3f9b4f12584e882e47b4e4634191c9c97acbc47bcc2fdf41c71d43bae09e2cc",
+      "schema_hash": "5ef790e8e09b158a8569dbcfddc779cb44839df01b8918fc4cf1b6003797f93c",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-fetch",
+      "name": "fetch",
+      "original": "originals/modelcontextprotocol-fetch.tools-list.0.json",
+      "original_sha256": "e0b21ef8859bf8dcec7103b0d4471c35c55d49d4faf0b2d3722b0d11f9fe36e8",
+      "schema_hash": "a7640d996856af7005a9f8e69b2c981c9aa1f3b2bdfa7d2f9e0702c887df16aa",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-filesystem",
+      "name": "create_directory",
+      "original": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "original_sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "schema_hash": "c3e75a7d4e4bd6911fa21e7a3dfd29a13253847806e2f840a20e474afaa80517",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-filesystem",
+      "name": "directory_tree",
+      "original": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "original_sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "schema_hash": "183b99ab98934ec33bc1eada9f1468c875eb4b225afd3d780241359e64aa31ec",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-filesystem",
+      "name": "edit_file",
+      "original": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "original_sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "schema_hash": "0e618c69bbb36a86a0425f5d5acadd5c69abc0a2c40efb97f80e3123f2c53a06",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-filesystem",
+      "name": "get_file_info",
+      "original": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "original_sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "schema_hash": "c3e75a7d4e4bd6911fa21e7a3dfd29a13253847806e2f840a20e474afaa80517",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-filesystem",
+      "name": "list_allowed_directories",
+      "original": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "original_sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "schema_hash": "93ab7499dc3c616f8db8780fed0d9f69270803cda913882ad2ef3943db8d7225",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-filesystem",
+      "name": "list_directory",
+      "original": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "original_sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "schema_hash": "c3e75a7d4e4bd6911fa21e7a3dfd29a13253847806e2f840a20e474afaa80517",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-filesystem",
+      "name": "list_directory_with_sizes",
+      "original": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "original_sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "schema_hash": "2981d4cbea6d14156e6ea8c4ea88181c95966b34b0e4f23b443dbc548c58c49d",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-filesystem",
+      "name": "move_file",
+      "original": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "original_sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "schema_hash": "da11573be25599e7d44009b2b31626d370dc345489aeb8bc04299437c0635fcb",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-filesystem",
+      "name": "read_file",
+      "original": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "original_sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "schema_hash": "c265d71cd9245cc9cab370c13acc7a1e1dd91e80f159d4d0e4580319b3a94dd3",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-filesystem",
+      "name": "read_media_file",
+      "original": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "original_sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "schema_hash": "c3e75a7d4e4bd6911fa21e7a3dfd29a13253847806e2f840a20e474afaa80517",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-filesystem",
+      "name": "read_multiple_files",
+      "original": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "original_sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "schema_hash": "e33001b8d3c59a392539941ea3ce0fb40beba8cbbe687f40d850eeee50515aa8",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-filesystem",
+      "name": "read_text_file",
+      "original": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "original_sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "schema_hash": "c265d71cd9245cc9cab370c13acc7a1e1dd91e80f159d4d0e4580319b3a94dd3",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-filesystem",
+      "name": "search_files",
+      "original": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "original_sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "schema_hash": "a74c2fc96644af87bfd207a08d775b426ecfdca13d9baebfcbd5b46b41590aa4",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-filesystem",
+      "name": "write_file",
+      "original": "originals/modelcontextprotocol-filesystem.tools-list.0.json",
+      "original_sha256": "9c16ae343fe6453b334fde6a9f94be5fed04e760c33b202bba1ee0d59c4ab659",
+      "schema_hash": "e4b3deed1a39fc2a5b990b319b17e1f19c84c891a770c219d97d9cdefe6181cf",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-git",
+      "name": "git_add",
+      "original": "originals/modelcontextprotocol-git.tools-list.0.json",
+      "original_sha256": "ba162e09a358e08b13ed7f49e85235024d291576ad22b51f4e00c237e81999fc",
+      "schema_hash": "fe607783e69161974a5f7a4ccd35c37a74701420facc8f99a153e9e1bd268a00",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-git",
+      "name": "git_branch",
+      "original": "originals/modelcontextprotocol-git.tools-list.0.json",
+      "original_sha256": "ba162e09a358e08b13ed7f49e85235024d291576ad22b51f4e00c237e81999fc",
+      "schema_hash": "268f353022c7efb49a6e61f3bd3c81522910358facafa35c16fca0a5a305f693",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-git",
+      "name": "git_checkout",
+      "original": "originals/modelcontextprotocol-git.tools-list.0.json",
+      "original_sha256": "ba162e09a358e08b13ed7f49e85235024d291576ad22b51f4e00c237e81999fc",
+      "schema_hash": "b655a056a01c07675207106a974e3c18649ad97cfe5049bbc68b5f033a8ce4d6",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-git",
+      "name": "git_commit",
+      "original": "originals/modelcontextprotocol-git.tools-list.0.json",
+      "original_sha256": "ba162e09a358e08b13ed7f49e85235024d291576ad22b51f4e00c237e81999fc",
+      "schema_hash": "c5cd9087b800e226a17190a2b110c7d9fe5a1131288faeb0f21478403293b967",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-git",
+      "name": "git_create_branch",
+      "original": "originals/modelcontextprotocol-git.tools-list.0.json",
+      "original_sha256": "ba162e09a358e08b13ed7f49e85235024d291576ad22b51f4e00c237e81999fc",
+      "schema_hash": "9118849f78270629cb79f009849443a991834e4e6a1a6767671d8efd5306d7b8",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-git",
+      "name": "git_diff",
+      "original": "originals/modelcontextprotocol-git.tools-list.0.json",
+      "original_sha256": "ba162e09a358e08b13ed7f49e85235024d291576ad22b51f4e00c237e81999fc",
+      "schema_hash": "32ee0e282fb126d18d4a4c6615b17defcaab9535409999d8625718408f57a8c4",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-git",
+      "name": "git_diff_staged",
+      "original": "originals/modelcontextprotocol-git.tools-list.0.json",
+      "original_sha256": "ba162e09a358e08b13ed7f49e85235024d291576ad22b51f4e00c237e81999fc",
+      "schema_hash": "a34503e2686d88a396e63b81ab6bff39b2ab9dbdca5de355ceab4e6b4a74399e",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-git",
+      "name": "git_diff_unstaged",
+      "original": "originals/modelcontextprotocol-git.tools-list.0.json",
+      "original_sha256": "ba162e09a358e08b13ed7f49e85235024d291576ad22b51f4e00c237e81999fc",
+      "schema_hash": "b5f28e179d77d1f8132248f474d5d7e689ff385ac68eb29cacd14e0b3c93e593",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-git",
+      "name": "git_log",
+      "original": "originals/modelcontextprotocol-git.tools-list.0.json",
+      "original_sha256": "ba162e09a358e08b13ed7f49e85235024d291576ad22b51f4e00c237e81999fc",
+      "schema_hash": "395c304b2b003bb1ab86e75d0150cc4e51a220fb47cf6ac37c354419939d7f54",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-git",
+      "name": "git_reset",
+      "original": "originals/modelcontextprotocol-git.tools-list.0.json",
+      "original_sha256": "ba162e09a358e08b13ed7f49e85235024d291576ad22b51f4e00c237e81999fc",
+      "schema_hash": "eea611c41ac2f0dac25fa3cc39a6b9692425bd6bc1de10c91e3ec81846c9707e",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-git",
+      "name": "git_show",
+      "original": "originals/modelcontextprotocol-git.tools-list.0.json",
+      "original_sha256": "ba162e09a358e08b13ed7f49e85235024d291576ad22b51f4e00c237e81999fc",
+      "schema_hash": "fa979031e75d98d89ad67bda75bdebe7069fbad3f5907c50cb0aafd8fc4c9ad1",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-git",
+      "name": "git_status",
+      "original": "originals/modelcontextprotocol-git.tools-list.0.json",
+      "original_sha256": "ba162e09a358e08b13ed7f49e85235024d291576ad22b51f4e00c237e81999fc",
+      "schema_hash": "7bd4de8036937dec083fd66e127b8e7ba67ec8e38453a3d20872e5eefafd6a48",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-memory",
+      "name": "add_observations",
+      "original": "originals/modelcontextprotocol-memory.tools-list.0.json",
+      "original_sha256": "111cd4b28224fe1ce4dcab6ea4c5d5d70bb0b1f92b9501101e3cdb08ae1dfc00",
+      "schema_hash": "e6e972efdb09e1d29eab808468864b502490d36263d969b11037cb2b4692e6b2",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-memory",
+      "name": "create_entities",
+      "original": "originals/modelcontextprotocol-memory.tools-list.0.json",
+      "original_sha256": "111cd4b28224fe1ce4dcab6ea4c5d5d70bb0b1f92b9501101e3cdb08ae1dfc00",
+      "schema_hash": "e539cb1e7f1baacf480946f42574fde20486f313248137d3da36568d0f27b067",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-memory",
+      "name": "create_relations",
+      "original": "originals/modelcontextprotocol-memory.tools-list.0.json",
+      "original_sha256": "111cd4b28224fe1ce4dcab6ea4c5d5d70bb0b1f92b9501101e3cdb08ae1dfc00",
+      "schema_hash": "52aa80054f13ddc75f655a8166537240da29e1dac0d2a615cb40cfb5696dce00",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-memory",
+      "name": "delete_entities",
+      "original": "originals/modelcontextprotocol-memory.tools-list.0.json",
+      "original_sha256": "111cd4b28224fe1ce4dcab6ea4c5d5d70bb0b1f92b9501101e3cdb08ae1dfc00",
+      "schema_hash": "26d6e33884a0c6d0229e2e49f8474eb75e6f41da1d22cf4c3b5fdf092a8eca80",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-memory",
+      "name": "delete_observations",
+      "original": "originals/modelcontextprotocol-memory.tools-list.0.json",
+      "original_sha256": "111cd4b28224fe1ce4dcab6ea4c5d5d70bb0b1f92b9501101e3cdb08ae1dfc00",
+      "schema_hash": "1eb55a341e93fbcda7f18409c5741fdacd8fc673ca64e59d5aa12f279c46810f",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-memory",
+      "name": "delete_relations",
+      "original": "originals/modelcontextprotocol-memory.tools-list.0.json",
+      "original_sha256": "111cd4b28224fe1ce4dcab6ea4c5d5d70bb0b1f92b9501101e3cdb08ae1dfc00",
+      "schema_hash": "b0f3c44897d0fb224e5ef47d7baea3bb94a1298e1a1a87564b28a7eca1ee4684",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-memory",
+      "name": "open_nodes",
+      "original": "originals/modelcontextprotocol-memory.tools-list.0.json",
+      "original_sha256": "111cd4b28224fe1ce4dcab6ea4c5d5d70bb0b1f92b9501101e3cdb08ae1dfc00",
+      "schema_hash": "b5ddb299e887308656c8e02c2adc58e0a3a82e809f9d22f95b8ddf7986a6d4b4",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-memory",
+      "name": "read_graph",
+      "original": "originals/modelcontextprotocol-memory.tools-list.0.json",
+      "original_sha256": "111cd4b28224fe1ce4dcab6ea4c5d5d70bb0b1f92b9501101e3cdb08ae1dfc00",
+      "schema_hash": "93ab7499dc3c616f8db8780fed0d9f69270803cda913882ad2ef3943db8d7225",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-memory",
+      "name": "search_nodes",
+      "original": "originals/modelcontextprotocol-memory.tools-list.0.json",
+      "original_sha256": "111cd4b28224fe1ce4dcab6ea4c5d5d70bb0b1f92b9501101e3cdb08ae1dfc00",
+      "schema_hash": "d9207e12931a135b036f96c102d1cacae2727d12f5c695ed1992e0368451db13",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-sequential-thinking",
+      "name": "sequentialthinking",
+      "original": "originals/modelcontextprotocol-sequential-thinking.tools-list.0.json",
+      "original_sha256": "98dde6e976ec7e967c4777ac193e9d35349bbaaad6dad33dfeaadbebe02c27b1",
+      "schema_hash": "838ba62e6f7ce9ce81dcfcbd46a187047f1de6dd2bcc8b6b051dfbf3688aa00e",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-time",
+      "name": "convert_time",
+      "original": "originals/modelcontextprotocol-time.tools-list.0.json",
+      "original_sha256": "405f4f6a083df0c41c74f61ef31c480402940415c180a58dbb34cbb059efc2ea",
+      "schema_hash": "f93db00a2e0b23aaad4e9dc5b3d7016705d23c0c88ce3405a50b1493fcbf0431",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    },
+    {
+      "server_id": "modelcontextprotocol-time",
+      "name": "get_current_time",
+      "original": "originals/modelcontextprotocol-time.tools-list.0.json",
+      "original_sha256": "405f4f6a083df0c41c74f61ef31c480402940415c180a58dbb34cbb059efc2ea",
+      "schema_hash": "fa7f193e346148f464c187edabd22e37b0f716ad99de53410d3bfd4a4751ffee",
+      "product_schema_check": true,
+      "origin": "genuine_mcp"
+    }
+  ],
+  "selection": {
+    "quota": 100,
+    "rule": "sha256(utf8(server_id + '/' + tool_name)) ascending, first 100",
+    "selected": [
+      "chromedevtools-chrome-devtools-mcp/click",
+      "chromedevtools-chrome-devtools-mcp/close_page",
+      "chromedevtools-chrome-devtools-mcp/drag",
+      "chromedevtools-chrome-devtools-mcp/evaluate_script",
+      "chromedevtools-chrome-devtools-mcp/fill",
+      "chromedevtools-chrome-devtools-mcp/fill_form",
+      "chromedevtools-chrome-devtools-mcp/get_console_message",
+      "chromedevtools-chrome-devtools-mcp/get_css_styles",
+      "chromedevtools-chrome-devtools-mcp/get_network_request",
+      "chromedevtools-chrome-devtools-mcp/handle_dialog",
+      "chromedevtools-chrome-devtools-mcp/hover",
+      "chromedevtools-chrome-devtools-mcp/lighthouse_audit",
+      "chromedevtools-chrome-devtools-mcp/list_console_messages",
+      "chromedevtools-chrome-devtools-mcp/list_network_requests",
+      "chromedevtools-chrome-devtools-mcp/list_pages",
+      "chromedevtools-chrome-devtools-mcp/navigate_page",
+      "chromedevtools-chrome-devtools-mcp/new_page",
+      "chromedevtools-chrome-devtools-mcp/performance_analyze_insight",
+      "chromedevtools-chrome-devtools-mcp/performance_start_trace",
+      "chromedevtools-chrome-devtools-mcp/performance_stop_trace",
+      "chromedevtools-chrome-devtools-mcp/resize_page",
+      "chromedevtools-chrome-devtools-mcp/screencast_start",
+      "chromedevtools-chrome-devtools-mcp/screencast_stop",
+      "chromedevtools-chrome-devtools-mcp/take_heapsnapshot",
+      "chromedevtools-chrome-devtools-mcp/take_screenshot",
+      "chromedevtools-chrome-devtools-mcp/take_snapshot",
+      "chromedevtools-chrome-devtools-mcp/type_text",
+      "chromedevtools-chrome-devtools-mcp/upload_file",
+      "chromedevtools-chrome-devtools-mcp/wait_for",
+      "microsoft-playwright-mcp/browser_click",
+      "microsoft-playwright-mcp/browser_close",
+      "microsoft-playwright-mcp/browser_console_messages",
+      "microsoft-playwright-mcp/browser_drag",
+      "microsoft-playwright-mcp/browser_drop",
+      "microsoft-playwright-mcp/browser_emulate_media",
+      "microsoft-playwright-mcp/browser_evaluate",
+      "microsoft-playwright-mcp/browser_file_upload",
+      "microsoft-playwright-mcp/browser_fill_form",
+      "microsoft-playwright-mcp/browser_find",
+      "microsoft-playwright-mcp/browser_handle_dialog",
+      "microsoft-playwright-mcp/browser_hover",
+      "microsoft-playwright-mcp/browser_navigate",
+      "microsoft-playwright-mcp/browser_network_request",
+      "microsoft-playwright-mcp/browser_network_requests",
+      "microsoft-playwright-mcp/browser_press_key",
+      "microsoft-playwright-mcp/browser_resize",
+      "microsoft-playwright-mcp/browser_run_code_unsafe",
+      "microsoft-playwright-mcp/browser_select_option",
+      "microsoft-playwright-mcp/browser_snapshot",
+      "microsoft-playwright-mcp/browser_tabs",
+      "microsoft-playwright-mcp/browser_take_screenshot",
+      "microsoft-playwright-mcp/browser_type",
+      "microsoft-playwright-mcp/browser_wait_for",
+      "modelcontextprotocol-everything/echo",
+      "modelcontextprotocol-everything/get-annotated-message",
+      "modelcontextprotocol-everything/get-env",
+      "modelcontextprotocol-everything/get-resource-links",
+      "modelcontextprotocol-everything/get-resource-reference",
+      "modelcontextprotocol-everything/get-structured-content",
+      "modelcontextprotocol-everything/get-tiny-image",
+      "modelcontextprotocol-everything/gzip-file-as-resource",
+      "modelcontextprotocol-everything/toggle-simulated-logging",
+      "modelcontextprotocol-everything/trigger-log-messages",
+      "modelcontextprotocol-everything/trigger-resource-update",
+      "modelcontextprotocol-fetch/fetch",
+      "modelcontextprotocol-filesystem/create_directory",
+      "modelcontextprotocol-filesystem/directory_tree",
+      "modelcontextprotocol-filesystem/edit_file",
+      "modelcontextprotocol-filesystem/get_file_info",
+      "modelcontextprotocol-filesystem/list_directory",
+      "modelcontextprotocol-filesystem/list_directory_with_sizes",
+      "modelcontextprotocol-filesystem/move_file",
+      "modelcontextprotocol-filesystem/read_file",
+      "modelcontextprotocol-filesystem/read_media_file",
+      "modelcontextprotocol-filesystem/read_multiple_files",
+      "modelcontextprotocol-filesystem/read_text_file",
+      "modelcontextprotocol-filesystem/search_files",
+      "modelcontextprotocol-filesystem/write_file",
+      "modelcontextprotocol-git/git_add",
+      "modelcontextprotocol-git/git_branch",
+      "modelcontextprotocol-git/git_checkout",
+      "modelcontextprotocol-git/git_commit",
+      "modelcontextprotocol-git/git_create_branch",
+      "modelcontextprotocol-git/git_diff",
+      "modelcontextprotocol-git/git_diff_staged",
+      "modelcontextprotocol-git/git_diff_unstaged",
+      "modelcontextprotocol-git/git_log",
+      "modelcontextprotocol-git/git_reset",
+      "modelcontextprotocol-git/git_show",
+      "modelcontextprotocol-git/git_status",
+      "modelcontextprotocol-memory/add_observations",
+      "modelcontextprotocol-memory/create_entities",
+      "modelcontextprotocol-memory/create_relations",
+      "modelcontextprotocol-memory/delete_entities",
+      "modelcontextprotocol-memory/delete_relations",
+      "modelcontextprotocol-memory/open_nodes",
+      "modelcontextprotocol-memory/search_nodes",
+      "modelcontextprotocol-sequential-thinking/sequentialthinking",
+      "modelcontextprotocol-time/convert_time",
+      "modelcontextprotocol-time/get_current_time"
+    ],
+    "excluded": [
+      {
+        "tool": "chromedevtools-chrome-devtools-mcp/emulate",
+        "reason": "beyond_quota"
+      },
+      {
+        "tool": "chromedevtools-chrome-devtools-mcp/press_key",
+        "reason": "beyond_quota"
+      },
+      {
+        "tool": "chromedevtools-chrome-devtools-mcp/select_page",
+        "reason": "beyond_quota"
+      },
+      {
+        "tool": "microsoft-playwright-mcp/browser_navigate_back",
+        "reason": "beyond_quota"
+      },
+      {
+        "tool": "modelcontextprotocol-everything/get-header-params",
+        "reason": "beyond_quota"
+      },
+      {
+        "tool": "modelcontextprotocol-everything/get-sum",
+        "reason": "beyond_quota"
+      },
+      {
+        "tool": "modelcontextprotocol-everything/toggle-subscriber-updates",
+        "reason": "beyond_quota"
+      },
+      {
+        "tool": "modelcontextprotocol-everything/trigger-list-changed",
+        "reason": "beyond_quota"
+      },
+      {
+        "tool": "modelcontextprotocol-everything/trigger-long-running-operation",
+        "reason": "beyond_quota"
+      },
+      {
+        "tool": "modelcontextprotocol-filesystem/list_allowed_directories",
+        "reason": "beyond_quota"
+      },
+      {
+        "tool": "modelcontextprotocol-memory/delete_observations",
+        "reason": "beyond_quota"
+      },
+      {
+        "tool": "modelcontextprotocol-memory/read_graph",
+        "reason": "beyond_quota"
+      }
+    ]
+  }
+}

@@ -1,0 +1,363 @@
+Metadata-Version: 2.5
+Name: mcp-server-time
+Version: 2026.10.28
+Summary: A Model Context Protocol server providing tools for time queries and timezone conversions for LLMs
+Project-URL: Repository, https://github.com/modelcontextprotocol/servers/tree/main/src/time
+Project-URL: Issues, https://github.com/modelcontextprotocol/servers/issues
+Author-email: Mariusz 'maledorak' Korzekwa <mariusz@korzekwa.dev>
+License: MIT
+Keywords: llm,mcp,time,timezone
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Requires-Python: >=3.10
+Requires-Dist: mcp<3,>=2.3
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: tzdata>=2024.2
+Requires-Dist: tzlocal>=5.3.1
+Description-Content-Type: text/markdown
+
+# Time MCP Server
+
+<!-- mcp-name: io.github.modelcontextprotocol/server-time -->
+
+A Model Context Protocol server that provides time and timezone conversion capabilities. This server enables LLMs to get current time information and perform timezone conversions using IANA timezone names, with automatic system timezone detection.
+
+Source: https://github.com/modelcontextprotocol/servers/tree/main/src/time
+
+Requires MCP Python SDK 2.x (`mcp>=2.3,<3`).
+
+### Available Tools
+
+- `get_current_time` - Get current time in a specific timezone or system timezone.
+  - Required arguments:
+    - `timezone` (string): IANA timezone name (e.g., 'America/New_York', 'Europe/London')
+
+- `convert_time` - Convert time between timezones.
+  - Required arguments:
+    - `source_timezone` (string): Source IANA timezone name
+    - `time` (string): Time in 24-hour format (HH:MM)
+    - `target_timezone` (string): Target IANA timezone name
+
+A timezone name, here and in `--local-timezone`, must be an exact IANA key, case included: `Europe/Warsaw` is accepted and `europe/warsaw` is rejected on every platform, including macOS, whose case-insensitive filesystem would otherwise resolve it.
+
+### Protocol versions
+
+The server speaks both eras of the Model Context Protocol over stdio, with nothing to configure: a **2026-07-28** client (discovered with `server/discover`, no session) and a **2025-11-25** client (the `initialize` handshake). The client's first request decides which. Tools behave the same in both. Methods the 2026-07-28 specification removes, such as `ping`, are answered only on a 2025-11-25 connection.
+
+### Results and errors
+
+The server is built on the SDK's high-level `MCPServer`. Each tool declares an `outputSchema` and returns its result twice: as `structuredContent`, and as the same object in indented JSON in a text block, for a client that does not read structured output.
+
+- **A tool failure is an `isError` result** whose text the model can read and act on, prefixed `Error executing tool <name>: `. That covers an unknown or non-exact timezone (`Invalid timezone: ...`), an empty timezone (`Missing required argument: <argument>`), a time not in `HH:MM` 24-hour form, a wall-clock time skipped by a clock change, and an argument missing or of the wrong type (the SDK's validation message).
+- **An unknown tool name is a JSON-RPC `-32602` error** (`Unknown tool: <name>`), not an `isError` result, as both protocol versions specify.
+- The server registers no prompts or resources. Their list methods answer with empty lists.
+
+## Installation
+
+### Using uv (recommended)
+
+When using [`uv`](https://docs.astral.sh/uv/) no specific installation is needed. We will
+use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run *mcp-server-time*.
+
+```bash
+uvx mcp-server-time
+```
+
+### Using PIP
+
+Alternatively you can install `mcp-server-time` via pip:
+
+```bash
+pip install mcp-server-time
+```
+
+After installation, you can run it as a script using:
+
+```bash
+python -m mcp_server_time
+```
+
+## Configuration
+
+### Configure for Claude.app
+
+Add to your Claude settings:
+
+<details>
+<summary>Using uvx</summary>
+
+```json
+{
+  "mcpServers": {
+    "time": {
+      "command": "uvx",
+      "args": ["mcp-server-time"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary>Using docker</summary>
+
+```json
+{
+  "mcpServers": {
+    "time": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "LOCAL_TIMEZONE", "mcp/time"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary>Using pip installation</summary>
+
+```json
+{
+  "mcpServers": {
+    "time": {
+      "command": "python",
+      "args": ["-m", "mcp_server_time"]
+    }
+  }
+}
+```
+</details>
+
+### Configure for Zed
+
+Add to your Zed settings.json:
+
+<details>
+<summary>Using uvx</summary>
+
+```json
+"context_servers": [
+  "mcp-server-time": {
+    "command": "uvx",
+    "args": ["mcp-server-time"]
+  }
+],
+```
+</details>
+
+<details>
+<summary>Using pip installation</summary>
+
+```json
+"context_servers": {
+  "mcp-server-time": {
+    "command": "python",
+    "args": ["-m", "mcp_server_time"]
+  }
+},
+```
+</details>
+
+### Configure for VS Code
+
+For quick installation, use one of the one-click install buttons below...
+
+[![Install with UV in VS Code](https://img.shields.io/badge/VS_Code-UV-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=time&config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22mcp-server-time%22%5D%7D) [![Install with UV in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-UV-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=time&config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22mcp-server-time%22%5D%7D&quality=insiders)
+
+[![Install with Docker in VS Code](https://img.shields.io/badge/VS_Code-Docker-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=time&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22mcp%2Ftime%22%5D%7D) [![Install with Docker in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Docker-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=time&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22mcp%2Ftime%22%5D%7D&quality=insiders)
+
+For manual installation, add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open User Settings (JSON)`.
+
+Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
+
+> Note that the `mcp` key is needed when using the `mcp.json` file.
+
+<details>
+<summary>Using uvx</summary>
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "time": {
+        "command": "uvx",
+        "args": ["mcp-server-time"]
+      }
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary>Using Docker</summary>
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "time": {
+        "command": "docker",
+        "args": ["run", "-i", "--rm", "mcp/time"]
+      }
+    }
+  }
+}
+```
+</details>
+
+### Configure for Zencoder
+
+1. Go to the Zencoder menu (...)
+2. From the dropdown menu, select `Agent Tools`
+3. Click on the `Add Custom MCP`
+4. Add the name and server configuration from below, and make sure to hit the `Install` button
+
+<details>
+<summary>Using uvx</summary>
+
+```json
+{
+    "command": "uvx",
+    "args": ["mcp-server-time"]
+  }
+```
+</details>
+
+### Customization - System Timezone
+
+By default, the server automatically detects your system's timezone. You can override this by adding the argument `--local-timezone` to the `args` list in the configuration.
+
+Example:
+```json
+{
+  "command": "python",
+  "args": ["-m", "mcp_server_time", "--local-timezone=America/New_York"]
+}
+```
+
+The Docker image cannot see the host's timezone, so it reads the `LOCAL_TIMEZONE` environment variable when the container starts, and uses `UTC` when it is unset or empty. Pass it with `-e`: `"-e", "LOCAL_TIMEZONE"` forwards the client's own value, as in the Docker configuration above, and `"-e", "LOCAL_TIMEZONE=America/New_York"` sets one. A `--local-timezone` given after the image name takes precedence.
+
+## Example Interactions
+
+1. Get current time:
+```json
+{
+  "name": "get_current_time",
+  "arguments": {
+    "timezone": "Europe/Warsaw"
+  }
+}
+```
+Response (`structuredContent`, and the same JSON as text):
+```json
+{
+  "timezone": "Europe/Warsaw",
+  "datetime": "2024-01-01T13:00:00+01:00",
+  "day_of_week": "Monday",
+  "is_dst": false
+}
+```
+
+2. Convert time between timezones:
+```json
+{
+  "name": "convert_time",
+  "arguments": {
+    "source_timezone": "America/New_York",
+    "time": "16:30",
+    "target_timezone": "Asia/Tokyo"
+  }
+}
+```
+Response (`structuredContent`, and the same JSON as text):
+```json
+{
+  "source": {
+    "timezone": "America/New_York",
+    "datetime": "2024-01-01T16:30:00-05:00",
+    "day_of_week": "Monday",
+    "is_dst": false
+  },
+  "target": {
+    "timezone": "Asia/Tokyo",
+    "datetime": "2024-01-02T06:30:00+09:00",
+    "day_of_week": "Tuesday",
+    "is_dst": false
+  },
+  "time_difference": "+14.0h"
+}
+```
+
+## Debugging
+
+You can use the MCP inspector to debug the server. For uvx installations:
+
+```bash
+npx @modelcontextprotocol/inspector uvx mcp-server-time
+```
+
+Or if you've installed the package in a specific directory or are developing on it:
+
+```bash
+cd path/to/servers/src/time
+npx @modelcontextprotocol/inspector uv run mcp-server-time
+```
+
+## Examples of Questions for Claude
+
+1. "What time is it now?" (will use system timezone)
+2. "What time is it in Tokyo?"
+3. "When it's 4 PM in New York, what time is it in London?"
+4. "Convert 9:30 AM Tokyo time to New York time"
+
+## Development
+
+Run the tests from `src/time`. They live in `tests/`: `test_protocol.py` drives
+the server through an MCP `ClientSession` in-process, `test_eras.py` runs a
+`Client` against it as a 2026-07-28 and as a 2025-11-25 client, `test_entrypoints.py`
+covers `main()`, `python -m mcp_server_time` and the console script, and
+`test_server.py` unit-tests the time helpers.
+
+```bash
+cd src/time
+uv run pytest
+```
+
+Coverage is a separate command. It measures line and branch coverage of
+`src/mcp_server_time`, prints the missing lines, and writes `coverage.json`
+(ignored by git):
+
+```bash
+cd src/time
+uv run --frozen pytest --cov --cov-report=term-missing --cov-report=json
+```
+
+Every file must reach 90% of its lines and 90% of its branches. Code that
+cannot be reached is marked `# pragma: no cover  # <reason>`, always with the
+reason, rather than lowering the bar.
+
+## Build
+
+Docker build:
+
+```bash
+cd src/time
+docker build -t mcp/time .
+```
+
+## Contributing
+
+We encourage contributions to help improve mcp-server-time. Bug reports, ideas for new time-related tools, enhancements to existing functionality, and documentation improvements are all valuable.
+
+For examples of other MCP servers and implementation patterns, see:
+https://github.com/modelcontextprotocol/servers
+
+Contributions arrive as **issues, not pull requests**: the repository maintainers do the implementation. Open an issue with the [bug report or feature request form](https://github.com/modelcontextprotocol/servers/issues/new/choose), and if you have already prototyped a change, share the prompt you used rather than a diff. See [CONTRIBUTING.md](https://github.com/modelcontextprotocol/servers/blob/main/CONTRIBUTING.md) for the full policy.
+
+## License
+
+mcp-server-time is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
