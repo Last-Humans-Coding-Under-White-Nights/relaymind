@@ -396,6 +396,28 @@ def native_rpc(page, method: str, params: dict) -> dict:
     return native_rpc_envelope(observed)
 
 
+WIRE_READY = "() => window.__rmPersonWire?.state().ready === true"
+
+
+def wait_for_wire_ready(page, seconds: float, failure: BaseException) -> None:
+    """Wait for the browser observer across single-page navigations, bounded.
+
+    A raw evaluate loop fails with "execution context was destroyed" when the
+    Control UI navigates after load; Playwright's wait survives that. Its own
+    timeout raises the caller's fixed failure; the overall deadline passes on.
+    """
+    try:
+        page.wait_for_function(WIRE_READY, timeout=seconds * 1000, polling=100)
+    except TimeoutError:
+        raise
+    except Exception as error:
+        if type(error).__name__ == "TimeoutError" and type(error).__module__.startswith(
+            "playwright"
+        ):
+            raise failure from None
+        raise
+
+
 def native_error_code(frame: dict) -> str | None:
     """A host error code only from a mapping error; any other shape has none."""
     error = frame.get("error") if isinstance(frame, dict) else None
@@ -1187,11 +1209,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     )
                     mark(prefix + "_login")
                     capture["phase"] = prefix + "_pairing"
-                    deadline = time.monotonic() + 60
-                    while not page.evaluate("() => window.__rmPersonWire?.state().ready === true"):
-                        if time.monotonic() >= deadline:
-                            raise TimeoutError("native_ui_pairing_timeout")
-                        time.sleep(0.05)
+                    wait_for_wire_ready(page, 60, TimeoutError("native_ui_pairing_timeout"))
                     mark(prefix + "_pairing")
                     capture["phase"] = prefix + "_session"
                     created = rpc(page, "sessions.create", session_create_params())

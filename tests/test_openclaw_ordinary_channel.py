@@ -1836,3 +1836,237 @@ def test_task_substring_does_not_bind_a_different_native_user_message():
     case = capture["ordinary_skill_loaded_use"]["cases"][0]
     case["requests"][0]["body"]["messages"][1]["content"] = "Quoted task: " + case["task"]
     assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+def test_backend_observation_times_out_while_a_real_transaction_owns_the_lock(
+    tmp_path, monkeypatch
+):
+    """RM16/RM39 AC30: a blocked read fails closed without waiting for the gateway."""
+    import time
+
+    from recommendation_helpers import setup
+
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    _, _, runs, _ = setup(tmp_path)
+    extension.runs = runs
+    monkeypatch.setattr(api, "ORDINARY_OBSERVE_SECONDS", 0.05, raising=False)
+    entered, release = threading.Event(), threading.Event()
+
+    def hold():
+        with runs.sql_transaction():
+            entered.set()
+            release.wait(0.5)  # Also bounds the pre-fix regression test.
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    assert entered.wait(1)
+    started = time.monotonic()
+    try:
+        with pytest.raises(ValueError, match="^ordinary_observe_timeout$"):
+            with extension.step("ui_actions"):
+                extension.observe_backend()
+        assert time.monotonic() - started < 0.4
+        assert "ordinary_observe_timeout" in extension.failure_reasons()
+        assert extension.failure_diagnostics() == {
+            "ordinary_failure_step": "ui_actions",
+            "ordinary_error_class": "value_error",
+        }
+    finally:
+        release.set()
+        holder.join(1)
+        runs.close()
+
+
+class OrdinaryUiPage:
+    """Only the external browser boundary is doubled; run_ui owns sequencing."""
+
+    def __init__(self, *, fail=None):
+        self.target = None
+        self.fail = fail
+        self.actions = []
+        self.dialog_handler = None
+        self.dialog_accepted = False
+        self.snapshot = dict(views=[], records=[], audits=[], events=[])
+
+    def get_by_role(self, role, *, name, exact):
+        assert exact is True
+        self.target = name
+        return self
+
+    def get_by_label(self, name, *, exact):
+        assert exact is True
+        self.target = name
+        return self
+
+    def action(self, timeout, kind):
+        assert timeout == 10000
+        self.actions.append(self.target)
+        if self.target == self.fail or (self.target, kind) == self.fail:
+            from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
+            raise PlaywrightTimeout("private URL and credential")
+
+    def click(self, *, timeout=None):
+        self.action(timeout, "click")
+        if self.target == "Recommend":
+            self.snapshot["views"] = [{"state": "ready"}]
+        elif self.target == "Choose 1":
+            self.snapshot["views"] = [{"state": "chosen"}]
+        elif self.target == "Correct to 1":
+            self.snapshot["records"] = [{"feedback": {"kind": "correction"}}]
+        elif self.target == "Delete feedback":
+            self.snapshot["records"] = []
+            self.snapshot["audits"] = [{"operation": "delete"}]
+        elif self.target == "Reset feedback":
+            self.dialog_handler(self)
+            assert self.dialog_accepted
+            self.snapshot["audits"].append({"operation": "reset"})
+
+    def fill(self, text, *, timeout=None):
+        self.action(timeout, "fill")
+
+    def wait_for(self, *, timeout=None):
+        self.action(timeout, "wait")
+
+    def once(self, event, callback):
+        assert event == "dialog"
+        self.dialog_handler = callback
+
+    def accept(self):
+        self.dialog_accepted = True
+
+
+def test_ui_actions_have_explicit_timeouts_and_preserve_reset_confirmation():
+    """RM16/RM37/RM39 AC28/AC30: each DOM action is bounded, reset stays confirmed."""
+    import copy
+
+    api = module()
+    page = OrdinaryUiPage()
+    result = api.run_ui(page, {}, lambda: copy.deepcopy(page.snapshot))
+    assert list(result["snapshots"]) == [
+        "recommend",
+        "choice",
+        "correction",
+        "inspect",
+        "delete",
+        "reset",
+    ]
+    assert page.actions == [
+        "RelayMind recommendations",
+        "Task",
+        "Recommend",
+        "Choose 1",
+        "Correct to 1",
+        "Inspect feedback",
+        "Delete feedback",
+        "Delete feedback",
+        "Reset feedback",
+    ]
+    assert page.dialog_accepted
+
+
+@pytest.mark.parametrize(
+    ("target", "action"),
+    [
+        ("RelayMind recommendations", "open"),
+        ("Task", "open"),
+        ("Recommend", "recommend"),
+        ("Choose 1", "choose"),
+        ("Correct to 1", "correct"),
+        ("Inspect feedback", "inspect"),
+        (("Delete feedback", "wait"), "inspect"),
+        (("Delete feedback", "click"), "delete"),
+        ("Reset feedback", "reset"),
+    ],
+)
+def test_ui_failure_records_the_current_closed_action(tmp_path, target, action):
+    """RM12/RM16/RM39 AC30: browser failures retain the action, never browser text."""
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    page = OrdinaryUiPage(fail=target)
+    with pytest.raises(ValueError, match="^ordinary_playwright_timeout$"):
+        with extension.step("ui_actions"):
+            api.run_ui(page, {}, lambda: page.snapshot, extension.set_ui_action)
+    assert extension.failure_diagnostics() == {
+        "ordinary_failure_step": "ui_actions",
+        "ordinary_error_class": "playwright_timeout",
+        "ordinary_ui_action": action,
+    }
+    assert api.ORDINARY_UI_ACTIONS == {
+        "open",
+        "recommend",
+        "choose",
+        "correct",
+        "inspect",
+        "delete",
+        "reset",
+    }
+
+
+def test_ui_action_refuses_private_unrecognized_values(tmp_path):
+    """RM12/RM39 AC30: the diagnostic discriminator cannot carry arbitrary text."""
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    with pytest.raises(ValueError, match="^ordinary_step_failed$"):
+        extension.set_ui_action("private URL and credential")
+    assert "ordinary_ui_action" not in extension.failure_diagnostics()
+
+
+def test_backend_observation_returns_original_rows_and_sanitizes_worker_errors(tmp_path):
+    """RM12/RM16/RM39 AC30: worker reads retain evidence and fail closed on storage errors."""
+    from recommendation_helpers import setup
+
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    _, _, runs, _ = setup(tmp_path)
+    extension.runs = runs
+    try:
+        assert extension.observe_backend() == dict(views=[], records=[], audits=[], events=[])
+    finally:
+        runs.close()
+    with pytest.raises(ValueError, match="^ordinary_step_failed$"):
+        with extension.step("ui_actions"):
+            extension.observe_backend()
+    assert extension.failure_diagnostics()["ordinary_error_class"] == "other"
+
+
+def test_real_dom_run_ui_accepts_the_native_reset_dialog():
+    """RM37/RM39 AC28/AC30: DOM-only regression, not installed-host qualification."""
+    from playwright.sync_api import sync_playwright
+
+    api = module()
+    actions = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        try:
+            page = browser.new_page()
+            page.set_content("""
+                <a href="#panel">RelayMind recommendations</a>
+                <label>Task<input></label>
+                <button onclick="snapshot.views = [{state:'ready'}]">Recommend</button>
+                <button onclick="snapshot.views = [{state:'chosen'}]">Choose 1</button>
+                <button onclick="snapshot.records = [{}]">Correct to 1</button>
+                <button>Inspect feedback</button>
+                <button onclick="snapshot.records = []; snapshot.audits.push({operation:'delete'})">
+                    Delete feedback</button>
+                <button onclick="if (confirm('Reset?')) snapshot.audits.push({operation:'reset'})">
+                    Reset feedback</button>
+                <script>window.snapshot = {views:[], records:[], audits:[], events:[]}</script>
+            """)
+            result = api.run_ui(page, {}, lambda: page.evaluate("snapshot"), actions.append)
+            assert result["snapshots"]["reset"]["audits"] == [
+                {"operation": "delete"},
+                {"operation": "reset"},
+            ]
+            assert actions == [
+                "open",
+                "recommend",
+                "choose",
+                "correct",
+                "inspect",
+                "delete",
+                "reset",
+            ]
+        finally:
+            browser.close()
