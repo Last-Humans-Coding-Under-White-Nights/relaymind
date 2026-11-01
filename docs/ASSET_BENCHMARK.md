@@ -908,7 +908,10 @@ for it.
     recorded result (exit 0). Exit 2 means a harness error: a baseline or
     workload gateway that does not start or exits before readiness (for
     example `workload_gateway_exited`), a control call without a reply, or
-    unavailable job evidence. The report, with every sample already collected,
+    unavailable job evidence. A control reply of `job_evidence_unavailable`
+    (the gateway could not read its job store) is recorded as
+    `rescan_job_evidence_unavailable` or `rebuild_job_evidence_unavailable`,
+    never as a refused rescan or rebuild. The report, with every sample already collected,
     is still written in that case.
   - **Default periodic scan.** The 30-second local scan stays at its default.
     On a loaded machine it can delay an import batch past 1,000 ms; that is
@@ -981,7 +984,8 @@ so ordinary pull requests stay fast. Each platform runs:
    `linux_runner_required` capture is kept, and the step passes. A recorded
    product failure of one UI action also passes the step; it becomes a failed
    platform step. A setup failure, a closed browser or a missing capture fails
-   it;
+   it. An earlier capture at `--out` is removed before the attempt, so only
+   this attempt's capture is graded;
 4. `asset_platform_run.py platform`, which writes the runner's `environment.json`,
    a fixture companion bundle locked to it, and `platform.json`. The bundle is
    built from the test fixtures of `tests/test_asset_whole_task_inputs.py`, not

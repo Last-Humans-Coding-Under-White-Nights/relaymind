@@ -3,22 +3,14 @@
 // admission; a dispatch marker and a consumed allow-once approval are written
 // and synced before native dispatch, so a restart can neither replay a
 // possible mutation nor reuse an approval, and a blocked conversation stays
-// blocked. One live owner per path (an exclusive lock file). History is never
+// blocked. One live owner per path (exclusive per-owner lock files). History is never
 // evicted: a full or unreadable ledger refuses (fail closed); blocks use
 // reserved capacity, and managed use refuses once no block could be recorded.
 // It stores digests and closed receipts only, never arguments, tool output,
 // instructions or credentials.
-import {
-  closeSync,
-  existsSync,
-  unlinkSync,
-  fsyncSync,
-  ftruncateSync,
-  openSync,
-  readFileSync,
-  writeSync,
-} from "node:fs";
-import { dirname } from "node:path";
+import * as fs from "node:fs";
+import { randomUUID } from "node:crypto";
+import { basename, dirname, join } from "node:path";
 import type { McpUseReceipt } from "./recommendation-native-mcp.ts";
 
 export type UseBase = Pick<
@@ -46,6 +38,24 @@ export interface NativeUseLedger {
   /** Releases the descriptor; every later operation refuses. Idempotent. */
   close(): void;
 }
+/**
+ * The filesystem and process operations the ledger uses. Production uses
+ * node:fs and this process; tests pass a double to control interleavings and
+ * short writes.
+ */
+export interface LedgerIo {
+  readonly pid: number;
+  alive(pid: number): boolean;
+  readonly closeSync: typeof fs.closeSync;
+  readonly existsSync: typeof fs.existsSync;
+  readonly fsyncSync: typeof fs.fsyncSync;
+  readonly ftruncateSync: typeof fs.ftruncateSync;
+  readonly openSync: typeof fs.openSync;
+  readonly readFileSync: typeof fs.readFileSync;
+  readonly readdirSync: typeof fs.readdirSync;
+  readonly unlinkSync: typeof fs.unlinkSync;
+  readonly writeSync: typeof fs.writeSync;
+}
 type Record =
   | { t: "claim"; k: string; d: string; b: UseBase }
   | { t: "dispatch"; k: string }
@@ -53,13 +63,13 @@ type Record =
   | { t: "approval"; a: string }
   | { t: "block"; i: string };
 
-function syncDirectory(path: string): void {
+function syncDirectory(io: LedgerIo, path: string): void {
   try {
-    const fd = openSync(dirname(path), "r");
+    const fd = io.openSync(dirname(path), "r");
     try {
-      fsyncSync(fd);
+      io.fsyncSync(fd);
     } finally {
-      closeSync(fd);
+      io.closeSync(fd);
     }
   } catch {
     /* Not supported for directories on every platform. */
@@ -74,42 +84,89 @@ function alive(pid: number): boolean {
     return (error as NodeJS.ErrnoException).code === "EPERM";
   }
 }
-/** Exclusive ownership: a lock file naming a live owner refuses a second one. */
-function acquire(lock: string): void {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const fd = openSync(lock, "wx", 0o600);
-      try {
-        writeSync(fd, String(process.pid) + "\n");
-        fsyncSync(fd);
-      } finally {
-        closeSync(fd);
-      }
-      syncDirectory(lock);
-      return;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      const owner = Number.parseInt(readFileSync(lock, "utf8"), 10);
+export const nodeLedgerIo: LedgerIo = {
+  pid: process.pid,
+  alive,
+  closeSync: fs.closeSync,
+  existsSync: fs.existsSync,
+  fsyncSync: fs.fsyncSync,
+  ftruncateSync: fs.ftruncateSync,
+  openSync: fs.openSync,
+  readFileSync: fs.readFileSync,
+  readdirSync: fs.readdirSync,
+  unlinkSync: fs.unlinkSync,
+  writeSync: fs.writeSync,
+};
+/**
+ * Exclusive ownership without ever removing a live owner's lock. Each opener
+ * creates its own lock file, named by its process and a random token and
+ * never reused, and only then inspects the others: any other lock of a live
+ * (or unknown) owner makes it withdraw its own and refuse, and only a lock
+ * whose named owner no longer exists is removed. Of two openers, the later
+ * inspection always sees the earlier lock, so two can never both proceed
+ * (both may refuse; a later open succeeds). A lock's name is its whole
+ * content, so the lock removed is exactly the stale one inspected. Returns
+ * the lock this owner holds and releases.
+ */
+function acquire(io: LedgerIo, path: string): string {
+  const directory = dirname(path);
+  const prefix = basename(path) + ".lock";
+  const mine = `${prefix}.${io.pid}.${randomUUID()}`;
+  const own = join(directory, mine);
+  io.closeSync(io.openSync(own, "wx", 0o600));
+  syncDirectory(io, own);
+  try {
+    for (const name of io.readdirSync(directory)) {
+      if (name === mine) continue;
+      let owner: number;
+      if (name === prefix) {
+        // The single fixed lock name of an earlier revision.
+        let text: string;
+        try {
+          text = io.readFileSync(join(directory, name), "utf8");
+        } catch (error) {
+          // Already removed by another opener as stale.
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+          throw error;
+        }
+        owner = Number(text.trim());
+      } else if (name.startsWith(prefix + ".")) {
+        const match = /^(\d+)\.[A-Za-z0-9-]+$/.exec(
+          name.slice(prefix.length + 1),
+        );
+        owner = match ? Number(match[1]) : Number.NaN;
+      } else continue;
       // A live owner, including this process, keeps the path.
-      if (!Number.isSafeInteger(owner) || owner <= 0 || alive(owner))
+      if (!Number.isSafeInteger(owner) || owner <= 0 || io.alive(owner))
         throw Error("ledger_owned");
-      unlinkSync(lock);
+      try {
+        io.unlinkSync(join(directory, name));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
     }
+  } catch (error) {
+    try {
+      io.unlinkSync(own);
+    } catch {
+      /* Already removed. */
+    }
+    throw error;
   }
-  throw Error("ledger_owned");
+  return own;
 }
 
 /** A private append-only JSON-lines ledger at an operator/host-owned path. */
 export function createFileUseLedger(
   path: string,
   limits: { maxRecords?: number; maxBytes?: number; maxBlocks?: number } = {},
+  io: LedgerIo = nodeLedgerIo,
 ): NativeUseLedger {
   const maxRecords = limits.maxRecords ?? 100000;
   const maxBytes = limits.maxBytes ?? 64 * 1024 * 1024;
   // Blocks never compete with bindings and approvals for capacity.
   const maxBlocks = limits.maxBlocks ?? 10000;
-  const lock = path + ".lock";
-  let locked = false;
+  let lock: string | undefined;
   const history = new Map<string, UseHistory>();
   const approvals = new Set<string>();
   const blocked = new Set<string>();
@@ -119,18 +176,17 @@ export function createFileUseLedger(
   let bytes = 0;
   let usable = true;
   let fd: number | undefined;
-  const created = !existsSync(path);
+  const created = !io.existsSync(path);
   try {
-    acquire(lock);
-    locked = true;
-    fd = openSync(path, "a+", 0o600);
-    if (created) syncDirectory(path);
-    const text = readFileSync(path, "utf8");
+    lock = acquire(io, path);
+    fd = io.openSync(path, "a+", 0o600);
+    if (created) syncDirectory(io, path);
+    const text = io.readFileSync(path, "utf8");
     const end = text.lastIndexOf("\n") + 1;
     // An unterminated final record was never synced and acknowledged.
     if (end < text.length) {
-      ftruncateSync(fd, Buffer.byteLength(text.slice(0, end), "utf8"));
-      fsyncSync(fd);
+      io.ftruncateSync(fd, Buffer.byteLength(text.slice(0, end), "utf8"));
+      io.fsyncSync(fd);
     }
     for (const line of text.slice(0, end).split("\n")) {
       if (!line) continue;
@@ -237,13 +293,27 @@ export function createFileUseLedger(
     // A block is never refused for capacity: new managed use refuses at the
     // block limit instead (isBlocked), so a required stop is never lost.
     try {
-      writeSync(handle, line);
-      fsyncSync(handle);
+      // writeSync may accept fewer bytes than asked: write the rest, and
+      // refuse when a write makes no progress.
+      const buffer = Buffer.from(line, "utf8");
+      let offset = 0;
+      while (offset < buffer.length) {
+        const written = io.writeSync(
+          handle,
+          buffer,
+          offset,
+          buffer.length - offset,
+        );
+        if (!(written > 0)) throw Error("ledger_write_stalled");
+        offset += written;
+      }
+      io.fsyncSync(handle);
     } catch (error) {
       // An unknown write state cannot prove history either way.
       usable = false;
       throw error;
     }
+    // Applied and acknowledged only once the whole record is synced.
     if (counted(record)) {
       records += cost(record);
       bytes += reserve(size, record);
@@ -256,15 +326,18 @@ export function createFileUseLedger(
       const handle = fd;
       fd = undefined;
       try {
-        closeSync(handle);
+        io.closeSync(handle);
       } catch {
         /* Already released. */
       }
     }
-    if (locked) {
-      locked = false;
+    if (lock !== undefined) {
+      // Only this owner's own lock, which no other opener removes while
+      // this process lives.
+      const held = lock;
+      lock = undefined;
       try {
-        unlinkSync(lock);
+        io.unlinkSync(held);
       } catch {
         /* Already removed. */
       }

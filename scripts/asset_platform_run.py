@@ -80,6 +80,10 @@ def ordinary_exit(code: int, capture: Mapping | None, *, system: str, machine: s
 def _ordinary(args) -> int:
     out = Path(args.out).absolute()
     out.parent.mkdir(parents=True, exist_ok=True)
+    # Only this attempt's capture is graded: an earlier attempt's output is
+    # removed first, so a run that exits before writing is ``capture_missing``
+    # (exit 2) and the platform step cannot pick up the stale capture.
+    out.unlink(missing_ok=True)
     argv = [sys.executable, str(QUALIFY), "--tarball", args.tarball]
     argv += ["--work-dir", str(Path(args.work_dir).absolute()), "--out", str(out)]
     try:
