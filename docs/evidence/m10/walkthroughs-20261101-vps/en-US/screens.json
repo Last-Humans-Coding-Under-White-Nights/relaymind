@@ -1,0 +1,112 @@
+[
+ {
+  "step": "open",
+  "file": "screens/0000-open.png",
+  "label": "RelayMind recommendations"
+ },
+ {
+  "step": "open",
+  "file": "screens/0001-open.png",
+  "label": "Task"
+ },
+ {
+  "step": "open",
+  "file": "screens/0002-open.png",
+  "label": "settled"
+ },
+ {
+  "step": "recommend",
+  "file": "screens/0003-recommend.png",
+  "label": "Recommend"
+ },
+ {
+  "step": "recommend",
+  "file": "screens/0004-recommend.png",
+  "label": "settled"
+ },
+ {
+  "step": "choose",
+  "file": "screens/0005-choose.png",
+  "label": "Choose 1"
+ },
+ {
+  "step": "choose",
+  "file": "screens/0006-choose.png",
+  "label": "settled"
+ },
+ {
+  "step": "correct",
+  "file": "screens/0007-correct.png",
+  "label": "Correct to 1"
+ },
+ {
+  "step": "correct",
+  "file": "screens/0008-correct.png",
+  "label": "settled"
+ },
+ {
+  "step": "inspect",
+  "file": "screens/0009-inspect.png",
+  "label": "Inspect feedback"
+ },
+ {
+  "step": "inspect",
+  "file": "screens/0010-inspect.png",
+  "label": "Delete feedback"
+ },
+ {
+  "step": "inspect",
+  "file": "screens/0011-inspect.png",
+  "label": "settled"
+ },
+ {
+  "step": "delete",
+  "file": "screens/0012-delete.png",
+  "label": "Delete feedback"
+ },
+ {
+  "step": "delete",
+  "file": "screens/0013-delete.png",
+  "label": "settled"
+ },
+ {
+  "step": "reset",
+  "file": "screens/0014-reset.png",
+  "label": "Reset feedback"
+ },
+ {
+  "step": "reset",
+  "file": "screens/0015-reset.png",
+  "label": "settled"
+ },
+ {
+  "step": "reset",
+  "file": "screens/0016-reset.png",
+  "label": "settled"
+ },
+ {
+  "step": "select_skill",
+  "file": "screens/0017-select_skill.png",
+  "label": "Select native skill"
+ },
+ {
+  "step": "select_skill",
+  "file": "screens/0018-select_skill.png",
+  "label": "Select native skill"
+ },
+ {
+  "step": "select_skill",
+  "file": "screens/0019-select_skill.png",
+  "label": "Select for next turn"
+ },
+ {
+  "step": "select_skill",
+  "file": "screens/0020-select_skill.png",
+  "label": "Exact native revision selected for the next turn; instruction use is not yet observed."
+ },
+ {
+  "step": "select_skill",
+  "file": "screens/0021-select_skill.png",
+  "label": "settled"
+ }
+]
