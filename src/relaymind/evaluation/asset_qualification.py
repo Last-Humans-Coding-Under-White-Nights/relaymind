@@ -7,6 +7,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from relaymind.canonical import canonical_digest
+from relaymind.evaluation.asset_judgments import OWNER_MACHINE
 from relaymind.evaluation.asset_splits import input_identity
 from relaymind.schema_util import freeze_json
 
@@ -315,10 +316,13 @@ def _assess_asset_release(
         custodian = people.get(review.custodian_id)
         if review.lock_digest != lock["digest"]:
             reasons.add("external_review_lock_mismatch")
+        # Spec 0.66 section 12.6.6: under owner_machine labelling the owner is
+        # custodian and tuner; the reviewed record and its label disclose it.
+        owner_machine = labels["agreement"]["method"] == OWNER_MACHINE
         if (
             custodian is None
             or "custodian" not in custodian["roles"]
-            or "tuner" in custodian["roles"]
+            or ("tuner" in custodian["roles"] and not owner_machine)
         ):
             reasons.add("custodian_unqualified")
         if (

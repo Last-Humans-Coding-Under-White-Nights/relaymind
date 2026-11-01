@@ -635,10 +635,32 @@ Apple Silicon macOS or native x86-64 Windows (`platform_not_target`) and every
 `unverified` entry make it `provisional`. A report labelled `provisional`,
 `qualified` or `measured` over fixture inputs is rejected
 (`qualification_contradiction`); no gate passes unless the tier is
-`qualified`, and a known failure still fails. The specification defines no
-reviewed S3 qualification record and enables no native configuration
-verifier, so `qualified_evidence_review` is always listed and no report can
-be assessed `qualified` yet; observed provenance labels cannot change that.
+`qualified`, and a known failure still fails. Without a reviewed record,
+`qualified_evidence_review` is always listed; observed provenance labels
+cannot change that.
+
+**Owner-run qualification records (spec 0.66 section 12.6.6; #251).** The
+`grade-*` commands accept `--qualification-record PATH`, a closed
+`QualificationRecordV1` (`asset_qualification_record.v1.json`) committed in
+`docs/evidence/m10/`. It binds by SHA-256 the report, freeze, tasks or
+episodes, labels, captures and media it covers (paths relative to the record),
+names the machine (`target_macos_m1_8gib`, `target_windows_x64` or
+`linux_host`; OS build, CPU, RAM and a hostname digest), the repository commit
+and harness/adapter revisions, and the preregistration commit. It is approved
+by a pull request review by at least one organization member other than the
+owner; the PR number, reviewer logins and approval time are added after the
+merge. Only an approved record that binds the report's exact bytes removes
+`qualified_evidence_review`; a changed byte, another report or scope, a machine
+other than the report's platform, or a labelling/agreement that differs from
+the frozen labels rejects (exit 2). Its `labelling` (`owner_machine` or
+`independent`) is reported next to the tier. A fixture input or any other
+unverified input still keeps the report below `qualified`. The label commands
+take `--labelling owner_machine` for the owner plus one recorded machine
+annotator (`owner_machine.v1`; the owner may also be the tuner, the machine
+annotator never). A `negative` record with scope `host_operation` closes the
+`skill_loaded_use` or `mcp_use` gate with the operation disabled
+(`known_host_limitations`). The module is
+`relaymind.evaluation.asset_qualification_record`.
 
 **Native configuration validation (spec 0.65; #240).** Host, provider, sampling
 and budget configuration documents stay unverified and cannot establish qualified
@@ -1047,13 +1069,13 @@ still requires the positive byte round trip. Neither check qualifies loaded use.
 ## Early installed-skill trial kit (#234)
 
 The `trial-*` commands of `scripts/asset_whole_task.py` prepare the early
-installed-skill customer trial on the customer's Apple M1 8 GiB machine with
+installed-skill trial, run by the owner as operator on the owner's Apple M1 8 GiB MacBook with
 the packaged plugin (RM39, RM44; AC30, AC36; spec 0.65 section 12.6.5). They
 wrap the existing frozen plan, conserving driver (`run_host_trial`) and
 offline grader (`grade-host`) above; they add no other calculation. The
 implementation is `relaymind.evaluation.asset_trial_kit`, so the runner
-inventory already covers it. The trial itself still needs the customer's
-machine, session and frozen inputs; nothing here performs it or records a
+inventory already covers it. The trial itself still needs the owner's
+machine session and frozen inputs; nothing here performs it or records a
 result.
 
 | Command | What it does |
@@ -1135,12 +1157,13 @@ python scripts/asset_whole_task.py trial --inputs /abs/frozen/inputs.json \
   --qualification provisional --interactive -- openclaw
 ```
 
-**Still open in #234:** the customer machine and session, the frozen trial
+**Still open in #234 (now #259):** the owner's machine session, the frozen trial
 inputs (tasks, freeze, corpus, configurations and inventories), and genuine
-row observations from native host records. Spec 0.65 defines no capture of
-OpenClaw 2026.10.7 session usage, so the kit takes observations as operator
-evidence. Native host configuration validation (#240) and a qualified-evidence
-verifier remain open as well.
+row observations from native host records. Spec 0.66 section 12.6.6 names the
+capture source (the host's persisted session record of provider-reported usage);
+until it is captured, the kit takes observations as operator evidence. Native
+host configuration validation (#240) remains open; the qualified-evidence
+record and its check are in place (#251).
 
 ## Bilingual packaged walkthrough recorder (#238)
 
@@ -1184,7 +1207,7 @@ later ones are `not_run`. A screenshot alone never makes a step recorded. The
 command exits `0` only when both languages are complete.
 
 The tier is `functional_fixture`, with a deterministic gateway and disposable
-fixture accounts. It is not a customer, human or live-model walkthrough and
+fixture accounts. It is not an owner, human or live-model walkthrough and
 not platform acceptance. Blocked steps are never attempted. Screenshots and
 video can show fixture account names; keep them private until reviewed, and
 never publish the work directory. Whether the pinned host's Control UI

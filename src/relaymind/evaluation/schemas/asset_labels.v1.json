@@ -211,7 +211,8 @@
       "properties": {
         "method": {
           "enum": [
-            "double_annotation.v1"
+            "double_annotation.v1",
+            "owner_machine.v1"
           ]
         },
         "groups": {

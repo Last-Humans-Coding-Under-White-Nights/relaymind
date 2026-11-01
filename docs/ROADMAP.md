@@ -1040,7 +1040,27 @@ listed here so the current order can be traced to its reason.
   so it does not wait for the plugin.
 
 
-## M10 — Multilingual asset recommendations (spec 0.65)
+## M10 — Multilingual asset recommendations (spec 0.66)
+
+Spec 0.66 (#251) adds the owner-run acceptance profile (section 12.6.6): the
+owner runs every trial as operator on the owner's Apple M1 8 GiB MacBook
+(target macOS), Windows PC (named native x86-64 target) and Ubuntu VPS (Linux
+functional host, never a target platform). Labels may be `owner_machine`
+(owner plus one recorded machine annotator, Cohen's kappa before owner
+adjudication), and reports say so. A closed `QualificationRecordV1` in
+`docs/evidence/m10/` binds the frozen inputs and reports by SHA-256 and is
+approved by a pull request review from at least one org member other than the
+owner; a negative record closes the `skill_loaded_use` or `mcp_use` gate on
+the pinned host with the operation disabled and listed as a known host
+limitation. The verifier support is implemented (`--qualification-record`,
+`--labelling owner_machine`) and fixture-tested only. No record has been
+committed and no gate has passed: #255, #259, #260 and #261 remain open and
+need the real runs, captures, labels and reviews. Host configuration semantics
+(#250/#240) still keep host reports below `qualified`. Spec-only decisions
+awaiting implementation: the rank 4–10 choice receipt returning the offered
+record, the MCP ledger location/mode/retention and erasure on reset, blind
+success judging, and episode corrections through the native feedback RPC.
+
 
 #207 customer documentation now has [English](asset-selection.md) and
 [简体中文](asset-selection.zh-CN.md) entry guides, v1/v2 migration and third-party
@@ -1126,13 +1146,15 @@ it does not qualify or enable either operation. Their separate reviewed entries
 still require actual supported native composition and all negative controls.
 Host snapshots/runtime recommendations remain disabled pending their own later
 normative contract and qualification. Source gates stay unchanged. There is no
-host upgrade, alternate dataset, new milestone or relaxed/partial acceptance.
+host upgrade, alternate dataset, new milestone or relaxed/partial acceptance,
+except that an approved spec 0.66 negative record removes the loaded-use or
+MCP-use requirement on the pinned host version and lists it as a host limitation.
 
-The customer-approved defaults of 29 October 2026 are in spec section 1.
+The owner-approved defaults of 29 October 2026 are in spec section 1.
 
-The customer explicitly authorized implementation on the reviewed specification
+The owner explicitly authorized implementation on the reviewed specification
 stack on 29 October 2026 before #187 merges; the former merge-first sequencing
-restriction is superseded. Merges remain customer-owned. The table gives the
+restriction is superseded. Merges remain owner-owned. The table gives the
 current RM/AC mapping without claiming that a remote issue has already changed.
 
 The source-grounded development deliverables for #191, #199 and #200 are
@@ -1166,7 +1188,7 @@ profile and for full M10 acceptance.
 | #188 Matrix capture | Historical 29 October qualification: one genuine version 1.1.1 archive, two equal-hash downloads; one Chinese body. This is distinct from the later 87-skill source-grounded development capture, which does not qualify market refresh or independent corpus rights. MATRIX-COHORT (100 original Chinese), MATRIX-OVERLAP (25 functional pairs), MATRIX-RIGHTS and MATRIX-REFRESH remain blocked; same-source permitted operator export/rights/inventory input required. No automatic substitute or source permission. |
 | #189 direct commands | Real pre-model ingress and isolated credential/native search/read/forged-input checks pass over doubles; verified person and immutable choice-to-library composition failed. These historical probes did not qualify host authority. The later spec0.62 ordinary direct-action proof closes HOST-ACTION-AUTHORITY for #195; exact skill/use gates remain open for #197/#198. Real interactive approvals not_run; read-only does not waive exact content/authority. |
 | #190 MCP | Same-instance public genuine provenance/schema, collision-safe host execution and changed-schema execution passed; three server invocations, ten completed gateway runs, zero gateway execution. Disconnect retains schemas and actual call fails; deny/removal exclude tools. HOST-MCP-BINDING and HOST-MCP-CURRENTNESS remain blocked: session/turn/host revision absent, availability unknown, third-party authorized runtime inventory refused. |
-| Evidence tiers | #189/#190 are Linux real-host functional runs with model doubles. #190 uses coding profile/toolSearch=false/disposable conversation grant; not intact-native/default or customer acceptance. HTTP/OAuth, live quality, supported-platform M10 and human interactive approval remain not_run. |
+| Evidence tiers | #189/#190 are Linux real-host functional runs with model doubles. #190 uses coding profile/toolSearch=false/disposable conversation grant; not intact-native/default or owner-run acceptance. HTTP/OAuth, live quality, supported-platform M10 and human interactive approval remain not_run. |
 
 Within the authorized reviewed stack, these components proceed within their dependencies: the
 independent catalog, reads of ordinary SKILL.md directories, closed reviewed
@@ -1221,7 +1243,7 @@ become implemented by appearing in the table.
 | #195 | #187, #189, #194 | RM08, RM11, RM12, RM17, RM19, RM22, RM33 | RM37; AC28 | Authenticated direct-input choices/feedback, scope isolation, retention/delete/reset |
 | #196 | #187, #192, #193, #194 | RM03, RM16–RM19, RM22, RM24, RM26, RM27, RM28 | RM38; AC29 | Separate readiness, lexical visibility/rebuild/scheduler behavior; full 300-asset/live embedding measurements later |
 | #197 | #187, #189, #194, #195, #193 | RM08, RM11, RM12, RM19, RM20, RM22, RM33; AC24 | RM39; AC30 | Packaged direct commands, exact installed-skill load/use and feedback; unchanged provider |
-| #198 | #187, #191, #192, #196, #197 | RM16, RM18, RM25, RM26, RM28, RM33; AC22, AC24 | RM39, RM44; AC30, AC36 | Actual early Apple M1 8 GiB customer trial and three-arm costs; observations before hybrid investment |
+| #198 | #187, #191, #192, #196, #197 | RM16, RM18, RM25, RM26, RM28, RM33; AC22, AC24 | RM39, RM44; AC30, AC36 | Actual early Apple M1 8 GiB owner-run trial and three-arm costs; observations before hybrid investment |
 | #199 | #187, #191 development inputs | RM07, RM12, RM16, RM25, RM28, RM33 | RM40; AC31 | Implemented mixed working catalog: 412 real source assets including 131 genuine MCP tools, frozen references and reproducible inputs; formal independent held-out qualification remains separate |
 | #200 | #187, #193, #191 | RM03, RM12, RM16, RM18, RM22, RM25, RM28; AC22 | RM35, RM40; AC26, AC31 | Implemented shared production-path run/compare, builtin/team HTTP examples and explicit index readiness with separate setup costs; working source and formal qualification profiles retain their own evidence rules |
 | #201 | #187, #198, #199, #200, #196 | RM03, RM04, RM12, RM16, RM18, RM22, RM24–RM28 | RM38, RM41; AC29, AC32 | Development-selected pinned local embedding artifact, bounded revisioned hybrid ranking/indexing, lifecycle/resource evidence |
@@ -1286,11 +1308,15 @@ isolation and connection retirement. Its unmodified capture is
 capture remains the record of the earlier revision. The loaded-use fence and
 the conditional MCP use path (#239/#204) change the adapter bytes again; the
 registry now pins the new exact revision
-`653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`, and its
-evidence revision is replaced by the fresh ordinary installed-host capture of
-these exact bytes before this change is merged. As before, this is
+`653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`, and
+the ordinary installed-host run of these exact bytes (CI run 41286397320,
+pinned OpenClaw 2026.10.7, Ubuntu runner, commit 548588a, PR merge checkout
+6a4a99f) passed the ordinary-pass and ordinary-skill-pass predicates with all
+15 harness sources matching. Its unmodified capture is
+[openclaw-native-actions-20261101-adapter.json](evidence/m10/openclaw-native-actions-20261101-adapter.json)
+(SHA-256 `933fb4e7c8b3057305fae165561825984a63325275b821be84b008dd574589f7`), which the registry's evidence revision names. As before, this is
 Linux functional evidence with disposable accounts, not macOS/Windows or
-customer acceptance. The person-ingress harness hardening raised in the #224 review
+owner-run acceptance. The person-ingress harness hardening raised in the #224 review
 (#228) changed evidence-bound harness files; a fresh ordinary installed-host
 run with the hardened harness, including the fixes from the #231 reviews, and the
 same adapter bytes passed the ordinary-pass predicate after the runner
@@ -1325,7 +1351,7 @@ operations `direct_actions` and `exact_skill_selection`. The receipt records
 not observed loaded instruction use, which stays open as HOST-EXACT-SKILL-USE in
 #239. MCP use and real interactive approvals remain open (#204). As before, this
 is Linux functional evidence with disposable accounts, not macOS/Windows or
-customer acceptance.
+owner-run acceptance.
 
 Spec 0.65 checkpoint (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;
 AC25/AC28/AC30/AC31/AC35–AC37): the normative contract now distinguishes a
@@ -1393,10 +1419,9 @@ spec 0.65 names no qualified native boundary that can stop the next model
 request. HOST-EXACT-SKILL-USE (#239) and MCP use with real approvals (#204)
 remain open. The changed adapter bytes have a new exact revision, and the
 shipped `direct_actions`/`exact_skill_selection` entry is re-pinned to it
-(`653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`), as for the spec 0.63 scope fix. Its evidence revision still names
-the capture of the earlier bytes: the fresh ordinary installed-host capture
-of this revision, and the evidence revision naming it, are the open
-pre-merge gate. `tests/test_openclaw_install.py` fails when the registry and
+(`653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`), as for the spec 0.63 scope fix. Its evidence revision names
+the fresh ordinary installed-host capture of this revision
+(`openclaw-native-actions-20261101-adapter.json`, SHA-256 `933fb4e7c8b3…`). `tests/test_openclaw_install.py` fails when the registry and
 the built adapter digest of the release artifact drift.
 
 #240 host_config evidence must validate with the pinned host's own validator
@@ -1500,7 +1525,7 @@ is claimed.
 preflight, the pinned-CLI plugin install, and the frozen plan run through the
 existing driver over operator-captured row observations, bundled with
 SHA-256 digests and graded offline. They are verified over fixture bundles and a
-host double only. The customer trial itself, its frozen inputs and genuine
+host double only. The owner-run trial itself (#259), its frozen inputs and genuine
 native row observations remain open; no provisional cost has been recorded.
 
 #201 native benchmark contract checkpoint (spec 0.61): explicit local-cold

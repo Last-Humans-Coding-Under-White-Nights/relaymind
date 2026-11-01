@@ -28,9 +28,11 @@ from collections.abc import Mapping, Sequence
 from relaymind.canonical import canonical_digest
 from relaymind.evaluation.asset_corpus_io import _VALIDATORS, AssetCorpusError, _CorpusValidator
 from relaymind.evaluation.asset_judgments import (
+    METHODS,
     _answer,
     agreement,
     check_object_order,
+    check_owner_machine_pair,
     check_person,
     id_map,
     validate_judgments,
@@ -93,10 +95,23 @@ def _prompt(case: Mapping) -> dict:
     return dict(case_id=case["id"], **{k: copy.deepcopy(case[k]) for k in _PROMPT})
 
 
-def label_template(catalog: Mapping, cases: Mapping, annotator_id: str) -> dict:
-    """One annotator's blind template over every frozen case."""
+def _method(labelling: str) -> str:
+    if labelling not in METHODS:
+        raise AssetCorpusError("invalid_labelling")
+    return METHODS[labelling]
+
+
+def label_template(
+    catalog: Mapping, cases: Mapping, annotator_id: str, *, labelling: str = "independent"
+) -> dict:
+    """One annotator's blind template over every frozen case.
+
+    ``labelling`` is ``independent`` (section 12.6.1) or the spec 0.66
+    section 12.6.6 ``owner_machine`` profile, where the owner may also tune.
+    """
+    owner_machine = _method(labelling) == METHODS["owner_machine"]
     people, case_map = _documents(catalog, cases)
-    check_person(annotator_id, people, "annotator")
+    check_person(annotator_id, people, "annotator", owner_machine=owner_machine)
     return dict(
         format=TEMPLATE_FORMAT,
         **_binding(catalog, cases),
@@ -105,12 +120,19 @@ def label_template(catalog: Mapping, cases: Mapping, annotator_id: str) -> dict:
     )
 
 
-def raw_judgments(catalog: Mapping, cases: Mapping, templates: Sequence[Mapping]) -> list[dict]:
+def raw_judgments(
+    catalog: Mapping,
+    cases: Mapping,
+    templates: Sequence[Mapping],
+    *,
+    labelling: str = "independent",
+) -> list[dict]:
     """The immutable raw Judgment rows from returned templates, sorted.
 
     Every case needs exactly two judgments by distinct annotators; a template
     whose binding or prompt text differs from the frozen cases rejects.
     """
+    owner_machine = _method(labelling) == METHODS["owner_machine"]
     people, case_map = _documents(catalog, cases)
     assets = {entry["record"]["asset_id"]: entry for entry in catalog["assets"]}
     binding = _binding(catalog, cases)
@@ -125,7 +147,7 @@ def raw_judgments(catalog: Mapping, cases: Mapping, templates: Sequence[Mapping]
         ):
             raise AssetCorpusError("template_binding")
         annotator = template["annotator_id"]
-        check_person(annotator, people, "annotator")
+        check_person(annotator, people, "annotator", owner_machine=owner_machine)
         ids = set()
         for item in template["items"]:
             case = case_map.get(item.get("case_id")) if isinstance(item, Mapping) else None
@@ -155,6 +177,8 @@ def raw_judgments(catalog: Mapping, cases: Mapping, templates: Sequence[Mapping]
         counts[row["case_id"]] += 1
     if any(counts[case_id] != 2 for case_id in case_map):
         raise AssetCorpusError("raw_judgment_coverage")
+    if owner_machine:
+        check_owner_machine_pair((j["annotator_id"] for j in judgments), people)
     return judgments
 
 
@@ -165,13 +189,19 @@ def _by_case(judgments: Sequence[Mapping]) -> dict[str, list]:
     return rows
 
 
-def _groups(case_map: Mapping, rows: Mapping) -> dict:
+def _groups(case_map: Mapping, rows: Mapping, labelling: str) -> dict:
     groups = agreement(case_map, rows)
     ordered = sorted(groups, key=lambda lane: (lane != "all", lane.encode()))
-    return dict(method="double_annotation.v1", groups=[groups[lane] for lane in ordered])
+    return dict(method=_method(labelling), groups=[groups[lane] for lane in ordered])
 
 
-def adjudication_worksheet(catalog: Mapping, cases: Mapping, judgments: Sequence[Mapping]) -> dict:
+def adjudication_worksheet(
+    catalog: Mapping,
+    cases: Mapping,
+    judgments: Sequence[Mapping],
+    *,
+    labelling: str = "independent",
+) -> dict:
     """The adjudicator's view: both raw judgments, their agreement, one final per case."""
     _, case_map = _documents(catalog, cases)
     rows = _by_case(judgments)
@@ -194,7 +224,7 @@ def adjudication_worksheet(catalog: Mapping, cases: Mapping, judgments: Sequence
     return dict(
         format=WORKSHEET_FORMAT,
         **_binding(catalog, cases),
-        agreement=_groups(case_map, rows),
+        agreement=_groups(case_map, rows, labelling),
         items=items,
     )
 
@@ -204,6 +234,8 @@ def freeze_labels(
     cases: Mapping,
     judgments: Sequence[Mapping],
     worksheet: Mapping,
+    *,
+    labelling: str = "independent",
 ) -> dict:
     """The AssetLabelsV1 from raw judgments and the completed worksheet.
 
@@ -241,7 +273,7 @@ def freeze_labels(
         rubric_version=RUBRIC,
         judgments=[dict(j) for j in judgments],
         adjudications=adjudications,
-        agreement=_groups(case_map, rows),
+        agreement=_groups(case_map, rows, labelling),
     )
     if next(_VALIDATORS["labels"].iter_errors(labels), None) is not None:
         raise AssetCorpusError("invalid_schema")

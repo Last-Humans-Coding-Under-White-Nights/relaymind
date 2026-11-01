@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Owner-run qualification records and `owner_machine` labelling (#251; RM16,
+  RM39, RM40, RM42, RM44; AC30, AC31, AC33, AC35–AC37; spec 0.66 section
+  12.6.6): the closed `asset_qualification_record.v1.json` schema and
+  `asset_qualification_record.py` verify every bound SHA-256, the machine role,
+  preregistration order, labelling and the review (one org member other than
+  the owner). `grade-*` take `--qualification-record`; only an approved record
+  binding the report's exact bytes removes `qualified_evidence_review`, and the
+  output reports its `labelling`. Label commands take `--labelling
+  owner_machine` (`owner_machine.v1`: the owner may also tune, the machine
+  annotator never); the record's Cohen's kappa is recomputed from the labels.
+  Negative `host_operation` records list disabled operations as known host
+  limitations. Fixture-tested only; no record exists and no gate has passed.
+
 - Native host configuration preflight (#250; RM16/RM39/RM40/RM44;
   AC31/AC35/AC36/AC37): a bounded Node checker uses pinned OpenClaw 2026.10.7
   validation, including defaults, strict refinements and plugin schemas, and
@@ -97,9 +112,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   operation is in the shipped registry, no production MCP route exists, and
   `relaymind.mcp` is not registered; the tests use injected fixture resolvers
   and routes only. The shipped direct-action/exact-selection entry is re-pinned
-  to the new adapter revision `653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`; its evidence revision still names the
-  capture of the earlier bytes, and the fresh ordinary installed-host capture of
-  this revision is the open pre-merge gate. A release-artifact test now fails
+  to the new adapter revision `653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`; its evidence revision names the
+  fresh ordinary installed-host capture of this revision (CI run 41286397320,
+  SHA-256 `933fb4e7c8b3…`). A release-artifact test now fails
   when the registry and the built adapter digest drift.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
@@ -136,6 +151,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   refusals with their exact error codes. Browser failures and the overall
   deadline remain failures through skill selection.
 
+- CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
+- CI: both `check` and `openclaw-plugin` run stacked PRs on Linux only to
+  conserve CI capacity, with no base-branch filter. Every PR must target
+  `master` and pass the full Linux/macOS/Windows matrix before merge; pushes
+  also run all three platforms. `openclaw-plugin` now shares the Chromium
+  shell cache keyed by OS and Playwright version; its test tiers remain serial.
 - Stabilize installed OpenClaw qualification on loaded runners (RM16/RM39;
   AC30): use bounded ten-second host-event waits, keep fixture holds alive
   through retirement observation, and capture only fixed ordinary substeps and
@@ -164,6 +185,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.65 → 0.66 (#251; RM16/RM38–RM44; AC29–AC37): adds the
+  owner-run acceptance profile (section 12.6.6). Names the owner's M1 8 GiB
+  MacBook and native x86-64 Windows PC as the target machines and the Ubuntu
+  VPS as the Linux functional host; defines `owner_machine` labelling with a
+  recorded machine annotator, Cohen's kappa and owner adjudication; held-out
+  split, commit-based preregistration, at least 20 tasks per lane within the
+  100, blind arm-anonymized success judging, disjoint usage components and
+  their capture sources, native-RPC episode corrections, rank 4–10 choice
+  receipts, the MCP ledger location/retention, the open-source MCP acceptance
+  catalog, and the closed qualification record with PR approval. A reviewed
+  negative record closes the loaded-use or MCP-use gate on the pinned host with
+  the operation disabled as a known host limitation (sections 7.6.1, 7.6.2).
+  "Customer" wording about who runs trials becomes owner/operator. No metric,
+  threshold or budget changes.
 - Specification 0.64 → 0.65 (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;
   AC25/AC28/AC30/AC31/AC35–AC37): defines native skill loaded-byte delivery,
   immutable-pin versus removal semantics and the later-use authority fence;

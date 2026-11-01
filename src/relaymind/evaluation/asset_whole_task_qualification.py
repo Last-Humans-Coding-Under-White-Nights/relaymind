@@ -12,13 +12,13 @@ A report claiming more than a known fixture input allows is a contradiction
 and is rejected. A claim the inputs cannot establish never passes a gate; a
 known gate failure still takes precedence.
 
-This revision has no path to ``qualified``. The specification defines the
-evidence obligations but no reviewed S3 qualification record: native host,
-provider, sampling and budget configuration validation is not enabled
-(section 12.6.5, "this revision enables no native verifier"), and software
-cannot establish authenticity, human observation or actual hardware from
-labels, opaque reviewer IDs or hashes. ``qualified_evidence_review`` is
-therefore always reported as unverified.
+Spec 0.66 section 12.6.6 defines the reviewed record: an approved
+QualificationRecordV1 whose digests bind this report's exact bytes lifts the
+``qualified_evidence_review`` reason, and its labelling (``owner_machine`` or
+``independent``) is reported beside the tier. Without such a record the review
+stays unverified. A record never lifts a fixture input or another unverified
+input, and software still cannot establish authenticity, human observation or
+actual hardware from labels or hashes: the record is the reviewed assertion.
 """
 
 from collections.abc import Iterable, Mapping
@@ -26,6 +26,7 @@ from dataclasses import dataclass
 
 from relaymind.evaluation.asset_corpus import assess_asset_release
 from relaymind.evaluation.asset_qualification import CustodianReview
+from relaymind.evaluation.asset_qualification_record import REPORT_SCOPES, QualificationRecord
 from relaymind.evaluation.asset_whole_task import WholeTaskRejected
 
 REVIEW_UNDEFINED = "qualified_evidence_review"
@@ -43,9 +44,15 @@ class WholeTaskQualification:
     claimed: str
     assessed: str
     reasons: tuple[str, ...]
+    labelling: str | None = None
 
     def as_output(self) -> dict:
-        return dict(claimed=self.claimed, assessed=self.assessed, reasons=list(self.reasons))
+        return dict(
+            claimed=self.claimed,
+            assessed=self.assessed,
+            reasons=list(self.reasons),
+            labelling=self.labelling,
+        )
 
 
 def assess_qualification(
@@ -58,16 +65,34 @@ def assess_qualification(
     artifacts: Iterable[Mapping],
     unverified: Iterable[str],
     platform: Mapping | None,
+    record: QualificationRecord | None = None,
+    report_sha256: str | None = None,
 ) -> WholeTaskQualification:
     """Assess one S3 report's qualification tier from verified facts.
 
     ``corpus_status`` is the section 12.6.1 release assessment
     (``fixture|unverified|qualified``); ``unverified`` lists what input
     resolution could not verify; ``platform`` is the platform report's
-    Environment (``None`` for host and adaptation reports).
+    Environment (``None`` for host and adaptation reports). ``record`` is a
+    loaded section 12.6.6 record and ``report_sha256`` the SHA-256 of the
+    report's exact bytes; a record for another report or scope rejects.
     """
     reasons = set(unverified)
-    reasons.add(REVIEW_UNDEFINED)
+    labelling = None
+    if record is None:
+        reasons.add(REVIEW_UNDEFINED)
+    else:
+        if record.outcome != "positive" or REPORT_SCOPES.get(record.scope) != kind:
+            raise WholeTaskRejected("qualification_record_scope")
+        if report_sha256 is None or not record.binds("report", report_sha256):
+            raise WholeTaskRejected("qualification_record_unbound")
+        if kind == "platform":
+            _check_platform_machine(record.machine, platform, reasons)
+        if record.approved:
+            reasons.discard(REVIEW_UNDEFINED)
+        else:
+            reasons.add(REVIEW_UNDEFINED)
+        labelling = record.labelling
     fixture = False
     if corpus_purpose == "fixture" or corpus_status == "fixture":
         reasons.add("fixture_corpus")
@@ -82,7 +107,17 @@ def assess_qualification(
     if kind == "platform" and (platform["os"], platform["architecture"]) not in TARGET_PLATFORMS:
         reasons.add("platform_not_target")
     assessed = "fixture" if fixture else ("provisional" if reasons else "qualified")
-    return WholeTaskQualification(kind, claimed, assessed, tuple(sorted(reasons)))
+    return WholeTaskQualification(kind, claimed, assessed, tuple(sorted(reasons)), labelling)
+
+
+def _check_platform_machine(machine: Mapping, platform: Mapping, reasons: set[str]) -> None:
+    """The record's machine identity must be the one the report measured."""
+    if (machine["os"], machine["architecture"]) != (platform["os"], platform["architecture"]) or (
+        platform["ram_bytes"] is not None and platform["ram_bytes"] != machine["ram_bytes"]
+    ):
+        raise WholeTaskRejected("record_machine_mismatch")
+    if machine["role"] == "linux_host":
+        reasons.add("platform_not_target")
 
 
 def check_claim(assessment: WholeTaskQualification) -> None:
@@ -105,13 +140,21 @@ def assess_inputs(
     inputs,
     *,
     custodian_review: CustodianReview | None = None,
+    record: QualificationRecord | None = None,
+    report_sha256: str | None = None,
 ) -> WholeTaskQualification:
     """Assess a report over its resolved ``WholeTaskInputs``.
 
-    ``custodian_review`` is the trusted section 12.6.1 corpus review assertion,
-    never parsed from a file; without it the corpus stays unqualified.
+    ``custodian_review`` is the trusted section 12.6.1 corpus review assertion.
+    An approved section 12.6.6 record may carry it instead; without either the
+    corpus stays unqualified. The record's labelling and agreement must match
+    the frozen labels.
     """
     release = inputs.release
+    if record is not None:
+        record.check_labels(release.labels)
+        if custodian_review is None:
+            custodian_review = record.custodian_review()
     status = assess_asset_release(release, custodian_review=custodian_review).status
     return assess_qualification(
         kind=kind,
@@ -122,4 +165,6 @@ def assess_inputs(
         artifacts=report.get("artifacts", ()),
         unverified=inputs.unverified,
         platform=report.get("platform"),
+        record=record,
+        report_sha256=report_sha256,
     )

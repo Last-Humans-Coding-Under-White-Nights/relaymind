@@ -182,6 +182,8 @@ _GENERATOR_ANCHORS = {
             ("ef222b8befa59a1edb4cdc3a0718bb4c1f5bdda0ab9dca0cb1d21f42c020872c", 2244),
             # Reviewed semantic/refresh integration adds only optional embedding extras.
             ("950dff8707e05c8b16e3ea6c55e32c2a78597b3318f236c16023eab8da5b4cc2", 2397),
+            # Reviewed CI change: adds only the pytest-xdist dev dependency (#244).
+            ("bce29a33637ef40030f8c4157559c75d55f0c67a242e0b23bbce6f087de4eb13", 2501),
         }
     ),
     "scripts/asset_selection_benchmark.py": frozenset(
@@ -189,6 +191,8 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.66 owner-run acceptance profile and qualification record.
+            ("95f02f33840b360b3c48dcbc43aa95bc5d1265ab501758f7002dcc90dfdfc233", 621565),
             # Reviewed 0.65 skill-use/MCP fences and native configuration evidence.
             ("ccd552fe981c4206c38b11cbe74ab84e5ff51f5c83f6aeadb2ad2ee1fdaf1c2e", 609833),
             # Reviewed 0.64 reset evidence document for section 12.6.5.
