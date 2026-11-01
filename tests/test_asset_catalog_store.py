@@ -262,8 +262,10 @@ def test_invalid_replacement_and_missing_root_retain_all_prior_assets(tmp_path):
         publish_local(catalog, source)
         first = catalog.snapshot()
         (source / "one" / "SKILL.md").write_text("bad replacement")
-        with pytest.raises(SourceFailure):
-            capture(source, previous=catalog.inventory("example"))
+        # Spec 0.66 section 4.6.1: a rejected candidate is excluded, never removed.
+        partial = capture(source, previous=catalog.inventory("example"))
+        assert partial.documents == () and not partial.complete
+        assert partial.removed_asset_ids == frozenset() and partial.rejected_count == 1
         source.rename(tmp_path / "missing")
         with pytest.raises(SourceFailure):
             capture(source, previous=catalog.inventory("example"))

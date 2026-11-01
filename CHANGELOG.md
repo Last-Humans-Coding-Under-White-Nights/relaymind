@@ -40,15 +40,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
   Both operations stay disabled. The records lift nothing until they are
   approved. `tests/test_m10_host_use_records.py` loads them with the checker.
+  The records also bind the second VPS run's captures (`*-20261101-vps2.json`,
+  checkout 62c4dcd), with the user name and hostname rewritten. Person ingress
+  passed there, and MCP use was `blocked`. The loaded-use observation still
+  fails its single-pin check, because the host lists the whole profile's pins.
 
 ### Fixed
 
+- `scripts/asset_whole_task.py trial-install` (and `trial`) failed on a fresh
+  OpenClaw 2026.10.7 host, which installs the plugin disabled until it is
+  configured (#269; RM39/RM44; AC30/AC36 tooling). The kit now follows the
+  operator guide's lifecycle: install, configure `baseUrl` (`--base-url`,
+  default `http://127.0.0.1:8080/v1`), enable, inspect. It records each step,
+  and inspect must report the plugin loaded and enabled. Verified with a host
+  double that models the disabled fresh install; not yet rerun on the
+  owner's M1 (#259).
+- Ordinary local skill discovery (#268; RM34/AC25; spec 0.66 section 4.6.1)
+  admitted only 8 of OpenClaw 2026.10.7's 49 bundled skills: 32 bodies were
+  rejected for `<placeholder>` text or HTML examples and 9 for more than three
+  code-fence lines, and one rejected file failed the whole folder. Bodies now
+  keep only the encoding, control and size checks, and a rejected candidate is
+  excluded on its own with a fixed reason. All 49 bundled skills are admitted
+  by a local scan of the pinned package. Five verbatim copies are test
+  fixtures (`tests/fixtures/openclaw-bundled-skills/`, MIT).
 - The loaded-use observation harness records the exact person-scope
   `sessions.reset` refusal (`operator.admin` required on the pinned host) as
   `control_refused`, with no turn, instead of raising
   `ordinary_skill_control_failed`. CI run 41286397320 hit that error. Any other
   refusal, and any turn evidence on a refused control, still fails the
-  predicate (#255). The fix has unit tests only; no CI run has confirmed it.
+  predicate (#255). The second VPS run observed the refusal as
+  `control_refused`; no CI run has confirmed it yet.
 
 - Owner-run qualification records and `owner_machine` labelling (#251; RM16,
   RM39, RM40, RM42, RM44; AC30, AC31, AC33, AC35–AC37; spec 0.66 section
@@ -193,9 +214,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   refusals with their exact error codes. Browser failures and the overall
   deadline remain failures through skill selection.
 
-- CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
 - CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation or native-preparation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
-- CI: both `check` and `openclaw-plugin` run stacked PRs on Linux only to
+- CI: the shared asset benchmark fixture uses a deterministic recommendation
+  budget instead of the production 500/150 ms pair, so a loaded runner cannot
+  expire a confident HTTP selector attempt and flatten its paired coverage.
+  Deliberate timeout cases keep explicit small budgets, the HTTP cancellation
+  test uses the shared fixed clock, and a slowed-selector regression test
+  proves the old deadline failed on every host.
+- CI: a small `plan` job picks the platforms (and logs its decision); both
+  `check` and `openclaw-plugin` take them from it and run stacked PRs on Linux only to
   conserve CI capacity, with no base-branch filter. Every PR must target
   `master` and pass the full Linux/macOS/Windows matrix before merge; pushes
   also run all three platforms. `openclaw-plugin` now shares the Chromium
@@ -249,6 +276,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a third machine adjudication pass, owner approval of the frozen labels). The
   record gains `prompt_authorship`, `drafter` and a machine annotators shape;
   reports never say `independent` for these labels.
+  threshold or budget changes. Amended before release (#268; RM34/AC25;
+  sections 4.6, 4.6.1, 14.5): each ordinary local SKILL.md candidate is
+  admitted or rejected on its own. A rejected file records one
+  `{asset_id,reason}` exclusion and makes the scan a partial generation
+  (complete=false, rejected/omitted records kept stale, no removals) instead
+  of failing the whole folder; path safety, read errors, budgets and
+  cancellation still fail the whole scan. The markup and repeated-line rules
+  apply to offered record fields; the internal instruction body keeps only the
+  NFC, encoding, control and size rules.
 - Specification 0.64 → 0.65 (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;
   AC25/AC28/AC30/AC31/AC35–AC37): defines native skill loaded-byte delivery,
   immutable-pin versus removal semantics and the later-use authority fence;

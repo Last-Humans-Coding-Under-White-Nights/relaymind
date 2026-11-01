@@ -67,6 +67,13 @@ def test_native_panel_binds_explicit_choice_and_privacy_to_authoritative_receipt
             page.get_by_role("button", name=labels[0], exact=True).click()
             expect(page.get_by_role("button", name=labels[1], exact=True)).to_be_visible()
             assert page.locator("img").count() == 0
+            # RM12/RM39; AC30: text-only evidence is readable, localized and inert.
+            detail = page.locator("pre").first
+            expect(detail).to_contain_text("推荐:" if locale == "zh-CN" else "Recommendation:")
+            expect(detail).to_contain_text("/home/operator/技能/long-package-")
+            expect(detail).to_contain_text("**source** [link](https://example.test) 中文\\u{202e}")
+            expect(detail).to_contain_text("0.75; token_overlap_count")
+            assert page.locator("pre a, pre img, pre script, pre strong").count() == 0
             assert (
                 len(page.evaluate("calls.filter(x=>x.method==='relaymind.recommendations')")) == 1
             )
@@ -95,6 +102,14 @@ def test_native_panel_binds_explicit_choice_and_privacy_to_authoritative_receipt
             )
             remove_label = "Delete feedback" if locale == "en" else "删除反馈"
             expect(page.get_by_role("button", name=remove_label, exact=True)).to_be_visible()
+            # Long unbroken locators and feedback JSON fit even a narrow panel.
+            page.set_viewport_size({"width": 360, "height": 800})
+            assert page.locator("pre").count() == 2
+            assert page.locator("pre").evaluate_all(
+                "nodes => nodes.every(node => node.scrollWidth <= node.clientWidth)"
+            )
+            assert "\u202e" not in page.locator("pre").last.inner_text()
+            assert page.locator("img").count() == 0
             page.evaluate(
                 "label => { window.retiredPrivateControl = new WeakRef("
                 "[...document.querySelectorAll('button')].find(x=>x.textContent===label)); }",

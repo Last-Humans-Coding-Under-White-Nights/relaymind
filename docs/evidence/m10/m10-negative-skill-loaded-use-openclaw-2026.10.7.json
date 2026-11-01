@@ -22,9 +22,9 @@
   "hostname_sha256": "bafcdd4933633f2d8c15bec38b13546e4d879cd8b65095a56e713b8336cedd01"
  },
  "revisions": {
-  "repository_commit": "acc40415a46ddbac1b29595a8bf136576c1a1cba",
+  "repository_commit": "62c4dcd248065ee2017cf38433184da81c821899",
   "adapter_revision": "653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f",
-  "harness_sha256": "4546f192238909d1395ea793ce33735a5ca53ae98741e2464debc7c7da4cec18"
+  "harness_sha256": "a00a438c912cad8c9321bd7bbe38d9b5b0ccd5c9ff305611cf0bdc5bcb006a9b"
  },
  "operation": {
   "name": "skill_loaded_use",
@@ -51,6 +51,18 @@
    "path": "openclaw-loaded-use-observation-20261101-vps.json",
    "sha256": "0c61867f5f22728988975f9daa7b64eb040ec140002329f3db561da9a2a37c5f",
    "bytes": 1502
+  },
+  {
+   "role": "capture",
+   "path": "openclaw-loaded-use-observation-20261101-vps2.json",
+   "sha256": "231e23e204b2d9d91775c543815f4bd3eb4d500183b9f53d02889b97f1072038",
+   "bytes": 449667
+  },
+  {
+   "role": "capture",
+   "path": "openclaw-person-ingress-20261101-vps2.json",
+   "sha256": "d86c55893da81c046b18139422f355cbf938d4b948f853b9a20f4b9a8f1ed683",
+   "bytes": 168964
   }
  ],
  "review": {
@@ -59,5 +71,5 @@
   "reviewer_logins": [],
   "approved_at": null
  },
- "recorded_at": "2026-11-01T08:21:33Z"
+ "recorded_at": "2026-11-01T09:16:37Z"
 }

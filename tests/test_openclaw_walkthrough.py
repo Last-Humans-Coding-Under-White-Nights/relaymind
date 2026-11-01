@@ -309,3 +309,102 @@ def test_media_outside_the_output_is_refused(rec, tmp_path):
     (base / "screens.json").write_text(json.dumps(shots), encoding="utf-8")
     with pytest.raises(ValueError, match="walkthrough_media_path"):
         build(rec, tmp_path, {"en-US": 0})
+
+
+# --- fonts for the isolated browser home ---------------------------------------------
+
+
+def font_dir(tmp_path):
+    fonts = tmp_path / "fonts"
+    fonts.mkdir()
+    (fonts / "NotoSansCJKsc-Regular.otf").write_bytes(b"otf-bytes")
+    (fonts / "Extra.ttc").write_bytes(b"ttc-bytes")
+    (fonts / "README.txt").write_bytes(b"not a font")
+    (fonts / "Linked.ttf").symlink_to(fonts / "Extra.ttc")
+    return fonts
+
+
+def test_fonts_reach_the_isolated_home_before_the_host_is_installed(rec, tmp_path, monkeypatch):
+    """The harness gives the browser HOME=<work>/home; Chinese labels need a CJK font there."""
+    fonts, home = font_dir(tmp_path), tmp_path / "work" / "home"
+    home.mkdir(parents=True)
+    seen = {}
+
+    class Base:
+        def prepare_host(self, host, environment, work, config_path):
+            seen["fonts"] = sorted(p.name for p in (home / ".fonts").iterdir())
+
+    monkeypatch.setattr(rec.ORDINARY, "OrdinaryComposition", Base)
+    composition = rec.walkthrough_composition("zh-CN", rec.Shooter(tmp_path / "media"), fonts)
+    composition().prepare_host(["node"], dict(HOME=str(home)), tmp_path / "work", None)
+    assert seen["fonts"] == ["Extra.ttc", "NotoSansCJKsc-Regular.otf"]
+    assert (home / ".fonts" / "Extra.ttc").read_bytes() == b"ttc-bytes"
+
+
+def test_without_a_font_dir_the_host_preparation_is_unchanged(rec, tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+
+    class Base:
+        def prepare_host(self, host, environment, work, config_path):
+            return "installed"
+
+    monkeypatch.setattr(rec.ORDINARY, "OrdinaryComposition", Base)
+    composition = rec.walkthrough_composition("en-US", rec.Shooter(tmp_path / "media"))
+    assert composition().prepare_host([], dict(HOME=str(home)), tmp_path, None) == "installed"
+    assert not (home / ".fonts").exists()
+
+
+def test_a_font_dir_without_fonts_is_refused(rec, tmp_path):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    with pytest.raises(ValueError, match="walkthrough_font_dir"):
+        rec.font_files(empty)
+
+
+def test_the_manifest_lists_the_installed_font_digests(rec, tmp_path):
+    for language in rec.LANGUAGES:
+        language_dir(tmp_path, language)
+    fonts = font_dir(tmp_path)
+    manifest = rec.build_manifest(
+        tmp_path / "out",
+        {language: dict(exit_code=0) for language in rec.LANGUAGES},
+        predicates=dict(ordinary_actions=lambda c: True, ordinary_skill=lambda c: True),
+        fonts=rec.font_files(fonts),
+    )
+    assert manifest["fonts"] == [
+        dict(name=name, sha256=hashlib.sha256(data).hexdigest(), bytes=len(data))
+        for name, data in (("Extra.ttc", b"ttc-bytes"), ("NotoSansCJKsc-Regular.otf", b"otf-bytes"))
+    ]
+    assert build(rec, tmp_path, {"en-US": 0, "zh-CN": 0})["fonts"] == []
+
+
+def test_record_passes_the_font_dir_to_every_language(rec, tmp_path, monkeypatch):
+    fonts, commands = font_dir(tmp_path), []
+
+    class Done:
+        returncode = 0
+
+    monkeypatch.setattr(
+        rec.subprocess, "run", lambda command, timeout: commands.append(command) or Done()
+    )
+    monkeypatch.setattr(
+        rec, "build_manifest", lambda out, outcomes, fonts: dict(complete=True, fonts=len(fonts))
+    )
+    args = rec.parse_args(
+        [
+            "record",
+            "--tarball",
+            str(tmp_path / "a.tgz"),
+            "--work-root",
+            str(tmp_path / "w"),
+            "--out-dir",
+            str(tmp_path / "o"),
+            "--font-dir",
+            str(fonts),
+        ]
+    )
+    assert rec.record(args) == 0
+    assert len(commands) == 2
+    for command in commands:
+        assert command[command.index("--font-dir") + 1] == str(fonts.absolute())

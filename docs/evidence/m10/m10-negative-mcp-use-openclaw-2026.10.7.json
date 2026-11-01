@@ -51,6 +51,12 @@
    "path": "openclaw-mcp-use-20261101-vps.json",
    "sha256": "cda481d755924d42cdca67251b5e80d3412c9828993cb59c2972fb09202e698d",
    "bytes": 26193
+  },
+  {
+   "role": "capture",
+   "path": "openclaw-mcp-use-20261101-vps2.json",
+   "sha256": "25461d2a1c2c238747842a638e273181bfb155c7cf9ef050018b620ee762cbcc",
+   "bytes": 208679
   }
  ],
  "review": {
@@ -59,5 +65,5 @@
   "reviewer_logins": [],
   "approved_at": null
  },
- "recorded_at": "2026-11-01T08:21:33Z"
+ "recorded_at": "2026-11-01T09:16:37Z"
 }

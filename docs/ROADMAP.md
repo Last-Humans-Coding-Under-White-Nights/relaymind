@@ -1069,12 +1069,15 @@ delegation candidate, `GatewaySessionAccessAuthority.retain()`, has no defined
 qualification. The MCP routes are name-only (`tools.invoke`), App-view-bound
 (`mcp.app.callTool`) or documented private. The records lift nothing until a
 pull request review by an org member other than the owner is written into
-them, which will make these host limitations. The VPS could not run either
-person tier: it has no private IPv4 interface, and Chromium lacks `libgbm.so.1`
-and `libasound.so.2`. The substantive captures therefore come from CI run
-41286397320. The harness now records the person-scope `sessions.reset` refusal
-(`operator.admin` required) as `control_refused` instead of failing. That fix
-has unit tests only and needs a CI run. #259, #260 and #261 remain open and
+them, which will make these host limitations. The first VPS run could not
+start a person tier (no private interface, missing Chromium libraries), so the
+first substantive captures came from CI run 41286397320. A second VPS run at
+62c4dcd, after the owner's setup, also binds its captures. Person ingress
+passes there. MCP use is `blocked` (`exact_route_unqualified`). The reset case
+is now `control_refused` on the real host. The loaded-use observation still
+exits 2: its predicate expects one pin in the session's selection listing, but
+the host lists every pin of the owner profile. That harness check needs a
+reviewed change and a CI run. The finding is unchanged. #259, #260 and #261 remain open and
 need the real runs, captures, labels and reviews. Host configuration semantics
 (#250/#240) still keep host reports below `qualified`. Spec-only decisions
 awaiting implementation: the rank 4–10 choice receipt returning the offered
@@ -1098,6 +1101,16 @@ manifest. Loaded skill use, MCP use and host MCP approval are recorded as
 `functional_fixture` tier does not satisfy the qualified-host walkthrough of
 #238.
 
+#270 (RM12/RM39; AC30) localizes all recommendation-detail labels for `en-US`
+and `zh-CN`, displays ordinary characters through text-only DOM rendering,
+neutralizes control characters, and wraps long evidence and feedback values.
+Source locators remain the exact offered record: spec sections 4.6.1 and 7.6
+define local locators as resolved `SKILL.md` paths and return that record in
+the scoped view; no home-path abbreviation/redaction rule is specified.
+The adapter revision is repinned to the new built bytes; evidenceRevision is
+unchanged: **recapture pending before merge**. Browser fixtures do not establish
+native host qualification for those bytes.
+
 The #192 implementation supplies independent catalog discovery: closed records
 and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
 imports, safe internal searchable bodies, atomic shared-SQLite publication,
@@ -1112,7 +1125,12 @@ host availability or execution authority.
 #193 selection and #194's partial lifecycle implementation are recorded below.
 The AC25 live host subcases, full 300-asset measurements, Windows/macOS
 qualification, Matrix rights/cohort/refresh and formal independent corpus gates
-remain separate from #192's completed catalog criteria.
+remain separate from #192's completed catalog criteria. #268 (spec 0.66
+amendment) admits each local SKILL.md candidate on its own: a rejected file is
+an exclusion in a partial generation, not a whole-folder failure, and body text
+is no longer markup/repetition checked. A local scan of the pinned OpenClaw
+2026.10.7 package admits all 49 bundled skills; this is a developer
+observation, not an AC25 live host subcase.
 
 The #193 selection component implements RM35/AC26: separate closed selection
 v2 and recommendation-result schemas, projection-only lexical ranking, strict
@@ -1360,12 +1378,12 @@ foreign person (`FORBIDDEN`) and a foreign person on its own session, refused by
 RelayMind's own authority check (`INVALID_REQUEST`). The predicate also binds
 the asset ID, content hash and source version, and requires the saved revision
 in `skills.library.list`. The ordinary installed-host run (OpenClaw 2026.10.7,
-Ubuntu runner, CI run 41284482576, commit f866b66, PR merge checkout
-960f340) passed both the
+Ubuntu runner, CI run 41295359455, commit de6d5d9, PR merge checkout
+f5e3e39) passed both the
 ordinary-pass and ordinary-skill-pass predicates, with all 15 harness sources
 matching. Its unmodified capture is
 [openclaw-native-actions-20261101-skill.json](evidence/m10/openclaw-native-actions-20261101-skill.json)
-(SHA-256 `3fa0614ba5127e0e08182e40293dbc3c5f15854e2cc474f53e8c0098ce408dc3`), which the registry's evidence revision now names for the
+(SHA-256 `06d7e42aa1ea407136c66e1a6d8862cf552f2c88a1b2794391622175f8828793`), which the registry's evidence revision now names for the
 operations `direct_actions` and `exact_skill_selection`. The receipt records
 `sessionActivation: next-turn` and `instructions: not_observed`: selection is
 not observed loaded instruction use, which stays open as HOST-EXACT-SKILL-USE in
@@ -1545,8 +1563,10 @@ is claimed.
 (`asset_trial_kit.py`) add the Apple M1 8 GiB / pinned host / release-checksum
 preflight, the pinned-CLI plugin install, and the frozen plan run through the
 existing driver over operator-captured row observations, bundled with
-SHA-256 digests and graded offline. They are verified over fixture bundles and a
-host double only. The owner-run trial itself (#259), its frozen inputs and genuine
+SHA-256 digests and graded offline. #269: the install follows the host's
+lifecycle (install, configure `baseUrl`, enable, inspect), because the pinned
+host installs the plugin disabled until it is configured. They are verified over
+fixture bundles and a host double only. The owner-run trial itself (#259), its frozen inputs and genuine
 native row observations remain open; no provisional cost has been recorded.
 
 #259 early trial on the owner's Apple M1 8 GiB MacBook (1 November 2026;

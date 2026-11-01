@@ -5,6 +5,20 @@ import type {
   ControlUiView,
 } from "openclaw/plugin-sdk/control-ui";
 import { decodeJson } from "./recommendation-json.ts";
+import {
+  formatRecommendation,
+  neutralizeControls,
+} from "./recommendation-display.ts";
+import type { RecommendationViewV1 } from "./recommendation-types.ts";
+
+function textBlock(): HTMLPreElement {
+  const element = document.createElement("pre");
+  element.style.whiteSpace = "pre-wrap";
+  element.style.overflowWrap = "anywhere";
+  element.style.minWidth = "0";
+  element.style.maxWidth = "100%";
+  return element;
+}
 
 const english = {
   title: "RelayMind recommendations",
@@ -97,8 +111,7 @@ function mountPanel(
   taskLabel.append(task);
   const status = document.createElement("p");
   status.setAttribute("role", "status");
-  const evidence = document.createElement("pre");
-  evidence.style.whiteSpace = "pre-wrap";
+  const evidence = textBlock();
   const choices = document.createElement("div"),
     privacy = document.createElement("div"),
     native = document.createElement("div");
@@ -237,9 +250,11 @@ function mountPanel(
     if (!Array.isArray(value.records)) return;
     for (const row of value.records) {
       const item = object(row),
-        pre = document.createElement("pre");
-      pre.textContent = JSON.stringify(item, (_key, value) =>
-        typeof value === "bigint" ? String(value) : value,
+        pre = textBlock();
+      pre.textContent = neutralizeControls(
+        JSON.stringify(item, (_key, value) =>
+          typeof value === "bigint" ? String(value) : value,
+        ),
       );
       privacy.append(pre);
       button(
@@ -318,7 +333,10 @@ function mountPanel(
       if (result.label === "recommendation") {
         view = value;
         selectedAsset = null;
-        evidence.textContent = String(result.text);
+        evidence.textContent = formatRecommendation(value as RecommendationViewV1, {
+          locale: host.locale,
+          format: "text",
+        });
         status.textContent = "";
         renderChoices();
       } else {
