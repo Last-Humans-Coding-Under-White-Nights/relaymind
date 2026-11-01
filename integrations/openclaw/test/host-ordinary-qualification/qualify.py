@@ -269,10 +269,12 @@ _SKILL_NEGATIVES = {
 
 
 def library_revision_listed(listed, skill_id, revision):
-    """Require a successful native listing containing the exact saved revision."""
+    """Require a successful native listing with the exact saved, not removed, revision."""
     try:
         return listed["ok"] is True and any(
-            entry["skillId"] == skill_id and entry["revision"] == revision
+            entry["skillId"] == skill_id
+            and entry["revision"] == revision
+            and entry.get("removed") is not True
             for entry in listed["payload"]["entries"]
         )
     except (KeyError, TypeError):
@@ -1418,6 +1420,9 @@ class OrdinaryComposition(BASE.ActionComposition):
                 )
             )
         skill["negatives"] = negatives
+        if any(item["ok"] is not False for item in negatives):
+            # An admitted refusal case ends the step before any UI or listing call.
+            raise ValueError("ordinary_skill_selection_failed")
         ui_page.get_by_role("button", name="Select native skill", exact=True).click()
         ui_page.get_by_role("combobox", name="Select native skill").select_option(
             value=json.dumps(
