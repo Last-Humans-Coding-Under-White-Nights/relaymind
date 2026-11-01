@@ -52,9 +52,15 @@ def test_the_windows_record_names_no_moving_adapter_reference():
     The archived full record named the branch ``m10-control-ui-l10n``, which
     moves. The measured adapter's native revision could not be recomputed, so
     the committed record leaves ``adapter_revision`` null; the tarball is
-    identified by its SHA-256 in ``release.json``.
+    identified by its SHA-256 in ``release.json``. A later record may name a
+    40-hex git commit or a 64-hex digest; any other string is rejected.
     """
     revision = load_record(RECORD).document["revisions"]["adapter_revision"]
-    assert revision is None or re.fullmatch(r"[0-9a-f]{64}", revision), revision
+    assert revision is None or re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", revision), revision
     release = json.loads((RUN / "release.json").read_text(encoding="utf-8"))
-    assert release["sha256"] in (RUN / "README.md").read_text(encoding="utf-8-sig")
+    assert release["sha256"] in (RUN / "README.md").read_text(encoding="utf-8")
+
+
+def test_the_readme_has_no_byte_order_mark():
+    """The README is authored documentation, not raw capture: plain UTF-8."""
+    assert not (RUN / "README.md").read_bytes().startswith(b"\xef\xbb\xbf")
