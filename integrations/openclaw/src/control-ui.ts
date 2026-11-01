@@ -5,6 +5,22 @@ import type {
   ControlUiView,
 } from "openclaw/plugin-sdk/control-ui";
 import { decodeJson } from "./recommendation-json.ts";
+import {
+  chineseLocale,
+  nativeSkillLabel,
+  neutralizeControls,
+} from "./recommendation-display.ts";
+import type { RecommendationViewV1 } from "./recommendation-types.ts";
+import { renderRecommendation } from "./recommendation-render.ts";
+
+function textBlock(): HTMLPreElement {
+  const element = document.createElement("pre");
+  element.style.whiteSpace = "pre-wrap";
+  element.style.overflowWrap = "anywhere";
+  element.style.minWidth = "0";
+  element.style.maxWidth = "100%";
+  return element;
+}
 
 const english = {
   title: "RelayMind recommendations",
@@ -74,7 +90,7 @@ function mountPanel(
 ) {
   let context = initial;
   const host = context.host;
-  const labels = /^zh\b/i.test(host.locale) ? chinese : english;
+  const labels = chineseLocale(host.locale) ? chinese : english;
   let busy = false,
     generation = 0;
   let view: Record<string, any> | null = null;
@@ -97,8 +113,7 @@ function mountPanel(
   taskLabel.append(task);
   const status = document.createElement("p");
   status.setAttribute("role", "status");
-  const evidence = document.createElement("pre");
-  evidence.style.whiteSpace = "pre-wrap";
+  const evidence = textBlock();
   const choices = document.createElement("div"),
     privacy = document.createElement("div"),
     native = document.createElement("div");
@@ -237,9 +252,11 @@ function mountPanel(
     if (!Array.isArray(value.records)) return;
     for (const row of value.records) {
       const item = object(row),
-        pre = document.createElement("pre");
-      pre.textContent = JSON.stringify(item, (_key, value) =>
-        typeof value === "bigint" ? String(value) : value,
+        pre = textBlock();
+      pre.textContent = neutralizeControls(
+        JSON.stringify(item, (_key, value) =>
+          typeof value === "bigint" ? String(value) : value,
+        ),
       );
       privacy.append(pre);
       button(
@@ -313,15 +330,22 @@ function mountPanel(
       current();
       if (started !== generation) throw Error("retired");
       const value = receipt(result.receipt_json);
-      if (typeof value.feedback_revision === "bigint")
-        feedbackRevision = String(value.feedback_revision);
       if (result.label === "recommendation") {
+        // Validate and format before changing any receipt-bound state: rejected
+        // receipts must leave the visible evidence, actions and CAS intact.
+        const text = renderRecommendation(value as RecommendationViewV1, {
+          locale: host.locale,
+          format: "text",
+        });
         view = value;
+        feedbackRevision = String(value.feedback_revision);
         selectedAsset = null;
-        evidence.textContent = String(result.text);
+        evidence.textContent = text;
         status.textContent = "";
         renderChoices();
       } else {
+        if (typeof value.feedback_revision === "bigint")
+          feedbackRevision = String(value.feedback_revision);
         if (input.kind === "choose") {
           if (input.request.choice.kind === "asset")
             selectedAsset =
@@ -439,7 +463,11 @@ function mountPanel(
             skillId: entry.skillId,
             revision: entry.revision,
           });
-          option.textContent = `${String(entry.slug ?? entry.skillId)} (${entry.revision.slice(0, 12)})`;
+          option.textContent = nativeSkillLabel({
+            slug: entry.slug,
+            skillId: entry.skillId,
+            revision: entry.revision,
+          });
           select.append(option);
         }
         native.append(select);
@@ -529,7 +557,7 @@ const mountPage: ControlUiView = (container, initial) => {
     mounted = undefined;
     selected = key;
     if (!key) {
-      container.textContent = context.host.locale.startsWith("zh")
+      container.textContent = chineseLocale(context.host.locale)
         ? "请先在宿主中打开一个个人会话，再打开 RelayMind。"
         : "Open a personal session in the host, then open RelayMind.";
       return;
@@ -554,12 +582,12 @@ export default {
   activate(host) {
     const panel = host.ui.registerPanel({
       id: "relaymind-recommendations",
-      label: host.locale.startsWith("zh") ? "RelayMind 推荐" : "RelayMind",
+      label: chineseLocale(host.locale) ? "RelayMind 推荐" : "RelayMind",
       mount: mountPanel,
     });
     const action = host.ui.registerAction({
       id: "relaymind-recommendations",
-      label: host.locale.startsWith("zh")
+      label: chineseLocale(host.locale)
         ? "RelayMind 推荐"
         : "RelayMind recommendations",
       placement: "session",
@@ -571,14 +599,14 @@ export default {
     });
     const page = host.ui.registerPage({
       id: "recommendations",
-      label: host.locale.startsWith("zh")
+      label: chineseLocale(host.locale)
         ? "RelayMind 推荐"
         : "RelayMind recommendations",
       mount: mountPage,
     });
     const navigation = host.ui.registerNavigation({
       id: "relaymind-recommendations",
-      label: host.locale.startsWith("zh")
+      label: chineseLocale(host.locale)
         ? "RelayMind 推荐"
         : "RelayMind recommendations",
       page: { id: "recommendations" },

@@ -188,7 +188,19 @@ def test_the_artifact_holds_only_the_runtime_files(releases):
         for p in (PACKAGE / "src").rglob("*.ts")
         if not p.name.endswith(".d.ts")
     }
-    built |= {"dist/control-ui/control-ui.js", "dist/control-ui/recommendation-json.js"}
+    built |= {
+        "dist/control-ui/control-ui.js",
+        "dist/control-ui/recommendation-json.js",
+        "dist/control-ui/recommendation-display.js",
+        "dist/control-ui/recommendation-types.js",
+        "dist/control-ui/recommendation-render.js",
+        "dist/control-ui/recommendation-contract.js",
+        "dist/control-ui/recommendation-schema.js",
+    }
+    built |= {
+        "dist/control-ui/recommendation-schemas/" + p.with_suffix(".js").name
+        for p in (PACKAGE / "src/recommendation-schemas").glob("*.ts")
+    }
     assert set(names) == RUNTIME_FILES | built
     assert names == record["files"]
     assert "dist/index.js" in names

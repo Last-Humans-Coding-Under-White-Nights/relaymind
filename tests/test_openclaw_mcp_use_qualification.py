@@ -672,7 +672,13 @@ def test_missing_dist_cannot_shrink_the_pin(tmp_path, monkeypatch):
     source = tmp_path / "integrations/openclaw/src/index.ts"
     source.parent.mkdir(parents=True)
     source.write_bytes(b"export {}")
+    (source.parent / "control-ui.ts").write_bytes(b'import { a } from "./ui-part.ts";')
+    (source.parent / "ui-part.ts").write_bytes(b"export const a = 1;")
+    (source.parent.parent / "tsconfig.control-ui.json").write_text(
+        '{"include": ["src/control-ui.ts"]}'
+    )
     assert "integrations/openclaw/dist/index.js" in api.required_sources()
+    assert "integrations/openclaw/dist/control-ui/ui-part.js" in api.required_sources()
     inventory = []
     for name in api.required_sources():
         path = tmp_path / name
@@ -1016,3 +1022,21 @@ def test_the_mcp_capability_step_runs_after_every_regular_tier():
     assert step > ci.index("      - name: Pinned host lifecycle")
     assert step > ci.index("          name: openclaw-plugin-${{ matrix.os }}")
     assert "continue-on-error" not in ci
+
+
+def test_the_pin_covers_every_emitted_control_ui_module(node_runtime, tmp_path):
+    """RM16/RM39; AC35: every browser-bundle module tsc emits is pinned.
+
+    The panel's emitted modules import one another at runtime, so a module the
+    pin omits could change without failing the source byte check.
+    """
+    from test_openclaw_host_transport import PACKAGE, run_tsc
+
+    run_tsc("-p", str(PACKAGE / "tsconfig.control-ui.json"), "--outDir", str(tmp_path))
+    emitted = {
+        (PACKAGE / "dist/control-ui" / p.relative_to(tmp_path)).relative_to(ROOT).as_posix()
+        for p in tmp_path.rglob("*.js")
+    }
+    assert "integrations/openclaw/dist/control-ui/recommendation-display.js" in emitted
+    required = {p for p in module("grade").required_sources() if "/dist/control-ui/" in p}
+    assert required == emitted

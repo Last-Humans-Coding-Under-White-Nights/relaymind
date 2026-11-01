@@ -1114,6 +1114,39 @@ manifest. Loaded skill use, MCP use and host MCP approval are recorded as
 `functional_fixture` tier does not satisfy the qualified-host walkthrough of
 #238.
 
+#270 (RM12/RM39; AC30) localizes all recommendation-detail labels for `en-US`
+and `zh-CN`, displays ordinary characters through text-only DOM rendering,
+neutralizes control characters (in the evidence, the privacy data and the
+host skill labels of the native skill select), and wraps long evidence and
+feedback values.
+Source locators remain the exact offered record: spec sections 4.6.1 and 7.6
+define local locators as resolved `SKILL.md` paths and return that record in
+the scoped view; no home-path abbreviation/redaction rule is specified.
+In text mode only a backslash introducing literal `\u{` notation is doubled;
+ordinary Windows path and description backslashes stay exact. The quote inside
+the quoted description is escaped, so source text cannot imitate a neutralized
+control or a field; one locale rule (`zh`, `zh-CN`, `zh_CN`, `zh-Hans`) serves the
+panel and its evidence. A recommendation receipt is validated against the
+published contract before updating the shown evidence, actions or feedback
+revision; malformed receipts leave all three in place. Native skill labels
+distinguish literal control notation using the same text helper. The ledger
+comment limits its 0600 owner-only access claim to POSIX; Windows access depends
+on the filesystem ACL.
+The adapter revision is repinned to the built bytes that include these review
+fixes and the #256 ledger and fence fixes
+(`38a65c787be8ddfbed99527c4e3b2c167d4a308bd2b566d2cf18acac975f06b4`).
+The ordinary installed-host run of these exact bytes (pinned OpenClaw
+2026.10.7, Ubuntu runner, CI run 41354462728, commit f229cff, PR merge
+checkout dd71bc2) passed the ordinary-pass and ordinary-skill-pass predicates
+with all 15 harness sources matching the wall-clock harness (the host
+qualification backend runs on the real clock, not the test `FakeClock`). Its
+unmodified capture replaces
+[openclaw-native-actions-20261101-adapter.json](evidence/m10/openclaw-native-actions-20261101-adapter.json)
+(SHA-256 `a5f39a046399baf8ee1c5e5d1ea767086b1f8a4d36630c694709600c2978e9e7`),
+which the registry's evidence revision names. Browser fixtures alone do
+not establish native host qualification for those bytes; as before, this is
+Linux functional evidence with disposable accounts.
+
 The #192 implementation supplies independent catalog discovery: closed records
 and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
 imports, safe internal searchable bodies, atomic shared-SQLite publication,

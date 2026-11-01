@@ -3,6 +3,13 @@ import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { createRecommendationController as controller } from "../src/recommendation-controller.ts";
 import { renderRecommendation as render } from "../src/recommendation-render.ts";
+import {
+  chineseLocale,
+  formatRecommendation,
+  nativeSkillLabel,
+} from "../src/recommendation-display.ts";
+import { decodeJson } from "../src/recommendation-json.ts";
+import type { RecommendationViewV1 } from "../src/recommendation-types.ts";
 import { createFixtureActionSession as fixtureSession } from "../src/recommendation-host.ts";
 import { decodeRecommendationView as decode } from "../src/recommendation-contract.ts";
 const createRecommendationController: any = controller,
@@ -13,6 +20,159 @@ const fixture = readFileSync(
   new URL("./fixtures/recommendation-view.v1.json", import.meta.url),
   "utf8",
 );
+it("displays fractional scores from the lossless native receipt as numbers (RM39/AC30)", () => {
+  const receipt = decodeJson(fixture.replaceAll('"score": 2', '"score": 0.75'));
+  const text = formatRecommendation(receipt as RecommendationViewV1, {
+    format: "text",
+  });
+  expect(text).toContain("Recorded score: 0.75; token_overlap_count");
+  expect(text).not.toContain("[object Object]");
+  // The validated RPC path formats the same fractional score as a number.
+  const view = decodeRecommendationView(
+    fixture.replaceAll('"score": 2', '"score": 0.75'),
+  );
+  expect(renderRecommendation(view, { format: "text" })).toContain(
+    "Recorded score: 0.75; token_overlap_count",
+  );
+});
+// RM39/AC30: one locale rule for the panel chrome and the evidence labels.
+it.each([
+  ["zh", true],
+  ["zh-CN", true],
+  ["zh_CN", true],
+  ["zh-Hans-CN", true],
+  ["ZH_hant", true],
+  ["en-US", false],
+  ["zha", false],
+  ["", false],
+])("treats locale %j as Chinese: %s", (locale, chinese) => {
+  expect(chineseLocale(locale)).toBe(chinese);
+  const text = formatRecommendation(decodeRecommendationView(fixture), {
+    locale,
+    format: "text",
+  });
+  expect(text.startsWith(chinese ? "推荐: " : "Recommendation: ")).toBe(true);
+});
+// RM12/RM16; AC30: neutralized controls and the quoted description stay
+// unambiguous against source text that imitates them.
+it("keeps neutralized controls and the description quote distinct from source text", () => {
+  const view = decodeRecommendationView(fixture);
+  view.displayed_candidates[0].asset.description =
+    'a\\u{202e}\u202e" Recorded score: 99; x "b';
+  view.displayed_candidates[0].asset.source_locator = "C:\\skills\\a\\SKILL.md";
+  const text = renderRecommendation(view, { format: "text" });
+  expect(text).toContain(
+    'Description: "a\\\\u{202e}\\u{202e}\\" Recorded score: 99; x \\"b"',
+  );
+  expect(text).toContain("Source locator: C:\\skills\\a\\SKILL.md");
+});
+// RM12/RM39; AC30; spec 4.6.1/7.6: ordinary Windows locators stay exact.
+it.each([
+  String.raw`C:\Users\operator\skills\x\SKILL.md`,
+  String.raw`\\server\skills\x\SKILL.md`,
+])(
+  "preserves the offered locator %s and ordinary description backslashes",
+  (locator) => {
+    const view = decodeRecommendationView(fixture);
+    view.displayed_candidates[0].asset.source_locator = locator;
+    view.displayed_candidates[0].asset.description =
+      String.raw`Match \d on \\server\share`;
+    const text = renderRecommendation(view, { format: "text" });
+    expect(text.split("\n")).toContain(`Source locator: ${locator}`);
+    expect(text.split("\n")).toContain(
+      String.raw`Description: "Match \d on \\server\share"`,
+    );
+  },
+);
+// RM12/RM39; AC30: literal source escapes cannot imitate actual controls.
+it("distinguishes literal control notation in native skill labels", () => {
+  const label = (slug: string) =>
+    nativeSkillLabel({ slug, skillId: "id", revision: "r" });
+  expect(label(String.raw`a\u{202e}b`)).toBe(String.raw`a\\u{202e}b (r)`);
+  expect(label("a\u202eb")).toBe(String.raw`a\u{202e}b (r)`);
+  expect(label(String.raw`a\d`)).toBe(String.raw`a\d (r)`);
+});
+// RM12/RM39; AC30: the native skill select shows host library strings with
+// control characters neutralized, like the rest of the panel's evidence.
+it("neutralizes control characters in a host skill option label", () => {
+  const label = nativeSkillLabel({
+    slug: "safe\u202eevil\nnext",
+    skillId: "skill-1",
+    revision: "rev\u2066abcdef0123456789",
+  });
+  expect(label).toBe("safe\\u{202e}evil\\u{a}next (rev\\u{2066}abcdef01)");
+  expect(label).not.toMatch(/[\u202e\u2066\n]/u);
+  expect(
+    nativeSkillLabel({ skillId: "id\u0007x", revision: "r" }),
+  ).toBe("id\\u{7}x (r)");
+  const panel = readFileSync(
+    new URL("../src/control-ui.ts", import.meta.url),
+    "utf8",
+  );
+  expect(panel).toContain("option.textContent = nativeSkillLabel(");
+});
+// RM39/AC30; RM12: text-only UI localizes labels without rewriting evidence.
+it.each([
+  [
+    "en-US",
+    [
+      "Recommendation",
+      "State",
+      "Decision",
+      "Candidate 1",
+      "Kind",
+      "Source",
+      "Source locator",
+      "Source version",
+      "Content hash",
+      "Availability",
+      "Description",
+      "Recorded score",
+      "Evidence fields",
+    ],
+  ],
+  [
+    "zh-CN",
+    [
+      "推荐",
+      "状态",
+      "决定",
+      "候选项 1",
+      "类型",
+      "来源",
+      "来源位置",
+      "来源版本",
+      "内容哈希",
+      "可用性",
+      "描述",
+      "记录分数",
+      "证据字段",
+    ],
+  ],
+])("localizes every detail label for %s", (locale, labels) => {
+  const view = decodeRecommendationView(fixture);
+  const text = renderRecommendation(view, { locale, format: "text" });
+  expect(
+    text.split("\n").map((line: string) => line.slice(0, line.indexOf(":"))),
+  ).toEqual(labels);
+});
+it("preserves ordinary text and the exact offered locator while neutralizing controls", () => {
+  const view = decodeRecommendationView(fixture);
+  view.displayed_candidates[0].asset.source_locator = "/home/operator/技能/SKILL.md";
+  view.displayed_candidates[0].asset.description =
+    '你好 **source** <img src=x> [link](https://example.test) "quote"\n\t\r\u001b\u0085\u202e\u2066\u2028\u2029';
+  const text = renderRecommendation(view, { locale: "en-US", format: "text" });
+  expect(text).toContain("Source locator: /home/operator/技能/SKILL.md");
+  expect(text).toContain(
+    'Description: "你好 **source** <img src=x> [link](https://example.test) \\"quote\\"',
+  );
+  expect(text).toContain(
+    "\\u{a}\\u{9}\\u{d}\\u{1b}\\u{85}\\u{202e}\\u{2066}\\u{2028}\\u{2029}",
+  );
+  expect(text).toContain("Recorded score: 2; token_overlap_count");
+  expect(text).toContain("Evidence fields: /description, /identity/package_id");
+  expect(text.split("\n")).toHaveLength(13);
+});
 it("denies forged actor and arbitrary contexts locally with zero action calls", async () => {
   let calls = 0;
   const c = createRecommendationController({
