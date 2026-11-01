@@ -12,6 +12,8 @@ import time
 from pathlib import Path
 
 TOTAL_SECONDS = 570
+# Host event publication may lag on a loaded runner; SIGALRM still bounds the trial.
+HOST_EVENT_WAIT_SECONDS = 10
 HOST_VERSION = "2026.10.7"
 AUTHCRUNCH_VERSION = "1.5.0"
 AUTHCRUNCH_SHA256 = "86a1ed8446bca803149bdcf1335005b840033a17c41680a067d7de11dfbaeca9"
@@ -392,6 +394,28 @@ def native_rpc(page, method: str, params: dict) -> dict:
         reason = next((r for r in RPC_TRANSPORT_REASONS if r in text), "native_rpc_transport")
         raise ValueError(reason) from None
     return native_rpc_envelope(observed)
+
+
+WIRE_READY = "() => window.__rmPersonWire?.state().ready === true"
+
+
+def wait_for_wire_ready(page, seconds: float, failure: BaseException) -> None:
+    """Wait for the browser observer across single-page navigations, bounded.
+
+    A raw evaluate loop fails with "execution context was destroyed" when the
+    Control UI navigates after load; Playwright's wait survives that. Its own
+    timeout raises the caller's fixed failure; the overall deadline passes on.
+    """
+    try:
+        page.wait_for_function(WIRE_READY, timeout=seconds * 1000, polling=100)
+    except TimeoutError:
+        raise
+    except Exception as error:
+        if type(error).__name__ == "TimeoutError" and type(error).__module__.startswith(
+            "playwright"
+        ):
+            raise failure from None
+        raise
 
 
 def native_error_code(frame: dict) -> str | None:
@@ -1093,17 +1117,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     finally:
                         context.close()
                 mark("proxy_signature_controls")
-                script = (plugin / "browser-wire.mjs").read_text(encoding="utf-8").replace(
-                    "export function installNativeSocketObserver",
-                    "function installNativeSocketObserver",
-                    1,
-                ) + "\ninstallNativeSocketObserver();\n"
-                if extension is not None:
-                    script = script.replace(
-                        "installNativeSocketObserver();",
-                        'installNativeSocketObserver(window, ["relaymind.recommendations", '
-                        '"relaymind.skill", "skills.library.save", "skills.library.list"]);',
-                    )
+                script = socket_observer_script(plugin, extension)
                 pages, sessions = [], []
 
                 def rpc(page, method, params):
@@ -1191,11 +1205,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     )
                     mark(prefix + "_login")
                     capture["phase"] = prefix + "_pairing"
-                    deadline = time.monotonic() + 60
-                    while not page.evaluate("() => window.__rmPersonWire?.state().ready === true"):
-                        if time.monotonic() >= deadline:
-                            raise TimeoutError("native_ui_pairing_timeout")
-                        time.sleep(0.05)
+                    wait_for_wire_ready(page, 60, TimeoutError("native_ui_pairing_timeout"))
                     mark(prefix + "_pairing")
                     capture["phase"] = prefix + "_session"
                     created = rpc(page, "sessions.create", session_create_params())
@@ -1275,7 +1285,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     dict(sessions[0], hold=True),
                 )
                 held_request_id = request_id
-                deadline = time.monotonic() + 3
+                deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
                 while not any(
                     event.get("requestId") == request_id and event.get("phase") == "prepared"
                     for event in native_events()
@@ -1295,7 +1305,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                 if extension is not None:
                     extension.before_retirement(pages[0], sessions[0])
                 contexts[0].close()
-                deadline = time.monotonic() + 3
+                deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
                 while not any(
                     event.get("requestId") == request_id
                     and event.get("connectionId") == connection_id
@@ -1309,7 +1319,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                 if extension is not None:
                     extension.after_retirement(capture)
                 release_path.write_bytes(b"release\n")
-                deadline = time.monotonic() + 5
+                deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
                 while not any(
                     event.get("requestId") == request_id
                     and event_phase(event) in {"guard_denied", "probe_failed"}
@@ -1444,6 +1454,36 @@ SAFE_REASONS = frozenset(
 )
 
 
+def socket_observer_script(plugin: Path, extension: object | None = None) -> str:
+    """RM39/AC30: grant loaded-use RPCs only to the opt-in observation run."""
+    script = (
+        (plugin / "browser-wire.mjs")
+        .read_text(encoding="utf-8")
+        .replace(
+            "export function installNativeSocketObserver",
+            "function installNativeSocketObserver",
+            1,
+        )
+    )
+    if extension is None:
+        return script + "\ninstallNativeSocketObserver();\n"
+    methods = [
+        "relaymind.recommendations",
+        "relaymind.skill",
+        "skills.library.save",
+        "skills.library.list",
+    ]
+    if getattr(extension, "observation", None) is not None:
+        methods += [
+            "sessions.messages.subscribe",
+            "chat.send",
+            "skills.library.read",
+            "skills.library.mutate",
+            "skills.library.activate",
+        ]
+    return script + "\ninstallNativeSocketObserver(window, " + json.dumps(methods) + ");\n"
+
+
 def run_qualification(work: Path, output: Path, *, extension=None) -> int:
     """Requested integration fails honestly when private setup is unavailable."""
     import platform
@@ -1485,6 +1525,8 @@ def run_qualification(work: Path, output: Path, *, extension=None) -> int:
             _run_private_trial(work, candidates[0], capture)
         else:
             _run_private_trial(work, candidates[0], capture, extension=extension)
+        if extension is not None and hasattr(extension, "finalize"):
+            extension.finalize(capture)
         capture["checks"]["person_composition"] = person_composition_pass(capture)
         if not capture["checks"]["person_composition"]:
             capture.update(status="failed", reason="person_composition_unverified")
@@ -1499,6 +1541,8 @@ def run_qualification(work: Path, output: Path, *, extension=None) -> int:
                 if previous.get("status") in {"passed", "failed", "not_run"}:
                     step["status"] = previous["status"]
             capture = safe
+        if extension is not None and hasattr(extension, "failure_diagnostics"):
+            capture.update(extension.failure_diagnostics())
         capture.update(status="failed", reason=reason, error_type=type(error).__name__)
         for step in capture["steps"]:
             if step["name"] == capture.get("phase"):

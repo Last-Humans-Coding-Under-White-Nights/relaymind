@@ -47,7 +47,10 @@ HOST-MCP-BINDING and HOST-MCP-CURRENTNESS remain named. Their unqualified adapte
 contracts are not implementation-ready; the core fails closed at those
 boundaries. Further supported qualification and a subsequent normative adapter
 revision are required before host snapshots or use are enabled. No host upgrade,
-alternate dataset or relaxed acceptance is included.
+alternate dataset or relaxed acceptance is included. Spec 0.65 section 7.6.2
+defines the conditions under which an exact MCP use could be qualified; that
+specification text is authoritative, while this document retains the historical
+disposition.
 
 This allows precise local/catalog/discovery/v2/API/backend-security work after
 actual specification merge. A spec merely present in a stacked branch does not
@@ -167,7 +170,10 @@ public snapshot payload/non-null override is rejected, and runtime create
 returns recommendation_unavailable before selection. Imported discovery can
 retain genuine provenance with unknown/needs_setup/unavailable status. Neither
 schema/capture digest nor successful download is live availability. The report
-does not establish that upgrading the host alone solves this.
+does not establish that upgrading the host alone solves this. Spec 0.65 section 7.6.2
+defines the conditions under which an exact MCP use could be qualified; that
+specification text is authoritative, while this document retains the historical
+disposition.
 
 ## Architecture and alternatives
 

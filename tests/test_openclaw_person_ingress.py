@@ -1504,3 +1504,122 @@ def test_a_playwright_timeout_is_native_rpc_timeout():
 
 def test_workspace_resolution_failure_is_its_own_reason():
     assert "workspace_unavailable" in module().PERSON_RPC_EVENT_REASONS["probe_failed"]
+
+
+def test_ordinary_failure_projection_survives_capture_writer(tmp_path, monkeypatch):
+    """RM12/RM16/RM39 AC30: the exported capture retains fixed extension diagnostics."""
+    import platform
+    import signal
+
+    from playwright.sync_api import Error
+
+    from test_openclaw_ordinary_channel import extension_fixture
+    from test_openclaw_ordinary_channel import module as ordinary_module
+
+    if not hasattr(signal, "setitimer"):
+        pytest.skip("SIGALRM is required")
+    api = module()
+    extension = extension_fixture(ordinary_module(), tmp_path)
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    monkeypatch.setattr(platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(api, "discover_network", lambda: ["10.1.2.3"])
+
+    def trial(work, address, capture, *, extension):
+        capture["phase"] = "account_b_person_rpc"
+        with extension.step("ui_actions"):
+            raise Error("Page.goto: Target page, context or browser has been closed; secret URL")
+
+    monkeypatch.setattr(api, "_run_private_trial", trial)
+    output = tmp_path / "capture.json"
+    assert api.run_qualification(tmp_path / "work", output, extension=extension) == 2
+    capture = json.loads(output.read_bytes())
+    assert capture["reason"] == "ordinary_playwright_target_closed"
+    assert capture["ordinary_failure_step"] == "ui_actions"
+    assert capture["ordinary_error_class"] == "playwright_target_closed"
+    assert "secret URL" not in output.read_text()
+    assert capture["checks"]["person_composition"] is False
+
+
+def test_overall_deadline_interrupts_an_ordinary_extension_wait(tmp_path, monkeypatch):
+    """RM16/RM39 AC30: an ordinary wait remains inside the real SIGALRM budget."""
+    import platform
+    import signal
+    import time
+
+    from test_openclaw_ordinary_channel import extension_fixture
+    from test_openclaw_ordinary_channel import module as ordinary_module
+
+    if not hasattr(signal, "setitimer"):
+        pytest.skip("SIGALRM is required")
+    api = module()
+    extension = extension_fixture(ordinary_module(), tmp_path)
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    monkeypatch.setattr(platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(api, "discover_network", lambda: ["10.1.2.3"])
+    monkeypatch.setattr(api, "TOTAL_SECONDS", 0.01)
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def trial(work, address, capture, *, extension):
+        with extension.step("retirement_prepared"):
+            time.sleep(0.1)
+
+    monkeypatch.setattr(api, "_run_private_trial", trial)
+    output = tmp_path / "capture.json"
+    assert api.run_qualification(tmp_path / "work", output, extension=extension) == 2
+    capture = json.loads(output.read_bytes())
+    assert capture["reason"] == "overall_deadline_exceeded"
+    assert capture["ordinary_failure_step"] == "retirement_prepared"
+    assert capture["checks"]["person_composition"] is False
+    assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)
+    assert signal.getsignal(signal.SIGALRM) == previous_handler
+
+
+# --- readiness after navigation (#231, CI run 41251465501) ------------------------
+
+
+class _WirePage:
+    def __init__(self, raise_with=None):
+        self.calls, self.raise_with = [], raise_with
+
+    def wait_for_function(self, expression, **options):
+        self.calls.append((expression, options))
+        if self.raise_with is not None:
+            raise self.raise_with
+
+    def evaluate(self, *args):  # a navigation destroys this context
+        raise RuntimeError("Execution context was destroyed, most likely because of a navigation")
+
+
+def test_wire_readiness_waits_across_navigations_with_a_bound():
+    page = _WirePage()
+    module().wait_for_wire_ready(page, 20, ValueError("x"))
+    ((expression, options),) = page.calls
+    assert "__rmPersonWire" in expression and "ready === true" in expression
+    assert options["timeout"] == 20000 and options["polling"] == 100
+
+
+def test_wire_readiness_timeout_raises_the_callers_fixed_failure():
+    playwright = pytest.importorskip("playwright.sync_api")
+    page = _WirePage(playwright.TimeoutError("Timeout 20000ms exceeded."))
+    with pytest.raises(ValueError, match="^ordinary_entry_unavailable$"):
+        module().wait_for_wire_ready(page, 20, ValueError("ordinary_entry_unavailable"))
+
+
+def test_wire_readiness_keeps_the_overall_deadline_and_other_errors():
+    page = _WirePage(TimeoutError("overall_deadline_exceeded"))
+    with pytest.raises(TimeoutError, match="overall_deadline_exceeded"):
+        module().wait_for_wire_ready(page, 20, ValueError("x"))
+    page = _WirePage(RuntimeError("Target closed"))
+    with pytest.raises(RuntimeError, match="Target closed"):
+        module().wait_for_wire_ready(page, 20, ValueError("x"))
+
+
+def test_no_harness_polls_wire_readiness_with_raw_evaluate():
+    """A raw evaluate loop fails when the single-page UI navigates."""
+    root = Path(__file__).resolve().parents[1] / "integrations/openclaw/test"
+    for path in (
+        root / "host-person-qualification/qualify.py",
+        root / "host-ordinary-qualification/qualify.py",
+    ):
+        source = path.read_text(encoding="utf-8")
+        assert 'evaluate("() => window.__rmPersonWire?.state().ready' not in source, path

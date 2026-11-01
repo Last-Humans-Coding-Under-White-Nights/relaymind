@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Native loaded-skill observation harness (#239; RM39/AC30): retain native
+  `skills_read` bytes, their receiving gateway request and host/run correlation,
+  with isolated stale/deleted/reset observations over deterministic inference.
+  This is evidence tooling only; loaded-use qualification remains unavailable.
+  Observation now requires `--observe-loaded-use` (default off); the ordinary
+  direct-action/exact-selection exit criterion is unchanged. CI runs a separate
+  six-minute observation step and artifact: only harness/fixture errors fail it,
+  never truthful observation outcomes, without `continue-on-error`. Native
+  records tolerate only a torn trailing line with one bounded re-read; retained
+  pin names, advertised revisions, socket receipts and independent provider/run
+  records are checked, and incomplete hooks cannot label a turn `not_loaded`.
+  Request and content retention limits preserve later control windows.
 - Add a disposable MCP use capability tier (#204; RM39/AC35), raw-evidence
   accounting tests, bounded sandbox servers and an optional CI capture. Exact
   use, native approval trials and human acceptance remain blocked/not_run.
@@ -19,6 +31,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `scripts/asset_operations_run.py startup` measures ten real `relaymind serve` startups over a generated 300-skill bilingual catalog, using the existing AC29 driver. It waits for recommendations to be ready and samples memory on POSIX and Windows.
   - `platform` builds an `AssetPlatformReportV1` from install-check and ordinary installed-host records, bound to the companion input manifest. Skill use is never inferred from a selection receipt.
   - All output is labeled `fixture`.
+- Stabilize installed OpenClaw qualification on loaded runners (RM16/RM39;
+  AC30): use bounded ten-second host-event waits, keep fixture holds alive
+  through retirement observation, and capture only fixed ordinary substeps and
+  error classes. Browser failures and the overall deadline now remain failures
+  through skill selection; the 570-second harness and 12-minute CI bounds and
+  all evidence predicates remain unchanged. Fresh evidence must bind the changed
+  harness sources.
+
 - Section 12.6.5 verifier closure and episode driver (#229, #202, #205, #207):
   - The frozen corpus is verified from the input manifest, and host tasks and episodes are bound to it.
   - Off/on adaptation configurations are checked as a named ablation.
@@ -39,6 +59,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.64 → 0.65 (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;
+  AC25/AC28/AC30/AC31/AC35–AC37): defines native skill loaded-byte delivery,
+  immutable-pin versus removal semantics and the later-use authority fence;
+  separates the deterministic-model functional tier from live-model capability
+  and allows a reviewed exact-composition entry only after all controls pass.
+  Defines the conditional direct MCP-use request, exact native binding,
+  lifecycle/approval fences and qualification gates without activating it;
+  automated native UI decisions remain functional evidence, never human approval.
+  Reconciles registration with the existing qualified direct-action exception,
+  places the 512 KiB native request cap in section 14.5, and bounds approval
+  waiting separately from the 60-second preparation/dispatch deadline without
+  changing existing budgets.
+  Requires source-bound pinned native host configuration validation with
+  the captured native regex dialect and explicit provider/sampling/budget
+  schema binding.
+  Runtime snapshots and all outstanding acceptance gates remain closed.
 - Specification 0.63 → 0.64 (RM42/RM44; AC33/AC36): names the reset evidence
   document of section 12.6.5 (`reset:<episode_id>`, holding the before/after
   preimages), so adaptation reports can be graded offline end to end.

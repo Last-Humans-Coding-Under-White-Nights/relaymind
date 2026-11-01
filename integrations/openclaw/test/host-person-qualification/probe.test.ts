@@ -264,3 +264,23 @@ it("#231 records workspace_unavailable when workspace resolution fails", async (
   expect(f.respond.mock.calls[0][0]).toBe(false);
   expect(events.at(-1)).toMatchObject({ phase: "probe_failed", reason: "workspace_unavailable" });
 });
+
+it("keeps the real fixture hold alive across loaded-runner observation and still expires", async () => {
+  // RM16/RM39 AC30: timeout is never substituted for post-await retirement evidence.
+  // @ts-expect-error plain JS fixture loaded unchanged by the pinned native host
+  const { waitForFixtureRelease } = await import("./probe.mjs");
+  vi.useFakeTimers({ toFake: ["setTimeout", "performance"] });
+  try {
+    let released = false;
+    const pending = waitForFixtureRelease(() => released);
+    await vi.advanceTimersByTimeAsync(10000);
+    released = true;
+    await vi.advanceTimersByTimeAsync(10);
+    await expect(pending).resolves.toBeUndefined();
+    const expired = expect(waitForFixtureRelease(() => false)).rejects.toThrow("fixture_hold_timeout");
+    await vi.advanceTimersByTimeAsync(60000);
+    await expired;
+  } finally {
+    vi.useRealTimers();
+  }
+});

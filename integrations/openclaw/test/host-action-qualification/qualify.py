@@ -37,6 +37,9 @@ def person_module():
     return module
 
 
+HOST_EVENT_WAIT_SECONDS = person_module().HOST_EVENT_WAIT_SECONDS
+
+
 def composed_pass(capture):
     """Correlate raw native receipts; complete check flags alone are never proof."""
     try:
@@ -410,14 +413,14 @@ class ActionComposition:
                 idempotencyKey="native-composed-retirement",
             ),
         )
-        if not self.entered.wait(3):
+        if not self.entered.wait(HOST_EVENT_WAIT_SECONDS):
             raise ValueError("composed_hold_not_observed")
 
     def after_retirement(self, capture):
         import time
 
         self.release.set()
-        deadline = time.monotonic() + 3
+        deadline = time.monotonic() + HOST_EVENT_WAIT_SECONDS
         while time.monotonic() < deadline:
             events = [json.loads(line) for line in self.event_file.read_bytes().splitlines()]
             relevant = [event for event in events if event.get("requestId") == self.held_request]

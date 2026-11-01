@@ -567,7 +567,7 @@ comparison object. Unknown CPU/memory and incomplete costs remain unknown;
 setup inference is never added to query inference a second time. Historical
 comparison objects retain their original closed shape and are not upgraded.
 
-## Whole-host trials, adaptation episodes and platform exports (spec 0.60/0.64 section 12.6.5)
+## Whole-host trials, adaptation episodes and platform exports (spec 0.60/0.64/0.65 section 12.6.5)
 
 These offline tools serve #198 (early installed-skill trial), #202 (adaptation
 episodes), #204 (host MCP-use rows), #205 (paired whole-host tasks) and #206
@@ -620,6 +620,11 @@ resolve only through an explicit `--resolver`; the runner inventory is the
 whole `src/relaymind` Python package plus `pyproject.toml` and
 `scripts/asset_whole_task.py`, whose package members must equal the running
 grader and whose other files must match reviewed bytes.
+
+**Native configuration validation (spec 0.65; #240).** Host, provider, sampling
+and budget configuration documents stay unverified and cannot establish qualified
+acceptance until the pinned native validation and applicable schema/extraction
+evidence required by section 12.6.5 are supplied and verified.
 
 **Reset evidence (spec 0.64).** The registry entry `reset:<episode_id>` holds,
 as its original bytes, the closed canonical JSON object
@@ -737,3 +742,82 @@ The full 60-second mixed workload (`run_workload`) still needs rescan and
 rebuild hooks into a running process. The AC29 and AC37 numbers that count
 come only from the Apple M1 8 GiB macOS and native x86-64 Windows machines;
 those runs remain open in #241, #235 and #234.
+
+### Native loaded-skill observation tier (#239; RM39/AC30)
+
+The ordinary installed-host harness at
+`integrations/openclaw/test/host-ordinary-qualification/qualify.py` now includes
+an opt-in evidence-only loaded-byte experiment (`--observe-loaded-use`, default off).
+Run it with the same disposable Linux
+person-ingress prerequisites and release tarball used by the ordinary host job:
+
+```sh
+PYTHONPATH=src:tests python integrations/openclaw/test/host-ordinary-qualification/qualify.py \
+  --tarball /absolute/path/to/relaymind-provider.tgz \
+  --work-dir /absolute/path/to/new-private-host \
+  --observe-loaded-use \
+  --out /absolute/path/to/ordinary-observation.json
+```
+
+The installed RelayMind provider sends native turns to a real loopback RelayMind
+client-owned chat API. Its deterministic adapter proposes `skills_read` using
+the selected skill's actually advertised name, then returns a fixed fixture
+answer after receiving the native tool-result bytes. The gateway never executes
+the read. The capture retains the native tool result, the receiving HTTP request,
+its Idempotency-Key and X-RelayMind-Run-Id, the provider's independent response-attempt
+records matched one-to-one by key and run ID, the browser `chat.send` acknowledgement
+and terminal event, and the host session key, ID and lifecycle revision.
+Each turn first obtains a native `sessions.messages.subscribe` receipt on that
+browser socket and retains the receipt and socket ID; subscription, send, and terminal
+evidence must share that socket. It uses a separate observer ID to preserve the UI's subscription. The
+predicate recomputes SHA-256 from retained UTF-8 text and joins the native call
+and receiving tool message by their call ID. Catalog text or a final marker alone
+cannot pass. The retained selected SKILL.md text is capped at 256 KiB; each
+request is read incrementally up to 1 MiB. Four requests plus one retained
+overflow are allowed per turn, with a 24-record global ceiling. The observer
+caps each serialized record at 1 MiB and its file at 8 MiB before appending.
+Waits and generations are bounded. These are component retention limits, not
+a size limit on the complete JSON export. Only an unterminated trailing event
+line may be deferred, after one 50 ms re-read; malformed complete records are
+fixed-reason harness failures.
+
+Four isolated cases record a bridge-selected positive turn and native controls:
+a changed library head after selection, an entry removed after selection, and
+`sessions.reset`. Controls use supported native library/session RPCs on the same
+authenticated browser connection; their direct activation is fixture setup, not
+an additional qualified adapter path. The closed `observed` values distinguish
+`loaded_pinned_revision`, `loaded_other_bytes`, `refused`, and `not_loaded`.
+An unfinished capture uses `incomplete` and fails the observation predicate;
+its already received tool/request evidence is retained. A tool-result request
+without its asynchronous native hook stays `incomplete` after the bounded
+catch-up wait; events are filtered by host run so a late prior event cannot
+contaminate the next case. A fixed per-case failure reason preserves the
+failure while later control turns still run. Controls retain the advertised
+revision and can record a different syntactically valid revision as
+`loaded_other_bytes`; only the positive proof requires the selected path.
+A retained old pin is reported as observed even when the library head changed
+or the entry was removed; it is never relabeled a successful rejection control.
+
+`ordinary_skill_loaded_use_pass` and the capture check
+`ordinary_skill_loaded_use_observation` mean that the positive byte round trip
+and control observations are complete. The capture always keeps
+`qualification: unavailable`. This is not `skill_loaded_use` qualification,
+autonomous model compliance, real-model capability, a platform acceptance
+measurement, or full AC30 acceptance. The selection receipt still says
+`instructions: not_observed`, and no production registry operation is enabled.
+A later normative decision about stale/deleted pins and authority at use time
+is still required. Already loaded conversation text cannot be unloaded by this
+harness; each control uses a fresh session. This change supplies tooling and
+unit/transport checks, not a newly measured native-host evidence record.
+
+The ordinary command without `--observe-loaded-use` keeps its existing exit
+criterion: native person composition, `ordinary_actions`, and `ordinary_skill`.
+CI runs that qualification first, then a separate opt-in observation step with
+a six-minute timeout and its own `openclaw-loaded-use-observation-ubuntu`
+artifact. The second step exits nonzero for a harness/fixture failure (including
+missing or inconsistent evidence), never because a complete truthful observation
+is `refused`, `not_loaded`, or `loaded_other_bytes`, including on the positive
+turn. No `continue-on-error` is used. The separate
+`ordinary_skill_observation_complete` check validates the evidence without
+requiring a positive loaded-byte outcome; `ordinary_skill_loaded_use_observation`
+still requires the positive byte round trip. Neither check qualifies loaded use.
