@@ -18,6 +18,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Every original is bundled with `SHA256SUMS` and a companion manifest and
     graded offline with the unchanged grader.
   - Output is fixture or provisional only; no trial has been run.
+  - Review follow-ups: the bundle and copied originals are private (`0700`/`0600`)
+    and appear only when complete; the install record keeps closed inspect codes
+    and a diagnostics count, never host text; the provisional gate checks the
+    closed record shapes, recomputes the machine checks and binds the records to
+    the frozen package; output paths under a symlinked parent (macOS `/tmp`)
+    work; evidence keeps the 10 MiB original limit; `plan.json` names the lane
+    and prompt case.
 - Bilingual packaged walkthrough recorder (#238; RM39; AC30, AC35):
   `integrations/openclaw/test/host-walkthrough/record.py` runs the unchanged
   ordinary installed-host qualification in `en-US` and `zh-CN`.
@@ -27,6 +34,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     Loaded skill use, MCP use and host MCP approval are always `blocked`.
   - The tier is `functional_fixture`, it is not in CI, and no walkthrough has
     been recorded yet.
+  - Every partial screenshot is listed by digest, and a torn or unsafe media
+    set still writes an incomplete manifest with fixed `media_problems`.
 - Qualification assessment for the section 12.6.5 exports (#240; RM16, RM40,
   RM42, RM44; AC31, AC33, AC36, AC37): graded host, platform and adaptation
   results record the claimed label, the tier assessed from the resolved inputs
