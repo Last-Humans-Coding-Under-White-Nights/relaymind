@@ -54,6 +54,7 @@
   "role": "target_macos_m1_8gib",
   "os": "Darwin",
   "os_build": "macOS 27.0.1 26A434",
+  "os_version": "macOS 27.0.1",
   "architecture": "arm64",
   "cpu_model": "Apple M1",
   "ram_bytes": 8589934592,
