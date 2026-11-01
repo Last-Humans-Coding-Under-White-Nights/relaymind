@@ -1349,6 +1349,20 @@ skill_loaded_use registry entry for that exact composition in the
 deterministic-model functional tier; live-model capability and full acceptance
 remain separate. The current selection receipt still says not_observed.
 
+The #239 observation harness
+(`integrations/openclaw/test/host-ordinary-qualification/qualify.py`) now reads
+provider attempt records by their own per-turn file window and retains a
+failure that never reached the gateway with its actual outcome; an
+unexplained record leaves the case incomplete
+(`ordinary_skill_provider_unexplained`). It drains asynchronous evidence until
+every proposed or answered tool call has its native hook, so a failed or
+cancelled tool's late hook is collected; an unresolved call stays incomplete
+(`ordinary_skill_tool_unresolved`), and a refused send is accepted only after
+the same bounded drain. The committed loaded-use observation capture
+(`tests/fixtures/openclaw-loaded-use-observation-20261101-vps2.json`) predates
+this harness change, binds the earlier harness by digest, and must be
+recaptured with this harness before it is cited as evidence for it.
+
 #204 may build a disposable qualification harness against public authenticated
 dispatch and actual native approval paths, but MCP activation remains disabled.
 Section 7.6.2 defines a separate explicit direct-use request and ten qualification
