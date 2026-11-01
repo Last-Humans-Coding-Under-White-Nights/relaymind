@@ -85,10 +85,9 @@ HOST_HOME = "<host-home>"
 DEFAULT_MODEL = "<default-model>"
 # The host's private default model, as `key=value` text or as a quoted JSON
 # string value; the quote may itself be escaped inside a JSON-encoded string.
-_DEFAULT_MODEL_ASSIGNED = re.compile(r'\b(default_model|defaultModel)=[^\s|\\"]+')
-_DEFAULT_MODEL_QUOTED = re.compile(
-    r'(\\*")(default_model|defaultModel)\1(\s*:\s*)\1(?:(?!\1)[^\n])*\1'
-)
+_DEFAULT_MODEL_KEY = r"(default_model|defaultModel)"
+_DEFAULT_MODEL_ASSIGNED = re.compile(rf'\b{_DEFAULT_MODEL_KEY}=[^\s|\\"]+')
+_DEFAULT_MODEL_QUOTED = re.compile(rf'(\\*"){_DEFAULT_MODEL_KEY}\1(\s*:\s*)\1(?:(?!\1)[^\n])*\1')
 ARTIFACT_DIR = "<artifact-dir>"
 REPO = "<repo>"
 USER_HOME = "<home>"
@@ -449,9 +448,7 @@ def _exec(ctx: Context, step: str, prompt: str) -> list[str]:
 def _sanitize(text: str, ctx: Context) -> str:
     text = text.replace(ctx.token, NOT_RECORDED)
     text = _DEFAULT_MODEL_ASSIGNED.sub(rf"\1={DEFAULT_MODEL}", text)
-    text = _DEFAULT_MODEL_QUOTED.sub(
-        lambda m: f"{m[1]}{m[2]}{m[1]}{m[3]}{m[1]}{DEFAULT_MODEL}{m[1]}", text
-    )
+    text = _DEFAULT_MODEL_QUOTED.sub(rf"\1\2\1\3\1{DEFAULT_MODEL}\1", text)
     # Most specific first: the host home and the artifact may sit under the others.
     places = (
         (ctx.home, HOST_HOME),
