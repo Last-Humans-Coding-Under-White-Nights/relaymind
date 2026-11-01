@@ -63,7 +63,7 @@ def startup_report(
     memory: Sequence[int | None],
     *,
     assets: int,
-    base_digest: str,
+    base_config_digest: str,
     counter: str,
 ) -> dict:
     useful = sum(sample.outcome == "useful" for sample in samples)
@@ -71,7 +71,7 @@ def startup_report(
         kind="asset-operations-startup",
         qualification="fixture",
         assets=assets,
-        base_config_digest=base_digest,
+        base_config_digest=base_config_digest,
         memory_counter=counter,
         samples=[dataclasses.asdict(sample) for sample in samples],
         memory_bytes=list(memory),
@@ -85,6 +85,8 @@ def startup_report(
 
 
 def _startup(args) -> dict:
+    if args.assets <= 0:
+        raise ValueError(f"assets_must_be_positive: {args.assets}")
     base = Path(args.base_config).absolute()
     if not base.is_file():
         raise ValueError(f"base_config_not_found: {base}")
@@ -110,7 +112,7 @@ def _startup(args) -> dict:
         samples,
         memory,
         assets=args.assets,
-        base_digest=hashlib.sha256(base.read_bytes()).hexdigest(),
+        base_config_digest=hashlib.sha256(base.read_bytes()).hexdigest(),
         counter=memory_counter(),
     )
 
