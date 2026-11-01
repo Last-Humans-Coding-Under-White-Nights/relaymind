@@ -15,7 +15,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   refusals with their exact error codes. Browser failures and the overall
   deadline remain failures through skill selection.
 
-- CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
 - CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation or native-preparation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
 - CI: the shared asset benchmark fixture uses a deterministic recommendation
   budget instead of the production 500/150 ms pair, so a loaded runner cannot
