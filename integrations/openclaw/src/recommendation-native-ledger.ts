@@ -183,10 +183,18 @@ export function createFileUseLedger(
     if (created) syncDirectory(io, path);
     const text = io.readFileSync(path, "utf8");
     const end = text.lastIndexOf("\n") + 1;
-    // An unterminated final record was never synced and acknowledged.
+    // An unterminated final record was never synced and acknowledged. It is
+    // cut through a separate read-write handle: an append-mode handle cannot
+    // change the file length on every platform (on Windows it holds append
+    // access only, and truncation needs write access).
     if (end < text.length) {
-      io.ftruncateSync(fd, Buffer.byteLength(text.slice(0, end), "utf8"));
-      io.fsyncSync(fd);
+      const writer = io.openSync(path, "r+");
+      try {
+        io.ftruncateSync(writer, Buffer.byteLength(text.slice(0, end), "utf8"));
+        io.fsyncSync(writer);
+      } finally {
+        io.closeSync(writer);
+      }
     }
     for (const line of text.slice(0, end).split("\n")) {
       if (!line) continue;

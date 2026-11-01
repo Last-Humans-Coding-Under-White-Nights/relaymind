@@ -234,7 +234,9 @@ def test_install_uses_the_pinned_cli_and_records_digests(tmp_path):
     names = [s["name"] for s in record["steps"]]
     assert names == ["install", "inspect"]
     log = (tmp_path / "fake_openclaw.py.log").read_text().splitlines()
-    assert json.loads(log[0]) == [
+    # The pinned host version is checked before the host is changed.
+    assert json.loads(log[0]) == ["--version"]
+    assert json.loads(log[1]) == [
         "plugins",
         "install",
         "npm-pack:" + str(tarball),
@@ -254,6 +256,63 @@ def test_failed_install_is_recorded_and_not_passed(tmp_path):
     record = kit.install_plugin(fake_host(tmp_path, "install-fails"), tarball, tmp_path / "i")
     assert record["passed"] is False
     assert [s["status"] for s in record["steps"]] == ["failed", "not_run"]
+
+
+# --- install preflight (PR #262 adversarial review) ---------------------------
+
+
+def host_calls(tmp_path: Path) -> list[list[str]]:
+    log = tmp_path / "fake_openclaw.py.log"
+    return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+
+def mutating(calls: list[list[str]]) -> list[list[str]]:
+    return [call for call in calls if call != ["--version"]]
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        dict(sums="0" * 64),
+        dict(record=dict(sha256="0" * 64)),
+        dict(record=dict(openclaw=dict(peer="2026.9.1", pluginApi="2026.9.1"))),
+        dict(missing=True),
+    ],
+)
+def test_install_refuses_a_release_whose_checksums_do_not_match(tmp_path, broken):
+    """RM39, AC30, AC36: no host mutation for an unverified package."""
+    tarball = release(tmp_path, sums=broken.get("sums"))
+    if "record" in broken:
+        path = tarball.parent / "release.json"
+        record = json.loads(path.read_bytes())
+        record.update(broken["record"])
+        path.write_text(json.dumps(record), encoding="utf-8")
+    if broken.get("missing"):
+        tarball.unlink()
+    with pytest.raises(kit.WholeTaskRejected, match="^release_checksum$"):
+        kit.install_plugin(fake_host(tmp_path), tarball, tmp_path / "i")
+    assert mutating(host_calls(tmp_path)) == []
+    assert not (tmp_path / "i").exists()
+
+
+def test_install_refuses_a_host_that_is_not_the_pinned_version(tmp_path):
+    tarball = release(tmp_path)
+    with pytest.raises(kit.WholeTaskBlocked) as error:
+        kit.install_plugin(fake_host(tmp_path, "old"), tarball, tmp_path / "i")
+    assert error.value.reason == "host_version"
+    assert host_calls(tmp_path) == [["--version"]]
+    assert not (tmp_path / "i").exists()
+
+
+@pytest.mark.parametrize(("mode", "sums", "code"), [("ok", "0" * 64, 2), ("old", None, 3)])
+def test_trial_install_command_refuses_before_any_host_mutation(tmp_path, mode, sums, code):
+    tarball = release(tmp_path, sums=sums)
+    output = tmp_path / "install.json"
+    argv = ["trial-install", "--tarball", str(tarball), "--work", str(tmp_path / "work")]
+    argv += ["--output", str(output), "--", *fake_host(tmp_path, mode)]
+    assert main(argv) == code
+    assert mutating(host_calls(tmp_path)) == []
+    assert not output.exists() and not (tmp_path / "work").exists()
 
 
 # --- run, bundle and grade ----------------------------------------------------
@@ -763,6 +822,33 @@ def test_a_bundle_under_a_symlinked_parent_is_written_to_the_real_path(tmp_path,
     assert result["bundle"] == str(real / "bundle")
 
 
+def test_inputs_tarball_and_observations_under_a_symlinked_parent_are_read(tmp_path, bundle):
+    """macOS /tmp is a symlink: an input directly under it is read, not refused as unsafe.
+
+    The input's own directory is the read root, which must not be a symlink; the
+    kit resolves the input's parent once (``real_path``), never the final name.
+    """
+    inputs = frozen_manifest(bundle)
+    tarball = release(tmp_path)
+    observed = observations(tmp_path, bundle)
+    links = tmp_path / "links"
+    links.mkdir()
+    for name, target in (("bundle", inputs.parent), ("release", tarball.parent)):
+        (links / name).symlink_to(target, target_is_directory=True)
+    (links / "parent").symlink_to(observed.parent, target_is_directory=True)
+    code, result = kit.trial_run(
+        inputs=links / "bundle" / inputs.name,
+        observations=links / "parent" / observed.name,
+        bundle=tmp_path / "out",
+        resolver=bundle.resolver,
+        qualification="fixture",
+        environment=ENVIRONMENT,
+        preflight_record=preflight_record(tmp_path, bundle, ENVIRONMENT),
+        tarball=links / "release" / tarball.name,
+    )
+    assert (code, result["status"]) == (3, "graded")
+
+
 def test_a_rejected_run_leaves_no_partial_bundle(tmp_path, bundle):
     observed = observations(tmp_path, bundle)
     first = observed / kit.observation_name(3)
@@ -822,3 +908,13 @@ def test_absent_observation_evidence_is_reported_missing(tmp_path, bundle):
     (observed / document["evidence"][0]["file"]).unlink()
     code, result = run(tmp_path, bundle, observed=observed)
     assert (code, result["reason"]) == (2, "observation_evidence_missing")
+
+
+def test_trial_dispatch_refuses_an_unknown_command():
+    """Only the four trial commands dispatch; nothing falls through to trial-run."""
+    import argparse
+
+    from relaymind.evaluation import asset_whole_task_cli as cli
+
+    with pytest.raises(ValueError, match="trial_command"):
+        cli._trial(argparse.Namespace(command="trial-bogus"))
