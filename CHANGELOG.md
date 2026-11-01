@@ -16,9 +16,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     independent, non-App MCP tool by its exact native identity: `tools.invoke`
     is name-only and the harness runtimes are private; the App-scoped
     `mcp.app.callTool` does not count. These verdicts rest on the pinned host
-    source; the inventory's `attempted_routes` lists what the captures
-    attempted (`mcp.app.discover`, `tools.effective`, `mcp.app.listTools`) and
-    what was not called.
+    source; the inventory's `attempted_routes` lists the corrected VPS3
+    attempts (`mcp.app.discover`, `tools.effective`, `mcp.app.listTools`) and
+    what was not called. Its older CI/VPS2 entries omit their
+    `tools.effective` reads; the settlement document records that gap.
   - `skill_loaded_use` has **no** negative record. Hooks, middleware and the
     provider can stop a read or a request but cannot re-verify fresh person
     authority, the session incarnation and the pinned bytes on their own. The
@@ -32,11 +33,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
   Both operations stay disabled. The MCP record lifts nothing until it is
   approved. `tests/test_m10_host_use_records.py` loads it with the checker,
-  checks every cited host file hash (including the reset policy sources), ties
-  the attempted routes to the captures, ties the record's commit and harness to
-  the VPS3 capture and its tracked sources to that commit's bytes, and checks
-  that no #255 capture publishes a plaintext hostname (the CI loaded-use
-  capture's runner hostname is now its SHA-256). The MCP record also binds the
+  checks cited hashes against the inventory and, in the OpenClaw CI job,
+  against the installed pinned host files (including the reset policy sources).
+  It ties listed attempts to captures and checks the documented older-route
+  omissions, ties the record's commit and harness to the VPS3 capture and its
+  tracked sources to that commit's bytes, and rebuilds that historical adapter
+  to verify its emitted files and recorded revision. Both CI jobs retain full
+  history; a missing record commit fails. Privacy checks reject plaintext
+  hostnames and personal home paths, allowing only the documented VPS
+  placeholder and the standard CI home. The MCP record also binds the
   second VPS run's MCP capture (`openclaw-mcp-use-20261101-vps2.json`,
   checkout 62c4dcd), with the user name and hostname rewritten. Person ingress
   passed there, and MCP use was `blocked`. That run's loaded-use capture exited
@@ -313,7 +318,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   marker and longest receipt under the byte cap and compiles each host schema
   pattern once per operation; the entry is re-pinned to adapter revision
   `37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`, whose
-  capture is taken from CI before merge.
+  evidence revision names its fresh capture (CI run 41335800361, SHA-256
+  `1212d0e28080…`).
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,
@@ -415,6 +421,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Activate two independently reviewed exact Linux CPU embedding identities;
   record ordinary native launch and provisional 412/128 benchmark results,
   including partial indexing, lexical fallback and the observed quality regression.
+
+### Fixed
+
+- The loaded-use observation harness records the exact person-scope
+  `sessions.reset` refusal (`operator.admin` required on the pinned host) as
+  `control_refused`, with no turn, instead of raising
+  `ordinary_skill_control_failed`. CI run 41286397320 hit that error. Any other
+  refusal, and any turn evidence on a refused control, still fails the
+  predicate (#255). The second VPS run observed the refusal as
+  `control_refused`. [CI run 41340879424](https://github.com/LHCWN/relaymind/actions/runs/41340879424)
+  at ed21e007 also completed loaded-use observation with that reset result and
+  confirmed corrected MCP discovery; exact use stayed blocked. These newer CI
+  captures are workflow artifacts, not committed evidence.
 
 ### Changed
 

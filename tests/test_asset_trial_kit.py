@@ -364,23 +364,14 @@ def test_base_url_outside_the_plugin_rules_is_refused_before_any_host_command(tm
     assert not (tmp_path / "fake_openclaw.py.log").exists()
 
 
-@pytest.mark.parametrize(
-    ("url", "configured"),
-    [
-        ("http://127.0.0.1:8080/v1", "http://127.0.0.1:8080/v1"),
-        ("http://LOCALHOST:8080/v1/", "http://localhost:8080/v1"),
-        ("https://127.10.0.1/v1", "https://127.10.0.1/v1"),
-        ("http://[::1]:8080/v1", "http://[::1]:8080/v1"),
-    ],
-)
-def test_loopback_base_url_is_configured_in_its_normal_form(url, configured):
-    """#269 review: the configured value is the plugin's own form, origin plus /v1."""
-    assert kit.check_base_url(url) == configured
-
-
-# Forms the pinned plugin's WHATWG URL parse accepts and normalizes (#271 review;
-# the expected values are what `parsePluginConfig` in config.ts returns).
+# Forms the pinned plugin's WHATWG URL parse accepts and normalizes (#269, #271
+# review; the expected values are what `parsePluginConfig` in config.ts returns):
+# the configured value is the plugin's own form, origin plus /v1.
 PLUGIN_NORMALIZED_BASE_URLS = [
+    ("http://127.0.0.1:8080/v1", "http://127.0.0.1:8080/v1"),
+    ("http://LOCALHOST:8080/v1/", "http://localhost:8080/v1"),
+    ("https://127.10.0.1/v1", "https://127.10.0.1/v1"),
+    ("http://[::1]:8080/v1", "http://[::1]:8080/v1"),
     ("http://127.0.0.1.:8080/v1", "http://127.0.0.1:8080/v1"),
     ("http://[0:0:0:0:0:0:0:1]:8080/v1", "http://[::1]:8080/v1"),
     ("http://127.1:8080/v1", "http://127.0.0.1:8080/v1"),

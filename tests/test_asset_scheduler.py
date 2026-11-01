@@ -7,8 +7,7 @@ from datetime import UTC, datetime
 import pytest
 
 from helpers import FakeClock, ScriptedAdapter
-from recommendation_helpers import BODY, client_for
-from relaymind import launcher
+from recommendation_helpers import BODY, build_app, client_for
 from relaymind.assets.sources import CaptureContext, SourceFailure
 from relaymind.selection import asset_lexical
 from test_asset_readiness import configured_catalog
@@ -81,7 +80,7 @@ def test_source_and_derived_rebuild_share_one_worker_while_lexical_queries_conti
     """RM38/AC29: a rebuild queues rescan work, never execution or foreground recommendations."""
 
     async def go():
-        launched = launcher.build_app(
+        launched = build_app(
             configured_catalog(tmp_path, warmup=False, detect=False),
             local_adapter=ScriptedAdapter(),
         )
@@ -142,7 +141,7 @@ def test_cancelled_derived_rebuild_keeps_source_fresh_and_records_operator_cance
     """RM38/AC29: cancelling derived work never invents a source failure or rejection."""
 
     async def go():
-        launched = launcher.build_app(
+        launched = build_app(
             configured_catalog(tmp_path, warmup=False, detect=False),
             local_adapter=ScriptedAdapter(),
         )
@@ -184,7 +183,7 @@ def test_async_paused_rebuild_uses_original_wall_deadline(tmp_path, monkeypatch)
     """RM38/AC29: scheduler waiting cannot extend the fixed original 60-second job limit."""
 
     async def go():
-        launched = launcher.build_app(
+        launched = build_app(
             configured_catalog(tmp_path, warmup=False, detect=False),
             local_adapter=ScriptedAdapter(),
         )
@@ -227,7 +226,7 @@ def test_failed_source_observer_defers_index_repair_until_inference_is_idle(tmp_
     from test_chat_disconnect_cancel import until
 
     async def go():
-        launched = launcher.build_app(
+        launched = build_app(
             configured_catalog(tmp_path, warmup=False, detect=False),
             local_adapter=ScriptedAdapter(),
         )
@@ -272,7 +271,7 @@ def test_idle_source_failure_repairs_only_through_recorded_derived_job(tmp_path,
     from test_chat_disconnect_cancel import until
 
     async def go():
-        launched = launcher.build_app(
+        launched = build_app(
             configured_catalog(tmp_path, warmup=False, detect=False),
             local_adapter=ScriptedAdapter(),
         )
@@ -302,7 +301,7 @@ def test_async_index_batches_pause_without_blocking_lexical_requests(
     """RM38/AC29: busy during index preparation yields the serving loop until idle."""
 
     async def go():
-        launched = launcher.build_app(
+        launched = build_app(
             configured_catalog(tmp_path, warmup=False, detect=False),
             local_adapter=ScriptedAdapter(),
         )
@@ -501,7 +500,7 @@ def test_repeated_cancel_of_stop_drains_paused_derived_owner_before_store_close(
     from test_chat_disconnect_cancel import until
 
     async def go():
-        launched = launcher.build_app(
+        launched = build_app(
             configured_catalog(tmp_path, warmup=False, detect=False),
             local_adapter=ScriptedAdapter(),
         )
@@ -602,7 +601,7 @@ def test_cancelled_stop_drains_a_real_scheduler_paused_rebuild(tmp_path, monkeyp
     """RM38/AC29: the real busy gate drains through cancelled job finalization."""
 
     async def go():
-        launched = launcher.build_app(
+        launched = build_app(
             configured_catalog(tmp_path, warmup=False, detect=False),
             local_adapter=ScriptedAdapter(),
         )
