@@ -1716,7 +1716,8 @@ def test_retirement_holds_backend_until_ui_abort_is_observed(tmp_path, monkeypat
     # Earlier requests must not be attributed to the held request.
     prior = json.dumps(dict(retirement["fetch_failures"][0], attempt_id="prior")) + "\n"
     extension.event_file.write_text(prior)
-    extension.retirement_start = len(prior.encode())
+    # The observer uses byte offsets; Windows text writes translate LF to CRLF.
+    extension.retirement_start = extension.event_file.stat().st_size
     extension.held_attempt = retirement["attempt"]
     extension.held_request = "held"
     extension.ui_guard_request = retirement["ui_guard_request"]

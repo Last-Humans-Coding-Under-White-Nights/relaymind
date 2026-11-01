@@ -28,6 +28,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   without the author competence rule, and the record's checks against the
   frozen labels and cases. Graded output reports `prompt_authorship`.
   Fixture-tested only.
+- #274 native Windows platform evidence (RM38; AC29, AC37), with a pending
+  qualification draft in `docs/evidence/m10/windows-platform-run-2026-11-01/`.
+  The packaged lifecycle passes; fixture qualification and unobserved host
+  operations remain explicit. The operations harness ignores proxy settings
+  for its loopback client, covered by a test-first real-gateway regression.
+  Review fixes sample the interpreter PID rather than a Windows venv redirector,
+  redact the host default model before export, and retain the complete evidence
+  in a digest-bound release attachment with a compact repository record.
 
 - #255 host use settlement (RM16/RM37/RM39; AC30/AC35; spec 0.66 sections
   7.6.1, 7.6.2, 12.6.6) adds two pending negative `host_operation` records for

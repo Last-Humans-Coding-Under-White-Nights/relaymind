@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "record_id": "windows-platform-run-2026-11-01-review",
+  "profile": "owner_run",
+  "outcome": "positive",
+  "scope": "platform",
+  "labelling": "not_applicable",
+  "annotators": null,
+  "agreement": null,
+  "corpus_review": null,
+  "preregistration": null,
+  "runs_started_at": null,
+  "machine": {
+    "ram_bytes": 68671221760,
+    "architecture": "AMD64",
+    "hostname_sha256": "c48c0692ec414d327d1d04a6b81573a989a6a6315074d3d76ee4756c8fa9125f",
+    "os_build": "10.0.26300",
+    "cpu_model": "AMD Ryzen 5 3600 6-Core Processor              ",
+    "role": "target_windows_x64",
+    "os": "Windows"
+  },
+  "revisions": {
+    "repository_commit": "4c1ce6e4d3f456f1a08955fd781f5adede9e1ce8",
+    "adapter_revision": "m10-control-ui-l10n",
+    "harness_sha256": "d056dd09235755adff8aa6aacb3a37235670c379c1b253fa07a4545bdb7f24dd"
+  },
+  "operation": null,
+  "subjects": [
+    {
+      "role": "evidence",
+      "path": "README.md",
+      "sha256": "fdc912afbde06521fdf850b0bb474c098eddf79eb16f332082df507c65c0617c",
+      "bytes": 3354
+    },
+    {
+      "role": "evidence",
+      "path": "SHA256SUMS",
+      "sha256": "70289808ac1626e94a324662453c6f492e36117b346e1def8096e25a8088550b",
+      "bytes": 212
+    },
+    {
+      "role": "evidence",
+      "path": "archive.json",
+      "sha256": "9cbfe282e33d10c0ad47baa8340910917e7af4f4f0331afc416fd5c7c7610d6f",
+      "bytes": 415
+    },
+    {
+      "role": "environment",
+      "path": "machine.json",
+      "sha256": "0fc45c1ce75a09d6563ae8fe254a01ef3f796bab80cd786868adad4949d326d2",
+      "bytes": 322
+    },
+    {
+      "role": "evidence",
+      "path": "operations-summary.json",
+      "sha256": "ded63b3b75b7bc595225eda3ca32118a2e1796f5615c4a1ced2bb97a21a01a08",
+      "bytes": 30527
+    },
+    {
+      "role": "evidence",
+      "path": "ordinary.json",
+      "sha256": "a58056945dfd3f17b6c5d21ed54d0f58119806b99e85b1fc29f585250c647598",
+      "bytes": 1394
+    },
+    {
+      "role": "report",
+      "path": "platform.json",
+      "sha256": "aa57eb8dc888d44a8a82da4733d5a6b917db26779b23f255981f70207b57c1da",
+      "bytes": 3675
+    },
+    {
+      "role": "evidence",
+      "path": "release.json",
+      "sha256": "e369482b34b2d417af839ee047cda5c18259c4e3a06d0e70a1122abdf3d7e4e2",
+      "bytes": 2311
+    },
+    {
+      "role": "evidence",
+      "path": "verify.txt",
+      "sha256": "accdc852a0f817c7d786413116e461413c4f93d49fb3298838dc663067bb54cb",
+      "bytes": 524
+    }
+  ],
+  "review": {
+    "owner_login": "devnullexile",
+    "pull_request": null,
+    "reviewer_logins": [],
+    "approved_at": null
+  },
+  "recorded_at": "2026-11-01T12:01:17.821270Z"
+}

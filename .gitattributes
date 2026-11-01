@@ -25,3 +25,4 @@
 /docs/evidence/2026-10-30-github-skill-source/LICENSE -text
 # Verbatim OpenClaw 2026.10.7 bundled SKILL.md copies, pinned by SHA-256 in tests.
 /tests/fixtures/openclaw-bundled-skills/** text eol=lf
+/docs/evidence/m10/windows-platform-run-2026-11-01/** -text whitespace=cr-at-eol

@@ -66,6 +66,8 @@ _TOPICS = (
     ("reminder", "Create a reminder.", "创建一个提醒。"),
 )
 _TOKEN_PREFIX = "Application token: "
+_PID_PREFIX = "Gateway-Pid: "
+_PID_ENTRY = "import os; print('Gateway-Pid: ' + str(os.getpid()), flush=True); "
 _CONTROL_PREFIX = b"Control-Reply: "
 _CONTROL_SECONDS = 60.0
 _GRACE_SECONDS = 10.0
@@ -209,7 +211,7 @@ def _child_argv(config: Path) -> list[str]:
     return [
         sys.executable,
         "-c",
-        "from relaymind.launcher import cli; cli()",
+        _PID_ENTRY + "from relaymind.launcher import cli; cli()",
         "serve",
         "--config",
         str(config),
@@ -218,7 +220,7 @@ def _child_argv(config: Path) -> list[str]:
 
 def _controlled_argv(config: Path) -> list[str]:
     entry = "from relaymind.evaluation.asset_operations_child import main; raise SystemExit(main())"
-    return [sys.executable, "-c", entry, "serve", "--config", str(config)]
+    return [sys.executable, "-c", _PID_ENTRY + entry, "serve", "--config", str(config)]
 
 
 def _child_env(extra: Mapping[str, str] | None) -> dict[str, str]:
@@ -231,7 +233,10 @@ def _child_env(extra: Mapping[str, str] | None) -> dict[str, str]:
     return env
 
 
-async def _read_token(process: asyncio.subprocess.Process, deadline: float, log: Path) -> str:
+async def _read_token(
+    process: asyncio.subprocess.Process, deadline: float, log: Path
+) -> tuple[str, int]:
+    pid = None
     with log.open("ab") as target:
         while True:
             remaining = deadline - time.monotonic()
@@ -244,9 +249,21 @@ async def _read_token(process: asyncio.subprocess.Process, deadline: float, log:
             if not line:
                 raise TimeoutError("gateway_token_unavailable")
             text = line.decode("utf-8", "replace")
-            if text.startswith(_TOKEN_PREFIX):
+            if text.startswith(_PID_PREFIX):
+                value = text.removeprefix(_PID_PREFIX).strip()
+                if (
+                    not value.isascii()
+                    or not value.isdecimal()
+                    or int(value) <= 0
+                    or pid is not None
+                ):
+                    raise ValueError("gateway_pid_invalid")
+                pid = int(value)
+            elif text.startswith(_TOKEN_PREFIX):
                 if time.monotonic() < deadline:
-                    return text.removeprefix(_TOKEN_PREFIX).strip()
+                    if pid is None:
+                        raise ValueError("gateway_pid_missing")
+                    return text.removeprefix(_TOKEN_PREFIX).strip(), pid
             else:
                 target.write(line)
                 target.flush()
@@ -397,15 +414,16 @@ async def _gateway(
             replies.pop(ordinal, None)
 
     try:
-        token = await _read_token(process, deadline, work / "stdout.log")
+        token, pid = await _read_token(process, deadline, work / "stdout.log")
         drain = asyncio.create_task(_drain(process.stdout, work / "stdout.log", replies))
         async with httpx.AsyncClient(
             base_url=f"http://127.0.0.1:{port}",
             headers={"Authorization": "Bearer " + token},
             timeout=10,
+            trust_env=False,
         ) as client:
             await (_wait_ready if recommendations else _wait_serving)(client, deadline, process)
-            yield Gateway(process.pid, client, control)
+            yield Gateway(pid, client, control)
     finally:
         # Cleanup is owned: a cancellation arriving now still kills and reaps.
         cleanup = asyncio.ensure_future(_stop(process))

@@ -181,11 +181,15 @@ def _operations(args) -> tuple[dict, bool]:
         _startup_samples(work / "startups", catalog, lambda n: base_for(f"startup-{n}"), env)
     )
 
+    baseline_pid = None
+
     async def baseline() -> int | None:
+        nonlocal baseline_pid
         async with serve_baseline(work / "baseline", base_config=base_for("baseline"), env=env) as (
             pid,
             _client,
         ):
+            baseline_pid = pid
             await asyncio.sleep(1.0)  # Settle after the first answer before sampling.
             return rss_bytes(pid)
 
@@ -242,6 +246,8 @@ def _operations(args) -> tuple[dict, bool]:
         ),
         memory_samples=dict(
             counter=memory_counter(),
+            baseline_pid=baseline_pid,
+            workload_pid=None if sampler is None else sampler.pid,
             baseline_bytes=baseline_bytes,
             startup_bytes=startup_memory,
             workload_bytes=[] if sampler is None else sampler.samples,
