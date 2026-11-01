@@ -359,7 +359,11 @@ CI_FILE = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ci
 def test_ci_builds_tests_and_runs_the_artifact_through_the_pinned_host_on_each_platform():
     """CI checks the declared host range, builds the release, and runs the host lifecycle."""
     job = _ci_job(CI_FILE.read_text("utf-8"))
-    assert job["strategy"]["matrix"]["os"] == ["ubuntu-latest", "macos-latest", "windows-latest"]
+    # All three platforms run for a PR to master and on master pushes; only
+    # stacked PRs (base not master) run Linux alone.
+    matrix = job["strategy"]["matrix"]["os"]
+    assert "github.base_ref != 'master'" in matrix
+    assert """'["ubuntu-latest", "macos-latest", "windows-latest"]'""" in matrix
     assert job["env"]["RELAYMIND_OPENCLAW_NODE"] == "1"
     (node,) = [s for s in job["steps"] if s.get("uses", "").startswith("actions/setup-node")]
     engines = json.loads((PACKAGE / "package.json").read_text("utf-8"))["engines"]["node"]

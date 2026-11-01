@@ -25,7 +25,12 @@ jobs:
       fail-fast: false
       matrix:
         # Target platforms per spec (macOS and Windows); Ubuntu as the fast default.
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Stacked PRs (base is not master) run Linux only; a PR to master and
+        # master pushes run all platforms, so every PR gets the full matrix
+        # before it merges.
+        os: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref != 'master'
+          && '["ubuntu-latest"]'
+          || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -90,7 +95,12 @@ jobs:
       fail-fast: false
       matrix:
         # The pinned host documents macOS, Linux, and native Windows (WSL2 optional).
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Stacked PRs (base is not master) run Linux only; a PR to master and
+        # master pushes run all platforms, so every PR gets the full matrix
+        # before it merges.
+        os: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref != 'master'
+          && '["ubuntu-latest"]'
+          || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     defaults:
