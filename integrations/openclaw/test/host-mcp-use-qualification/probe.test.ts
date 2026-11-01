@@ -11,7 +11,7 @@ test("records authenticated inventory and an honest missing-view refusal", async
     calls.push({method, params});
     return method === "tools.effective" ? inventory : {ok: false, error: {code: "INVALID_REQUEST", message: "viewId required"}};
   };
-  const result = await observeDispatch(dispatch, (event: Record<string, unknown>) => events.push(event), "native-1")(
+  const result = await observeDispatch(dispatch, (event: Record<string, unknown>) => events.push(event))(
     "tools.effective", {sessionKey: "s"}, {timeoutMs: 3000},
   );
   expect(result).toEqual(inventory);

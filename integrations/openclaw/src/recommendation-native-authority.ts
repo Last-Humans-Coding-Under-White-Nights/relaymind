@@ -1,5 +1,6 @@
 // RM37/RM39; AC28/AC30: in-process native authority, never request-asserted identity.
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
+import { RecommendationClientError } from "./recommendation-transport.ts";
 type Handler = Parameters<OpenClawPluginApi["registerGatewayMethod"]>[1];
 export type NativeActionOptions = Parameters<Handler>[0];
 export interface NativeActionBinding {
@@ -18,6 +19,38 @@ export interface NativeScopeDependencies {
     agentId: string,
   ) => string;
   monotonicNow: () => number;
+}
+/**
+ * RM16: an honest class for a gateway failure. Only the gateway's own
+ * refusals mean revoked authority/registration or an unavailable choice; a
+ * transport, protocol, overload or unknown failure is unavailable, and the
+ * client's deadline is a timeout.
+ */
+export type GatewayFailure =
+  | "unauthorized"
+  | "choice_unavailable"
+  | "deadline"
+  | "cancelled"
+  | "unavailable";
+export function classifyGatewayError(error: unknown): GatewayFailure {
+  if (!(error instanceof RecommendationClientError)) return "unavailable";
+  switch (error.code) {
+    case "unauthenticated":
+    case "user_action_required":
+    case "scope_mismatch":
+      return "unauthorized";
+    case "recommendation_not_found":
+    case "recommendation_expired":
+    case "asset_changed":
+    case "invalid_state":
+      return "choice_unavailable";
+    case "deadline_exceeded":
+      return "deadline";
+    case "cancelled":
+      return "cancelled";
+    default:
+      return "unavailable";
+  }
 }
 /** Spec 0.65 section 14.5: every section 7.6.1–7.6.2 native request is at most 512 KiB UTF-8. */
 export const MAX_NATIVE_REQUEST_BYTES = 512 * 1024;
@@ -167,7 +200,10 @@ export function prepareNativeAuthority(
   return {
     binding,
     signal,
-    deadlineMs,
+    /** The current deadline, including any excluded approval wait. */
+    get deadlineMs() {
+      return deadlineMs;
+    },
     assertCurrent: current,
     /** The current operation deadline (monotonic), after excluded waits. */
     deadline: () => deadlineMs,

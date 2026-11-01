@@ -9,7 +9,10 @@ import type {
   UserActionClient,
   ReadOptions,
 } from "./recommendations.ts";
-import { prepareNativeAuthority } from "./recommendation-native-authority.ts";
+import {
+  classifyGatewayError,
+  prepareNativeAuthority,
+} from "./recommendation-native-authority.ts";
 import type {
   NativeActionOptions,
   NativeActionBinding,
@@ -28,9 +31,12 @@ export type NativeUseCode =
   | "unavailable";
 export class NativeUseRefusal extends Error {
   readonly code: NativeUseCode;
-  constructor(code: NativeUseCode) {
+  /** False for a transient failure that refuses this attempt only. */
+  readonly blocks: boolean;
+  constructor(code: NativeUseCode, blocks = true) {
     super(code);
     this.code = code;
+    this.blocks = blocks;
     this.name = "NativeUseRefusal";
   }
 }
@@ -65,6 +71,10 @@ interface Dependencies extends NativeScopeDependencies {
 const MAX_SKILL_BYTES = 1048576;
 function refuse(code: NativeUseCode): never {
   throw new NativeUseRefusal(code);
+}
+/** A transient gateway/host failure: refuse this attempt, never block. */
+function transient(): never {
+  throw new NativeUseRefusal("unavailable", false);
 }
 function incarnation(use: {
   sessionKey: string;
@@ -107,20 +117,42 @@ export function createSkillLoadedUseFence(dependencies: Dependencies) {
     if (!dependencies.qualification("skill_loaded_use")) refuse("unqualified");
     if (isBlocked(use)) refuse("binding_changed");
     let authority: ReturnType<typeof prepareNativeAuthority> | undefined;
+    // Only a failure attributable to the use's own verified person and
+    // session incarnation blocks the conversation durably; an unverified
+    // caller must not be able to block someone else's conversation.
+    let attributed = false;
     try {
       try {
         authority = prepareNativeAuthority(options, dependencies);
       } catch {
         refuse("unauthorized");
       }
-      const { binding, signal, deadlineMs, assertCurrent } = authority;
+      const live = authority;
+      const { binding, signal, deadlineMs } = live;
       const target = options.sessionAccessAuthority!.target;
+      const cancelled = () =>
+        options.signal?.aborted === true ||
+        options.client?.connectionSignal?.aborted === true;
       const current = () => {
         try {
-          assertCurrent();
+          live.assertCurrent();
         } catch {
+          // The fence's own deadline or a host cancellation is transient.
+          if (live.expired() || cancelled()) transient();
           refuse("unauthorized");
         }
+      };
+      // RM16: only the gateway's own refusals are fence failures.
+      const gatewayFailed: (error: unknown, choice: boolean) => never = (
+        error,
+        choice,
+      ) => {
+        if (error instanceof NativeUseRefusal) throw error;
+        const failure = classifyGatewayError(error);
+        if (failure === "unauthorized") refuse("unauthorized");
+        if (failure === "choice_unavailable" && choice)
+          refuse("choice_unavailable");
+        transient();
       };
       // An earlier RPC's JSON identity is not authority for this turn.
       if (
@@ -129,14 +161,14 @@ export function createSkillLoadedUseFence(dependencies: Dependencies) {
         target.lifecycleRevision !== use.lifecycleRevision
       )
         refuse("unauthorized");
+      attributed = true;
       const read: ReadOptions = { signal, deadlineMs, assertCurrent: current };
       try {
         const actions = await dependencies.actionClient(binding, read);
         current();
         await actions.listFeedback({ limit: 1 }, read);
       } catch (error) {
-        if (error instanceof NativeUseRefusal) throw error;
-        refuse("unauthorized");
+        gatewayFailed(error, false);
       }
       current();
       let view: Awaited<ReturnType<RecommendationClient["get"]>>;
@@ -145,8 +177,7 @@ export function createSkillLoadedUseFence(dependencies: Dependencies) {
         current();
         view = await client.get(use.recommendationId, read);
       } catch (error) {
-        if (error instanceof NativeUseRefusal) throw error;
-        refuse("choice_unavailable");
+        gatewayFailed(error, true);
       }
       current();
       const action = view.selected_action;
@@ -220,7 +251,7 @@ export function createSkillLoadedUseFence(dependencies: Dependencies) {
           },
         );
       } catch {
-        refuse("unavailable");
+        transient();
       }
       current();
       unexpired();
@@ -239,10 +270,12 @@ export function createSkillLoadedUseFence(dependencies: Dependencies) {
         refuse("binding_changed");
       return loaded.content;
     } catch (error) {
-      block(use);
-      throw error instanceof NativeUseRefusal
-        ? error
-        : new NativeUseRefusal("unavailable");
+      const refusal =
+        error instanceof NativeUseRefusal
+          ? error
+          : new NativeUseRefusal("unavailable", false);
+      if (attributed && refusal.blocks) block(use);
+      throw refusal;
     } finally {
       authority?.close();
     }
