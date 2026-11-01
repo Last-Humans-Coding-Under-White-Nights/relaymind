@@ -11,6 +11,14 @@ corrections. No external model is called.
 The ``prepare`` command writes the off/on EffectiveConfigV1 documents and the
 EpisodeFreezeV1; ``run`` executes the episodes resumably and writes the report
 and the reset evidence documents.
+
+``run`` executes exactly the frozen adaptation config and the manifest it
+names by digest: the off/on documents and the adaptation config must have the
+digests of the freeze, and the manifest in ``--model-dir`` must have the
+config's ``manifest_digest``. The ONNX backend then rejects a runtime build or
+device that differs from the manifest (``embedding_runtime_mismatch``). A
+different runtime identity is a new manifest and so a new preregistration
+(section 12.6.6); the run never substitutes a run-local manifest.
 """
 
 import argparse
@@ -78,6 +86,33 @@ def cmd_prepare(args) -> None:
     print(json.dumps(dict(freeze_digest=canonical_digest(freeze))))
 
 
+class NotFrozen(ValueError):
+    """The run would execute a configuration the freeze does not bind."""
+
+
+def frozen_adaptation(prepared: Path, model_dir: Path):
+    """The frozen adaptation config and its manifest, both checked by digest."""
+    from relaymind.assets.embedding_config import validate_adaptation_config
+    from relaymind.assets.embedding_manifest import load_embedding_manifest
+
+    freeze = read(prepared / "episode-freeze.json")
+    off, on = read(prepared / "effective-off.json"), read(prepared / "effective-on.json")
+    value = read(prepared / "adaptation-config.json")
+    digest = canonical_digest(value)
+    if digest != freeze["adaptation_config_digest"]:
+        raise NotFrozen("adaptation_config_mismatch")
+    if (
+        canonical_digest(off) != freeze["off_config_digest"]
+        or canonical_digest(on) != freeze["on_config_digest"]
+        or (on.get("adaptation") or {}).get("config_digest") != digest
+    ):
+        raise NotFrozen("effective_config_mismatch")
+    manifest = load_embedding_manifest(Path(model_dir) / value["manifest"])
+    if manifest.manifest_digest != value["manifest_digest"]:
+        raise NotFrozen("adaptation_manifest_mismatch")
+    return validate_adaptation_config(value, manifest), manifest
+
+
 def environment() -> dict:
     from relaymind.evaluation.asset_evidence import collect_benchmark_environment
 
@@ -86,9 +121,8 @@ def environment() -> dict:
 
 def cmd_run(args) -> None:
     from relaymind.assets.embedding_backends import EmbeddingEngine
-    from relaymind.assets.embedding_config import load_adaptation_config
-    from relaymind.assets.embedding_manifest import load_embedding_manifest, verify_embedding_files
-    from relaymind.assets.embedding_onnx import OnnxCpuBackend, device_identity, runtime_identity
+    from relaymind.assets.embedding_manifest import verify_embedding_files
+    from relaymind.assets.embedding_onnx import OnnxCpuBackend
     from relaymind.evaluation.asset_episode_driver import (
         locked_episode_arms,
         run_adaptation_episodes,
@@ -101,22 +135,7 @@ def cmd_run(args) -> None:
     prepared = args.prepared
     off, on = read(prepared / "effective-off.json"), read(prepared / "effective-on.json")
     freeze, episodes = read(prepared / "episode-freeze.json"), read(args.episodes)
-    # The run-local manifest names the actual runtime build and device of this
-    # machine: it is not the reviewed registry identity, so nothing here is
-    # qualified (the report stays provisional).
-    reviewed = read(args.model_dir / args.manifest_name)
-    local = dict(reviewed, runtime=runtime_identity(), device=device_identity())
-    write(args.model_dir / "run-local.manifest.json", local)
-    adaptation_file = args.model_dir / "run-local.adaptation.json"
-    adaptation_value = read(prepared / "adaptation-config.json")
-    manifest = load_embedding_manifest(args.model_dir / "run-local.manifest.json")
-    adaptation_value = dict(
-        adaptation_value,
-        manifest="run-local.manifest.json",
-        manifest_digest=manifest.manifest_digest,
-    )
-    adaptation_file.write_text(json.dumps(adaptation_value), encoding="utf-8")
-    semantic = load_adaptation_config(adaptation_file)
+    semantic, manifest = frozen_adaptation(prepared, args.model_dir)
     stack = verify_embedding_files(manifest)
     artifact = stack.__enter__()
     engine = EmbeddingEngine(manifest, OnnxCpuBackend(artifact))
@@ -189,7 +208,6 @@ def main() -> None:
     p.add_argument("--episodes", type=Path, required=True)
     p.add_argument("--production", type=Path, required=True)
     p.add_argument("--model-dir", type=Path, required=True)
-    p.add_argument("--manifest-name", default="multilingual-e5-small-linux-x86_64.manifest.json")
     p.add_argument("--environment", type=Path, required=True)
     p.add_argument("--inputs-reference", type=Path)
     p.add_argument("--work", type=Path, required=True)

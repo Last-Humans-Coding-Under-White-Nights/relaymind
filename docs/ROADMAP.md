@@ -1065,11 +1065,13 @@ corpus is `development`, not the 300-asset acceptance catalog, so no report
 over it can be qualified.
 The 100 episodes ran and graded `not_applicable`/provisional: corrected
 paraphrase top-1 51/200 (target 0.90), control loss 0.02, resets 100/100
-(pending record `m10-owner-run-260-adaptation`). The paired host run stopped
-after 14 tasks: the recommendations arm needs a signed-in person and disabled
-skill/MCP use, most provider-arm rows hit the gateway's 30 s
-`external_seconds`, and the run's private evidence was lost, so it is not
-graded. A full two-arm host run needs about 13M external tokens. See
+(pending record `m10-owner-run-260-adaptation`); the run used an unrecorded
+run-local ONNX manifest, not the preregistered one its report binds, so the
+on-arm numbers are diagnostic only. The paired host run stopped after 14
+tasks: the recommendations arm needs a signed-in person and disabled
+skill/MCP use, 11 of 14 provider_only rows failed (`host_failed`; the cause
+is not in the surviving evidence), and the run's private evidence was lost,
+so it is not graded. A full two-arm host run needs about 13M external tokens. See
 `docs/evidence/m10/owner-run-260/README.md`. No gate has passed.
 #255 has committed two **pending** negative `host_operation` records for the
 pinned 2026.10.7 host: `m10-negative-skill-loaded-use-openclaw-2026.10.7`

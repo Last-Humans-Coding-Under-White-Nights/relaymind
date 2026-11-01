@@ -25,6 +25,15 @@ before another call could pass that reservation, and unknown consumption is
 charged at its worst case. A row that cannot start is ``not_run`` with
 reason ``budget_cap``. Credentials and the provider endpoint live only in private
 files of the run directory, which are deleted at the end, and in this process.
+
+The host freeze is enforced: before setup, the executed arms' frozen model,
+provider and provider, sampling and host config digests must equal the
+committed documents in ``--configs`` and ``--model``; each arm's host is
+configured from its frozen host document (secrets filled in from the
+environment, the gateway on the frozen ``baseUrl``), and the effective host
+config is checked against that document after setup. Every row's config must
+be the verified frozen configuration of its arm. A mismatch rejects with a
+closed reason (``FreezeMismatch``).
 """
 
 import argparse
@@ -39,6 +48,7 @@ import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -48,7 +58,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import live_acceptance  # noqa: E402
 import openclaw_install_check as install_check  # noqa: E402
 
-from relaymind.canonical import canonical_json  # noqa: E402
+from relaymind.canonical import canonical_digest, canonical_json  # noqa: E402
 from relaymind.evaluation.asset_host_runner import (  # noqa: E402
     attempts_from_trace,
     run_host_plan,
@@ -58,6 +68,10 @@ from relaymind.evaluation.environment import checkout_environment  # noqa: E402
 PROVIDER = "external-openai-compatible"
 DIRECT = "external"
 TIMEOUT = 600.0
+EXECUTED_ARMS = ("native", "provider_only")
+SECRETS_KEY = "omitted_secret_fields"
+# The shortest tail of the run directory path that is still redacted.
+MIN_PATH_TAIL = 16
 
 
 def read(path):
@@ -96,6 +110,90 @@ def verified_prompts(tasks, freeze, lock_path: Path, evidence_root: Path) -> dic
     }
 
 
+class FreezeMismatch(ValueError):
+    """The executed configuration is not the one the host freeze binds."""
+
+
+def frozen_arm_configs(freeze, configs_dir: Path, model: str) -> dict[str, dict]:
+    """The frozen configuration and host document of each executed arm.
+
+    The model must be the freeze's, and the committed provider, sampling and
+    host documents must have the freeze's digests.
+    """
+    configs_dir = Path(configs_dir)
+    provider, sampling = read(configs_dir / "provider.json"), read(configs_dir / "sampling.json")
+    entries = {c["arm"]: c for c in freeze["configurations"]}
+    frozen = {}
+    for arm in EXECUTED_ARMS:
+        config = entries.get(arm)
+        if config is None:
+            raise FreezeMismatch("freeze_arm_missing")
+        if config["provider"] != PROVIDER or provider.get("provider") != PROVIDER:
+            raise FreezeMismatch("provider_mismatch")
+        if not (model == config["model"] == provider.get("model")):
+            raise FreezeMismatch("model_mismatch")
+        host = read(configs_dir / f"host-{arm}.json")
+        if (
+            canonical_digest(provider) != config["provider_config_digest"]
+            or canonical_digest(sampling) != config["sampling_config_digest"]
+            or canonical_digest(host) != config["host_config_digest"]
+        ):
+            raise FreezeMismatch("config_digest_mismatch")
+        frozen[arm] = dict(config=config, host=host)
+    return frozen
+
+
+def realize(frozen, secrets) -> dict:
+    """The frozen host document with its omitted secret fields filled in."""
+    if isinstance(frozen, dict):
+        value = {k: realize(v, secrets) for k, v in frozen.items() if k != SECRETS_KEY}
+        for name in frozen.get(SECRETS_KEY, ()):
+            if name not in secrets:
+                raise FreezeMismatch("secret_unavailable")
+            value[name] = secrets[name]
+        return value
+    if isinstance(frozen, list):
+        return [realize(v, secrets) for v in frozen]
+    return frozen
+
+
+def check_effective(frozen, effective, path=()) -> None:
+    """The effective host config must carry the frozen document exactly.
+
+    Every frozen value must be present and equal; a frozen object that lists
+    omitted secret fields, and every plugin ``config`` object, is closed: it
+    has exactly the frozen keys and the named secrets. Host-owned keys outside
+    those objects are allowed.
+    """
+    if isinstance(frozen, dict):
+        if not isinstance(effective, dict):
+            raise FreezeMismatch("host_config_mismatch")
+        keys = {k for k in frozen if k != SECRETS_KEY}
+        secrets = set(frozen.get(SECRETS_KEY, ()))
+        closed = SECRETS_KEY in frozen or path[-1:] == ("config",)
+        if not secrets <= set(effective) or (closed and set(effective) != keys | secrets):
+            raise FreezeMismatch("host_config_mismatch")
+        for key in keys:
+            if key not in effective:
+                raise FreezeMismatch("host_config_mismatch")
+            check_effective(frozen[key], effective[key], (*path, key))
+    elif canonical_json(frozen) != canonical_json(effective):
+        raise FreezeMismatch("host_config_mismatch")
+
+
+def sanitize(text: str, *, secrets, work) -> str:
+    """Remove secrets and the run directory path, also when the host cut its head off."""
+    for secret in secrets:
+        text = text.replace(secret, "<omitted>")
+    work = str(work)
+    text = text.replace(work, "<run-dir>")
+    for start in range(1, len(work) - MIN_PATH_TAIL + 1):
+        tail = work[start:]
+        if tail in text:
+            text = text.replace(tail, "<run-dir>")
+    return text
+
+
 class Budget:
     """The external-token cap, enforced before a row starts and while it runs.
 
@@ -113,7 +211,12 @@ class Budget:
             raise ValueError("budget_allowances")
         self.path, self.cap = Path(ledger), cap
         self.row_budget, self.call_allowance = row_budget, call_allowance
-        self.data = read(self.path)
+        # A fresh ledger starts at zero; an existing one carries its spending.
+        self.data = (
+            read(self.path)
+            if self.path.exists()
+            else dict(total_input=0, total_output=0, calls=0, stages={})
+        )
 
     def spent(self) -> int:
         d = self.data
@@ -138,6 +241,7 @@ class Budget:
         row["output"] += completion
         row["conservative"] += extra
         row["calls"] += 1
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(d, indent=1), encoding="utf-8")
 
 
@@ -168,21 +272,20 @@ def run_bounded(command, *, env, timeout, usage, limit_reached, poll=1.0) -> dic
                 row_tokens_at_stop=None,
             )
         status, stopped_at = None, None
-        while process.poll() is None:
-            used = usage()
-            if limit_reached(used):
-                status, stopped_at = "budget_stopped", used
-            elif time.monotonic() - started > timeout:
-                status = "timed_out"
-            if status is not None:
-                os.killpg(process.pid, signal.SIGTERM)
-                try:
-                    process.wait(10)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    process.wait()
-                break
-            time.sleep(poll)
+        try:
+            while process.poll() is None:
+                used = usage()
+                if limit_reached(used):
+                    status, stopped_at = "budget_stopped", used
+                elif time.monotonic() - started > timeout:
+                    status = "timed_out"
+                if status is not None:
+                    break
+                time.sleep(poll)
+        finally:
+            # Stopped, or a usage read failed: the host turn never outlives this call.
+            if process.poll() is None:
+                _stop(process)
         code = process.returncode
         if status is None:
             status = "completed" if code == 0 else "failed"
@@ -197,6 +300,17 @@ def run_bounded(command, *, env, timeout, usage, limit_reached, poll=1.0) -> dic
             stderr=err.read().decode("utf-8", "replace"),
             row_tokens_at_stop=stopped_at,
         )
+
+
+def _stop(process) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+        process.wait(10)
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.wait()
+    except ProcessLookupError:
+        process.wait()
 
 
 def write_bytes(path: Path, payload: bytes) -> dict:
@@ -218,6 +332,8 @@ class Run:
         self.prompts = verified_prompts(
             read(args.tasks), read(args.freeze), args.lock, args.release_root
         )
+        # Only the frozen model and configuration documents are executed.
+        self.frozen = frozen_arm_configs(read(args.freeze), args.configs, args.model)
         self.secrets = [
             os.environ["RELAYMIND_EXTERNAL_API_KEY"],
             os.environ["RELAYMIND_EXTERNAL_BASE_URL"],
@@ -246,22 +362,28 @@ class Run:
 
         self.work.mkdir(parents=True, exist_ok=True)
         os.umask(0o077)
+        native_frozen = self.frozen["native"]["host"]
+        relay_frozen = self.frozen["provider_only"]["host"]
+        model = self.frozen["provider_only"]["config"]["model"]
         self.native = self.host("native-home", True)
-        direct = m9.DirectEndpoint(
-            os.environ["RELAYMIND_EXTERNAL_BASE_URL"],
-            self.args.model,
-            os.environ["RELAYMIND_EXTERNAL_API_KEY"],
-            None,
-        )
-        m9.DIRECT_PROVIDER = DIRECT
-        steps, ok = m9.setup_direct(self.native, direct)
-        self.native.merge_config({"tools": {"exec": {"mode": "deny"}}})
-        if not ok:
+        if self.native.run(["--version"], timeout=m9.SETUP_TIMEOUT)["status"] != "completed":
             raise SystemExit("native_setup_failed")
+        self.native.merge_config(
+            realize(
+                native_frozen,
+                dict(
+                    apiKey=os.environ["RELAYMIND_EXTERNAL_API_KEY"],
+                    baseUrl=os.environ["RELAYMIND_EXTERNAL_BASE_URL"],
+                ),
+            )
+        )
+        check_effective(native_frozen, read(self.native.config_path))
+        plugin = relay_frozen["plugins"]["entries"][m9.PLUGIN_ID]["config"]
+        port = urlsplit(plugin["baseUrl"]).port
         gateway_dir = self.work / "gateway"
         gateway_dir.mkdir(exist_ok=True)
         external = live_acceptance.ExternalEndpoint(
-            os.environ["RELAYMIND_EXTERNAL_BASE_URL"], self.args.model, self.args.context_limit
+            os.environ["RELAYMIND_EXTERNAL_BASE_URL"], model, self.args.context_limit
         )
         config = gateway_dir / "relaymind.toml"
         config.write_text(
@@ -270,7 +392,8 @@ class Run:
                 manifest=None,
                 artifact=None,
                 local_url=None,
-                port=live_acceptance._free_port(),
+                # The frozen plugin config names the gateway's loopback address.
+                port=port,
                 external=external,
                 modes=("auto", "external_only"),
                 local_model=False,
@@ -283,7 +406,6 @@ class Run:
         output = process.start()
         self.gateway = process
         self.store = gateway_dir / "runs.sqlite3"
-        self.relay = self.host("relay-home", False)
         handle = m9.GatewayHandle(
             output.url.rstrip("/") + "/v1",
             output.token,
@@ -292,12 +414,20 @@ class Run:
             process.stop,
             {},
         )
-        steps, plugin, ok = m9.setup_relaymind(
+        if handle.base_url != plugin["baseUrl"]:
+            raise FreezeMismatch("gateway_url_mismatch")
+        self.relay = self.host("relay-home", False)
+        steps, _, ok = m9.setup_relaymind(
             "relaymind_external_only", self.relay, handle, self.args.tarball, {}
         )
-        self.relay.merge_config({"tools": {"exec": {"mode": "deny"}}})
         if not ok:
             raise SystemExit("relay_setup_failed")
+        # The plugin config is exactly the frozen one (no diagnostics file).
+        effective = read(self.relay.config_path)
+        effective["plugins"]["entries"][m9.PLUGIN_ID]["config"] = realize(plugin, {})
+        self.relay.config_path.write_text(json.dumps(effective, indent=2), "utf-8")
+        self.relay.merge_config(realize(relay_frozen, {}))
+        check_effective(relay_frozen, read(self.relay.config_path))
 
     def close(self):
         if self.gateway is not None:
@@ -314,9 +444,14 @@ class Run:
             conn.close()
 
     def sanitize(self, text: str) -> str:
-        for secret in self.secrets:
-            text = text.replace(secret, "<omitted>")
-        return text.replace(str(self.work), "<run-dir>")
+        return sanitize(text, secrets=self.secrets, work=self.work)
+
+    def arm_config(self, arm: str, config) -> dict:
+        """The row's config, which must be the verified frozen configuration of its arm."""
+        frozen = self.frozen[arm]["config"]
+        if canonical_json(config) != canonical_json(frozen):
+            raise FreezeMismatch("freeze_config_mismatch")
+        return frozen
 
     def evidence(self, key: str, name: str, value, refs: list) -> str:
         payload = value if isinstance(value, bytes) else canonical_json(value).encode("utf-8")
@@ -423,11 +558,12 @@ class Run:
     def execute(self, task, arm, config):
         if arm == "recommendations":
             return self.not_run(task, arm, "person_choice_unavailable")
+        config = self.arm_config(arm, config)
         if not self.budget.can_start():
             return self.not_run(task, arm, "budget_cap")
         key = f"{task['id']}-{arm}"
         host = self.native if arm == "native" else self.relay
-        model = f"{DIRECT}/{self.args.model}" if arm == "native" else install_check.MODEL_REF
+        model = f"{DIRECT}/{config['model']}" if arm == "native" else install_check.MODEL_REF
         sandbox = self.work / "sandboxes" / key
         state = self.work / "state" / key
         for path in (sandbox, state):
@@ -506,7 +642,7 @@ class Run:
                     dict(
                         id=f"{key}-{n}",
                         ordinal=n,
-                        model=item.get("model") or self.args.model,
+                        model=item.get("model") or config["model"],
                         provider=PROVIDER,
                         external=True,
                         started_at=None,
@@ -595,7 +731,8 @@ def main():
         "output",
     ):
         parser.add_argument("--" + name, type=Path, required=True)
-    parser.add_argument("--model", required=True)
+    parser.add_argument("--model", required=True, help="must be the host freeze's model")
+    parser.add_argument("--configs", type=Path, default=HERE / "configs")
     parser.add_argument("--context-limit", type=int, default=128000)
     parser.add_argument("--cap", type=int, default=5_000_000)
     # Observed rows reached 245k tokens; one call stays below 64k (context plus

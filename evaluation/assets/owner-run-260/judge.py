@@ -211,6 +211,24 @@ def cmd_adjudicate(args) -> None:
     print(json.dumps(dict(items=len(items), agree=agree, disputed=len(disputed))))
 
 
+def apply_verdicts(report: dict, by_row: dict) -> None:
+    """Set every row's success: the judged verdict of a completed row, and
+    ``False`` for every started row that did not complete (failed, timeout,
+    cancelled, for example stopped at the token cap). A ``not_run`` row keeps
+    ``None``.
+    """
+    for row in report["rows"]:
+        if row["status"] == "completed":
+            verdict = by_row[(row["task_id"], row["arm"])]
+            row["success"] = verdict["success"]
+            row["evidence_ids"] = sorted(
+                {*row["evidence_ids"], "judging:blind-map", "judging:success-judgments"},
+                key=str.encode,
+            )
+        elif row["status"] != "not_run":
+            row["success"] = False
+
+
 def cmd_apply(args) -> None:
     from relaymind.evaluation.asset_whole_task import host_summary
 
@@ -237,16 +255,7 @@ def cmd_apply(args) -> None:
             bytes=len(data),
             provenance="observed",
         )
-    for row in report["rows"]:
-        if row["status"] == "completed":
-            verdict = by_row[(row["task_id"], row["arm"])]
-            row["success"] = verdict["success"]
-            row["evidence_ids"] = sorted(
-                {*row["evidence_ids"], "judging:blind-map", "judging:success-judgments"},
-                key=str.encode,
-            )
-        elif row["status"] in ("failed", "timeout"):
-            row["success"] = False
+    apply_verdicts(report, by_row)
     report["evidence"] = sorted(
         [*report["evidence"], *files.values()], key=lambda e: e["id"].encode()
     )

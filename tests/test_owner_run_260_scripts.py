@@ -231,3 +231,194 @@ def test_apply_rechecks_both_judges_and_every_final_verdict():
     for document, reason in bad:
         with pytest.raises(judge.JudgingIncomplete, match=reason):
             judge.check_judgments(document, mapping)
+
+
+# --- review of #278 ---------------------------------------------------------------
+
+record_script = _module("record")
+run_episodes = _module("run_episodes")
+EVIDENCE = ROOT / "docs" / "evidence" / "m10"
+CONFIGS = SCRIPTS / "configs"
+FREEZE = read(SCRIPTS / "host-freeze.json")
+MODEL = "glm-5.3-flash"
+
+
+def test_every_committed_owner_run_260_record_loads_against_its_schema():
+    """H1 (spec 0.66 section 12.6.6; AC33, AC36): the records validate and bind."""
+    from relaymind.evaluation.asset_qualification_record import load_record
+
+    records = sorted(EVIDENCE.glob("m10-owner-run-260-*.json"))
+    assert records
+    for path in records:
+        assert load_record(path).record_id == path.stem
+
+
+def test_the_record_machine_takes_its_os_version_from_the_measured_environment():
+    """H1: the record's machine identity carries the report environment's os_version."""
+    machine = dict(role="linux_host", os="Linux", architecture="x86_64")
+    environment = dict(os="Linux", architecture="x86_64", os_version="Linux-7")
+    assert record_script.machine_identity(machine, environment)["os_version"] == "Linux-7"
+    with pytest.raises(ValueError, match="record_machine_mismatch"):
+        record_script.machine_identity(dict(machine, os_version="Linux-8"), environment)
+    with pytest.raises(ValueError, match="record_machine_mismatch"):
+        record_script.machine_identity(dict(machine, os="Darwin"), environment)
+
+
+def prepared(tmp_path) -> Path:
+    target = tmp_path / "prepared"
+    target.mkdir()
+    for name in ("effective-off.json", "effective-on.json", "adaptation-config.json"):
+        (target / name).write_bytes((SCRIPTS / "episode-configs" / name).read_bytes())
+    (target / "episode-freeze.json").write_bytes((SCRIPTS / "episode-freeze.json").read_bytes())
+    return target
+
+
+def test_the_episode_run_executes_exactly_the_frozen_adaptation_config(tmp_path):
+    """H2 (RM42; AC33): the executed adaptation config and manifest are the frozen ones."""
+    semantic, manifest = run_episodes.frozen_adaptation(
+        prepared(tmp_path), ROOT / "models" / "embeddings"
+    )
+    frozen = read(SCRIPTS / "episode-configs" / "adaptation-config.json")
+    assert manifest.manifest_digest == frozen["manifest_digest"]
+    assert (
+        canonical_digest(frozen)
+        == read(SCRIPTS / "episode-freeze.json")["adaptation_config_digest"]
+    )
+    assert semantic is not None
+
+
+def test_a_run_local_manifest_is_not_the_frozen_one(tmp_path):
+    """H2: a manifest with another runtime identity needs a new preregistration."""
+    models = tmp_path / "models"
+    models.mkdir()
+    name = "multilingual-e5-small-linux-x86_64.manifest.json"
+    manifest = read(ROOT / "models" / "embeddings" / name)
+    manifest["runtime"] = dict(manifest["runtime"], build="0" * 64)
+    write(models / name, manifest)
+    with pytest.raises(ValueError, match="adaptation_manifest_mismatch"):
+        run_episodes.frozen_adaptation(prepared(tmp_path), models)
+
+
+def test_an_edited_adaptation_config_is_not_the_frozen_one(tmp_path):
+    root = prepared(tmp_path)
+    value = read(root / "adaptation-config.json")
+    value["similarity"]["threshold"] = 0.8
+    write(root / "adaptation-config.json", value)
+    with pytest.raises(ValueError, match="adaptation_config_mismatch"):
+        run_episodes.frozen_adaptation(root, ROOT / "models" / "embeddings")
+
+
+def test_the_host_freeze_model_and_config_digests_are_enforced(tmp_path):
+    """M1 (spec 0.66 section 12.6.5; AC36): the runner executes only the frozen arms."""
+    frozen = run_host.frozen_arm_configs(FREEZE, CONFIGS, MODEL)
+    assert set(frozen) == {"native", "provider_only"}
+    assert frozen["native"]["config"]["model"] == MODEL
+    with pytest.raises(run_host.FreezeMismatch, match="model_mismatch"):
+        run_host.frozen_arm_configs(FREEZE, CONFIGS, "another-model")
+    edited = tmp_path / "configs"
+    edited.mkdir()
+    for path in CONFIGS.glob("*.json"):
+        (edited / path.name).write_bytes(path.read_bytes())
+    document = read(edited / "host-native.json")
+    document["tools"]["exec"]["mode"] = "allow"
+    write(edited / "host-native.json", document)
+    with pytest.raises(run_host.FreezeMismatch, match="config_digest_mismatch"):
+        run_host.frozen_arm_configs(FREEZE, edited, MODEL)
+
+
+def test_the_effective_host_config_must_be_the_frozen_document():
+    """M1: the frozen document, with secrets filled in, is what the host runs."""
+    native = read(CONFIGS / "host-native.json")
+    effective = run_host.realize(native, dict(apiKey="k", baseUrl="https://x/v1"))
+    provider = effective["models"]["providers"]["external"]
+    assert (provider["apiKey"], provider["baseUrl"]) == ("k", "https://x/v1")
+    assert "omitted_secret_fields" not in provider
+    # Host-owned state outside the frozen document is allowed.
+    run_host.check_effective(native, dict(effective, meta=dict(lastTouched="t")))
+    changed = json.loads(json.dumps(effective))
+    changed["models"]["providers"]["external"]["models"][0]["id"] = "other"
+    extra = json.loads(json.dumps(effective))
+    extra["models"]["providers"]["external"]["headers"] = {}
+    missing = json.loads(json.dumps(effective))
+    del missing["models"]["providers"]["external"]["apiKey"]
+    for document in (changed, extra, missing):
+        with pytest.raises(run_host.FreezeMismatch, match="host_config_mismatch"):
+            run_host.check_effective(native, document)
+    plugin = read(CONFIGS / "host-provider_only.json")
+    run_host.check_effective(plugin, run_host.realize(plugin, {}))
+    diagnostics = run_host.realize(plugin, {})
+    diagnostics["plugins"]["entries"]["relaymind"]["config"]["diagnosticsPath"] = "/d"
+    with pytest.raises(run_host.FreezeMismatch, match="host_config_mismatch"):
+        run_host.check_effective(plugin, diagnostics)
+
+
+def test_the_executor_uses_the_frozen_arm_config():
+    """M1: a row's config must be the verified frozen configuration of its arm."""
+    run = object.__new__(run_host.Run)
+    run.frozen = run_host.frozen_arm_configs(FREEZE, CONFIGS, MODEL)
+    entry = next(c for c in FREEZE["configurations"] if c["arm"] == "native")
+    assert run.arm_config("native", entry) == entry
+    with pytest.raises(run_host.FreezeMismatch, match="freeze_config_mismatch"):
+        run.arm_config("native", dict(entry, model="another-model"))
+
+
+def test_a_truncated_run_directory_path_is_sanitized():
+    """M2: host output that cuts the run directory path still loses its private prefix."""
+    work = "/var/tmp/area-0/workspaces-x/0123abcd-session/scratchpad/i260/host-run/work2"
+    text = f"failed: aces-x/0123abcd-session/scratchpad/i260/host-run/work2/state/h1.lock; {work}/a"
+    clean = run_host.sanitize(text + " sk-test-secret", secrets=["sk-test-secret"], work=work)
+    assert clean == "failed: <run-dir>/state/h1.lock; <run-dir>/a <omitted>"
+
+
+def test_a_fresh_ledger_path_starts_at_zero(tmp_path):
+    """M5: the documented rerun starts on a new ledger."""
+    ledger = tmp_path / "new" / "ledger.json"
+    b = run_host.Budget(ledger, cap=1_000_000, row_budget=200_000, call_allowance=50_000)
+    assert b.spent() == 0 and b.can_start()
+    b.settle("native", prompt=10, completion=5, unknown_calls=0, evidence=True)
+    assert read(ledger)["total_input"] + read(ledger)["total_output"] == 15
+
+
+def test_a_budget_cancelled_row_is_a_known_non_success():
+    """L1 (spec 0.66 section 12.6.5): every started row that did not complete failed."""
+    rows = [
+        dict(task_id="t1", arm="native", status=status, success=None, evidence_ids=[])
+        for status in ("completed", "failed", "timeout", "cancelled", "not_run")
+    ]
+    for n, row in enumerate(rows):
+        row["task_id"] = f"t{n}"
+    verdicts = {("t0", "native"): dict(success=True)}
+    judge.apply_verdicts(dict(rows=rows), verdicts)
+    assert [r["success"] for r in rows] == [True, False, False, False, None]
+
+
+def test_the_host_turn_is_stopped_when_usage_cannot_be_read(tmp_path):
+    """L2: a failing usage read never leaves the host process running."""
+    pid_file = tmp_path / "pid"
+    script = (
+        f"import os, time; open({str(pid_file)!r}, 'w').write(str(os.getpid()))\ntime.sleep(60)"
+    )
+
+    def usage():
+        import time
+
+        deadline = time.monotonic() + 10
+        while not pid_file.exists() or not pid_file.read_text():
+            assert time.monotonic() < deadline
+            time.sleep(0.02)
+        raise OSError("usage store unavailable")
+
+    with pytest.raises(OSError, match="usage store unavailable"):
+        run_host.run_bounded(
+            [sys.executable, "-c", script],
+            env=None,
+            timeout=20,
+            usage=usage,
+            limit_reached=lambda used: False,
+            poll=0.05,
+        )
+    pid = int(pid_file.read_text())
+    with pytest.raises(ProcessLookupError):
+        import os
+
+        os.kill(pid, 0)
