@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h072",
+ "criteria": [
+  "Describes separating the mesh into connected components and measuring each component's volume",
+  "Provides a rule for filtering debris (e.g., volume threshold) and applies it to identify the main body",
+  "Reports the number of components and their volumes as the expected output"
+ ]
+}

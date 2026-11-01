@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h027",
+ "criteria": [
+  "Identifies that the parameters table is Chinese-only while the doc is expected to be bilingual",
+  "Flags the missing English translations for the two parameters",
+  "Checks parameter types and mandatory flags for accuracy",
+  "Reports issues in a clear, actionable list"
+ ]
+}

@@ -1,0 +1,13 @@
+Role: second, independent grader. Work alone from the items given.
+
+For every item:
+1. Read the request and list to yourself what the user needed.
+2. Go through each rubric criterion and check it against the final answer
+   only. A criterion that the answer does not meet makes the item fail.
+3. Answers that are empty, refuse, stall, or promise work instead of
+   delivering it fail.
+4. Ignore which assistant may have written it; there is no identifying
+   information and you should not guess.
+
+Output JSON only:
+{"judgments":[{"blind_id":"...","success":false,"notes":"short reason"}]}

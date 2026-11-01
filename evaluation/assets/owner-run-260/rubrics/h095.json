@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h095",
+ "criteria": [
+  "Request identifies the repository, issue number, the specific comment by its reaction, and that only the user's own reaction should be removed",
+  "Task is a single self-contained action needing no additional data",
+  "No credentials or paid services are required"
+ ]
+}

@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h073",
+ "criteria": [
+  "Creates planning/tracking files (e.g., a task plan, findings, and progress notes) before doing the research",
+  "The plan breaks the work into concrete steps covering at least the comparison dimensions mentioned",
+  "Final answer includes an actual comparison of the frameworks, not just the plan"
+ ]
+}

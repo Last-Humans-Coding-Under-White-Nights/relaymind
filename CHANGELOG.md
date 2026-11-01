@@ -8,6 +8,63 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- #260 host run, stopped and not graded (`docs/evidence/m10/owner-run-260/host/`;
+  RM16, RM44; AC36): 14 of the 100 preregistered tasks ran on the MacBook
+  through `run_host_plan` with an in-process OpenClaw 2026.10.7 executor
+  (`evaluation/assets/owner-run-260/run_host.py`). Native: 11 completed, 2
+  failed, 1 timeout; provider_only: 3 completed, 11 failed (reason
+  `host_failed`; the cause is not in the surviving evidence);
+  recommendations: 13 `not_run` (`person_choice_unavailable`, h001–h013) and
+  87 `not_run` (`interrupted`); the other 86 rows of each executed arm are
+  `not_run` (`interrupted`). The private run directory was deleted during
+  the run, so per-row evidence and final answers are lost; only the in-memory
+  report survives, nothing was judged or graded, and no host record exists.
+  About 3.18M of the 5M external-token budget was used.
+- #260 adaptation run (`docs/evidence/m10/owner-run-260/adaptation/`; RM42,
+  RM44; AC33): the 100 preregistered episodes ran on the VPS through the
+  journaled episode driver. `grade-adaptation`: graded, gate `not_applicable`,
+  assessed `provisional` (`corpus_unqualified`, `adaptation_config_semantics`,
+  `qualified_evidence_review`). Corrected paraphrase top-1 was 51/200 (0.255;
+  the target is 0.90), control top-1 38/100 off and 36/100 on (loss 0.02), and
+  100/100 resets were byte-identical. Corrections used the driver's
+  evaluation-only registration, not the native feedback RPC. The run used a
+  run-local ONNX manifest (another runtime build and device) that was not
+  recorded; the report binds the preregistered adaptation config, so the
+  on-arm numbers are diagnostic only. The pending record
+  `m10-owner-run-260-adaptation` lifts nothing until it is reviewed.
+- Third #278 review fixes for the #260 scripts (RM03, RM12, RM16, RM40, RM42,
+  RM44; AC31, AC33, AC36): `run_host.py` closes the gate, gateway and private
+  credential files when setup fails, bounds only the output field the client
+  sent and reports a reservation already held as `row_reserved`;
+  `harness.py` rejects repeated prompts within one item and judgments with an
+  unknown handle instead of storing them as negative; `judge.py adjudicate`
+  survives a malformed reply, writes after every batch and resumes without
+  paying twice; `bundle.py` marks unpublished extra evidence `restricted`;
+  `run_episodes.py` runs only recommendation settings that project to the
+  frozen off document and releases the verified embedding files on failure.
+- #260 review fixes: the pending adaptation record gains the
+  `machine.os_version` its schema requires and now loads (test over every
+  committed #260 record); `run_episodes.py` executes only the frozen
+  adaptation config and manifest; `run_host.py` enforces the host freeze's
+  model and config digests, configures each host from its frozen document,
+  starts on a fresh ledger, redacts truncated run-directory paths and never
+  leaves a host turn running when a usage read fails; `judge.py apply` marks
+  cancelled rows as not successful. One scratch-path fragment stays in the
+  digest-bound h014 capture (documented in the README). Deterministic tests
+  only.
+- Owner-run #260 cohort, frozen and preregistered
+  (`evaluation/assets/owner-run-260/`; RM40, RM42, RM44; AC31, AC33, AC36;
+  spec 0.66 section 12.6.6): 600 held-out machine-drafted cases over the
+  412-asset development catalog (100 host tasks, 20 per required lane, and
+  100 adaptation episodes), `machine_dual.v1` labels from two same-family
+  machine annotators and a machine adjudication pass (class agreement 589/600,
+  Cohen's kappa 0.146 under 98% positive prevalence; acceptable-set agreement
+  451/600), the frozen lock, the episode and host freezes and both
+  preregistration outputs. The corpus stays `development`, so nothing graded
+  over it can qualify.
+  Five of the 11 class disagreements come from a parsing defect, not from the
+  annotators: positive answers with unpadded handles (`A54`) were stored as
+  negative (see the cohort README); the labels are kept as recorded.
 - #259 early installed-skill trial on the owner's Apple M1 8 GiB MacBook (RM16,
   RM39, RM40, RM44; AC30, AC31, AC36; spec 0.66 sections 12.6.5, 12.6.6) in
   `docs/evidence/m10/early-trial-m1-20261101/`: frozen inputs (one

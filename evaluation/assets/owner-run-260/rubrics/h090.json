@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h090",
+ "criteria": [
+  "Generates a dependency inventory report of third-party libraries in the project",
+  "Flags outdated libraries needing upgrade",
+  "Includes a security audit assessment",
+  "Report covers API version compatibility considerations"
+ ]
+}

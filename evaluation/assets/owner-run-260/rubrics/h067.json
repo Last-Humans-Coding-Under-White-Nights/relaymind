@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h067",
+ "criteria": [
+  "Explains the structure of an MCP server (tools, inputs/outputs)",
+  "Provides working Python code using FastMCP with at least two tools (e.g., list and create issues)",
+  "Includes guidance on error handling and tool descriptions/documentation",
+  "Does not require paid services or real credentials to run (uses a mock or placeholder API)"
+ ]
+}

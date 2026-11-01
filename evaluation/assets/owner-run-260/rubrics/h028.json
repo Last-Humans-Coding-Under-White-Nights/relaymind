@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h028",
+ "criteria": [
+  "Provides the hvigorw command for building a HAP (e.g., assembleHap)",
+  "Includes the clean command for rebuilds",
+  "Mentions relevant parameters/options for CI usage",
+  "Commands are accurate for the Hvigor build tool"
+ ]
+}

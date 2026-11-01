@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h083",
+ "criteria": [
+  "Engages in multi-turn requirement gathering with user confirmation of decisions",
+  "Produces a design/requirement document before final skill generation",
+  "Final skill YAML header includes compatibility: harmonyos",
+  "Skill purpose matches checking ArkTS naming conventions"
+ ]
+}

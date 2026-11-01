@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h021",
+ "criteria": [
+  "Provides ArkTS code to create a live view for a delivery order",
+  "Includes code to update the live view as order status changes",
+  "Includes code to stop or remove the live view on completion",
+  "Code follows HarmonyOS LiveView Kit APIs correctly"
+ ]
+}

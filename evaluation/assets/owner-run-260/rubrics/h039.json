@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h039",
+ "criteria": [
+  "Presents an input-unification/normalization strategy for touch, mouse, keyboard, and stylus",
+  "Includes concrete ArkTS code for hover and/or right-click menu behavior",
+  "Covers keyboard focus navigation and at least one shortcut",
+  "Addresses stylus-specific behavior such as pressure or hover"
+ ]
+}

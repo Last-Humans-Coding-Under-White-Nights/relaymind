@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h052",
+ "criteria": [
+  "A working PID control loop implementation in code is provided",
+  "Throttle/brake output handling and anti-windup are implemented",
+  "A simulation demonstrates speed converging from 110 to 100 km/h",
+  "Gains are tunable parameters with reasonable defaults"
+ ]
+}

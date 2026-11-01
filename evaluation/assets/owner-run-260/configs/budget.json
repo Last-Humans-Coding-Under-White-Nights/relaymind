@@ -1,0 +1,6 @@
+{
+ "format": "relaymind.owner_run_task_budget.v1",
+ "host_turn_timeout_s": 600,
+ "retries": 0,
+ "note": "the pinned host's own per-turn limits apply unchanged"
+}

@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h046",
+ "criteria": [
+  "Provides runnable Python code using PyCBC TimeSeries operations",
+  "Includes high-pass filtering, resampling, wraparound removal, and PSD estimation steps",
+  "Uses the specified segment length (4 seconds) for PSD estimation and states the high-pass cutoff frequency used",
+  "Code is self-contained and does not require external accounts or private data"
+ ]
+}

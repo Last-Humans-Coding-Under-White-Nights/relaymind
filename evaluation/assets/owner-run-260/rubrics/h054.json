@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h054",
+ "criteria": [
+  "The workflow correctly describes adding a reply comment to the existing comment",
+  "Comment content matches the user's intended message",
+  "Marking the new comment as the answer is included",
+  "No unrelated GitHub operations are performed"
+ ]
+}

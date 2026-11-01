@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h035",
+ "criteria": [
+  "States clear rules on permissible log levels for user/personal data",
+  "Provides corrected versions of the example logging statements",
+  "Includes a checklist or step-by-step remediation guidance for scanning the codebase"
+ ]
+}

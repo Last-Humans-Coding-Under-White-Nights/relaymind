@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h014",
+ "criteria": [
+  "Provides environment setup and Taro project configuration changes for ASCF meta-service",
+  "Shows required package.json script changes",
+  "Includes troubleshooting and pre-release checks",
+  "Steps are self-contained without requiring private accounts"
+ ]
+}

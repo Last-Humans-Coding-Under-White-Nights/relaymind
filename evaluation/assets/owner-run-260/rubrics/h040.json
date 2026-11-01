@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h040",
+ "criteria": [
+  "Adds explicit types to untyped variables and object literals",
+  "Resolves the 'this' usage violation appropriately",
+  "Fixes typing issues around the async/return value in the example",
+  "All corrections target arkts strict static compile rules, not just runtime behavior"
+ ]
+}

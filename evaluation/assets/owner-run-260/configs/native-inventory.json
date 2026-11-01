@@ -1,0 +1,1262 @@
+{
+ "format": "relaymind.owner_run_native_inventory.v1",
+ "host": "openclaw",
+ "host_version": "2026.10.7",
+ "command": "openclaw skills list --json",
+ "sanitized": "the isolated host home path is replaced by <host-home>",
+ "response": {
+  "workspaceDir": "<host-home>/state/workspace",
+  "managedSkillsDir": "<host-home>/state/skills",
+  "skills": [
+   {
+    "name": "1password",
+    "description": "Set up and use 1Password CLI for sign-in, desktop integration, and reading or injecting secrets.",
+    "emoji": "🔐",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://developer.1password.com/docs/cli/get-started/",
+    "missing": {
+     "bins": [
+      "op"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "add-model-provider",
+    "description": "Add and live-prove a model provider with non-interactive config one-liners, without exposing credentials.",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-custodian",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "apple-notes",
+    "description": "Create, view, edit, delete, search, move, or export Apple Notes via the memo CLI on macOS.",
+    "emoji": "📝",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://github.com/antoniorodr/memo",
+    "missing": {
+     "bins": [
+      "memo"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "apple-reminders",
+    "description": "List, add, edit, complete, or delete Apple Reminders and reminder lists via remindctl.",
+    "emoji": "⏰",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://github.com/steipete/remindctl",
+    "missing": {
+     "bins": [
+      "remindctl"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "bear-notes",
+    "description": "Create, search, and manage Bear notes via grizzly CLI.",
+    "emoji": "🐻",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://bear.app",
+    "missing": {
+     "bins": [
+      "grizzly"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "blogwatcher",
+    "description": "Monitor blogs and RSS/Atom feeds for updates using the blogwatcher CLI.",
+    "emoji": "📰",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://github.com/Hyaxia/blogwatcher",
+    "missing": {
+     "bins": [
+      "blogwatcher"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "blucli",
+    "description": "BluOS CLI (blu) for discovery, playback, grouping, and volume.",
+    "emoji": "🫐",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://blucli.sh",
+    "missing": {
+     "bins": [
+      "blu"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "browser-automation",
+    "description": "Use when controlling web pages with the OpenClaw browser tool, especially multi-step flows, login checks, tab management, or recovery from stale refs/timeouts.",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": false,
+    "commandVisible": false,
+    "source": "openclaw-extra",
+    "bundled": false,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "camsnap",
+    "description": "Capture frames or clips from RTSP/ONVIF cameras and local webcams, including USB pan/tilt/zoom control.",
+    "emoji": "📸",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://camsnap.ai",
+    "missing": {
+     "bins": [
+      "camsnap"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "canvas",
+    "description": "Present hosted widget documents on a connected macOS panel and control panel visibility or navigation.",
+    "emoji": "🖼️",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-extra",
+    "bundled": false,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "clawhub",
+    "description": "Search ClawHub for plugins by default, or skills when explicitly requested; install, verify, update, uninstall, publish, or sync skills.",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "cloud-image-bake",
+    "description": "Bake, select, prove, and safely retire a Cloud Worker image with crabbox and config one-liners.",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-custodian",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "coding-agent",
+    "description": "Delegate coding work to Codex, Claude Code, or OpenCode as background workers; not simple edits or read-only code lookup.",
+    "emoji": "🧩",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [
+      "skills.entries.coding-agent.enabled"
+     ],
+     "os": []
+    }
+   },
+   {
+    "name": "configure-channel",
+    "description": "Configure and prove a chat channel with non-interactive one-liners; secrets only as SecretRefs.",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-custodian",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "control-ui",
+    "description": "Operate and troubleshoot the OpenClaw Control UI: navigate connected clients, organize sessions, build session dashboards, and handle direct or Tailscale-hosted Gateways.",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "diagnose-gateway",
+    "description": "Diagnose Gateway, config, secrets, channels, and port failures with read-only one-liners.",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-custodian",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "diagram-maker",
+    "description": "Create SVG/HTML or Excalidraw diagrams for concepts, architecture, flows, and whiteboards.",
+    "emoji": "🧭",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "eightctl",
+    "description": "Control Eight Sleep pods (status, temperature, alarms, schedules).",
+    "emoji": "🛌",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://eightctl.sh",
+    "missing": {
+     "bins": [
+      "eightctl"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "gemini",
+    "description": "Gemini CLI one-shot prompts, summaries, generation, skills, hooks, MCP, or Gemma routing.",
+    "emoji": "✨",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://ai.google.dev/",
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "gh-issues",
+    "description": "Fetch GitHub issues, select candidates, spawn background fix agents, open PRs, and optionally process PR review comments.",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "primaryEnv": "GH_TOKEN",
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "gifgrep",
+    "description": "Search GIF providers with CLI/TUI, download results, and extract stills/sheets.",
+    "emoji": "🧲",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://gifgrep.com",
+    "missing": {
+     "bins": [
+      "gifgrep"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "github",
+    "description": "GitHub CLI for issues, PRs, CI/check logs, comments, reviews, releases, repos, and gh api queries.",
+    "emoji": "🐙",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "gog",
+    "description": "Google Workspace CLI for Gmail, Calendar, Drive, Contacts, Sheets, and Docs.",
+    "emoji": "🎮",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://gogcli.sh",
+    "missing": {
+     "bins": [
+      "gog"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "goplaces",
+    "description": "Query Google Places for text search, place details, resolve, reviews, or scriptable JSON via goplaces.",
+    "emoji": "📍",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "primaryEnv": "GOOGLE_PLACES_API_KEY",
+    "homepage": "https://github.com/steipete/goplaces",
+    "missing": {
+     "bins": [
+      "goplaces"
+     ],
+     "anyBins": [],
+     "env": [
+      "GOOGLE_PLACES_API_KEY"
+     ],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "healthcheck",
+    "description": "Audit/harden OpenClaw hosts: SSH, firewall, updates, exposure, backups, disk encryption, gateway security.",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "himalaya",
+    "description": "Himalaya CLI for IMAP/SMTP mail: list, read, search, compose, reply, forward, copy, move, delete.",
+    "emoji": "📧",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://github.com/pimalaya/himalaya",
+    "missing": {
+     "bins": [
+      "himalaya"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "mcporter",
+    "description": "List, configure, authenticate, call, and inspect MCP servers/tools with mcporter over HTTP or stdio.",
+    "emoji": "📦",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "http://mcporter.dev",
+    "missing": {
+     "bins": [
+      "mcporter"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "meme-maker",
+    "description": "Search meme templates, suggest formats, and generate local or hosted image memes.",
+    "emoji": "🖼️",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "model-usage",
+    "description": "Summarize CodexBar local cost logs by model for Codex or Claude, including current or full breakdowns.",
+    "emoji": "📊",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [
+      "codexbar"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "nano-pdf",
+    "description": "Edit PDFs with natural-language instructions using the nano-pdf CLI.",
+    "emoji": "📄",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://pypi.org/project/nano-pdf/",
+    "missing": {
+     "bins": [
+      "nano-pdf"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "node-connect",
+    "description": "Diagnose OpenClaw Control UI browser and native Android, iOS, or macOS node connection failures across route, auth, pairing, QR/setup-code, and reconnect states.",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "node-inspect-debugger",
+    "description": "Debug Node.js with node inspect, --inspect, breakpoints, CDP, heap, and CPU profiles.",
+    "emoji": "🪲",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "notion",
+    "description": "Notion CLI/API for pages, Markdown content, data sources, files, comments, search, Workers, and raw API calls.",
+    "emoji": "📝",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "primaryEnv": "NOTION_API_TOKEN",
+    "homepage": "https://developers.notion.com/cli/get-started/overview",
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "obsidian",
+    "description": "Work with Obsidian vaults using the official obsidian CLI: read/search/create/edit notes, tasks, links, properties, plugins.",
+    "emoji": "💎",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://obsidian.md/cli",
+    "missing": {
+     "bins": [
+      "obsidian"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "openai-whisper",
+    "description": "Local speech-to-text with the Whisper CLI (no API key).",
+    "emoji": "🎤",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://openai.com/research/whisper",
+    "missing": {
+     "bins": [
+      "whisper"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "openai-whisper-api",
+    "description": "OpenAI Audio Transcriptions API via curl; gpt-4o-transcribe, mini, diarize, or whisper-1.",
+    "emoji": "🌐",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "primaryEnv": "OPENAI_API_KEY",
+    "homepage": "https://platform.openai.com/docs/guides/speech-to-text",
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [
+      "OPENAI_API_KEY"
+     ],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "openhue",
+    "description": "Control Philips Hue lights and scenes via the OpenHue CLI.",
+    "emoji": "💡",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://www.openhue.io/cli",
+    "missing": {
+     "bins": [
+      "openhue"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "oracle",
+    "description": "Oracle CLI second-model review/debug/refactor/design with selected files, dry-run token checks, API or browser engine.",
+    "emoji": "🧿",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://askoracle.dev",
+    "missing": {
+     "bins": [
+      "oracle"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "ordercli",
+    "description": "Foodora-only CLI for checking past orders and active order status (Deliveroo WIP).",
+    "emoji": "🛵",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://ordercli.sh",
+    "missing": {
+     "bins": [
+      "ordercli"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "peekaboo",
+    "description": "Capture and automate macOS UI with the Peekaboo CLI.",
+    "emoji": "👀",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://peekaboo.boo",
+    "missing": {
+     "bins": [
+      "peekaboo"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "python-debugpy",
+    "description": "Debug Python with pdb, breakpoint(), post-mortem inspection, and debugpy remote attach.",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "sag",
+    "description": "ElevenLabs text-to-speech with mac-style say UX.",
+    "emoji": "🔊",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "primaryEnv": "ELEVENLABS_API_KEY",
+    "homepage": "https://sag.sh",
+    "missing": {
+     "bins": [
+      "sag"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "sherpa-onnx-tts",
+    "description": "Local text-to-speech via sherpa-onnx (offline, no cloud)",
+    "emoji": "🔉",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [
+      "SHERPA_ONNX_RUNTIME_DIR",
+      "SHERPA_ONNX_MODEL_DIR"
+     ],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "skill-creator",
+    "description": "Author or review AgentSkills: create, repair, validate, or restructure SKILL.md files and bundled resources.",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "songsee",
+    "description": "Generate spectrograms and feature-panel visualizations from audio with the songsee CLI.",
+    "emoji": "🌊",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://github.com/steipete/songsee",
+    "missing": {
+     "bins": [
+      "songsee"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "sonoscli",
+    "description": "Control Sonos speakers (discover/status/play/volume/group).",
+    "emoji": "🔊",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://sonoscli.sh",
+    "missing": {
+     "bins": [
+      "sonos"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "spike",
+    "description": "Run throwaway prototypes to validate feasibility, compare approaches, and report a verdict.",
+    "emoji": "🧪",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "spotify-player",
+    "description": "Terminal Spotify playback/search via spogo (preferred) or spotify_player.",
+    "emoji": "🎵",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://www.spotify.com",
+    "missing": {
+     "bins": [],
+     "anyBins": [
+      "spogo",
+      "spotify_player"
+     ],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "summarize",
+    "description": "Summarize or transcribe URLs, YouTube/videos, podcasts, articles, transcripts, PDFs, and local files.",
+    "emoji": "🧾",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://summarize.sh",
+    "missing": {
+     "bins": [
+      "summarize"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "things-mac",
+    "description": "Add, update, list, search, or inspect Things 3 todos, inbox, today, projects, areas, and tags on macOS.",
+    "emoji": "✅",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://github.com/ossianhempel/things3-cli",
+    "missing": {
+     "bins": [
+      "things"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "tmux",
+    "description": "Control tmux sessions/panes for interactive CLIs: list, capture output, send keys, paste text, monitor prompts.",
+    "emoji": "🧵",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [
+      "tmux"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "trello",
+    "description": "Manage Trello boards, lists, and cards via the Trello REST API.",
+    "emoji": "📋",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://developer.atlassian.com/cloud/trello/rest/",
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [
+      "TRELLO_API_KEY",
+      "TRELLO_TOKEN"
+     ],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "visualize",
+    "description": "Create inline visuals for code and explanations, or author persistent OpenClaw dashboard widgets with show_widget.",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "weather",
+    "description": "Current weather and forecasts with web_fetch, falling back to wttr.in curl for locations, rain, temperature, travel planning.",
+    "emoji": "☔",
+    "eligible": true,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": true,
+    "userInvocable": true,
+    "commandVisible": true,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "homepage": "https://wttr.in/:help",
+    "missing": {
+     "bins": [],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   },
+   {
+    "name": "xurl",
+    "description": "xurl CLI for authenticated X posts, replies, reads/search, DMs, media upload, followers, auth status, or raw v2 API calls.",
+    "emoji": "🐦",
+    "eligible": false,
+    "disabled": false,
+    "blockedByAllowlist": false,
+    "blockedByAgentFilter": false,
+    "modelVisible": false,
+    "userInvocable": true,
+    "commandVisible": false,
+    "source": "openclaw-bundled",
+    "bundled": true,
+    "missing": {
+     "bins": [
+      "xurl"
+     ],
+     "anyBins": [],
+     "env": [],
+     "config": [],
+     "os": []
+    }
+   }
+  ]
+ }
+}

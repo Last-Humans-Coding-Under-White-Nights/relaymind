@@ -117,7 +117,9 @@ def _unknown_row(task_id: str, arm: str, status: str, reason: str) -> dict:
     return row
 
 
-def _admit(row, refs, planned, config, seen: set, evidence: Mapping) -> tuple[dict, list]:
+def _admit(
+    row, refs, planned, config, seen: set, evidence: Mapping, *, skipped: bool = False
+) -> tuple[dict, list]:
     """Check one executor row before it is journaled; raise on any contradiction."""
     if (
         not isinstance(row, Mapping)
@@ -128,7 +130,9 @@ def _admit(row, refs, planned, config, seen: set, evidence: Mapping) -> tuple[di
     row = validate_whole_task("HostRow", copy.deepcopy(dict(row)))
     if (row["task_id"], row["arm"]) != (planned["task_id"], planned["arm"]):
         raise WholeTaskRejected("row_plan")
-    if row["status"] == "not_run":
+    if skipped and row["status"] != "not_run":
+        raise WholeTaskRejected("row_not_started")
+    if not skipped and row["status"] == "not_run":
         # The row was journaled as started before the executor ran; not_run
         # means execution did not start, so it contradicts that record.
         raise WholeTaskRejected("row_started")
@@ -158,12 +162,18 @@ def run_host_plan(
     qualification: str,
     input_manifest: Mapping,
     interrupted: Callable[[], bool],
+    skip_reason: Callable[[Mapping, str, Mapping], str | None] | None = None,
 ) -> dict:
     """Execute the preregistered plan with crash-safe, resumable progress.
 
     Returns the AssetHostReportV1, exactly as the conserving driver would,
     after the grader has verified it (without the companion registry, which
     the offline grade-host command resolves).
+
+    ``skip_reason`` is a pre-start check only: it must not dispatch work. A
+    returned reason records a durable ``not_run`` row without a started entry.
+    Skips survive resume; an executor still cannot return ``not_run`` after
+    starting. A fresh run is needed to retry a recorded skip.
     """
     if qualification not in RUN_QUALIFICATIONS:
         # Qualified needs resolved actual evidence, never a caller flag.
@@ -189,7 +199,13 @@ def run_host_plan(
             if key in journal.finished:
                 value = journal.finished[key]
                 row, refs = _admit(
-                    value.get("row"), value.get("evidence"), planned, config, seen, evidence
+                    value.get("row"),
+                    value.get("evidence"),
+                    planned,
+                    config,
+                    seen,
+                    evidence,
+                    skipped=key in journal.skipped,
                 )
             elif key in journal.started:
                 # Started before a crash and never recorded: kept, not rerun.
@@ -198,6 +214,24 @@ def run_host_plan(
             elif interrupted():
                 break
             else:
+                reason = (
+                    skip_reason(by_id[task_id], arm, copy.deepcopy(config))
+                    if skip_reason is not None
+                    else None
+                )
+                if reason is not None:
+                    row, refs = _admit(
+                        _not_run(task_id, arm, reason),
+                        [],
+                        planned,
+                        config,
+                        seen,
+                        evidence,
+                        skipped=True,
+                    )
+                    journal.skip(key, dict(row=row, evidence=refs))
+                    rows[ordinal] = row
+                    continue
                 journal.start(key)
                 try:
                     output, output_refs = execute(by_id[task_id], arm, copy.deepcopy(config))

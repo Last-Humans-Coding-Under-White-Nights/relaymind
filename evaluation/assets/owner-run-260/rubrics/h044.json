@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h044",
+ "criteria": [
+  "Scala code uses higher-order functions (map/filter/flatMap) rather than loops.",
+  "Handles missing 'age' and 'nickname' fields with Option and pattern matching.",
+  "Produces the correct deduplicated sorted result for the sample data."
+ ]
+}

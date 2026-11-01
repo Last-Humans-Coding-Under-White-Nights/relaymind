@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h033",
+ "criteria": [
+  "Covers setting preferred orientation in code and orientation config in module.json5",
+  "Addresses foldable-unfolded and/or tri-fold orientation handling",
+  "Provides concrete ArkTS code example or fix",
+  "Explains how to verify the orientation behavior"
+ ]
+}

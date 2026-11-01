@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h099",
+ "criteria": [
+  "Predictation horizon choice is justified against the 10 ms sample time and ~80 ms tension time constant",
+  "Q/R cost matrices reflect prioritizing tension regulation over speed tracking",
+  "Actuator torque limits are considered in the tuning rationale",
+  "Provides concrete numerical starting values with explanations"
+ ]
+}

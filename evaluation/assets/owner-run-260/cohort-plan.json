@@ -1,0 +1,2757 @@
+{
+ "host": [
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a1083476778a5193e9ba97c",
+   "item_id": "h001",
+   "case_id": "h001-prompt",
+   "rubric": [
+    "The assistant installs the specified HAP on a connected device using device commands",
+    "UI automation visits all four tabs of the bottom navigation bar",
+    "Screenshots are captured for each visited page",
+    "Device logs are collected and error findings are summarized"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:69e20689eb33f23f522ca14c",
+   "item_id": "h002",
+   "case_id": "h002-prompt",
+   "rubric": [
+    "Deprecated SDK interfaces in the project source are identified and listed",
+    "Findings are grouped or ranked by fix priority",
+    "Concrete migration suggestions with code examples are provided for each deprecated interface"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a2109c15f61584597413c46",
+   "item_id": "h003",
+   "case_id": "h003-prompt",
+   "rubric": [
+    "The Native crash log is analyzed using signal, registers, and native stack information",
+    "A single root cause for the crash is identified with supporting evidence chain",
+    "Concrete fix recommendations are provided"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a2a351befaf3913a71c5451",
+   "item_id": "h004",
+   "case_id": "h004-prompt",
+   "rubric": [
+    "Code uses the custom-view scanning capability of the Scan Kit rather than the default UI",
+    "Flash control, zoom, and tap-to-focus on the custom preview are all implemented",
+    "A complete, runnable ArkTS example is provided"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a2a3541587f977f23cd00a9",
+   "item_id": "h005",
+   "case_id": "h005-prompt",
+   "rubric": [
+    "The solution uses the default scanning UI of the Scan Kit",
+    "Scanned result is returned to and filled into the invite code input field",
+    "No custom camera preview implementation is included"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a26ca04baaff04434228a01",
+   "item_id": "h006",
+   "case_id": "h006-prompt",
+   "rubric": [
+    "System-level causes like low memory and high load are checked and ruled out first",
+    "Thread stacks and related queues are analyzed to pinpoint a single root cause module",
+    "A complete evidence chain plus fix recommendations is presented"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6ae2eb90baf9bf2dcb1a5291",
+   "item_id": "h007",
+   "case_id": "h007-prompt",
+   "rubric": [
+    "Baidu Map HarmonyOS SDK packages are correctly installed and imported",
+    "Map display with pan/zoom, nearby restaurant POI search, and markers are implemented",
+    "Driving route planning from current location to a selected restaurant is demonstrated"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a7c1b1312243475c811a545",
+   "item_id": "h008",
+   "case_id": "h008-prompt",
+   "rubric": [
+    "The app's home page is driven across default, loading, and empty-data states with deterministic operations",
+    "Differences between design, requirements, and actual app UI are identified per state",
+    "A structured conclusion with evidence screenshots and suspicious issues is produced"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:69e2065a23e9807a198f27ec",
+   "item_id": "h009",
+   "case_id": "h009-prompt",
+   "rubric": [
+    "ArkTS syntax errors are detected and classified by severity",
+    "Fixable errors are automatically fixed and the build is retried until success or a retry limit",
+    "The final build artifact path is reported"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a30ed58587f977f23cd00c3",
+   "item_id": "h010",
+   "case_id": "h010-prompt",
+   "rubric": [
+    "Module metadata such as oh-package.json5 is checked for completeness and correctness",
+    "ohpm environment is configured and pre-publish validation passes before publishing",
+    "The package is published and a standards-compliant README is generated"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a1085399ca68848e13e14c0",
+   "item_id": "h011",
+   "case_id": "h011-prompt",
+   "rubric": [
+    "Provides a step-by-step HBuilderX setup and adaptation procedure for turning a uni-app project into a HarmonyOS meta-service",
+    "Covers required environment, project configuration changes, and build/run steps",
+    "Includes troubleshooting for common first-build errors",
+    "Does not require private credentials or paid services to follow"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6ab135ee7aa1da07b3d9ab0c",
+   "item_id": "h012",
+   "case_id": "h012-prompt",
+   "rubric": [
+    "Explains data collection steps for both versions (htrace, showmap/smaps or equivalent)",
+    "Describes topdown comparison to identify degradation sources",
+    "Gives correct SO-type-based dispatch of analysis steps (ARKTS_HEAP→3+4, SO_SIZE/HAP→5, etc.)",
+    "Outlines a consolidated anti-regression report structure"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6ab4c7fabaf9bf2dcb1a5201",
+   "item_id": "h013",
+   "case_id": "h013-prompt",
+   "rubric": [
+    "Parses the given requirement into structured test points",
+    "Produces a complete test case set covering normal, boundary (threshold 90/160, heart rate 45/120), and interruption (DND) scenarios",
+    "Includes coverage analysis linking cases to test points",
+    "Cases are concrete with expected results"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a1084e1a4482462bc6264f7",
+   "item_id": "h014",
+   "case_id": "h014-prompt",
+   "rubric": [
+    "Provides environment setup and Taro project configuration changes for ASCF meta-service",
+    "Shows required package.json script changes",
+    "Includes troubleshooting and pre-release checks",
+    "Steps are self-contained without requiring private accounts"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a9e7a8ebec30c1b5b02d490",
+   "item_id": "h015",
+   "case_id": "h015-prompt",
+   "rubric": [
+    "Code implements keyword POI search with nearby retrieval",
+    "Includes place detail query flow triggered by result selection",
+    "Implements geocoding from address string to coordinates",
+    "Uses HarmonyOS local SDK APIs correctly in ArkTS"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a9e7a92bec30c1b5b02d496",
+   "item_id": "h016",
+   "case_id": "h016-prompt",
+   "rubric": [
+    "Code implements route planning between origin and destination with time/distance",
+    "Supports batch route calculation for multiple origin-destination pairs",
+    "Uses correct HarmonyOS Map Kit route planning APIs",
+    "Code is complete and runnable in ArkTS"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a1084426778a5193e9ba97f",
+   "item_id": "h017",
+   "case_id": "h017-prompt",
+   "rubric": [
+    "Correctly explains @Builder parameter rules relevant to the compile error",
+    "Accurately describes @ObservedV2/@Track usage and V1 vs V2 differences",
+    "Provides accurate API version availability info",
+    "Does not generate or rewrite user code, only retrieves/explains knowledge"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a9e7a91bec30c1b5b02d493",
+   "item_id": "h018",
+   "case_id": "h018-prompt",
+   "rubric": [
+    "Code creates a map component positioned to a specified location",
+    "Implements marker add/remove with click info popup",
+    "Draws a polygon overlay on the map",
+    "Controls camera zoom/position appropriately"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:69f078ee23e9807a198f2821",
+   "item_id": "h019",
+   "case_id": "h019-prompt",
+   "rubric": [
+    "Provides ArkTS declarative UI code for a todo list with input and delete",
+    "Uses @ohos relational database for persistence",
+    "Gives hvigorw build/deploy/verify commands",
+    "Code follows ArkTS syntax conventions"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a93d330e0ea8a11bed7ab12",
+   "item_id": "h020",
+   "case_id": "h020-prompt",
+   "rubric": [
+    "Describes building and deploying the app to a real device via hdc/uitest",
+    "Covers scripted UI operations to capture each page screenshot",
+    "Produces posters in three specs: 1080x1920, 1920x1280, 1920x1080",
+    "States outputs go to store-posters/ and are added to .gitignore"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a2a349fefaf3913a71c544b",
+   "item_id": "h021",
+   "case_id": "h021-prompt",
+   "rubric": [
+    "Provides ArkTS code to create a live view for a delivery order",
+    "Includes code to update the live view as order status changes",
+    "Includes code to stop or remove the live view on completion",
+    "Code follows HarmonyOS LiveView Kit APIs correctly"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a2a34e6efaf3913a71c544e",
+   "item_id": "h022",
+   "case_id": "h022-prompt",
+   "rubric": [
+    "Explains how to obtain the push token in an ArkTS app",
+    "Covers the push service configuration/enablement steps",
+    "Shows how to send a notification message",
+    "Does not require credentials or paid services to follow the core steps"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a15c4343a79e364c8d3b6f8",
+   "item_id": "h023",
+   "case_id": "h023-prompt",
+   "rubric": [
+    "Suggests responsive layout approach using breakpoints (e.g., GridRow/GridCol)",
+    "Addresses the fixed 360-width image stretching issue",
+    "Handles component adaptation (layoutWeight, aspectRatio, etc.)",
+    "Considers both phone and tablet/foldable form factors"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a210a26836052485d3fe6be",
+   "item_id": "h024",
+   "case_id": "h024-prompt",
+   "rubric": [
+    "Identifies TypeError caused by accessing 'price' on undefined data",
+    "Points to ProductPage.ets line 12 as the crash location",
+    "Explains how to deobfuscate the stack via SourceMap",
+    "Gives a concrete fix such as null/undefined checking"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a16696a3a79e364c8d3b6fd",
+   "item_id": "h025",
+   "case_id": "h025-prompt",
+   "rubric": [
+    "Produces a cross-platform technical design covering all three platforms",
+    "Provides implementation plans per platform",
+    "Delivers working code for HarmonyOS, Android, and iOS",
+    "Includes build and verification steps"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6aad0690fd16e319f7741ae0",
+   "item_id": "h026",
+   "case_id": "h026-prompt",
+   "rubric": [
+    "Shows CLI login and logout commands",
+    "Shows how to query the App ID for an existing app",
+    "Covers uploading the APP/release package",
+    "Covers submitting the app for release review"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a2a2de41196b363e029a37f",
+   "item_id": "h027",
+   "case_id": "h027-prompt",
+   "rubric": [
+    "Identifies that the parameters table is Chinese-only while the doc is expected to be bilingual",
+    "Flags the missing English translations for the two parameters",
+    "Checks parameter types and mandatory flags for accuracy",
+    "Reports issues in a clear, actionable list"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a108149a4482462bc6264f4",
+   "item_id": "h028",
+   "case_id": "h028-prompt",
+   "rubric": [
+    "Provides the hvigorw command for building a HAP (e.g., assembleHap)",
+    "Includes the clean command for rebuilds",
+    "Mentions relevant parameters/options for CI usage",
+    "Commands are accurate for the Hvigor build tool"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6aa81c45fe22192a9e8589b7",
+   "item_id": "h029",
+   "case_id": "h029-prompt",
+   "rubric": [
+    "Identifies likely causes of callback signature verification failure",
+    "Covers server-side (Spring Boot) verification setup",
+    "Mentions sandbox testing for diagnosis",
+    "Gives concrete fix suggestions"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a2a3427efaf3913a71c5448",
+   "item_id": "h030",
+   "case_id": "h030-prompt",
+   "rubric": [
+    "Recommends a custom transition approach (e.g., custom NavContentInfo transition)",
+    "Includes shared-element style animation between thumbnail and full image",
+    "Provides ArkTS code for the transition",
+    "Handles the reverse (close) transition back to the list"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a1080f8a4482462bc6264f1",
+   "item_id": "h031",
+   "case_id": "h031-prompt",
+   "rubric": [
+    "Explains relevant hilog commands for capturing/filtering logs and how to produce a log export/archive",
+    "Shows how to extract and read the crash log / fault thread stack dump from the bundle",
+    "Interprets the provided stack trace and points to a likely cause or next diagnostic step"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:69a653ce81825464628cc869",
+   "item_id": "h032",
+   "case_id": "h032-prompt",
+   "rubric": [
+    "Document includes feature description/requirements definition section",
+    "Includes scenario analysis and user flow section",
+    "Includes API/interface specification and a detailed implementation plan",
+    "Includes defined automated test cases for the feature"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a15c3ac85d6af77b47b17c0",
+   "item_id": "h033",
+   "case_id": "h033-prompt",
+   "rubric": [
+    "Covers setting preferred orientation in code and orientation config in module.json5",
+    "Addresses foldable-unfolded and/or tri-fold orientation handling",
+    "Provides concrete ArkTS code example or fix",
+    "Explains how to verify the orientation behavior"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a1086b99ca68848e13e14c6",
+   "item_id": "h034",
+   "case_id": "h034-prompt",
+   "rubric": [
+    "Describes how to run local (ArkTS/JS) unit tests for a module",
+    "Shows how to limit the run to a specific test suite or case",
+    "Mentions coverage statistics mode and how to obtain it",
+    "Explains expected output or how to interpret results"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a68563a450ba62d80018371",
+   "item_id": "h035",
+   "case_id": "h035-prompt",
+   "rubric": [
+    "States clear rules on permissible log levels for user/personal data",
+    "Provides corrected versions of the example logging statements",
+    "Includes a checklist or step-by-step remediation guidance for scanning the codebase"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a1085bb9ca68848e13e14c3",
+   "item_id": "h036",
+   "case_id": "h036-prompt",
+   "rubric": [
+    "Covers creating/converting a project into an atomic service",
+    "Addresses at least package size, privacy hosting, and trusted domain configuration",
+    "Includes code examples for @atomicservice usage and/or silent login",
+    "Mentions the AtomicServiceEnhancedWeb vs ArkWeb choice and submission/compliance tips"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:69c4a41491d99675db704ab2",
+   "item_id": "h037",
+   "case_id": "h037-prompt",
+   "rubric": [
+    "Identifies which parts violate sendable constraints (e.g., Map/Array usage) and explains why",
+    "Produces refactored code with @Sendable-conformant structures and correct sharing strategy",
+    "Splits or restructures classes as needed rather than just adding annotations",
+    "Mentions a compile/verification step for the transformed code"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a046ec8f5e4ac20d9106b0b",
+   "item_id": "h038",
+   "case_id": "h038-prompt",
+   "rubric": [
+    "Describes exploring SA/inner_kit/IDL interfaces in the OHOS source tree",
+    "Includes permission analysis for the wrapped system capabilities",
+    "Produces a CLI tool design with ohos- or hms- style command naming",
+    "Mentions build verification and a generated report of the process"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a15c37d3a79e364c8d3b6f5",
+   "item_id": "h039",
+   "case_id": "h039-prompt",
+   "rubric": [
+    "Presents an input-unification/normalization strategy for touch, mouse, keyboard, and stylus",
+    "Includes concrete ArkTS code for hover and/or right-click menu behavior",
+    "Covers keyboard focus navigation and at least one shortcut",
+    "Addresses stylus-specific behavior such as pressure or hover"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:69e340daeb33f23f522ca150",
+   "item_id": "h040",
+   "case_id": "h040-prompt",
+   "rubric": [
+    "Adds explicit types to untyped variables and object literals",
+    "Resolves the 'this' usage violation appropriately",
+    "Fixes typing issues around the async/return value in the example",
+    "All corrections target arkts strict static compile rules, not just runtime behavior"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "github:request_copilot_review",
+   "item_id": "h041",
+   "case_id": "h041-prompt",
+   "rubric": [
+    "The assistant indicates a Copilot code review was requested for PR #128.",
+    "The response mentions gathering automated feedback before human review."
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:88a2ee6d85477d193fd58ec0",
+   "item_id": "h042",
+   "case_id": "h042-prompt",
+   "rubric": [
+    "Provides a custom distance function implementing the two stated rules (time gap and category overlap).",
+    "Shows how to pass the metric to DBSCAN (e.g., metric=callable or precomputed matrix).",
+    "Includes the sample users A, B, C in a runnable example."
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "matrix:6a15c33585d6af77b47b17bd",
+   "item_id": "h043",
+   "case_id": "h043-prompt",
+   "rubric": [
+    "Describes a declarative scene/resource index for camera selection across phone/tablet/foldable.",
+    "Covers runtime capability checks (e.g., canIUse or SysCap) with a fallback page.",
+    "Addresses foldable rotation/stride adaptation."
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:2585e8ba52e3c24e1448f001",
+   "item_id": "h044",
+   "case_id": "h044-prompt",
+   "rubric": [
+    "Scala code uses higher-order functions (map/filter/flatMap) rather than loops.",
+    "Handles missing 'age' and 'nickname' fields with Option and pattern matching.",
+    "Produces the correct deduplicated sorted result for the sample data."
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "github:create_pull_request_review",
+   "item_id": "h045",
+   "case_id": "h045-prompt",
+   "rubric": [
+    "The assistant creates a review on PR #42 in pending state (not immediately submitted).",
+    "The response reflects that comments are accumulated before submitting an APPROVE/REQUEST_CHANGES decision."
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:e2771fef6d4c3ff5ef16ec52",
+   "item_id": "h046",
+   "case_id": "h046-prompt",
+   "rubric": [
+    "Provides runnable Python code using PyCBC TimeSeries operations",
+    "Includes high-pass filtering, resampling, wraparound removal, and PSD estimation steps",
+    "Uses the specified segment length (4 seconds) for PSD estimation and states the high-pass cutoff frequency used",
+    "Code is self-contained and does not require external accounts or private data"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "github:assign_copilot_to_issue_with_intent",
+   "item_id": "h047",
+   "case_id": "h047-prompt",
+   "rubric": [
+    "Response indicates the Copilot agent was assigned to issue #142 in myorg/webapp with intent to produce a pull request",
+    "Uses the preferred assignment tool variant rather than the basic one when describing the action",
+    "No source code changes are attempted manually by the assistant"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:a9e3373cc7dbbd8e090a2c2b",
+   "item_id": "h048",
+   "case_id": "h048-prompt",
+   "rubric": [
+    "Tests use pytest with fixtures and parametrize as requested",
+    "Covers normal input, missing file, and malformed row cases, with file IO mocked",
+    "Tests are runnable given the inline sample data and the described function signature"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:de446d55d0c0892d0407423a",
+   "item_id": "h049",
+   "case_id": "h049-prompt",
+   "rubric": [
+    "Groups all listed variables into meaningful driver categories",
+    "Category names and brief explanations are provided for each group",
+    "Grouping is scientifically sensible (e.g., water-related, thermal, radiation, atmospheric composition) and covers every variable without omission"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "github:star_repository",
+   "item_id": "h050",
+   "case_id": "h050-prompt",
+   "rubric": [
+    "Response indicates the pycbc repository was starred",
+    "Only the starring action is performed, with no other repository modifications"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:ae49bfc179dfaa4a5773e23c",
+   "item_id": "h051",
+   "case_id": "h051-prompt",
+   "rubric": [
+    "Each of the 5 raw records is mapped to a codebook code (A01, B03, C05, A02, D07 respectively)",
+    "Typos, mixed Chinese-English and ambiguous wording are corrected with explanations",
+    "A confidence level is provided for each mapping",
+    "Station/context validation or notes on ambiguous entries are included"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:db35ac4f98d0b2471c133806",
+   "item_id": "h052",
+   "case_id": "h052-prompt",
+   "rubric": [
+    "A working PID control loop implementation in code is provided",
+    "Throttle/brake output handling and anti-windup are implemented",
+    "A simulation demonstrates speed converging from 110 to 100 km/h",
+    "Gains are tunable parameters with reasonable defaults"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:29ae07193b3f2e0f8abfd603",
+   "item_id": "h053",
+   "case_id": "h053-prompt",
+   "rubric": [
+    "Correct syzlang resource/type declarations for the ioctl struct (u32 len, u32 pad)",
+    "The ioctl command number 0x40081234 is properly described",
+    "Syntax is valid syzlang (define, type, syscall declaration)",
+    "Brief explanation of each syzlang construct is given"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "github:discussion_comment_write",
+   "item_id": "h054",
+   "case_id": "h054-prompt",
+   "rubric": [
+    "The workflow correctly describes adding a reply comment to the existing comment",
+    "Comment content matches the user's intended message",
+    "Marking the new comment as the answer is included",
+    "No unrelated GitHub operations are performed"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "github:list_tags",
+   "item_id": "h055",
+   "case_id": "h055-prompt",
+   "rubric": [
+    "The tool used lists tags from the pydantic/pydantic repository",
+    "The response includes a list of tag names",
+    "The latest version is identified or the tags are ordered so the newest is determinable"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:1d436313f8291937f2a12334",
+   "item_id": "h056",
+   "case_id": "h056-prompt",
+   "rubric": [
+    "A Python-based approach (e.g., scapy/dpkt) for parsing PCAP files is described",
+    "TCP connection count via handshake matching is computed",
+    "Handshake latency and retransmission statistics are included",
+    "Runnable code or tested utility functions are provided"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:35c51c9a3f20d64f04ee6781",
+   "item_id": "h057",
+   "case_id": "h057-prompt",
+   "rubric": [
+    "A propeller allocation matrix maps thrust/moments to individual motor RPMs",
+    "First-order motor lag is modeled",
+    "RK45 integration of translational and rotational equations of motion is implemented",
+    "A 10-second hover simulation result is produced and briefly analyzed"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:eac7a47a81807b876f162262",
+   "item_id": "h058",
+   "case_id": "h058-prompt",
+   "rubric": [
+    "R² decomposition (variance decomposition) method is correctly applied",
+    "Contribution percentages of ad spend, promotion and price are computed",
+    "Calculations use the provided 8 data points",
+    "Results are presented with brief interpretation"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "matrix:69b91fef233b372014ff9dfe",
+   "item_id": "h059",
+   "case_id": "h059-prompt",
+   "rubric": [
+    "The approach uses a CLI (inference.sh) to run image and video generation models",
+    "Commands for generating 10 cyberpunk city images are provided",
+    "A 5-second video generation command/workflow is included",
+    "No interactive manual tooling is required; commands are runnable"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "zh_hans_to_en",
+   "target": "github:list_pull_requests",
+   "item_id": "h060",
+   "case_id": "h060-prompt",
+   "rubric": [
+    "The tool used lists pull requests from the tensorflow/tensorflow repository",
+    "The response contains a list of open PRs with titles/numbers or a summary count",
+    "No search-based tool is used since no author filter was specified"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "skillsbench:e9ffe42fecbfe45eebde82e8",
+   "item_id": "h061",
+   "case_id": "h061-prompt",
+   "rubric": [
+    "Defines an explicit source priority (e.g., NVD > GHSA > RedHat or similar) and justifies it",
+    "Returns 8.1 for CVE-2023-1234 per the stated priority",
+    "Returns 9.8 for CVE-2023-5678 and handles the no-conflict single-source case correctly",
+    "Handles CVE-2023-9012 by falling back to the v2 score or clearly flagging the missing v3 score"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "github:get_tag",
+   "item_id": "h062",
+   "case_id": "h062-prompt",
+   "rubric": [
+    "Provides the tag name, the commit SHA it points to, and the creation date for v2.4.1 in curl/curl",
+    "Produces a short formatted release-notes blurb containing that tag data"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "github:get_discussion_comments",
+   "item_id": "h063",
+   "case_id": "h063-prompt",
+   "rubric": [
+    "Retrieves comments from the specified discussion in microsoft/vscode",
+    "Summarizes main arguments on both sides rather than dumping raw comments",
+    "Notes maintainer positions if evident in the comments"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "skillsbench:8f6b11b0a23af96966105820",
+   "item_id": "h064",
+   "case_id": "h064-prompt",
+   "rubric": [
+    "Calculates scores using a recognized coefficient formula (DOTS, Wilks, or similar) with correct bodyweight inputs",
+    "Ranks the three lifters by the computed score",
+    "Shows the individual scores, not just the ranking"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "matrix:6a15c3d845371b3a70b81127",
+   "item_id": "h065",
+   "case_id": "h065-prompt",
+   "rubric": [
+    "Identifies the relevant adaptation areas: screen/window size handling, fold-state changes, and avoid areas at minimum",
+    "Breaks the problem into distinct scenarios or checks rather than one vague checklist",
+    "Addresses the foldable-specific layout reflow and the avoid-area overlap described by the user"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "skillsbench:5be6cd3da0cb0dbd9b09dc3b",
+   "item_id": "h066",
+   "case_id": "h066-prompt",
+   "rubric": [
+    "Provides an estimated driving duration between the two named cities",
+    "Provides an estimated road distance",
+    "Includes a rough taxi fare estimate with any assumptions stated"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "matrix:698d47252d90f030958947c4",
+   "item_id": "h067",
+   "case_id": "h067-prompt",
+   "rubric": [
+    "Explains the structure of an MCP server (tools, inputs/outputs)",
+    "Provides working Python code using FastMCP with at least two tools (e.g., list and create issues)",
+    "Includes guidance on error handling and tool descriptions/documentation",
+    "Does not require paid services or real credentials to run (uses a mock or placeholder API)"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "skillsbench:ae8209be0bf04795d0876ae9",
+   "item_id": "h068",
+   "case_id": "h068-prompt",
+   "rubric": [
+    "Correctly reports holdings count per quarter (3 then 4)",
+    "Identifies NVDA increase, AAPL decrease, MSFT increase, and new TSLA position",
+    "Offers a brief interpretation of what the changes suggest"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "skillsbench:f44b11be7470357842ad7e49",
+   "item_id": "h069",
+   "case_id": "h069-prompt",
+   "rubric": [
+    "Proposes a concrete parsing approach (e.g., regex or split on delimiter)",
+    "Handles or at least acknowledges malformed/skipped lines",
+    "Shows extracted structured output for the sample lines or equivalent"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "skillsbench:58fce420d898006a9e67958a",
+   "item_id": "h070",
+   "case_id": "h070-prompt",
+   "rubric": [
+    "Explains how to discover tables and columns in an unknown SQLite file",
+    "Describes how to infer relationships (foreign keys / shared keys) between tables",
+    "Produces or clearly outlines JSON output for the database contents"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "skillsbench:bac13f7d591d6713a2c0d311",
+   "item_id": "h071",
+   "case_id": "h071-prompt",
+   "rubric": [
+    "Correctly identifies the dominated options (A, C, E) and the non-dominated ones (B and D)",
+    "Explains that a point is dominated when another option is at least as good on both objectives and better on one",
+    "Final answer is consistent with the data provided"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "skillsbench:11d9eaf866f654324f74f8fb",
+   "item_id": "h072",
+   "case_id": "h072-prompt",
+   "rubric": [
+    "Describes separating the mesh into connected components and measuring each component's volume",
+    "Provides a rule for filtering debris (e.g., volume threshold) and applies it to identify the main body",
+    "Reports the number of components and their volumes as the expected output"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "skillsbench:56d09fbb560594b742247438",
+   "item_id": "h073",
+   "case_id": "h073-prompt",
+   "rubric": [
+    "Creates planning/tracking files (e.g., a task plan, findings, and progress notes) before doing the research",
+    "The plan breaks the work into concrete steps covering at least the comparison dimensions mentioned",
+    "Final answer includes an actual comparison of the frameworks, not just the plan"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "github:unhide_issue_comment",
+   "item_id": "h074",
+   "case_id": "h074-prompt",
+   "rubric": [
+    "Recognizes the need to unhide/unminimize a hidden issue comment",
+    "References the correct issue number (#432)",
+    "Does not request credentials or perform actions requiring private accounts beyond stating the intent"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "skillsbench:9080b733089e01f19ddc3179",
+   "item_id": "h075",
+   "case_id": "h075-prompt",
+   "rubric": [
+    "Proposes a clear folder structure grouping the listed files logically",
+    "Identifies the likely duplicate pairs (resume files, vacation photos, final/report docs)",
+    "Provides rename suggestions removing the messy naming patterns"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "matrix:6a154e0245371b3a70b81112",
+   "item_id": "h076",
+   "case_id": "h076-prompt",
+   "rubric": [
+    "Explains how to determine whether the component is ABC-based or SO-based",
+    "Includes NAPI registration code (or its structure) for the component on the cross-platform side",
+    "Covers BUILD.gn configuration and registration in plugin_lib.gni / build configs",
+    "Specifically addresses the ToolBar component in the ArkUI-X Android context"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "github:get_file_contents",
+   "item_id": "h077",
+   "case_id": "h077-prompt",
+   "rubric": [
+    "Retrieves the README.md content from vercel/next.js on the main branch",
+    "Provides an accurate short summary of the project based on the actual README content"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "skillsbench:71c03ff573acf2860265a65d",
+   "item_id": "h078",
+   "case_id": "h078-prompt",
+   "rubric": [
+    "Output is valid JSON with a clear structure covering segments, compression ratios, and duration statistics",
+    "Compression ratios are computed correctly (e.g., 2.5 and ~2.67) from the given sizes",
+    "Includes overall duration statistics (original 3600s, compressed 3540s)"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "github:unhide_pull_request_review",
+   "item_id": "h079",
+   "case_id": "h079-prompt",
+   "rubric": [
+    "Recognizes the need to unhide/unminimize a pull request review body",
+    "References PR #118 specifically",
+    "Does not require private credentials or paid services to describe the intent"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "en_to_en",
+   "target": "skillsbench:bc972034483ef412d55c7da4",
+   "item_id": "h080",
+   "case_id": "h080-prompt",
+   "rubric": [
+    "Extracts audio from the video into WAV format (e.g., via ffmpeg)",
+    "Names a concrete output file (e.g., meeting_recording.wav)",
+    "Does not require private accounts or paid services"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "matrix:6a6854f9185a87274833701f",
+   "item_id": "h081",
+   "case_id": "h081-prompt",
+   "rubric": [
+    "Processes files in directory order and explicitly handles batching for large directories",
+    "States or applies the user's remediation principle (uniform error logging) to each file",
+    "Does not skip files or merge unrelated changes",
+    "Output is self-contained and does not require external services"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "matrix:6a210a6a5e56c918406bf491",
+   "item_id": "h082",
+   "case_id": "h082-prompt",
+   "rubric": [
+    "Mentions rawheap conversion and clustering analysis of the snapshots",
+    "Produces or describes a two-version growth comparison and lists suspect leaked objects",
+    "References the provided directories (./heap/v12, ./heap/v13) and companion logs",
+    "Answer is based only on the described inline scenario, no credentials or paid services required"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "matrix:6a7983e8f0c9220c890dead2",
+   "item_id": "h083",
+   "case_id": "h083-prompt",
+   "rubric": [
+    "Engages in multi-turn requirement gathering with user confirmation of decisions",
+    "Produces a design/requirement document before final skill generation",
+    "Final skill YAML header includes compatibility: harmonyos",
+    "Skill purpose matches checking ArkTS naming conventions"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "matrix:6a1086556778a5193e9ba982",
+   "item_id": "h084",
+   "case_id": "h084-prompt",
+   "rubric": [
+    "Runs an Instrument Test scoped to the specified module, suite, and single test case",
+    "Includes coverage statistics in the run",
+    "Reports the test result clearly to the user"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "matrix:6a107e966778a5193e9ba976",
+   "item_id": "h085",
+   "case_id": "h085-prompt",
+   "rubric": [
+    "Covers the full flow: reproduce, root cause analysis, minimal fix, build/run verification",
+    "Addresses the crash when tapping the add-to-cart button on the product detail page",
+    "Fix is minimal and does not introduce unrelated changes",
+    "Mentions or applies build retry/circuit-breaker limits"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "matrix:6a8c4ab6a4122c463164533f",
+   "item_id": "h086",
+   "case_id": "h086-prompt",
+   "rubric": [
+    "Executes the described UI steps on a HarmonyOS device via HDC",
+    "Locates controls via control tree or visual recognition",
+    "Includes screenshot verification at steps",
+    "Reports outcome of the toggle off/on sequence"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "matrix:6a107faa9ca68848e13e14bd",
+   "item_id": "h087",
+   "case_id": "h087-prompt",
+   "rubric": [
+    "Follows an end-to-end requirement development flow (analysis, design, implementation)",
+    "Delivers both message list and message detail pages per the PRD",
+    "Implementation is HarmonyOS/ArkTS based",
+    "Clarifies ambiguous intent rather than jumping to a single-file fix"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "matrix:6a2109725f61584597413c43",
+   "item_id": "h088",
+   "case_id": "h088-prompt",
+   "rubric": [
+    "Analyzes the hilog/HiviewDFX logs and maps the 801 error code",
+    "Provides root cause candidates correlated with source code",
+    "Outputs a structured diagnostic report with fix suggestions",
+    "Handles the freeze symptom as part of the diagnosis"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "matrix:6a2a344f40e9726f5c23d3b4",
+   "item_id": "h089",
+   "case_id": "h089-prompt",
+   "rubric": [
+    "Plans Model/ViewModel/View layering and directory structure",
+    "Moves business logic out of views into view models",
+    "Addresses the messy state management problem",
+    "Keeps the architecture simple and improves testability"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "matrix:6aa74cd3cae3eb0526545324",
+   "item_id": "h090",
+   "case_id": "h090-prompt",
+   "rubric": [
+    "Generates a dependency inventory report of third-party libraries in the project",
+    "Flags outdated libraries needing upgrade",
+    "Includes a security audit assessment",
+    "Report covers API version compatibility considerations"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "skillsbench:3108cdca6c84cfade8d78e02",
+   "item_id": "h091",
+   "case_id": "h091-prompt",
+   "rubric": [
+    "Script parses interleaved int16 I/Q correctly and runs a Range FFT per chirp with the given chirp parameters",
+    "Pipeline includes static clutter removal, subject range-bin selection, and phase extraction with unwrapping",
+    "HR and BR are estimated via bandpass filtering plus PSD peak picking, with explicit handling of the HR second harmonic",
+    "Final HR and BR values in BPM are reported along with intermediate-check guidance"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "github:reprioritize_sub_issue",
+   "item_id": "h092",
+   "case_id": "h092-prompt",
+   "rubric": [
+    "The request explicitly identifies the repository, parent issue, sub-issue to move, and the target position (front of the list)",
+    "No credentials or private accounts are required beyond the GitHub MCP connection",
+    "The task is a single self-contained reorder operation with other sub-issue order preserved"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "github:submit_pending_pull_request_review",
+   "item_id": "h093",
+   "case_id": "h093-prompt",
+   "rubric": [
+    "Request specifies the repository, PR number, and that a pending review exists with draft comments",
+    "The desired review action (approve) and a summary comment are stated",
+    "Task requires only public GitHub context and one submit action"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "github:list_org_repository_security_advisories",
+   "item_id": "h094",
+   "case_id": "h094-prompt",
+   "rubric": [
+    "The request asks to list security advisories across an organization's repositories",
+    "The desired output includes severity and CVE identifiers in a table",
+    "No private credentials or paid services are required"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "github:remove_issue_comment_reaction",
+   "item_id": "h095",
+   "case_id": "h095-prompt",
+   "rubric": [
+    "Request identifies the repository, issue number, the specific comment by its reaction, and that only the user's own reaction should be removed",
+    "Task is a single self-contained action needing no additional data",
+    "No credentials or paid services are required"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "skillsbench:ee8671f204b587b8cbb8424a",
+   "item_id": "h096",
+   "case_id": "h096-prompt",
+   "rubric": [
+    "Checks turning space (e.g., 1500mm circle) within the 2200x2000mm room",
+    "Evaluates door clear width and toilet centerline distance against ADA-derived thresholds",
+    "Reviews grab bar placement/length and lavatory knee/toe clearance dimensions",
+    "Provides itemized pass/fail results with concrete correction suggestions"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "skillsbench:306191650a8c3697b733a763",
+   "item_id": "h097",
+   "case_id": "h097-prompt",
+   "rubric": [
+    "Sets up the dispatch as constrained minimization with the given quadratic cost functions",
+    "Respects all generator min/max limits and the 400 MW power balance",
+    "Reports each generator's optimal setpoint and the total minimum cost",
+    "Result satisfies equal-incremental-cost conditions where limits are not binding"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "skillsbench:a0386ccdac96525d7649f963",
+   "item_id": "h098",
+   "case_id": "h098-prompt",
+   "rubric": [
+    "Report covers threat modeling of the described architecture (frontend, API, DB, Stripe webhooks)",
+    "Includes tenant-isolation bypass risks and JWT crypto implementation guidance",
+    "Addresses webhook signature verification and maps findings to OWASP Top 10",
+    "Findings are concrete and actionable, referencing the given system components"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "skillsbench:75737dce9de5bbf25e36ee53",
+   "item_id": "h099",
+   "case_id": "h099-prompt",
+   "rubric": [
+    "Predictation horizon choice is justified against the 10 ms sample time and ~80 ms tension time constant",
+    "Q/R cost matrices reflect prioritizing tension regulation over speed tracking",
+    "Actuator torque limits are considered in the tuning rationale",
+    "Provides concrete numerical starting values with explanations"
+   ]
+  },
+  {
+   "cohort": "host",
+   "lane": "code_switch",
+   "target": "skillsbench:f030acc2b065a395a5a4b6b5",
+   "item_id": "h100",
+   "case_id": "h100-prompt",
+   "rubric": [
+    "Provides tshark commands or outputs showing per-protocol packet counts from the pcap",
+    "Extracts HTTP request URLs together with their status codes",
+    "Reports TCP retransmission analysis or a command to detect them",
+    "Uses a single self-contained workflow without requiring external credentials"
+   ]
+  }
+ ],
+ "episodes": [
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6aabc80b51cbbf2538efd4df",
+   "item_id": "e001",
+   "case_ids": [
+    "e001-c1",
+    "e001-c2",
+    "e001-c3",
+    "e001-p1",
+    "e001-p2"
+   ],
+   "control": "h056-prompt",
+   "reset": "h004-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a574362210fe27bd246fcf5",
+   "item_id": "e002",
+   "case_ids": [
+    "e002-c1",
+    "e002-c2",
+    "e002-c3",
+    "e002-p1",
+    "e002-p2"
+   ],
+   "control": "h023-prompt",
+   "reset": "h005-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a5eece1185a872748336ec7",
+   "item_id": "e003",
+   "case_ids": [
+    "e003-c1",
+    "e003-c2",
+    "e003-c3",
+    "e003-p1",
+    "e003-p2"
+   ],
+   "control": "h070-prompt",
+   "reset": "h089-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a108019071d0d29982eec74",
+   "item_id": "e004",
+   "case_ids": [
+    "e004-c1",
+    "e004-c2",
+    "e004-c3",
+    "e004-p1",
+    "e004-p2"
+   ],
+   "control": "h076-prompt",
+   "reset": "h034-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:69e1df16a8edf53fea151e71",
+   "item_id": "e005",
+   "case_ids": [
+    "e005-c1",
+    "e005-c2",
+    "e005-c3",
+    "e005-p1",
+    "e005-p2"
+   ],
+   "control": "h024-prompt",
+   "reset": "h099-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_zh_hans",
+   "target": "matrix:6a10848e071d0d29982eec77",
+   "item_id": "e006",
+   "case_ids": [
+    "e006-c1",
+    "e006-c2",
+    "e006-c3",
+    "e006-p1",
+    "e006-p2"
+   ],
+   "control": "h086-prompt",
+   "reset": "h034-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_zh_hans",
+   "target": "matrix:6a215e9b8428f219b71f84a2",
+   "item_id": "e007",
+   "case_ids": [
+    "e007-c1",
+    "e007-c2",
+    "e007-c3",
+    "e007-p1",
+    "e007-p2"
+   ],
+   "control": "h051-prompt",
+   "reset": "h060-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:cbbaab2e5d00942d3d0497c4",
+   "item_id": "e008",
+   "case_ids": [
+    "e008-c1",
+    "e008-c2",
+    "e008-c3",
+    "e008-p1",
+    "e008-p2"
+   ],
+   "control": "h055-prompt",
+   "reset": "h031-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:fc9daf422e738c60e24792ab",
+   "item_id": "e009",
+   "case_ids": [
+    "e009-c1",
+    "e009-c2",
+    "e009-c3",
+    "e009-p1",
+    "e009-p2"
+   ],
+   "control": "h032-prompt",
+   "reset": "h024-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "github:projects_write",
+   "item_id": "e010",
+   "case_ids": [
+    "e010-c1",
+    "e010-c2",
+    "e010-c3",
+    "e010-p1",
+    "e010-p2"
+   ],
+   "control": "h083-prompt",
+   "reset": "h034-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:3257656b3c1123329999daad",
+   "item_id": "e011",
+   "case_ids": [
+    "e011-c1",
+    "e011-c2",
+    "e011-c3",
+    "e011-p1",
+    "e011-p2"
+   ],
+   "control": "h056-prompt",
+   "reset": "h016-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:62ab7427fc33897b43df354c",
+   "item_id": "e012",
+   "case_ids": [
+    "e012-c1",
+    "e012-c2",
+    "e012-c3",
+    "e012-p1",
+    "e012-p2"
+   ],
+   "control": "h011-prompt",
+   "reset": "h037-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "matrix:699fb9d75a554d66cf5a3740",
+   "item_id": "e013",
+   "case_ids": [
+    "e013-c1",
+    "e013-c2",
+    "e013-c3",
+    "e013-p1",
+    "e013-p2"
+   ],
+   "control": "h030-prompt",
+   "reset": "h089-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "github:projects_get",
+   "item_id": "e014",
+   "case_ids": [
+    "e014-c1",
+    "e014-c2",
+    "e014-c3",
+    "e014-p1",
+    "e014-p2"
+   ],
+   "control": "h004-prompt",
+   "reset": "h056-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "github:merge_pull_request",
+   "item_id": "e015",
+   "case_ids": [
+    "e015-c1",
+    "e015-c2",
+    "e015-c3",
+    "e015-p1",
+    "e015-p2"
+   ],
+   "control": "h003-prompt",
+   "reset": "h020-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "github:hide_pull_request_review_comment",
+   "item_id": "e016",
+   "case_ids": [
+    "e016-c1",
+    "e016-c2",
+    "e016-c3",
+    "e016-p1",
+    "e016-p2"
+   ],
+   "control": "h091-prompt",
+   "reset": "h064-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:009dba7c67e9425905defa98",
+   "item_id": "e017",
+   "case_ids": [
+    "e017-c1",
+    "e017-c2",
+    "e017-c3",
+    "e017-p1",
+    "e017-p2"
+   ],
+   "control": "h071-prompt",
+   "reset": "h090-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:0457eeed402b6f48ad124ec3",
+   "item_id": "e018",
+   "case_ids": [
+    "e018-c1",
+    "e018-c2",
+    "e018-c3",
+    "e018-p1",
+    "e018-p2"
+   ],
+   "control": "h060-prompt",
+   "reset": "h016-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:adb4c06d6554f25dd337133c",
+   "item_id": "e019",
+   "case_ids": [
+    "e019-c1",
+    "e019-c2",
+    "e019-c3",
+    "e019-p1",
+    "e019-p2"
+   ],
+   "control": "h005-prompt",
+   "reset": "h073-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:196e8ba4c6ac56b56bcb02f6",
+   "item_id": "e020",
+   "case_ids": [
+    "e020-c1",
+    "e020-c2",
+    "e020-c3",
+    "e020-p1",
+    "e020-p2"
+   ],
+   "control": "h071-prompt",
+   "reset": "h099-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:a75620f87cf3d5e932d0077e",
+   "item_id": "e021",
+   "case_ids": [
+    "e021-c1",
+    "e021-c2",
+    "e021-c3",
+    "e021-p1",
+    "e021-p2"
+   ],
+   "control": "h038-prompt",
+   "reset": "h058-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:ff3b525ba8393898c195cec7",
+   "item_id": "e022",
+   "case_ids": [
+    "e022-c1",
+    "e022-c2",
+    "e022-c3",
+    "e022-p1",
+    "e022-p2"
+   ],
+   "control": "h022-prompt",
+   "reset": "h061-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:31ccdcadc77284bca61f6e9a",
+   "item_id": "e023",
+   "case_ids": [
+    "e023-c1",
+    "e023-c2",
+    "e023-c3",
+    "e023-p1",
+    "e023-p2"
+   ],
+   "control": "h093-prompt",
+   "reset": "h076-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "github:update_pull_request_state",
+   "item_id": "e024",
+   "case_ids": [
+    "e024-c1",
+    "e024-c2",
+    "e024-c3",
+    "e024-p1",
+    "e024-p2"
+   ],
+   "control": "h021-prompt",
+   "reset": "h045-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:264374199415f42c4aeae5bc",
+   "item_id": "e025",
+   "case_ids": [
+    "e025-c1",
+    "e025-c2",
+    "e025-c3",
+    "e025-p1",
+    "e025-p2"
+   ],
+   "control": "h020-prompt",
+   "reset": "h054-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "matrix:698d453c45bef56c57b4360f",
+   "item_id": "e026",
+   "case_ids": [
+    "e026-c1",
+    "e026-c2",
+    "e026-c3",
+    "e026-p1",
+    "e026-p2"
+   ],
+   "control": "h020-prompt",
+   "reset": "h043-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "github:sub_issue_write",
+   "item_id": "e027",
+   "case_ids": [
+    "e027-c1",
+    "e027-c2",
+    "e027-c3",
+    "e027-p1",
+    "e027-p2"
+   ],
+   "control": "h096-prompt",
+   "reset": "h035-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "github:add_sub_issue",
+   "item_id": "e028",
+   "case_ids": [
+    "e028-c1",
+    "e028-c2",
+    "e028-c3",
+    "e028-p1",
+    "e028-p2"
+   ],
+   "control": "h079-prompt",
+   "reset": "h029-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:8a93cdb0dd2a86a23b0f2d9e",
+   "item_id": "e029",
+   "case_ids": [
+    "e029-c1",
+    "e029-c2",
+    "e029-c3",
+    "e029-p1",
+    "e029-p2"
+   ],
+   "control": "h066-prompt",
+   "reset": "h096-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "github:remove_pull_request_review_comment_reaction",
+   "item_id": "e030",
+   "case_ids": [
+    "e030-c1",
+    "e030-c2",
+    "e030-c3",
+    "e030-p1",
+    "e030-p2"
+   ],
+   "control": "h095-prompt",
+   "reset": "h089-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:009f3ff58ead0966ecf63ce4",
+   "item_id": "e031",
+   "case_ids": [
+    "e031-c1",
+    "e031-c2",
+    "e031-c3",
+    "e031-p1",
+    "e031-p2"
+   ],
+   "control": "h052-prompt",
+   "reset": "h027-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:cf2ef7bd742228882e8b4bca",
+   "item_id": "e032",
+   "case_ids": [
+    "e032-c1",
+    "e032-c2",
+    "e032-c3",
+    "e032-p1",
+    "e032-p2"
+   ],
+   "control": "h005-prompt",
+   "reset": "h010-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "github:search_users",
+   "item_id": "e033",
+   "case_ids": [
+    "e033-c1",
+    "e033-c2",
+    "e033-c3",
+    "e033-p1",
+    "e033-p2"
+   ],
+   "control": "h082-prompt",
+   "reset": "h024-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:01ee724e52364a91101b983a",
+   "item_id": "e034",
+   "case_ids": [
+    "e034-c1",
+    "e034-c2",
+    "e034-c3",
+    "e034-p1",
+    "e034-p2"
+   ],
+   "control": "h042-prompt",
+   "reset": "h076-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:38ab22523fdb083953f7d96c",
+   "item_id": "e035",
+   "case_ids": [
+    "e035-c1",
+    "e035-c2",
+    "e035-c3",
+    "e035-p1",
+    "e035-p2"
+   ],
+   "control": "h090-prompt",
+   "reset": "h100-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "github:update_issue_labels",
+   "item_id": "e036",
+   "case_ids": [
+    "e036-c1",
+    "e036-c2",
+    "e036-c3",
+    "e036-p1",
+    "e036-p2"
+   ],
+   "control": "h031-prompt",
+   "reset": "h071-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:81e6756aadbf5ae4e344418d",
+   "item_id": "e037",
+   "case_ids": [
+    "e037-c1",
+    "e037-c2",
+    "e037-c3",
+    "e037-p1",
+    "e037-p2"
+   ],
+   "control": "h034-prompt",
+   "reset": "h076-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "matrix:69fd41df6f6f956d81b73b52",
+   "item_id": "e038",
+   "case_ids": [
+    "e038-c1",
+    "e038-c2",
+    "e038-c3",
+    "e038-p1",
+    "e038-p2"
+   ],
+   "control": "h049-prompt",
+   "reset": "h094-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:9623c6c4eb516ccc4d81afad",
+   "item_id": "e039",
+   "case_ids": [
+    "e039-c1",
+    "e039-c2",
+    "e039-c3",
+    "e039-p1",
+    "e039-p2"
+   ],
+   "control": "h006-prompt",
+   "reset": "h022-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "github:search_issues",
+   "item_id": "e040",
+   "case_ids": [
+    "e040-c1",
+    "e040-c2",
+    "e040-c3",
+    "e040-p1",
+    "e040-p2"
+   ],
+   "control": "h006-prompt",
+   "reset": "h078-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "github:create_issue",
+   "item_id": "e041",
+   "case_ids": [
+    "e041-c1",
+    "e041-c2",
+    "e041-c3",
+    "e041-p1",
+    "e041-p2"
+   ],
+   "control": "h091-prompt",
+   "reset": "h087-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:ee90b1c0180064716c2fb79e",
+   "item_id": "e042",
+   "case_ids": [
+    "e042-c1",
+    "e042-c2",
+    "e042-c3",
+    "e042-p1",
+    "e042-p2"
+   ],
+   "control": "h031-prompt",
+   "reset": "h062-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "github:get_teams",
+   "item_id": "e043",
+   "case_ids": [
+    "e043-c1",
+    "e043-c2",
+    "e043-c3",
+    "e043-p1",
+    "e043-p2"
+   ],
+   "control": "h094-prompt",
+   "reset": "h037-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "matrix:6a115871071d0d29982eec7e",
+   "item_id": "e044",
+   "case_ids": [
+    "e044-c1",
+    "e044-c2",
+    "e044-c3",
+    "e044-p1",
+    "e044-p2"
+   ],
+   "control": "h025-prompt",
+   "reset": "h086-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "github:unresolve_review_thread",
+   "item_id": "e045",
+   "case_ids": [
+    "e045-c1",
+    "e045-c2",
+    "e045-c3",
+    "e045-p1",
+    "e045-p2"
+   ],
+   "control": "h073-prompt",
+   "reset": "h001-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:984012927e159e7351fbb01e",
+   "item_id": "e046",
+   "case_ids": [
+    "e046-c1",
+    "e046-c2",
+    "e046-c3",
+    "e046-p1",
+    "e046-p2"
+   ],
+   "control": "h055-prompt",
+   "reset": "h058-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:4fb66d7d40d3c12ff28172e4",
+   "item_id": "e047",
+   "case_ids": [
+    "e047-c1",
+    "e047-c2",
+    "e047-c3",
+    "e047-p1",
+    "e047-p2"
+   ],
+   "control": "h095-prompt",
+   "reset": "h088-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:4cafbe56e66e34993ad0f3f8",
+   "item_id": "e048",
+   "case_ids": [
+    "e048-c1",
+    "e048-c2",
+    "e048-c3",
+    "e048-p1",
+    "e048-p2"
+   ],
+   "control": "h019-prompt",
+   "reset": "h074-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:c85bd9ad3f8f10a05324471d",
+   "item_id": "e049",
+   "case_ids": [
+    "e049-c1",
+    "e049-c2",
+    "e049-c3",
+    "e049-p1",
+    "e049-p2"
+   ],
+   "control": "h048-prompt",
+   "reset": "h065-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:6747e2eb588a654dd86b130a",
+   "item_id": "e050",
+   "case_ids": [
+    "e050-c1",
+    "e050-c2",
+    "e050-c3",
+    "e050-p1",
+    "e050-p2"
+   ],
+   "control": "h025-prompt",
+   "reset": "h022-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "github:list_secret_scanning_alerts",
+   "item_id": "e051",
+   "case_ids": [
+    "e051-c1",
+    "e051-c2",
+    "e051-c3",
+    "e051-p1",
+    "e051-p2"
+   ],
+   "control": "h028-prompt",
+   "reset": "h070-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "github:list_issue_fields",
+   "item_id": "e052",
+   "case_ids": [
+    "e052-c1",
+    "e052-c2",
+    "e052-c3",
+    "e052-p1",
+    "e052-p2"
+   ],
+   "control": "h065-prompt",
+   "reset": "h093-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "github:delete_file",
+   "item_id": "e053",
+   "case_ids": [
+    "e053-c1",
+    "e053-c2",
+    "e053-c3",
+    "e053-p1",
+    "e053-p2"
+   ],
+   "control": "h057-prompt",
+   "reset": "h047-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "matrix:698d47a72d90f030958947c7",
+   "item_id": "e054",
+   "case_ids": [
+    "e054-c1",
+    "e054-c2",
+    "e054-c3",
+    "e054-p1",
+    "e054-p2"
+   ],
+   "control": "h002-prompt",
+   "reset": "h026-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "github:manage_repository_notification_subscription",
+   "item_id": "e055",
+   "case_ids": [
+    "e055-c1",
+    "e055-c2",
+    "e055-c3",
+    "e055-p1",
+    "e055-p2"
+   ],
+   "control": "h056-prompt",
+   "reset": "h098-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "github:list_issues",
+   "item_id": "e056",
+   "case_ids": [
+    "e056-c1",
+    "e056-c2",
+    "e056-c3",
+    "e056-p1",
+    "e056-p2"
+   ],
+   "control": "h006-prompt",
+   "reset": "h013-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:3c85273d8cd7e3f2c914be0b",
+   "item_id": "e057",
+   "case_ids": [
+    "e057-c1",
+    "e057-c2",
+    "e057-c3",
+    "e057-p1",
+    "e057-p2"
+   ],
+   "control": "h074-prompt",
+   "reset": "h044-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "github:hide_pull_request_review",
+   "item_id": "e058",
+   "case_ids": [
+    "e058-c1",
+    "e058-c2",
+    "e058-c3",
+    "e058-p1",
+    "e058-p2"
+   ],
+   "control": "h066-prompt",
+   "reset": "h080-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "github:pull_request_read",
+   "item_id": "e059",
+   "case_ids": [
+    "e059-c1",
+    "e059-c2",
+    "e059-c3",
+    "e059-p1",
+    "e059-p2"
+   ],
+   "control": "h052-prompt",
+   "reset": "h049-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:9916718a673f31583b1358fa",
+   "item_id": "e060",
+   "case_ids": [
+    "e060-c1",
+    "e060-c2",
+    "e060-c3",
+    "e060-p1",
+    "e060-p2"
+   ],
+   "control": "h066-prompt",
+   "reset": "h046-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:5f78f32b17315b4426fcd3b7",
+   "item_id": "e061",
+   "case_ids": [
+    "e061-c1",
+    "e061-c2",
+    "e061-c3",
+    "e061-p1",
+    "e061-p2"
+   ],
+   "control": "h096-prompt",
+   "reset": "h051-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:5c84c77bfef1a68b56d7828f",
+   "item_id": "e062",
+   "case_ids": [
+    "e062-c1",
+    "e062-c2",
+    "e062-c3",
+    "e062-p1",
+    "e062-p2"
+   ],
+   "control": "h098-prompt",
+   "reset": "h033-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:acec52e1918bb165f324249c",
+   "item_id": "e063",
+   "case_ids": [
+    "e063-c1",
+    "e063-c2",
+    "e063-c3",
+    "e063-p1",
+    "e063-p2"
+   ],
+   "control": "h072-prompt",
+   "reset": "h050-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "github:list_commits",
+   "item_id": "e064",
+   "case_ids": [
+    "e064-c1",
+    "e064-c2",
+    "e064-c3",
+    "e064-p1",
+    "e064-p2"
+   ],
+   "control": "h065-prompt",
+   "reset": "h044-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:4903dc267af1aefea42798da",
+   "item_id": "e065",
+   "case_ids": [
+    "e065-c1",
+    "e065-c2",
+    "e065-c3",
+    "e065-p1",
+    "e065-p2"
+   ],
+   "control": "h031-prompt",
+   "reset": "h054-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "github:search_orgs",
+   "item_id": "e066",
+   "case_ids": [
+    "e066-c1",
+    "e066-c2",
+    "e066-c3",
+    "e066-p1",
+    "e066-p2"
+   ],
+   "control": "h052-prompt",
+   "reset": "h006-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:5f6db3c84260155a777bc3b6",
+   "item_id": "e067",
+   "case_ids": [
+    "e067-c1",
+    "e067-c2",
+    "e067-c3",
+    "e067-p1",
+    "e067-p2"
+   ],
+   "control": "h078-prompt",
+   "reset": "h074-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "github:get_global_security_advisory",
+   "item_id": "e068",
+   "case_ids": [
+    "e068-c1",
+    "e068-c2",
+    "e068-c3",
+    "e068-p1",
+    "e068-p2"
+   ],
+   "control": "h008-prompt",
+   "reset": "h079-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "matrix:69e1dea2c4357076d28ecb48",
+   "item_id": "e069",
+   "case_ids": [
+    "e069-c1",
+    "e069-c2",
+    "e069-c3",
+    "e069-p1",
+    "e069-p2"
+   ],
+   "control": "h023-prompt",
+   "reset": "h046-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "matrix:6a6aeac2210fe27bd24702d9",
+   "item_id": "e070",
+   "case_ids": [
+    "e070-c1",
+    "e070-c2",
+    "e070-c3",
+    "e070-p1",
+    "e070-p2"
+   ],
+   "control": "h061-prompt",
+   "reset": "h008-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "github:add_pull_request_review_comment_reaction",
+   "item_id": "e071",
+   "case_ids": [
+    "e071-c1",
+    "e071-c2",
+    "e071-c3",
+    "e071-p1",
+    "e071-p2"
+   ],
+   "control": "h018-prompt",
+   "reset": "h058-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "github:search_code",
+   "item_id": "e072",
+   "case_ids": [
+    "e072-c1",
+    "e072-c2",
+    "e072-c3",
+    "e072-p1",
+    "e072-p2"
+   ],
+   "control": "h030-prompt",
+   "reset": "h085-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:a86af835e36cf54d8997b194",
+   "item_id": "e073",
+   "case_ids": [
+    "e073-c1",
+    "e073-c2",
+    "e073-c3",
+    "e073-p1",
+    "e073-p2"
+   ],
+   "control": "h033-prompt",
+   "reset": "h068-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "github:get_dependabot_alert",
+   "item_id": "e074",
+   "case_ids": [
+    "e074-c1",
+    "e074-c2",
+    "e074-c3",
+    "e074-p1",
+    "e074-p2"
+   ],
+   "control": "h035-prompt",
+   "reset": "h067-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:5b698fef19dd387a82bd8b64",
+   "item_id": "e075",
+   "case_ids": [
+    "e075-c1",
+    "e075-c2",
+    "e075-c3",
+    "e075-p1",
+    "e075-p2"
+   ],
+   "control": "h051-prompt",
+   "reset": "h004-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:2ee4cd3639f4002d1aef2e46",
+   "item_id": "e076",
+   "case_ids": [
+    "e076-c1",
+    "e076-c2",
+    "e076-c3",
+    "e076-p1",
+    "e076-p2"
+   ],
+   "control": "h081-prompt",
+   "reset": "h042-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:bf5f91a3e20f1ebcd2f3344b",
+   "item_id": "e077",
+   "case_ids": [
+    "e077-c1",
+    "e077-c2",
+    "e077-c3",
+    "e077-p1",
+    "e077-p2"
+   ],
+   "control": "h067-prompt",
+   "reset": "h019-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "github:dismiss_notification",
+   "item_id": "e078",
+   "case_ids": [
+    "e078-c1",
+    "e078-c2",
+    "e078-c3",
+    "e078-p1",
+    "e078-p2"
+   ],
+   "control": "h019-prompt",
+   "reset": "h096-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:de3925c22dd9b9174548b93b",
+   "item_id": "e079",
+   "case_ids": [
+    "e079-c1",
+    "e079-c2",
+    "e079-c3",
+    "e079-p1",
+    "e079-p2"
+   ],
+   "control": "h024-prompt",
+   "reset": "h038-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:eb4539015b98d473a49ca7d4",
+   "item_id": "e080",
+   "case_ids": [
+    "e080-c1",
+    "e080-c2",
+    "e080-c3",
+    "e080-p1",
+    "e080-p2"
+   ],
+   "control": "h081-prompt",
+   "reset": "h089-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:a696f3c92e65ddf02083dc32",
+   "item_id": "e081",
+   "case_ids": [
+    "e081-c1",
+    "e081-c2",
+    "e081-c3",
+    "e081-p1",
+    "e081-p2"
+   ],
+   "control": "h048-prompt",
+   "reset": "h058-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:9ded7e6edb5f489a3628ef6a",
+   "item_id": "e082",
+   "case_ids": [
+    "e082-c1",
+    "e082-c2",
+    "e082-c3",
+    "e082-p1",
+    "e082-p2"
+   ],
+   "control": "h050-prompt",
+   "reset": "h018-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "github:mark_all_notifications_read",
+   "item_id": "e083",
+   "case_ids": [
+    "e083-c1",
+    "e083-c2",
+    "e083-c3",
+    "e083-p1",
+    "e083-p2"
+   ],
+   "control": "h046-prompt",
+   "reset": "h084-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:a1876bb811e5cfdb49d8c6a2",
+   "item_id": "e084",
+   "case_ids": [
+    "e084-c1",
+    "e084-c2",
+    "e084-c3",
+    "e084-p1",
+    "e084-p2"
+   ],
+   "control": "h011-prompt",
+   "reset": "h059-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "github:create_or_update_file",
+   "item_id": "e085",
+   "case_ids": [
+    "e085-c1",
+    "e085-c2",
+    "e085-c3",
+    "e085-p1",
+    "e085-p2"
+   ],
+   "control": "h068-prompt",
+   "reset": "h097-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "matrix:698d807f2d90f030958947df",
+   "item_id": "e086",
+   "case_ids": [
+    "e086-c1",
+    "e086-c2",
+    "e086-c3",
+    "e086-p1",
+    "e086-p2"
+   ],
+   "control": "h094-prompt",
+   "reset": "h097-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "matrix:698d48a02d90f030958947cd",
+   "item_id": "e087",
+   "case_ids": [
+    "e087-c1",
+    "e087-c2",
+    "e087-c3",
+    "e087-p1",
+    "e087-p2"
+   ],
+   "control": "h056-prompt",
+   "reset": "h041-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:97b65b8645442cffa4882f57",
+   "item_id": "e088",
+   "case_ids": [
+    "e088-c1",
+    "e088-c2",
+    "e088-c3",
+    "e088-p1",
+    "e088-p2"
+   ],
+   "control": "h063-prompt",
+   "reset": "h046-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "github:update_pull_request",
+   "item_id": "e089",
+   "case_ids": [
+    "e089-c1",
+    "e089-c2",
+    "e089-c3",
+    "e089-p1",
+    "e089-p2"
+   ],
+   "control": "h071-prompt",
+   "reset": "h092-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "github:resolve_review_thread",
+   "item_id": "e090",
+   "case_ids": [
+    "e090-c1",
+    "e090-c2",
+    "e090-c3",
+    "e090-p1",
+    "e090-p2"
+   ],
+   "control": "h035-prompt",
+   "reset": "h059-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "github:create_repository_ruleset",
+   "item_id": "e091",
+   "case_ids": [
+    "e091-c1",
+    "e091-c2",
+    "e091-c3",
+    "e091-p1",
+    "e091-p2"
+   ],
+   "control": "h014-prompt",
+   "reset": "h036-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "github:list_code_scanning_alerts",
+   "item_id": "e092",
+   "case_ids": [
+    "e092-c1",
+    "e092-c2",
+    "e092-c3",
+    "e092-p1",
+    "e092-p2"
+   ],
+   "control": "h084-prompt",
+   "reset": "h038-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:29408c1629e4d1877faaf36c",
+   "item_id": "e093",
+   "case_ids": [
+    "e093-c1",
+    "e093-c2",
+    "e093-c3",
+    "e093-p1",
+    "e093-p2"
+   ],
+   "control": "h041-prompt",
+   "reset": "h048-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "github:hide_issue_comment",
+   "item_id": "e094",
+   "case_ids": [
+    "e094-c1",
+    "e094-c2",
+    "e094-c3",
+    "e094-p1",
+    "e094-p2"
+   ],
+   "control": "h082-prompt",
+   "reset": "h028-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "github:ui_get",
+   "item_id": "e095",
+   "case_ids": [
+    "e095-c1",
+    "e095-c2",
+    "e095-c3",
+    "e095-p1",
+    "e095-p2"
+   ],
+   "control": "h086-prompt",
+   "reset": "h061-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:a8e21cc06a0d0359b6d7176b",
+   "item_id": "e096",
+   "case_ids": [
+    "e096-c1",
+    "e096-c2",
+    "e096-c3",
+    "e096-p1",
+    "e096-p2"
+   ],
+   "control": "h043-prompt",
+   "reset": "h093-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:5ac11e8e71ba81f2c9920799",
+   "item_id": "e097",
+   "case_ids": [
+    "e097-c1",
+    "e097-c2",
+    "e097-c3",
+    "e097-p1",
+    "e097-p2"
+   ],
+   "control": "h039-prompt",
+   "reset": "h002-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "zh_hans_to_en",
+   "target": "skillsbench:40dd16017c9861084250599b",
+   "item_id": "e098",
+   "case_ids": [
+    "e098-c1",
+    "e098-c2",
+    "e098-c3",
+    "e098-p1",
+    "e098-p2"
+   ],
+   "control": "h036-prompt",
+   "reset": "h010-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "code_switch",
+   "target": "skillsbench:cdc55a86f14f49978c04166c",
+   "item_id": "e099",
+   "case_ids": [
+    "e099-c1",
+    "e099-c2",
+    "e099-c3",
+    "e099-p1",
+    "e099-p2"
+   ],
+   "control": "h016-prompt",
+   "reset": "h042-prompt"
+  },
+  {
+   "cohort": "episode",
+   "lane": "en_to_en",
+   "target": "skillsbench:bd580235d2c0204656ac63aa",
+   "item_id": "e100",
+   "case_ids": [
+    "e100-c1",
+    "e100-c2",
+    "e100-c3",
+    "e100-p1",
+    "e100-p2"
+   ],
+   "control": "h021-prompt",
+   "reset": "h054-prompt"
+  }
+ ]
+}

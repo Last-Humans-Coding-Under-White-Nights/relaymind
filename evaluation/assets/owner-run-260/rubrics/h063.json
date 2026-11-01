@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h063",
+ "criteria": [
+  "Retrieves comments from the specified discussion in microsoft/vscode",
+  "Summarizes main arguments on both sides rather than dumping raw comments",
+  "Notes maintainer positions if evident in the comments"
+ ]
+}

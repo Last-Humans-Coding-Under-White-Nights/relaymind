@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h058",
+ "criteria": [
+  "R² decomposition (variance decomposition) method is correctly applied",
+  "Contribution percentages of ad spend, promotion and price are computed",
+  "Calculations use the provided 8 data points",
+  "Results are presented with brief interpretation"
+ ]
+}

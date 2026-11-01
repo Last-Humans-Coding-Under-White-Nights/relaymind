@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h049",
+ "criteria": [
+  "Groups all listed variables into meaningful driver categories",
+  "Category names and brief explanations are provided for each group",
+  "Grouping is scientifically sensible (e.g., water-related, thermal, radiation, atmospheric composition) and covers every variable without omission"
+ ]
+}

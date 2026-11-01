@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h004",
+ "criteria": [
+  "Code uses the custom-view scanning capability of the Scan Kit rather than the default UI",
+  "Flash control, zoom, and tap-to-focus on the custom preview are all implemented",
+  "A complete, runnable ArkTS example is provided"
+ ]
+}

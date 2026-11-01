@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h078",
+ "criteria": [
+  "Output is valid JSON with a clear structure covering segments, compression ratios, and duration statistics",
+  "Compression ratios are computed correctly (e.g., 2.5 and ~2.67) from the given sizes",
+  "Includes overall duration statistics (original 3600s, compressed 3540s)"
+ ]
+}

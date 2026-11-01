@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h066",
+ "criteria": [
+  "Provides an estimated driving duration between the two named cities",
+  "Provides an estimated road distance",
+  "Includes a rough taxi fare estimate with any assumptions stated"
+ ]
+}

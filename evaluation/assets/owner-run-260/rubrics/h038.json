@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h038",
+ "criteria": [
+  "Describes exploring SA/inner_kit/IDL interfaces in the OHOS source tree",
+  "Includes permission analysis for the wrapped system capabilities",
+  "Produces a CLI tool design with ohos- or hms- style command naming",
+  "Mentions build verification and a generated report of the process"
+ ]
+}

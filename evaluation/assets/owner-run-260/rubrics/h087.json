@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h087",
+ "criteria": [
+  "Follows an end-to-end requirement development flow (analysis, design, implementation)",
+  "Delivers both message list and message detail pages per the PRD",
+  "Implementation is HarmonyOS/ArkTS based",
+  "Clarifies ambiguous intent rather than jumping to a single-file fix"
+ ]
+}

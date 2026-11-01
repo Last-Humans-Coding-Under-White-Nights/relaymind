@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h059",
+ "criteria": [
+  "The approach uses a CLI (inference.sh) to run image and video generation models",
+  "Commands for generating 10 cyberpunk city images are provided",
+  "A 5-second video generation command/workflow is included",
+  "No interactive manual tooling is required; commands are runnable"
+ ]
+}

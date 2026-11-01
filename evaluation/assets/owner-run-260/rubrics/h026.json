@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h026",
+ "criteria": [
+  "Shows CLI login and logout commands",
+  "Shows how to query the App ID for an existing app",
+  "Covers uploading the APP/release package",
+  "Covers submitting the app for release review"
+ ]
+}

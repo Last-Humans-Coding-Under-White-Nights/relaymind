@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h023",
+ "criteria": [
+  "Suggests responsive layout approach using breakpoints (e.g., GridRow/GridCol)",
+  "Addresses the fixed 360-width image stretching issue",
+  "Handles component adaptation (layoutWeight, aspectRatio, etc.)",
+  "Considers both phone and tablet/foldable form factors"
+ ]
+}

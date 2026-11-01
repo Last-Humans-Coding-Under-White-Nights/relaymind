@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h036",
+ "criteria": [
+  "Covers creating/converting a project into an atomic service",
+  "Addresses at least package size, privacy hosting, and trusted domain configuration",
+  "Includes code examples for @atomicservice usage and/or silent login",
+  "Mentions the AtomicServiceEnhancedWeb vs ArkWeb choice and submission/compliance tips"
+ ]
+}

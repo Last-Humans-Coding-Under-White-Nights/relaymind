@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h003",
+ "criteria": [
+  "The Native crash log is analyzed using signal, registers, and native stack information",
+  "A single root cause for the crash is identified with supporting evidence chain",
+  "Concrete fix recommendations are provided"
+ ]
+}

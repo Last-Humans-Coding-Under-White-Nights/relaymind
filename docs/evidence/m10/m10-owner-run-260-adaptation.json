@@ -1,0 +1,120 @@
+{
+ "schema_version": 1,
+ "record_id": "m10-owner-run-260-adaptation",
+ "profile": "owner_run",
+ "outcome": "positive",
+ "scope": "adaptation",
+ "labelling": "machine_dual_owner_approved",
+ "annotators": {
+  "machine_a": {
+   "annotator_id": "machine-annotator-a",
+   "model_id": "glm-5.3",
+   "prompt_sha256": "6e25f554849e4503b94cfa2dd0e2b93d2c0ade70d5330f3ceb88e613fca59195",
+   "temperature": 0,
+   "saw_tuning_results": false,
+   "saw_arm_outputs": false
+  },
+  "machine_b": {
+   "annotator_id": "machine-annotator-b",
+   "model_id": "glm-5.3",
+   "prompt_sha256": "8cb15371c9088a2864e3846aa7450631fdd2145af290a1f4b2b8a16ac1491c98",
+   "temperature": 0,
+   "saw_tuning_results": false,
+   "saw_arm_outputs": false
+  },
+  "adjudicator": {
+   "annotator_id": "machine-adjudicator",
+   "model_id": "glm-5.3",
+   "prompt_sha256": "7e7368a0976347ec2a925f6ed2ca83759f73136b5c269069988df996837c4dfa",
+   "temperature": 0,
+   "saw_tuning_results": false,
+   "saw_arm_outputs": false
+  },
+  "family_relation": "same_family"
+ },
+ "agreement": {
+  "paired_cases": 600,
+  "class_agreements": 589,
+  "cohen_kappa": 0.14629414047342054
+ },
+ "prompt_authorship": "machine_drafted_owner_approved",
+ "drafter": {
+  "author_id": "machine-drafter",
+  "model_id": "glm-5.3",
+  "prompt_sha256": "c0dfa7ba980ef674aa13377235208bf85ec3c1db66c35cf6777fca0ef83f6c3b",
+  "temperature": 0
+ },
+ "corpus_review": null,
+ "preregistration": {
+  "commit": "6b1c676b918b3308c434ff85c5e04bd00eea4f9d",
+  "committed_at": "2026-11-01T10:01:54Z"
+ },
+ "runs_started_at": "2026-11-01T10:02:19.891230Z",
+ "machine": {
+  "role": "linux_host",
+  "os": "Linux",
+  "os_build": "Ubuntu 26.04.1 LTS 7.0.0-38-generic",
+  "os_version": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "architecture": "x86_64",
+  "cpu_model": "Intel Xeon Processor (Skylake, IBRS)",
+  "ram_bytes": 11998482432,
+  "hostname_sha256": "bafcdd4933633f2d8c15bec38b13546e4d879cd8b65095a56e713b8336cedd01"
+ },
+ "revisions": {
+  "repository_commit": "6b1c676b918b3308c434ff85c5e04bd00eea4f9d",
+  "adapter_revision": null,
+  "harness_sha256": "ddbe5f39a02adb115d84631b9c23329fce98ad283172201cc8ccb4eeea009fe8"
+ },
+ "operation": null,
+ "subjects": [
+  {
+   "role": "freeze",
+   "path": "owner-run-260/adaptation/docs/3c60d16f1df7d290d0d0ab789a4a4b8631b502e77e20cae5e27e0ba0968d0b18.json",
+   "sha256": "0dee50c935801707d9968076a62e55d4edf75a798471cccb81ef28c99173f46e",
+   "bytes": 315
+  },
+  {
+   "role": "episodes",
+   "path": "owner-run-260/adaptation/docs/6aa9465dd6222ecb6d97fb2d1f0d9294024507231a1a7115ba71d377c460e41b.json",
+   "sha256": "a8a171db946624dd8e7231d9d04d5d4d49aa3c5b4fc6d9ec1605192b9a8a680f",
+   "bytes": 97587
+  },
+  {
+   "role": "corpus_lock",
+   "path": "owner-run-260/adaptation/docs/b5e30d12b04a3d3aabf49aa6c042b20bdffe81b9515c61a1978913aeda5ce37f.json",
+   "sha256": "cc8d9b764b2abd136bd61c000fddad5f16fd78c3baeb3d1eb356086caea07894",
+   "bytes": 171324
+  },
+  {
+   "role": "labels",
+   "path": "owner-run-260/adaptation/docs/d588ee48071c3d927aceba47d01844ac627d664955ad6c2c4badc58eb7fe872d.json",
+   "sha256": "d038766365ecb99c36cad97ebde3d5e752afedf05011d35d58154f0613c096c3",
+   "bytes": 737294
+  },
+  {
+   "role": "environment",
+   "path": "owner-run-260/adaptation/docs/f6f2fb3a71b105f3bb14fcca6751664b36322291db5673a57eb96b4a2fa749c6.json",
+   "sha256": "8ae810d56d7e2cb3817241eec459f37f874f03233003e91e134c8cb084bdfe46",
+   "bytes": 353
+  },
+  {
+   "role": "evidence",
+   "path": "owner-run-260/adaptation/inputs.json",
+   "sha256": "77d077a7119bafe2d07eb28647c4dfc2cf55130b39420dfaf41212de4a754a01",
+   "bytes": 229870
+  },
+  {
+   "role": "report",
+   "path": "owner-run-260/adaptation/report.json",
+   "sha256": "79ba17eeef0de9e7a6306c6aeee269346a0e8e1d373a59b4d53f60f12c0e3409",
+   "bytes": 8994662
+  }
+ ],
+ "review": {
+  "owner_login": "devnull.exile",
+  "pull_request": null,
+  "reviewer_logins": [],
+  "approved_at": null
+ },
+ "recorded_at": "2026-11-01T15:50:59Z"
+}

@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h047",
+ "criteria": [
+  "Response indicates the Copilot agent was assigned to issue #142 in myorg/webapp with intent to produce a pull request",
+  "Uses the preferred assignment tool variant rather than the basic one when describing the action",
+  "No source code changes are attempted manually by the assistant"
+ ]
+}

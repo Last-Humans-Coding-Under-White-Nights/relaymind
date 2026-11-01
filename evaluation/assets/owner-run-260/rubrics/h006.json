@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h006",
+ "criteria": [
+  "System-level causes like low memory and high load are checked and ruled out first",
+  "Thread stacks and related queues are analyzed to pinpoint a single root cause module",
+  "A complete evidence chain plus fix recommendations is presented"
+ ]
+}

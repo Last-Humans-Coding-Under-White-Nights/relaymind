@@ -1,0 +1,68 @@
+{
+ "format": "relaymind.owner_run_token_ledger.v1",
+ "budget": 5000000,
+ "provider_reported_input": 2794094,
+ "provider_reported_output": 342458,
+ "unlogged_estimate": 43000,
+ "total_with_estimate": 3179552,
+ "stages": {
+  "draft": {
+   "input": 60099,
+   "output": 66063,
+   "reasoning": 255,
+   "cached": 16704,
+   "calls": 52
+  },
+  "annotator-a": {
+   "input": 318795,
+   "output": 53401,
+   "reasoning": 22323,
+   "cached": 258240,
+   "calls": 16
+  },
+  "annotator-b": {
+   "input": 318974,
+   "output": 45729,
+   "reasoning": 15738,
+   "cached": 258240,
+   "calls": 16
+  },
+  "adjudicator": {
+   "input": 128605,
+   "output": 22151,
+   "reasoning": 11134,
+   "cached": 85760,
+   "calls": 6
+  },
+  "probe": {
+   "input": 160,
+   "output": 150,
+   "calls": 12
+  },
+  "host_pilot": {
+   "input": 9331,
+   "output": 13,
+   "calls": 1
+  },
+  "host_native": {
+   "input": 989369,
+   "output": 131102,
+   "calls": 15
+  },
+  "host_provider_only": {
+   "input": 953085,
+   "output": 23849,
+   "calls": 15
+  },
+  "host_native_unparsed": {
+   "tokens": 15676,
+   "note": "native rows whose zstd transcript was not parsed; host-reported aggregate usage"
+  }
+ },
+ "notes": [
+  "Counts are provider-reported usage: response usage for drafting, labelling and adjudication; the host transcript per assistant message (input plus cacheRead plus output) for the native arm; gateway TraceEvent usage for the provider arm.",
+  "unlogged_estimate covers drafting responses overwritten by a duplicate concurrent drafting process and one call lost before logging.",
+  "Provider-arm calls that timed out at the gateway report no usage; any tokens they consumed are not counted.",
+  "host_pilot is one smoke turn; the two first-preregistration pilot host rows are inside host_native and host_provider_only."
+ ]
+}

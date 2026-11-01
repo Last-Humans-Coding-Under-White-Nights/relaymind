@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h089",
+ "criteria": [
+  "Plans Model/ViewModel/View layering and directory structure",
+  "Moves business logic out of views into view models",
+  "Addresses the messy state management problem",
+  "Keeps the architecture simple and improves testability"
+ ]
+}

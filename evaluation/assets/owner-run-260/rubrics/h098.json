@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h098",
+ "criteria": [
+  "Report covers threat modeling of the described architecture (frontend, API, DB, Stripe webhooks)",
+  "Includes tenant-isolation bypass risks and JWT crypto implementation guidance",
+  "Addresses webhook signature verification and maps findings to OWASP Top 10",
+  "Findings are concrete and actionable, referencing the given system components"
+ ]
+}

@@ -1,0 +1,21 @@
+{
+ "schema_version": 1,
+ "identity": {
+  "name": "local_e5_adaptation",
+  "version": "1"
+ },
+ "manifest": "multilingual-e5-small-linux-x86_64.manifest.json",
+ "manifest_digest": "420a2fcd5564ade1d81216a8c85947267300d5cc09a1e888d4bcd5361b7b13fa",
+ "representation": {
+  "version": "task_text.v1",
+  "normalization": "NFC",
+  "query_prefix": "query: ",
+  "max_tokens": 512,
+  "overflow": "unavailable"
+ },
+ "similarity": {
+  "version": "exact_cosine.v1",
+  "threshold": 0.9
+ },
+ "ranking_version": "bounded_votes.v1"
+}

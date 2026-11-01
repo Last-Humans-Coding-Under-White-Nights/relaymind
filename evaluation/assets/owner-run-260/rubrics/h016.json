@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h016",
+ "criteria": [
+  "Code implements route planning between origin and destination with time/distance",
+  "Supports batch route calculation for multiple origin-destination pairs",
+  "Uses correct HarmonyOS Map Kit route planning APIs",
+  "Code is complete and runnable in ArkTS"
+ ]
+}

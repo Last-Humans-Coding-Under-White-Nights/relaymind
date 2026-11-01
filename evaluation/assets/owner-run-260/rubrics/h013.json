@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h013",
+ "criteria": [
+  "Parses the given requirement into structured test points",
+  "Produces a complete test case set covering normal, boundary (threshold 90/160, heart rate 45/120), and interruption (DND) scenarios",
+  "Includes coverage analysis linking cases to test points",
+  "Cases are concrete with expected results"
+ ]
+}

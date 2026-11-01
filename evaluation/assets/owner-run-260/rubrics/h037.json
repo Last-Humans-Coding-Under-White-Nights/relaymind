@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h037",
+ "criteria": [
+  "Identifies which parts violate sendable constraints (e.g., Map/Array usage) and explains why",
+  "Produces refactored code with @Sendable-conformant structures and correct sharing strategy",
+  "Splits or restructures classes as needed rather than just adding annotations",
+  "Mentions a compile/verification step for the transformed code"
+ ]
+}

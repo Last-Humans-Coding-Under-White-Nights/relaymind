@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h070",
+ "criteria": [
+  "Explains how to discover tables and columns in an unknown SQLite file",
+  "Describes how to infer relationships (foreign keys / shared keys) between tables",
+  "Produces or clearly outlines JSON output for the database contents"
+ ]
+}

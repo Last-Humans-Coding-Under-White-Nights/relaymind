@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h053",
+ "criteria": [
+  "Correct syzlang resource/type declarations for the ioctl struct (u32 len, u32 pad)",
+  "The ioctl command number 0x40081234 is properly described",
+  "Syntax is valid syzlang (define, type, syscall declaration)",
+  "Brief explanation of each syzlang construct is given"
+ ]
+}

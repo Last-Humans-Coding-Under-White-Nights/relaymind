@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h061",
+ "criteria": [
+  "Defines an explicit source priority (e.g., NVD > GHSA > RedHat or similar) and justifies it",
+  "Returns 8.1 for CVE-2023-1234 per the stated priority",
+  "Returns 9.8 for CVE-2023-5678 and handles the no-conflict single-source case correctly",
+  "Handles CVE-2023-9012 by falling back to the v2 score or clearly flagging the missing v3 score"
+ ]
+}

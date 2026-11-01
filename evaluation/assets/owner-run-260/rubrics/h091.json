@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h091",
+ "criteria": [
+  "Script parses interleaved int16 I/Q correctly and runs a Range FFT per chirp with the given chirp parameters",
+  "Pipeline includes static clutter removal, subject range-bin selection, and phase extraction with unwrapping",
+  "HR and BR are estimated via bandpass filtering plus PSD peak picking, with explicit handling of the HR second harmonic",
+  "Final HR and BR values in BPM are reported along with intermediate-check guidance"
+ ]
+}

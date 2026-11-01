@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h015",
+ "criteria": [
+  "Code implements keyword POI search with nearby retrieval",
+  "Includes place detail query flow triggered by result selection",
+  "Implements geocoding from address string to coordinates",
+  "Uses HarmonyOS local SDK APIs correctly in ArkTS"
+ ]
+}

@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h010",
+ "criteria": [
+  "Module metadata such as oh-package.json5 is checked for completeness and correctness",
+  "ohpm environment is configured and pre-publish validation passes before publishing",
+  "The package is published and a standards-compliant README is generated"
+ ]
+}

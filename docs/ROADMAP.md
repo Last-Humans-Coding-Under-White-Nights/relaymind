@@ -1059,6 +1059,21 @@ A later 0.66 addition for #260 adds `machine_drafted_owner_approved`
 prompts and `machine_dual_owner_approved` labels (two machine annotators and a
 machine adjudicator; the owner approves by PR review). Their verifier support
 is fixture-tested only.
+#260 froze and preregistered its cohort in `evaluation/assets/owner-run-260/`:
+600 machine-drafted held-out cases on the 412-asset development catalog (100
+host tasks, 20 per lane; 100 episodes) with `machine_dual.v1` labels. The
+corpus is `development`, not the 300-asset acceptance catalog, so no report
+over it can be qualified.
+The 100 episodes ran and graded `not_applicable`/provisional: corrected
+paraphrase top-1 51/200 (target 0.90), control loss 0.02, resets 100/100
+(pending record `m10-owner-run-260-adaptation`); the run used an unrecorded
+run-local ONNX manifest, not the preregistered one its report binds, so the
+on-arm numbers are diagnostic only. The paired host run stopped after 14
+tasks: the recommendations arm needs a signed-in person and disabled
+skill/MCP use, 11 of 14 provider_only rows failed (`host_failed`; the cause
+is not in the surviving evidence), and the run's private evidence was lost,
+so it is not graded. A full two-arm host run needs about 13M external tokens. See
+`docs/evidence/m10/owner-run-260/README.md`. No gate has passed.
 #255 has committed one **pending** negative `host_operation` record for the
 pinned 2026.10.7 host: `m10-negative-mcp-use-openclaw-2026.10.7`
 (`exact_route_absent`). No supported route invokes an independent, non-App MCP

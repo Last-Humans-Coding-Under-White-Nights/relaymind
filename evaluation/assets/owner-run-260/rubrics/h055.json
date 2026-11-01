@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h055",
+ "criteria": [
+  "The tool used lists tags from the pydantic/pydantic repository",
+  "The response includes a list of tag names",
+  "The latest version is identified or the tags are ordered so the newest is determinable"
+ ]
+}

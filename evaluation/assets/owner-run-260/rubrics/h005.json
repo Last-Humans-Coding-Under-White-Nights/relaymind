@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h005",
+ "criteria": [
+  "The solution uses the default scanning UI of the Scan Kit",
+  "Scanned result is returned to and filled into the invite code input field",
+  "No custom camera preview implementation is included"
+ ]
+}

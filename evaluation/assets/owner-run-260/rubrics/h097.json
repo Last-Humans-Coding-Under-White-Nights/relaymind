@@ -1,0 +1,10 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h097",
+ "criteria": [
+  "Sets up the dispatch as constrained minimization with the given quadratic cost functions",
+  "Respects all generator min/max limits and the 400 MW power balance",
+  "Reports each generator's optimal setpoint and the total minimum cost",
+  "Result satisfies equal-incremental-cost conditions where limits are not binding"
+ ]
+}

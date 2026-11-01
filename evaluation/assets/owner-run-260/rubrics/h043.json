@@ -1,0 +1,9 @@
+{
+ "format": "relaymind.owner_run_rubric.v1",
+ "task_id": "h043",
+ "criteria": [
+  "Describes a declarative scene/resource index for camera selection across phone/tablet/foldable.",
+  "Covers runtime capability checks (e.g., canIUse or SysCap) with a fallback page.",
+  "Addresses foldable rotation/stride adaptation."
+ ]
+}
