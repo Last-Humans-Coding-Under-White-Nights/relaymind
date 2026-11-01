@@ -163,6 +163,8 @@ def test_production_source_observer_publishes_cache_and_actual_job_events(tmp_pa
             validate_job_event(e)
         from test_asset_sources import skill
 
+        # RM36/AC27: keep the two jobs ordered by their recorded timestamps.
+        runs.clock.advance(0.001)
         skill(tmp_path / "source")
         await worker.rescan("example")
         assert service.readiness()["state"] == "ready"
@@ -248,8 +250,9 @@ def test_launcher_wires_recommendations_recovery_and_catalog_worker(tmp_path):
     """RM36/AC27: production app consumes the separate service and source observer."""
     from gateway_helpers import ScriptedAdapter
     from launcher_helpers import write_config
+    from recommendation_helpers import build_app
     from relaymind.assets.settings import AssetSettings, RecommendationSettings, SourceConfig
-    from relaymind.launcher import build_app, load_config
+    from relaymind.launcher import load_config
     from test_asset_sources import skill
 
     source = tmp_path / "skills"
