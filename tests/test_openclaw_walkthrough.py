@@ -372,9 +372,9 @@ def test_record_writes_an_incomplete_manifest_when_a_child_fails(
     def fake_run(command, timeout):
         if outcome == "timeout":
             raise subprocess.TimeoutExpired(command, timeout)
-        return subprocess.CompletedProcess(command, 2)
+        return 2
 
-    monkeypatch.setattr(rec.subprocess, "run", fake_run)
+    monkeypatch.setattr(rec, "run_child", fake_run)
     tarball = tmp_path / "plugin.tgz"
     tarball.write_bytes(b"tgz")
     argv = ["record", "--tarball", str(tarball), "--work-root", str(tmp_path / "work")]
@@ -385,6 +385,95 @@ def test_record_writes_an_incomplete_manifest_when_a_child_fails(
     assert [e["language"] for e in manifest["languages"]] == list(rec.LANGUAGES)
     assert {e["reason"] for e in manifest["languages"]} == {reason}
     assert {e["exit_code"] for e in manifest["languages"]} == {None if outcome == "timeout" else 2}
+
+
+# --- child process group (PR #262 adversarial review) -------------------------
+
+# A child that starts a persistent grandchild (as the harness starts the gateway
+# and proxy), records its PID, then hangs. With ``ignore``, both ignore SIGTERM.
+HANGING_CHILD = r"""
+import signal, subprocess, sys, time
+if sys.argv[2] == "ignore":
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+grand = subprocess.Popen([sys.executable, "-c",
+    "import signal, sys, time\n"
+    "if sys.argv[1] == 'ignore': signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+    "time.sleep(600)", sys.argv[2]])
+open(sys.argv[1], "w").write(str(grand.pid))
+time.sleep(600)
+"""
+
+
+def _alive(pid: int) -> bool:
+    import os
+    import time
+
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        time.sleep(0.05)  # An orphan may be reaped by init a moment later.
+    return True
+
+
+def _hanging(tmp_path, mode):
+    import sys
+
+    script = tmp_path / "hanging_child.py"
+    script.write_text(HANGING_CHILD, encoding="utf-8")
+    pid_file = tmp_path / "grandchild.pid"
+    return [sys.executable, str(script), str(pid_file), mode], pid_file
+
+
+def _wait_for(path):
+    import time
+
+    deadline = time.monotonic() + 10
+    while not (path.exists() and path.read_text()):
+        assert time.monotonic() < deadline
+        time.sleep(0.05)
+    return int(path.read_text())
+
+
+@pytest.mark.skipif(__import__("sys").platform == "win32", reason="POSIX process groups")
+@pytest.mark.parametrize("mode", ["graceful", "ignore"])
+def test_a_child_timeout_stops_the_whole_process_group(rec, tmp_path, mode):
+    """A timed-out child leaves no gateway or proxy running behind it."""
+    import subprocess
+
+    command, pid_file = _hanging(tmp_path, mode)
+    with pytest.raises(subprocess.TimeoutExpired):
+        rec.run_child(command, timeout=2, grace=0.5)
+    grandchild = int(pid_file.read_text())
+    assert not _alive(grandchild)
+
+
+@pytest.mark.skipif(__import__("sys").platform == "win32", reason="POSIX process groups")
+def test_an_interrupted_record_stops_the_whole_process_group(rec, tmp_path, monkeypatch):
+    import subprocess
+
+    command, pid_file = _hanging(tmp_path, "graceful")
+    real_wait = subprocess.Popen.wait
+
+    def wait(self, timeout=None):
+        if timeout is not None and timeout > 1:  # The child's own wait, not the stop.
+            _wait_for(pid_file)
+            raise KeyboardInterrupt
+        return real_wait(self, timeout=timeout)
+
+    monkeypatch.setattr(subprocess.Popen, "wait", wait)
+    with pytest.raises(KeyboardInterrupt):
+        rec.run_child(command, timeout=60, grace=0.5)
+    monkeypatch.undo()
+    assert not _alive(int(pid_file.read_text()))
+
+
+def test_a_child_that_finishes_returns_its_exit_code(rec):
+    import sys
+
+    assert rec.run_child([sys.executable, "-c", "raise SystemExit(4)"], timeout=30) == 4
 
 
 # --- second review follow-ups (PR #262) ---------------------------------------
@@ -472,3 +561,98 @@ def test_exact_skill_selection_is_localized_and_shot(rec, tmp_path, monkeypatch)
     assert {shot["step"] for shot in shooter.shots} == {"select_skill"}
     assert [shot["label"] for shot in shooter.shots] == ["供下一轮使用", "settled"]
     assert rec.HERE in instance.source_paths()
+
+
+# --- review follow-ups, round 2 (PR #262) -------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("pattern", "sample", "expected"),
+    [
+        ("Choose 1", "Choose 1", "选择 1"),
+        (r"Choose \d+", "Choose 12", "选择 12"),
+        ("Correct to 1", "Correct to 1", "纠正为 1"),
+        (r"Correct to [0-9]+", "Correct to 3", "纠正为 3"),
+    ],
+)
+def test_numbered_regex_names_translate_like_numbered_strings(rec, pattern, sample, expected):
+    """A regex for a numbered button translates as translate() does for its string."""
+    import re
+
+    compiled = re.compile(pattern, re.IGNORECASE)
+    assert compiled.fullmatch(sample) and rec.translate(sample, "zh-CN") == expected
+    translated = rec.translate(compiled, "zh-CN")
+    assert translated.fullmatch(expected) and translated.flags & re.IGNORECASE
+    assert not translated.fullmatch(expected.split(" ")[0] + " x")
+
+
+@pytest.mark.parametrize("pattern", [r"Choose .*", r"Choose \d+|Delete feedback", r"Choose (x)"])
+def test_numbered_regex_names_beyond_the_number_are_unknown(rec, pattern):
+    import re
+
+    with pytest.raises(ValueError, match="walkthrough_label_unknown"):
+        rec.translate(re.compile(pattern), "zh-CN")
+
+
+def test_a_playwright_screenshot_timeout_is_not_swallowed(rec, tmp_path):
+    """Playwright's TimeoutError is not the builtin one; the deadline still propagates."""
+    playwright = pytest.importorskip("playwright.sync_api")
+
+    class TimingOutPage:
+        def screenshot(self, **kwargs):
+            raise playwright.TimeoutError("screenshot timed out")
+
+    shooter = rec.Shooter(tmp_path)
+    shooter.step = "open"
+    with pytest.raises(playwright.TimeoutError):
+        shooter.shoot(TimingOutPage(), "label")
+    assert shooter.shots == []
+
+
+@pytest.mark.parametrize("existing", ["work", "out"])
+def test_record_refuses_an_existing_directory_with_a_structured_outcome(
+    rec, tmp_path, monkeypatch, capsys, existing
+):
+    monkeypatch.setattr(rec, "run_child", lambda command, timeout: pytest.fail("ran"))
+    (tmp_path / existing).mkdir()
+    tarball = tmp_path / "plugin.tgz"
+    tarball.write_bytes(b"tgz")
+    argv = ["record", "--tarball", str(tarball), "--work-root", str(tmp_path / "work")]
+    argv += ["--out-dir", str(tmp_path / "out")]
+    assert rec.main(argv) == 2
+    outcome = json.loads(capsys.readouterr().out)
+    reason = "work_root_exists" if existing == "work" else "out_dir_exists"
+    assert outcome == dict(complete=False, reason=reason, manifest=None)
+    # Nothing is created next to the refused directory.
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted([existing, "plugin.tgz"])
+
+
+def test_child_restores_every_patched_harness_attribute(rec, tmp_path, monkeypatch):
+    import argparse
+
+    from playwright.sync_api import Browser
+
+    originals = (rec.ORDINARY.run_ui, rec.ORDINARY.OrdinaryComposition, Browser.new_context)
+    seen = []
+
+    def fake_main(argv):
+        seen.append((rec.ORDINARY.run_ui, rec.ORDINARY.OrdinaryComposition))
+        raise RuntimeError("harness failed")
+
+    monkeypatch.setattr(rec.ORDINARY, "main", fake_main)
+    media = tmp_path / "media"
+    media.mkdir()
+    args = argparse.Namespace(
+        language="zh-CN",
+        tarball=tmp_path / "plugin.tgz",
+        work_dir=tmp_path / "work",
+        out=media / "capture.json",
+        media=media,
+    )
+    with pytest.raises(RuntimeError, match="harness failed"):
+        rec.child(args)
+    ((run_ui, composition),) = seen
+    assert run_ui is not originals[0] and composition is not originals[1]
+    assert (rec.ORDINARY.run_ui, rec.ORDINARY.OrdinaryComposition, Browser.new_context) == (
+        originals
+    )

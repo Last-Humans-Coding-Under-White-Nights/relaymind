@@ -90,6 +90,42 @@ it("drops only a torn final record, which was never acknowledged", () => {
   expect(createFileUseLedger(file).lookup("k3")).toBeDefined();
 });
 
+// Windows CI: a handle opened for appending holds append access only, and
+// changing the file length needs write access, so ftruncate through it fails
+// (EPERM). The double refuses exactly that, as Windows does.
+it("cuts a torn final record without truncating through an append handle", () => {
+  const file = path();
+  const first = createFileUseLedger(file);
+  first.claim("k1", D, base);
+  first.close();
+  appendFileSync(file, '{"t":"claim","k":"k2"');
+  const appendHandles = new Set<number>();
+  const io: LedgerIo = {
+    ...nodeLedgerIo,
+    openSync: ((...args: Parameters<typeof fs.openSync>) => {
+      const handle = fs.openSync(...args);
+      if (typeof args[1] === "string" && args[1].startsWith("a"))
+        appendHandles.add(handle);
+      else appendHandles.delete(handle);
+      return handle;
+    }) as typeof fs.openSync,
+    ftruncateSync: ((handle: number, length?: number) => {
+      if (appendHandles.has(handle))
+        throw Object.assign(Error("EPERM: operation not permitted"), {
+          code: "EPERM",
+        });
+      fs.ftruncateSync(handle, length);
+    }) as typeof fs.ftruncateSync,
+  };
+  const reopened = createFileUseLedger(file, {}, io);
+  expect(reopened.lookup("k1")).toBeDefined();
+  expect(reopened.lookup("k2")).toBeUndefined();
+  reopened.claim("k3", D, base);
+  reopened.close();
+  expect(readFileSync(file, "utf8").endsWith("\n")).toBe(true);
+  expect(createFileUseLedger(file).lookup("k3")).toBeDefined();
+});
+
 it("fails closed on every operation when a complete record is unreadable", () => {
   const file = path();
   writeFileSync(file, "not json\n");

@@ -33,9 +33,12 @@ Usage (Linux x86-64 with the person-ingress prerequisites)::
 import hashlib
 import importlib.util
 import json
+import os
 import re
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path, PurePosixPath
 
 HERE = Path(__file__).resolve()
@@ -46,6 +49,7 @@ LANGUAGES = ("en-US", "zh-CN")
 NAVIGATION = {"en-US": "RelayMind recommendations", "zh-CN": "RelayMind 推荐"}
 VIDEO_SIZE = {"width": 1280, "height": 800}
 CHILD_SECONDS = 900
+STOP_GRACE_SECONDS = 15
 UI_STEPS = ("open", "recommend", "choose", "correct", "inspect", "delete", "reset")
 BLOCKED = {
     "skill_use": dict(reason="skill_loaded_use_unqualified", references=["spec 7.6.1", "#239"]),
@@ -93,15 +97,40 @@ _ENGLISH, _CHINESE = control_ui_labels()
 _NUMBERED = {"choose": re.compile(r"Choose (\d+)"), "correction": re.compile(r"Correct to (\d+)")}
 
 
+# The number part of a numbered-label regex: digits, digit classes and quantifiers only.
+_NUMBER_PART = re.compile(r"(?:\\d|[0-9\[\]+*?{},-])+")
+_NUMBER_SAMPLES = range(1, 100)
+
+
+def _numbered_families(name: re.Pattern) -> list:
+    """The numbered labels (``Choose N``, ``Correct to N``) a regex names for some N."""
+    return [
+        key
+        for key in _NUMBERED
+        if any(name.fullmatch(f"{_ENGLISH[key]} {n}") for n in _NUMBER_SAMPLES)
+    ]
+
+
 def _translate_pattern(name: re.Pattern, language: str) -> re.Pattern:
-    """A regex name translates only when it matches exactly one plugin label."""
+    """A regex name translates only when it names exactly one plugin label.
+
+    A label is one fixed label or one numbered label family, as in translate().
+    A numbered regex keeps its number part, which may only constrain the number.
+    """
     if not isinstance(name.pattern, str):
         raise ValueError("walkthrough_label_unknown")
     labels = {NAVIGATION["en-US"], *_ENGLISH.values()}
     matches = [label for label in labels if name.fullmatch(label)]
-    if len(matches) != 1:
+    families = _numbered_families(name)
+    if len(matches) + len(families) != 1:
         raise ValueError("walkthrough_label_unknown")
-    return re.compile(re.escape(translate(matches[0], language)), name.flags)
+    if matches:
+        return re.compile(re.escape(translate(matches[0], language)), name.flags)
+    prefix = _ENGLISH[families[0]] + " "
+    number = name.pattern[len(prefix) :]
+    if not name.pattern.startswith(prefix) or not _NUMBER_PART.fullmatch(number):
+        raise ValueError("walkthrough_label_unknown")
+    return re.compile(re.escape(_CHINESE[families[0]] + " ") + number, name.flags)
 
 
 def translate(name, language: str):
@@ -142,6 +171,15 @@ def context_defaults(options: dict, locale: str, video_dir: Path) -> dict:
 # --- screenshots and the localized page ---------------------------------------------
 
 
+def _timeout_errors() -> tuple:
+    """The builtin and Playwright timeouts; Playwright's is not a builtin subclass."""
+    try:
+        from playwright.sync_api import TimeoutError as PlaywrightTimeout
+    except ImportError:  # Unit tests may run without Playwright installed.
+        return (TimeoutError,)
+    return (TimeoutError, PlaywrightTimeout)
+
+
 class Shooter:
     """Screenshots per walkthrough step under ``root/screens``."""
 
@@ -157,9 +195,9 @@ class Shooter:
         name = f"screens/{len(self.shots):04d}-{self.step}.png"
         try:
             page.screenshot(path=str(self.root / name), full_page=True)
-        except TimeoutError:
-            raise  # The harness's overall deadline is never swallowed.
-        except Exception:
+        except Exception as error:
+            if isinstance(error, _timeout_errors()):
+                raise  # The harness's overall deadline is never swallowed.
             return  # A missing screenshot leaves the step unrecorded.
         self.shots.append(dict(step=self.step, file=name, label=label))
 
@@ -488,6 +526,54 @@ def build_manifest(out: Path, outcomes: dict, *, predicates: dict | None = None)
     )
 
 
+# --- child processes ------------------------------------------------------------------
+
+
+def _signal_group(group: int, signum: int) -> bool:
+    """Send ``signum`` to the process group; False once the group is empty."""
+    try:
+        os.killpg(group, signum)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # Some kernels refuse a group whose members are all exiting; nothing to stop.
+        return False
+    return True
+
+
+def _stop_group(process: subprocess.Popen, grace: float) -> None:
+    """Stop the child's whole process group: SIGTERM, a bounded wait, then SIGKILL.
+
+    The person-ingress harness starts a gateway and a proxy and stops them in a
+    ``finally`` block; SIGTERM lets it do so, and SIGKILL leaves nothing behind
+    if it cannot within ``grace`` seconds.
+    """
+    group = process.pid
+    deadline = time.monotonic() + grace
+    if _signal_group(group, signal.SIGTERM):
+        while time.monotonic() < deadline:
+            if process.poll() is not None and not _signal_group(group, 0):
+                break
+            time.sleep(0.05)
+    _signal_group(group, signal.SIGKILL)
+    process.wait()
+
+
+def run_child(command: list[str], timeout: float, grace: float = STOP_GRACE_SECONDS) -> int:
+    """Run one language in its own session and return its exit code.
+
+    On timeout (``subprocess.TimeoutExpired``) or interruption the whole
+    process group is stopped before the exception propagates, so no gateway or
+    proxy the harness started outlives it.
+    """
+    process = subprocess.Popen(command, start_new_session=True)
+    try:
+        return process.wait(timeout=timeout)
+    except BaseException:
+        _stop_group(process, grace)
+        raise
+
+
 # --- commands -------------------------------------------------------------------------
 
 
@@ -504,10 +590,11 @@ def child(args) -> int:
         return original(self, **context_defaults(options, args.language, video))
 
     shooter = Shooter(media)
+    run_ui, composition = ORDINARY.run_ui, ORDINARY.OrdinaryComposition
     Browser.new_context = new_context
-    ORDINARY.run_ui = localized_run_ui(args.language, shooter)
-    ORDINARY.OrdinaryComposition = walkthrough_composition(args.language, shooter)
     try:
+        ORDINARY.run_ui = localized_run_ui(args.language, shooter)
+        ORDINARY.OrdinaryComposition = walkthrough_composition(args.language, shooter)
         return ORDINARY.main(
             [
                 "--tarball",
@@ -521,12 +608,29 @@ def child(args) -> int:
     finally:
         shooter.save()
         Browser.new_context = original
+        ORDINARY.run_ui, ORDINARY.OrdinaryComposition = run_ui, composition
+
+
+def _refused(reason: str) -> int:
+    """The record outcome line for a run that never started: incomplete, exit 2."""
+    print(json.dumps(dict(complete=False, reason=reason, manifest=None)))
+    return 2
 
 
 def record(args) -> int:
     work_root, out = args.work_root.absolute(), args.out_dir.absolute()
-    work_root.mkdir(mode=0o700, parents=True, exist_ok=False)
-    out.mkdir(mode=0o700, parents=True, exist_ok=False)
+    # Both must be new; an existing one is refused before either is created.
+    for path, reason in ((work_root, "work_root_exists"), (out, "out_dir_exists")):
+        if path.exists() or path.is_symlink():
+            return _refused(reason)
+    try:
+        work_root.mkdir(mode=0o700, parents=True, exist_ok=False)
+    except FileExistsError:
+        return _refused("work_root_exists")
+    try:
+        out.mkdir(mode=0o700, parents=True, exist_ok=False)
+    except FileExistsError:
+        return _refused("out_dir_exists")
     outcomes = {}
     for language in args.languages:
         media = out / language
@@ -536,7 +640,7 @@ def record(args) -> int:
         command += [str(work_root / language), "--out", str(media / "capture.json")]
         command += ["--media", str(media)]
         try:
-            code = subprocess.run(command, timeout=CHILD_SECONDS).returncode
+            code = run_child(command, CHILD_SECONDS)
             reason = None if code == 0 else "child_failed"
         except subprocess.TimeoutExpired:
             code, reason = None, "child_timeout"
