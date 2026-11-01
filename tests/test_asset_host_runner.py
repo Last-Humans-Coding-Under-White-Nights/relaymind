@@ -890,3 +890,26 @@ def test_a_failed_lock_write_leaves_no_stale_lock(tmp_path, monkeypatch):
     assert not (tmp_path / "run.jsonl.lock").exists()
     with RunJournal(journal, header):
         pass
+
+
+@pytest.mark.parametrize(
+    "usage",
+    [
+        "lots",
+        [1, 2],
+        3,
+        dict(USAGE, input_tokens="100"),
+        dict(USAGE, output_tokens=2.5),
+        dict(USAGE, cached_tokens=True),
+    ],
+)
+@pytest.mark.parametrize("error", [None, dict(code="provider_unreachable", message="x")])
+def test_a_malformed_usage_is_rejected_by_trace_validation(usage, error):
+    """A usage that is not an object of integer or null counts never reaches the
+    attempt mapping: TraceEvent validation rejects it as an invalid trace event,
+    the same ValueError as any other invalid event, never an AttributeError."""
+    end = finished(2, "c1", None, error=error)
+    end["payload"]["usage"] = usage
+    events = [started(1, "c1"), end]
+    with pytest.raises(ValueError, match="usage"):
+        attempts_from_trace(events, provider="p", attempt_prefix="a-", evidence_id="t")
