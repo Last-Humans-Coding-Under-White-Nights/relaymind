@@ -35,7 +35,7 @@ export function installNativeSocketObserver(target = window, extraMethods = []) 
           if (value && turns.has(value.runId) && turns.get(value.runId) === value.sessionKey &&
               ["final", "error", "aborted"].includes(value.state)) {
             const events = terminalEvents.get(value.runId) ?? [];
-            if (events.length < 2 && event.data.length <= 1048576) events.push({...value, socket_id: socketId});
+            if (events.length < 2 && new TextEncoder().encode(event.data).length <= 1048576) events.push({...value, socket_id: socketId});
             terminalEvents.set(value.runId, events);
           }
           return;
@@ -56,7 +56,7 @@ export function installNativeSocketObserver(target = window, extraMethods = []) 
     if (used.has(id)) throw new Error("duplicate_native_request");
     used.add(id);
     if (method === "chat.send") {
-      if (typeof params.idempotencyKey !== "string" || typeof params.sessionKey !== "string" || turns.size >= 4) throw new Error("native_turn_bound");
+      if (typeof params?.idempotencyKey !== "string" || typeof params?.sessionKey !== "string" || turns.size >= 4) throw new Error("native_turn_bound");
       turns.set(params.idempotencyKey, params.sessionKey);
     }
     const promise = new Promise((resolve, reject) => {
