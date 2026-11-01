@@ -211,6 +211,16 @@ def _answer(row: dict, assets: Mapping) -> None:
         raise AssetCorpusError("invalid_judgment_class")
 
 
+def pair_checks(left: Mapping, right: Mapping) -> tuple[bool, bool, bool, bool]:
+    """Class, acceptable-set, language and independence agreement of one pair."""
+    return (
+        left["class"] == right["class"],
+        set(left["acceptable_asset_ids"]) == set(right["acceptable_asset_ids"]),
+        left["language_valid"] == right["language_valid"],
+        left["independent_case"] == right["independent_case"],
+    )
+
+
 def agreement(case_map: Mapping, rows: Mapping) -> dict:
     groups = {
         lane: {"lane": lane, **dict.fromkeys(COUNTS, 0), "jaccard_sum": 0.0}
@@ -219,12 +229,7 @@ def agreement(case_map: Mapping, rows: Mapping) -> dict:
     for case_id, case in case_map.items():
         left, right = rows[case_id]
         a, b = set(left["acceptable_asset_ids"]), set(right["acceptable_asset_ids"])
-        checks = (
-            left["class"] == right["class"],
-            a == b,
-            left["language_valid"] == right["language_valid"],
-            left["independent_case"] == right["independent_case"],
-        )
+        checks = pair_checks(left, right)
         for lane in ("all", case["lane"]):
             group = groups[lane]
             group["paired_cases"] += 1

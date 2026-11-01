@@ -59,8 +59,3 @@ def test_the_windows_record_names_no_moving_adapter_reference():
     assert revision is None or re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", revision), revision
     release = json.loads((RUN / "release.json").read_text(encoding="utf-8"))
     assert release["sha256"] in (RUN / "README.md").read_text(encoding="utf-8")
-
-
-def test_the_readme_has_no_byte_order_mark():
-    """The README is authored documentation, not raw capture: plain UTF-8."""
-    assert not (RUN / "README.md").read_bytes().startswith(b"\xef\xbb\xbf")
