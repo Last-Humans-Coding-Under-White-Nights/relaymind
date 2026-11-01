@@ -7,17 +7,25 @@ on CI or a developer machine are never the macOS/native Windows acceptance.
 """
 
 import asyncio
+import contextlib
 import importlib.util
 import json
 import os
 import shutil
 import sys
 import time
+import tomllib
 from pathlib import Path
+from types import SimpleNamespace
 
+import httpx
 import pytest
 
+import relaymind.evaluation.asset_operations_run as kit
+from relaymind.evaluation.asset_operations import StartupSample
 from relaymind.evaluation.asset_operations_run import (
+    _config,
+    _wait_ready,
     generate_catalog,
     platform_report,
     rss_bytes,
@@ -79,7 +87,6 @@ def test_memory_of_a_missing_process_is_unknown():
 
 def test_memory_of_undecodable_process_output_is_unknown(monkeypatch):
     """RM38/AC29: unreadable process output yields no sample instead of a crash."""
-    import relaymind.evaluation.asset_operations_run as kit
 
     def undecodable(*args, **kwargs):
         raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
@@ -159,6 +166,19 @@ def test_the_kit_owns_the_server_and_source_tables(tmp_path):
         asyncio.run(go())
 
 
+def _empty_base(tmp_path) -> Path:
+    base = tmp_path / "base.toml"
+    base.write_text("")
+    return base
+
+
+def _skip_readiness(monkeypatch):
+    async def ready(client, deadline, process):
+        return None
+
+    monkeypatch.setattr(kit, "_wait_ready", ready)
+
+
 def _fake_python(tmp_path, body: str) -> Path:
     script = tmp_path / "fake_gateway.py"
     script.write_text(body)
@@ -166,8 +186,6 @@ def _fake_python(tmp_path, body: str) -> Path:
 
 
 def _patch_child(monkeypatch, script: Path):
-    import relaymind.evaluation.asset_operations_run as kit
-
     monkeypatch.setattr(kit, "_child_argv", lambda config: [sys.executable, str(script)])
 
 
@@ -198,12 +216,6 @@ class _ReadinessClient:
 
 def test_readiness_tolerates_non_mapping_and_undecodable_bodies():
     """RM38/AC29: a non-dict or undecodable readiness body is retried, not fatal."""
-    from types import SimpleNamespace
-
-    import httpx
-
-    from relaymind.evaluation.asset_operations_run import _wait_ready
-
     client = _ReadinessClient(
         [
             [],
@@ -220,10 +232,6 @@ def test_readiness_tolerates_non_mapping_and_undecodable_bodies():
 
 def test_readiness_keeps_retrying_a_non_mapping_body_until_the_deadline():
     """RM38/AC29: a non-mapping body never escapes as AttributeError."""
-    from types import SimpleNamespace
-
-    from relaymind.evaluation.asset_operations_run import _wait_ready
-
     client = _ReadinessClient([[]] * 100)
     with pytest.raises(TimeoutError, match="gateway_not_ready"):
         asyncio.run(_wait_ready(client, time.monotonic() + 0.1, SimpleNamespace(returncode=None)))
@@ -232,7 +240,6 @@ def test_readiness_keeps_retrying_a_non_mapping_body_until_the_deadline():
 
 def test_a_process_that_ignores_kill_is_not_awaited_forever(monkeypatch, capsys):
     """RM38/AC29: a hung gateway cannot block shutdown after the grace period."""
-    import relaymind.evaluation.asset_operations_run as kit
 
     class HungProcess:
         returncode = None
@@ -257,8 +264,7 @@ def test_a_process_that_ignores_kill_is_not_awaited_forever(monkeypatch, capsys)
 def test_a_silent_child_cannot_outlast_the_token_deadline(tmp_path, monkeypatch):
     script = _fake_python(tmp_path, "import time\ntime.sleep(30)\n")
     _patch_child(monkeypatch, script)
-    base = tmp_path / "base.toml"
-    base.write_text("")
+    base = _empty_base(tmp_path)
 
     async def go():
         async with serve(tmp_path / "w", tmp_path, base_config=base, timeout=0.5):
@@ -274,8 +280,7 @@ def test_a_gateway_that_exits_after_the_token_fails_before_the_deadline(tmp_path
     """RM38/AC29: a crashed child is reported at once, not after the full timeout."""
     script = _fake_python(tmp_path, "print('Application token: t', flush=True)\n")
     _patch_child(monkeypatch, script)
-    base = tmp_path / "base.toml"
-    base.write_text("")
+    base = _empty_base(tmp_path)
 
     async def go():
         async with serve(tmp_path / "w", tmp_path, base_config=base, timeout=60):
@@ -289,8 +294,6 @@ def test_a_gateway_that_exits_after_the_token_fails_before_the_deadline(tmp_path
 
 @pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM handling is POSIX only")
 def test_cancellation_during_shutdown_still_kills_and_reaps(tmp_path, monkeypatch):
-    import relaymind.evaluation.asset_operations_run as kit
-
     pid_file = tmp_path / "pid"
     script = _fake_python(
         tmp_path,
@@ -303,12 +306,8 @@ def test_cancellation_during_shutdown_still_kills_and_reaps(tmp_path, monkeypatc
     _patch_child(monkeypatch, script)
     monkeypatch.setattr(kit, "_GRACE_SECONDS", 1.0)
 
-    async def ready(client, deadline, process):
-        return None
-
-    monkeypatch.setattr(kit, "_wait_ready", ready)
-    base = tmp_path / "base.toml"
-    base.write_text("")
+    _skip_readiness(monkeypatch)
+    base = _empty_base(tmp_path)
 
     async def go():
         async def body():
@@ -318,9 +317,8 @@ def test_cancellation_during_shutdown_still_kills_and_reaps(tmp_path, monkeypatc
         task = asyncio.create_task(body())
         while not pid_file.exists() or not pid_file.read_text():
             await asyncio.sleep(0.01)
-        await asyncio.sleep(0.2)
         # Let the body exit and cleanup begin, then cancel during the grace wait.
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.5)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
@@ -443,17 +441,21 @@ def _platform_bundle(tmp_path, environment=None):
     return bundle
 
 
-def test_the_platform_command_refuses_a_platform_outside_the_environment_lock(tmp_path):
-    bundle = _platform_bundle(tmp_path, dict(ENVIRONMENT, os="elsewhere"))
-    code = _script().main(
+def _platform_main(tmp_path, bundle, out) -> int:
+    return _script().main(
         [
             "platform",
             "--install-check", str(tmp_path / "install.json"),
             "--inputs", str(bundle.root / "inputs.json"),
             "--platform", str(tmp_path / "environment.json"),
-            "--output", str(tmp_path / "out.json"),
+            "--output", str(out),
         ]
     )  # fmt: skip
+
+
+def test_the_platform_command_refuses_a_platform_outside_the_environment_lock(tmp_path):
+    bundle = _platform_bundle(tmp_path, dict(ENVIRONMENT, os="elsewhere"))
+    code = _platform_main(tmp_path, bundle, tmp_path / "out.json")
     assert code == 2 and not (tmp_path / "out.json").exists()
 
 
@@ -463,15 +465,7 @@ def test_the_platform_command_produces_a_report_the_grader_accepts(tmp_path):
 
     bundle = _platform_bundle(tmp_path)
     out = tmp_path / "platform.json"
-    code = _script().main(
-        [
-            "platform",
-            "--install-check", str(tmp_path / "install.json"),
-            "--inputs", str(bundle.root / "inputs.json"),
-            "--platform", str(tmp_path / "environment.json"),
-            "--output", str(out),
-        ]
-    )  # fmt: skip
+    code = _platform_main(tmp_path, bundle, out)
     assert code == 0
     report = json.loads(out.read_text())
     code, result = _grade(bundle, "grade-platform", report)
@@ -486,15 +480,7 @@ def test_the_platform_command_refuses_an_unregistered_record(tmp_path):
     bundle.write_manifest()
     write(tmp_path / "install.json", install_check())
     (tmp_path / "environment.json").write_text(json.dumps(LOCKED))
-    code = _script().main(
-        [
-            "platform",
-            "--install-check", str(tmp_path / "install.json"),
-            "--inputs", str(bundle.root / "inputs.json"),
-            "--platform", str(tmp_path / "environment.json"),
-            "--output", str(tmp_path / "out.json"),
-        ]
-    )  # fmt: skip
+    code = _platform_main(tmp_path, bundle, tmp_path / "out.json")
     assert code == 2 and not (tmp_path / "out.json").exists()
 
 
@@ -502,15 +488,7 @@ def test_the_platform_command_refuses_a_non_object_platform_document(tmp_path, c
     """RM39/AC37: a JSON array is not a platform mapping and exits 2, not a traceback."""
     bundle = _platform_bundle(tmp_path)
     (tmp_path / "environment.json").write_text(json.dumps([]))
-    code = _script().main(
-        [
-            "platform",
-            "--install-check", str(tmp_path / "install.json"),
-            "--inputs", str(bundle.root / "inputs.json"),
-            "--platform", str(tmp_path / "environment.json"),
-            "--output", str(tmp_path / "out.json"),
-        ]
-    )  # fmt: skip
+    code = _platform_main(tmp_path, bundle, tmp_path / "out.json")
     assert code == 2 and not (tmp_path / "out.json").exists()
     assert "platform_invalid" in capsys.readouterr().err
 
@@ -519,15 +497,7 @@ def test_the_platform_command_creates_the_output_directory(tmp_path):
     """RM39/AC37: an output path in a new directory is written, not crashed on."""
     bundle = _platform_bundle(tmp_path)
     out = tmp_path / "reports" / "platform.json"
-    code = _script().main(
-        [
-            "platform",
-            "--install-check", str(tmp_path / "install.json"),
-            "--inputs", str(bundle.root / "inputs.json"),
-            "--platform", str(tmp_path / "environment.json"),
-            "--output", str(out),
-        ]
-    )  # fmt: skip
+    code = _platform_main(tmp_path, bundle, out)
     assert code == 0 and out.is_file()
 
 
@@ -536,15 +506,7 @@ def test_a_failed_output_write_exits_two(tmp_path, capsys):
     bundle = _platform_bundle(tmp_path)
     out = tmp_path / "out"
     out.mkdir()
-    code = _script().main(
-        [
-            "platform",
-            "--install-check", str(tmp_path / "install.json"),
-            "--inputs", str(bundle.root / "inputs.json"),
-            "--platform", str(tmp_path / "environment.json"),
-            "--output", str(out),
-        ]
-    )  # fmt: skip
+    code = _platform_main(tmp_path, bundle, out)
     assert code == 2
     assert "asset_operations_run" in capsys.readouterr().err
 
@@ -552,10 +514,15 @@ def test_a_failed_output_write_exits_two(tmp_path, capsys):
 # --- startup command --------------------------------------------------------------
 
 
+def _startup_argv(base, work, assets, out) -> list[str]:
+    return [
+        "startup", "--base-config", str(base), "--work", str(work),
+        "--assets", str(assets), "--output", str(out),
+    ]  # fmt: skip
+
+
 def test_startup_refuses_a_missing_base_config_before_any_work(tmp_path, monkeypatch, capsys):
     """RM38/AC29: a missing base config fails before catalog generation and launches."""
-    import contextlib
-
     module = _script()
     generated = []
     launched = []
@@ -569,19 +536,7 @@ def test_startup_refuses_a_missing_base_config_before_any_work(tmp_path, monkeyp
     monkeypatch.setattr(module, "generate_catalog", lambda *a, **k: generated.append(a))
     monkeypatch.setattr(module, "serve", launch)
     out = tmp_path / "startup.json"
-    code = module.main(
-        [
-            "startup",
-            "--base-config",
-            str(tmp_path / "missing.toml"),
-            "--work",
-            str(tmp_path / "work"),
-            "--assets",
-            "5",
-            "--output",
-            str(out),
-        ]
-    )
+    code = module.main(_startup_argv(tmp_path / "missing.toml", tmp_path / "work", 5, out))
     assert code == 2 and not generated and not launched and not out.exists()
     assert "base_config_not_found" in capsys.readouterr().err
 
@@ -594,18 +549,12 @@ def test_startup_refuses_a_non_positive_asset_count_before_any_work(
     module = _script()
     generated = []
     launched = []
-    base = tmp_path / "base.toml"
-    base.write_text("")
+    base = _empty_base(tmp_path)
 
     monkeypatch.setattr(module, "generate_catalog", lambda *a, **k: generated.append(a))
     monkeypatch.setattr(module, "serve", lambda *a, **k: launched.append(a))
     out = tmp_path / "startup.json"
-    code = module.main(
-        [
-            "startup", "--base-config", str(base), "--work", str(tmp_path / "work"),
-            "--assets", assets, "--output", str(out),
-        ]
-    )  # fmt: skip
+    code = module.main(_startup_argv(base, tmp_path / "work", assets, out))
     assert code == 2 and not generated and not launched and not out.exists()
     assert "assets_must_be_positive" in capsys.readouterr().err
 
@@ -613,12 +562,7 @@ def test_startup_refuses_a_non_positive_asset_count_before_any_work(
 def test_startup_command_records_ten_real_startups(tmp_path, monkeypatch):
     base = _base(tmp_path, monkeypatch)
     out = tmp_path / "startup.json"
-    code = _script().main(
-        [
-            "startup", "--base-config", str(base), "--work", str(tmp_path / "work"),
-            "--assets", "5", "--output", str(out),
-        ]
-    )  # fmt: skip
+    code = _script().main(_startup_argv(base, tmp_path / "work", 5, out))
     report = json.loads(out.read_text())
     assert code == 0 and report["qualification"] == "fixture"
     assert len(report["samples"]) == 10 and len(report["memory_bytes"]) == 10
@@ -639,8 +583,6 @@ def test_startup_command_records_ten_real_startups(tmp_path, monkeypatch):
 
 
 def test_startup_report_is_incomplete_without_useful_startups():
-    from relaymind.evaluation.asset_operations import StartupSample
-
     module = _script()
     samples = [StartupSample(i, 0.0, None, 100 + i, (), "timeout", "timeout") for i in range(10)]
     report = module.startup_report(
@@ -656,8 +598,6 @@ def test_startup_report_is_incomplete_without_useful_startups():
 )
 def test_startup_report_is_incomplete_without_every_memory_sample(count, memory):
     """RM38/AC29: an empty or partial memory list never completes the report."""
-    from relaymind.evaluation.asset_operations import StartupSample
-
     samples = [StartupSample(i, 0.0, 0.5, 100 + i, (), "useful", None) for i in range(count)]
     report = _script().startup_report(
         samples, memory, assets=300, base_config_digest="d", counter="x"
@@ -668,8 +608,6 @@ def test_startup_report_is_incomplete_without_every_memory_sample(count, memory)
 
 def test_startup_report_is_complete_with_ten_useful_startups_and_memory_samples():
     """RM38/AC29: completeness needs ten useful startups and ten known samples."""
-    from relaymind.evaluation.asset_operations import StartupSample
-
     samples = [StartupSample(i, 0.0, 0.5, 100 + i, (), "useful", None) for i in range(10)]
     report = _script().startup_report(
         samples, [1] * 10, assets=300, base_config_digest="d", counter="x"
@@ -681,8 +619,6 @@ def test_startup_report_is_complete_with_ten_useful_startups_and_memory_samples(
 @pytest.mark.parametrize("first_useful_at", [None, 1.5])
 def test_deadline_failures_never_count_as_useful_startups(first_useful_at):
     """RM38/AC29: a late useful response still fails the startup deadline."""
-    from relaymind.evaluation.asset_operations import StartupSample
-
     samples = [
         StartupSample(i, 0.0, first_useful_at, 100 + i, (), "failed", "deadline_exceeded")
         for i in range(10)
@@ -696,15 +632,10 @@ def test_deadline_failures_never_count_as_useful_startups(first_useful_at):
 
 def test_startup_memory_stays_with_its_launch_and_work_can_be_reused(tmp_path, monkeypatch):
     """RM38/AC29: missing process samples keep their ordinal across repeated runs."""
-    from contextlib import asynccontextmanager
-
-    import httpx
-
     module = _script()
-    base = tmp_path / "base.toml"
-    base.write_text("")
+    base = _empty_base(tmp_path)
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def launch(work, catalog, *, base_config):
         ordinal = int(work.name.removeprefix("run-"))
         if ordinal in (0, 4):
@@ -719,47 +650,11 @@ def test_startup_memory_stays_with_its_launch_and_work_can_be_reused(tmp_path, m
     monkeypatch.setattr(module, "rss_bytes", lambda pid: pid * 1024)
     for _ in range(2):
         out = tmp_path / "startup.json"
-        assert (
-            module.main(
-                [
-                    "startup",
-                    "--base-config",
-                    str(base),
-                    "--work",
-                    str(tmp_path / "work"),
-                    "--assets",
-                    "5",
-                    "--output",
-                    str(out),
-                ]
-            )
-            == 0
-        )
+        assert module.main(_startup_argv(base, tmp_path / "work", 5, out)) == 0
         report = json.loads(out.read_text())
-        assert [s["pid"] for s in report["samples"]] == [
-            None,
-            101,
-            102,
-            103,
-            None,
-            105,
-            106,
-            107,
-            108,
-            109,
-        ]
-        assert report["memory_bytes"] == [
-            None,
-            103424,
-            104448,
-            105472,
-            None,
-            107520,
-            108544,
-            109568,
-            110592,
-            111616,
-        ]
+        pids = [None, 101, 102, 103, None, 105, 106, 107, 108, 109]
+        assert [s["pid"] for s in report["samples"]] == pids
+        assert report["memory_bytes"] == [None if p is None else p * 1024 for p in pids]
 
 
 def test_generated_catalog_can_be_regenerated(tmp_path):
@@ -770,58 +665,34 @@ def test_generated_catalog_can_be_regenerated(tmp_path):
     assert [path.read_bytes() for path in first] == contents
 
 
+def _tasklist(monkeypatch, stdout: str):
+    monkeypatch.setattr(kit.sys, "platform", "win32")
+    monkeypatch.setattr(
+        kit.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=stdout)
+    )
+
+
 @pytest.mark.parametrize("memory", ["12,345 K", "12.345 KB", "12\u00a0345 Ko", "12 345 КБ"])
 @pytest.mark.parametrize("image", ['"python.exe"', '"python, worker.exe"', "python.exe"])
 def test_windows_memory_parses_csv_and_localized_units(monkeypatch, memory, image):
     """RM38/AC29: working-set samples survive CSV quoting and localized units."""
-    from types import SimpleNamespace
-
-    import relaymind.evaluation.asset_operations_run as kit
-
-    monkeypatch.setattr(kit.sys, "platform", "win32")
-    monkeypatch.setattr(
-        kit.subprocess,
-        "run",
-        lambda *args, **kwargs: SimpleNamespace(
-            returncode=0, stdout=f'{image},"123","Console","1","{memory}"\n'
-        ),
-    )
+    _tasklist(monkeypatch, f'{image},"123","Console","1","{memory}"\n')
     assert rss_bytes(123) == 12641280
 
 
 def test_windows_memory_finds_the_matching_row_in_multiline_output(monkeypatch):
     """RM38/AC29: a banner or several rows must not hide the process's own sample."""
-    from types import SimpleNamespace
-
-    import relaymind.evaluation.asset_operations_run as kit
-
-    monkeypatch.setattr(kit.sys, "platform", "win32")
-    monkeypatch.setattr(
-        kit.subprocess,
-        "run",
-        lambda *args, **kwargs: SimpleNamespace(
-            returncode=0,
-            stdout='INFO: tasks listed below\n"python","124","Console","1","1,024 K"\n'
-            '"python","123","Console","1","12,345 K"\n',
-        ),
+    _tasklist(
+        monkeypatch,
+        'INFO: tasks listed below\n"python","124","Console","1","1,024 K"\n'
+        '"python","123","Console","1","12,345 K"\n',
     )
     assert rss_bytes(123) == 12345 * 1024
 
 
 def test_windows_memory_that_is_malformed_stays_unknown(monkeypatch):
     """RM38/AC29: an unterminated CSV quote drops the sample instead of crashing."""
-    from types import SimpleNamespace
-
-    import relaymind.evaluation.asset_operations_run as kit
-
-    monkeypatch.setattr(kit.sys, "platform", "win32")
-    monkeypatch.setattr(
-        kit.subprocess,
-        "run",
-        lambda *args, **kwargs: SimpleNamespace(
-            returncode=0, stdout='"python","123","Console","1","12,345 K'
-        ),
-    )
+    _tasklist(monkeypatch, '"python","123","Console","1","12,345 K')
     assert rss_bytes(123) is None
 
 
@@ -835,28 +706,12 @@ def test_windows_memory_that_is_malformed_stays_unknown(monkeypatch):
 )
 def test_windows_missing_memory_stays_unknown(monkeypatch, row):
     """RM38/AC29: absent counters and other processes supply no measurement."""
-    from types import SimpleNamespace
-
-    import relaymind.evaluation.asset_operations_run as kit
-
-    monkeypatch.setattr(kit.sys, "platform", "win32")
-    monkeypatch.setattr(
-        kit.subprocess,
-        "run",
-        lambda *args, **kwargs: SimpleNamespace(
-            returncode=0,
-            stdout=row,
-        ),
-    )
+    _tasklist(monkeypatch, row)
     assert rss_bytes(123) is None
 
 
 def test_base_config_preserves_root_dotted_keys_and_non_path_values(tmp_path):
     """RM38/AC29: relocation preserves TOML meaning and opaque provider options."""
-    import tomllib
-
-    from relaymind.evaluation.asset_operations_run import _config
-
     base = tmp_path / "base.toml"
     base.write_text(
         f"store.path = {json.dumps(str(tmp_path / 'runs.sqlite'))}\n"
@@ -890,8 +745,6 @@ def test_base_config_preserves_root_dotted_keys_and_non_path_values(tmp_path):
 @pytest.mark.parametrize("value", ["plain", "../relative/file"])
 def test_known_config_paths_must_be_absolute(tmp_path, key, value):
     """RM38/AC29: relocating even extensionless paths must never change their meaning."""
-    from relaymind.evaluation.asset_operations_run import _config
-
     base = tmp_path / "base.toml"
     encoded = json.dumps([value] if key == "skills.roots" else value)
     base.write_text(f"{key} = {encoded}\n")
@@ -901,8 +754,6 @@ def test_known_config_paths_must_be_absolute(tmp_path, key, value):
 
 def test_reusing_a_work_directory_starts_each_launch_with_clean_logs(tmp_path, monkeypatch):
     """RM38/AC29: a reused work directory never mixes separate launches' logs."""
-    import relaymind.evaluation.asset_operations_run as kit
-
     body = (
         "print('startup diagnostic', flush=True)\n"
         "print('Application token: t', flush=True)\n"
@@ -910,12 +761,8 @@ def test_reusing_a_work_directory_starts_each_launch_with_clean_logs(tmp_path, m
     )
     _patch_child(monkeypatch, _fake_python(tmp_path, body))
 
-    async def ready(client, deadline, process):
-        return None
-
-    monkeypatch.setattr(kit, "_wait_ready", ready)
-    base = tmp_path / "base.toml"
-    base.write_text("")
+    _skip_readiness(monkeypatch)
+    base = _empty_base(tmp_path)
 
     async def go():
         for _ in range(2):
@@ -930,19 +777,13 @@ def test_reusing_a_work_directory_starts_each_launch_with_clean_logs(tmp_path, m
 @pytest.mark.parametrize("token", [False, True])
 def test_stdout_before_token_is_preserved_even_if_startup_fails(tmp_path, monkeypatch, token):
     """RM38/AC29: startup diagnostics survive token handover without leaking its secret."""
-    import relaymind.evaluation.asset_operations_run as kit
-
     body = "print('startup diagnostic', flush=True)\n"
     if token:
         body += "print('Application token: secret-value', flush=True)\n"
     _patch_child(monkeypatch, _fake_python(tmp_path, body))
 
-    async def ready(client, deadline, process):
-        return None
-
-    monkeypatch.setattr(kit, "_wait_ready", ready)
-    base = tmp_path / "base.toml"
-    base.write_text("")
+    _skip_readiness(monkeypatch)
+    base = _empty_base(tmp_path)
 
     async def go():
         async with serve(tmp_path / "w", tmp_path, base_config=base, timeout=10):
@@ -954,16 +795,3 @@ def test_stdout_before_token_is_preserved_even_if_startup_fails(tmp_path, monkey
         with pytest.raises(TimeoutError, match="gateway_token_unavailable"):
             asyncio.run(go())
     assert (tmp_path / "w" / "stdout.log").read_text() == "startup diagnostic\n"
-
-
-def test_base_config_root_dotted_keys_keep_their_table(tmp_path):
-    """RM38/AC29: prepending a server table must not capture root dotted keys."""
-    import tomllib
-
-    from relaymind.evaluation.asset_operations_run import _config
-
-    base = tmp_path / "base.toml"
-    base.write_text(f"store.path = {json.dumps(str(tmp_path / 'runs.sqlite'))}\n")
-    parsed = tomllib.loads(_config(tmp_path, base, tmp_path, 1234).read_text())
-    assert parsed["store"]["path"] == str(tmp_path / "runs.sqlite")
-    assert parsed["server"] == {"host": "127.0.0.1", "port": 1234}
