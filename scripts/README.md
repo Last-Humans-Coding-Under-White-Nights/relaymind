@@ -21,21 +21,26 @@
   operator-captured row observations, a digest bundle and offline grading).
 - `m1_trial_inputs.py` / `m1_trial_observe.py` — maintained successors to the
   archived #259 helpers (RM16/RM40/RM44; AC31/AC36; spec 0.66 section 12.6.6).
-  Both require `--trial-dir <new-trial-directory>` outside committed evidence.
-  Prepare that directory with new `inputs/captures`, machine templates and
-  `usage-relationship.md` as in the historical trial; use a fresh operator root.
-  Run `draft --root <operator-root>` again after every drafting pass, **before**
-  labels bind the cases, then `freeze --root <operator-root> --cases <cases>
-  --labels <labels>`. Current and superseded drafting pairs enter case
-  authorship evidence and the lock; freeze rejects stale drafting evidence.
-  The observer accepts the archived observer's row arguments and records
-  `host-dispatch.json` before invoking the host. Bundle the observations with
-  `asset_whole_task.py trial` as before. Review the new bundle for privacy, then
-  copy it unchanged into a fresh `docs/evidence/m10/<new-trial>/bundle`
-  directory; the record requires contained paths there. After committing the
-  harness, use
-  `record --bundle <bundle> --record-id <new-id> --owner-login <login>`; add
-  `--preregistration <commit>` only for a genuine preregistration. The record
+  Both require `--trial-dir <new-trial-directory>` outside committed evidence,
+  on every command; for `m1_trial_inputs.py` it may come before or after the
+  command name. Prepare that directory with new `inputs/captures`, machine
+  templates and `usage-relationship.md` as in the historical trial; use a fresh
+  operator root. Run
+  `python scripts/m1_trial_inputs.py --trial-dir <new-trial-directory> draft --root <operator-root>`
+  again after every drafting pass, **before** labels bind the cases, then
+  `python scripts/m1_trial_inputs.py --trial-dir <new-trial-directory> freeze --root <operator-root> --cases <cases> --labels <labels>`.
+  Current and superseded drafting pairs enter case authorship evidence and the
+  lock; freeze rejects stale drafting evidence. The observer takes the archived
+  observer's row arguments **and** the required `--trial-dir` (the archived
+  observer had no such option), and records `host-dispatch.json` before
+  invoking the host:
+  `python scripts/m1_trial_observe.py --trial-dir <new-trial-directory> --root <operator-root> --inputs <frozen-inputs> --plan <plan> --ordinal <ordinal> --observations <observations>`.
+  Bundle the observations with `asset_whole_task.py trial` as before. Review
+  the new bundle for privacy, then copy it unchanged into a fresh
+  `docs/evidence/m10/<new-trial>/bundle` directory; the record requires
+  contained paths there. After committing the harness, use
+  `python scripts/m1_trial_inputs.py --trial-dir <new-trial-directory> record --bundle <bundle> --record-id <new-id> --owner-login <login>`;
+  add `--preregistration <commit>` only for a genuine preregistration. The record
   command refuses an existing record. The old scripts, captures and records
   under `docs/evidence/` remain historical evidence.
 - `asset_operations_run.py` — the AC29 operations run kit (`startup`,

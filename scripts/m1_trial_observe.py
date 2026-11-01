@@ -388,9 +388,15 @@ def observe(args) -> int:
     return 0 if status == "completed" else 1
 
 
-def main(argv=None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """One flat parser (no subcommands), so option order is free."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--trial-dir", type=Path, required=True)
+    parser.add_argument(
+        "--trial-dir",
+        type=Path,
+        required=True,
+        help="new trial directory outside committed evidence, with usage-relationship.md",
+    )
     parser.add_argument("--root", type=Path, required=True, help="private operator root")
     parser.add_argument("--inputs", type=Path, required=True, help="frozen inputs.json")
     parser.add_argument("--plan", type=Path, required=True, help="plan-host output")
@@ -401,6 +407,11 @@ def main(argv=None) -> int:
     parser.add_argument("--interactions", type=int, default=0)
     parser.add_argument("--human-wait-ms", type=float, default=0.0)
     parser.add_argument("--not-run", metavar="REASON", help="record the row not_run, run nothing")
+    return parser
+
+
+def main(argv=None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
     global HERE
     HERE = args.trial_dir.resolve()

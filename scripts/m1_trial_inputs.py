@@ -7,22 +7,23 @@ existing record checker. It never runs a host turn, judges a task or writes a
 label.
 
 Maintained successor to the archived #259 helper; the archived bytes stay unchanged.
-Pass --trial-dir with a new directory outside committed evidence.
-Commands (run from the repository root with the project's Python):
+Every command needs ``--trial-dir T``, a new trial directory outside committed
+evidence; it may come before or after the command name.
+Commands (run with the project's Python):
 
-``draft --root R``
+``--trial-dir T draft --root R``
     Copy the eight admissible OpenClaw 2026.10.7 bundled skill originals and
     the pinned host's captures from the private operator root ``R`` into
     ``inputs/`` and write the draft catalog, the DRAFT case, the drafted
     statements and the arm configurations (the external base URL is omitted;
     no credential is ever present in these files).
-``freeze --root R --cases C --labels L``
+``--trial-dir T freeze --root R --cases C --labels L``
     After the owner has authored the case(s) and the labels exist
     (``label-template`` / ``label-worksheet`` / ``label-freeze``), write the
     frozen corpus lock, the AssetHostTasksV1 / HostFreezeV1 documents, the
     companion manifest ``frozen/inputs.json`` and a private resolver for the
     inventory preimages under ``R/resolver``.
-``record --bundle B --record-id ID --owner-login LOGIN [--preregistration COMMIT]``
+``--trial-dir T record --bundle B --record-id ID --owner-login LOGIN [--preregistration COMMIT]``
     Write a pending QualificationRecordV1 (scope host_trial,
     machine_dual_owner_approved labelling, machine_drafted_owner_approved prompts)
     binding the bundle's report, freeze, tasks, corpus lock, labels and
@@ -38,6 +39,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import tomllib
@@ -47,6 +49,8 @@ from pathlib import Path
 
 HERE: Path  # Set by --trial-dir; never defaults to committed evidence.
 REPO = Path(os.environ.get("RELAYMIND_REPO") or Path(__file__).resolve().parents[1])
+# A ``base_url`` key line at any indentation (TOML ``key = value``).
+BASE_URL = re.compile(r"^\s*base_url\s*=")
 sys.path.insert(0, str(REPO / "src"))
 
 from relaymind.canonical import canonical_digest, canonical_json  # noqa: E402
@@ -290,10 +294,15 @@ def draft(root: Path) -> None:
     for arm in ("provider_only", "recommendations"):
         text = (root / f"gateway-{arm}" / "relaymind.toml").read_text(encoding="utf-8")
         # The owner's external base URL is confidential: omitted, never hashed.
-        kept = [line for line in text.splitlines() if not line.startswith("base_url")]
-        tomllib.loads("\n".join(kept))
-        _write(configs / f"gateway-{arm}.toml", ("\n".join(kept) + "\n").encode("utf-8"))
+        kept = _omit_base_url(text)
+        tomllib.loads(kept)
+        _write(configs / f"gateway-{arm}.toml", (kept + "\n").encode("utf-8"))
     print(f"draft written to {inputs}")
+
+
+def _omit_base_url(text: str) -> str:
+    """The configuration without any ``base_url`` key line, however indented."""
+    return "\n".join(line for line in text.splitlines() if not BASE_URL.match(line))
 
 
 # --- freeze ----------------------------------------------------------------------
@@ -601,7 +610,11 @@ def _preregistration(commit: str | None) -> dict | None:
     if commit is None:
         return None
     sha, epoch = subprocess.run(
-        ["git", "show", "-s", "--format=%H %ct", commit], capture_output=True, text=True, check=True
+        ["git", "show", "-s", "--format=%H %ct", commit],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.split()
     when = datetime.fromtimestamp(int(epoch), UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     return dict(commit=sha, committed_at=when)
@@ -619,6 +632,15 @@ def _record_machine(environment: dict, build: str, hostname: str) -> dict:
         ram_bytes=environment["ram_bytes"],
         hostname_sha256=_sha(hostname.encode("utf-8")),
     )
+
+
+def _head_commit() -> str:
+    """``git rev-parse HEAD`` of the repository, wherever the operator runs."""
+    import subprocess
+
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
 
 def check_written(target: Path, labels: dict, catalog: dict, cases: dict):
@@ -693,9 +715,7 @@ def record(bundle: Path, record_id: str, preregistration: str | None, owner_logi
     build = subprocess.run(
         ["sw_vers", "-buildVersion"], capture_output=True, text=True, check=True
     ).stdout.strip()
-    commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
-    ).stdout.strip()
+    commit = _head_commit()
     value = dict(
         schema_version=1,
         record_id=record_id,
@@ -747,26 +767,46 @@ def record(bundle: Path, record_id: str, preregistration: str | None, owner_logi
     print(f"record {target} loads; approved={checked.approved}")
 
 
-def main(argv=None) -> int:
+TRIAL_DIR_HELP = "new trial directory outside committed evidence (required)"
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """--trial-dir is accepted before or after the command name."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--trial-dir", type=Path, required=True)
+    parser.add_argument("--trial-dir", type=Path, help=TRIAL_DIR_HELP)
+    # SUPPRESS keeps a value given before the command from being reset.
+    shared = argparse.ArgumentParser(add_help=False)
+    shared.add_argument("--trial-dir", type=Path, default=argparse.SUPPRESS, help=TRIAL_DIR_HELP)
     sub = parser.add_subparsers(dest="command", required=True)
-    d = sub.add_parser("draft")
+    d = sub.add_parser("draft", parents=[shared])
     d.add_argument("--root", type=Path, required=True)
-    f = sub.add_parser("freeze")
+    f = sub.add_parser("freeze", parents=[shared])
     f.add_argument("--root", type=Path, required=True)
     f.add_argument("--cases", type=Path, required=True)
     f.add_argument("--labels", type=Path, required=True)
-    r = sub.add_parser("record")
+    r = sub.add_parser("record", parents=[shared])
     r.add_argument("--bundle", type=Path, required=True)
     r.add_argument("--record-id", required=True)
     r.add_argument("--owner-login", required=True)
     r.add_argument("--preregistration", help="the commit that froze the inputs")
+    return parser
+
+
+def parse_args(argv=None) -> argparse.Namespace:
+    """The parsed command line; --trial-dir is required on either side."""
+    parser = build_parser()
     args = parser.parse_args(argv)
+    if args.trial_dir is None:
+        parser.error("the following arguments are required: --trial-dir")
+    if args.trial_dir.resolve().is_relative_to(REPO / "docs/evidence"):
+        parser.error("use a new trial directory outside committed evidence")
+    return args
+
+
+def main(argv=None) -> int:
+    args = parse_args(argv)
     global HERE
     HERE = args.trial_dir.resolve()
-    if HERE.is_relative_to(REPO / "docs/evidence"):
-        parser.error("use a new trial directory outside committed evidence")
     if args.command == "draft":
         draft(args.root.absolute())
     elif args.command == "freeze":
