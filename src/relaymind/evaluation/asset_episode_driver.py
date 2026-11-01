@@ -402,6 +402,13 @@ def _restored(value: Mapping, episode_id: str, evidence: dict) -> dict:
     ):
         raise WholeTaskRejected("journal_evidence")
     for item in value["evidence"]:
+        if not (
+            isinstance(item.get("payload"), str)
+            and isinstance(item.get("id"), str)
+            and isinstance(item.get("sha256"), str)
+            and type(item.get("bytes")) is int  # bool is not a byte count
+        ):
+            raise WholeTaskRejected("journal_evidence")
         payload = item["payload"].encode("utf-8")
         if (
             item["id"] != "reset:" + episode_id
