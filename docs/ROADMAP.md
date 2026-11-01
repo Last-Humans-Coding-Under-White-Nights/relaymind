@@ -1060,20 +1060,27 @@ pinned 2026.10.7 host: `m10-negative-skill-loaded-use-openclaw-2026.10.7`
 (`exact_route_absent`). Both operations stay disabled. See
 `docs/evidence/m10/host-use-settlement-20261101.md`. The host has hooks, tool-result
 middleware and the provider stream that can stop a read or a request, but none
-carries the fresh person authority that the 7.6.1 fence needs. The only
+can re-verify fresh person authority, the session incarnation and the pinned
+bytes, so none can fence the next model request as 7.6.1 requires. The only
 delegation candidate, `GatewaySessionAccessAuthority.retain()`, has no defined
-qualification. The MCP routes are name-only (`tools.invoke`), App-view-bound
-(`mcp.app.callTool`) or documented private. The records lift nothing until a
+qualification. No supported route invokes an independent, non-App MCP tool by
+its exact native identity: `tools.invoke` is name-only, the harness runtimes
+are documented private, and the App-scoped `mcp.app.callTool` does not count. The records lift nothing until a
 pull request review by an org member other than the owner is written into
 them, which will make these host limitations. The first VPS run could not
 start a person tier (no private interface, missing Chromium libraries), so the
 first substantive captures came from CI run 41286397320. A second VPS run at
 62c4dcd, after the owner's setup, also binds its captures. Person ingress
 passes there. MCP use is `blocked` (`exact_route_unqualified`). The reset case
-is now `control_refused` on the real host. The loaded-use observation still
-exits 2: its predicate expects one pin in the session's selection listing, but
-the host lists every pin of the owner profile. That harness check needs a
-reviewed change and a CI run. The finding is unchanged. #259, #260 and #261 remain open and
+is now `control_refused` on the real host. That run exited 2 because the
+62c4dcd predicate expected one pin in the session's selection listing while
+the host lists every pin of the owner profile; the selected-skill pin check
+(5d92b64) is already in this branch, and the current predicate accepts the
+committed capture. A CI run of the current harness is still missing. The CI and
+VPS2 MCP captures show an empty `tools.effective` list only because the old
+probe read `payload.tools` instead of the host's `groups[].tools`; a third VPS
+run at bba0cf1 with the #249 fix lists both colliding tools and is still
+`blocked`, and the MCP record binds it. The findings are unchanged. #259, #260 and #261 remain open and
 need the real runs, captures, labels and reviews. Host configuration semantics
 (#250/#240) still keep host reports below `qualified`. Spec-only decisions
 awaiting implementation: the rank 4–10 choice receipt returning the offered
@@ -1345,11 +1352,12 @@ registration; then exclusive ledger ownership, admission-time key binding
 with dispatch markers, reserved block capacity and the post-read fence
 recheck) change the adapter bytes again: the entry is re-pinned to
 `943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`, and
-the ordinary installed-host run of these exact bytes (CI run 41307043410,
-commit f800c60, PR merge checkout 2c8c8cd) passed the ordinary-pass and
-ordinary-skill-pass predicates with all 15 harness sources matching; its
-capture `openclaw-native-actions-20261101-adapter.json` (SHA-256
-`babba902bb57…`) is the registry's evidence revision. As before, this is
+the ordinary installed-host run of these exact bytes with the stricter
+session-selection harness (CI run 41318389858, commit c0bd6f4, PR merge
+checkout c22ad40) passed the ordinary-pass and ordinary-skill-pass predicates
+with all 15 harness sources matching; its capture
+`openclaw-native-actions-20261101-adapter.json` (SHA-256
+`35436e519245…`) is the registry's evidence revision. As before, this is
 Linux functional evidence with disposable accounts, not macOS/Windows or
 owner-run acceptance. The person-ingress harness hardening raised in the #224 review
 (#228) changed evidence-bound harness files; a fresh ordinary installed-host
@@ -1375,15 +1383,13 @@ foreign person (`FORBIDDEN`) and a foreign person on its own session, refused by
 RelayMind's own authority check (`INVALID_REQUEST`). The predicate also binds
 the asset ID, content hash and source version, and requires the saved revision
 in `skills.library.list`, whose `session` must be the authenticated target
-session with exactly that skill and revision as its selection. The committed
-capture below satisfies this stricter check, but it was recorded with the
-earlier harness, so its harness digests need a recapture. The ordinary installed-host run (OpenClaw 2026.10.7,
-Ubuntu runner, CI run 41295359455, commit de6d5d9, PR merge checkout
-f5e3e39) passed both the
+session with exactly that skill and revision as its selection. The ordinary
+installed-host run of this stricter harness (OpenClaw 2026.10.7, Ubuntu runner,
+CI run 41317645014, commit 6e11c2d, PR merge checkout 077e402) passed both the
 ordinary-pass and ordinary-skill-pass predicates, with all 15 harness sources
 matching. Its unmodified capture is
 [openclaw-native-actions-20261101-skill.json](evidence/m10/openclaw-native-actions-20261101-skill.json)
-(SHA-256 `06d7e42aa1ea407136c66e1a6d8862cf552f2c88a1b2794391622175f8828793`), which the registry's evidence revision now names for the
+(SHA-256 `3a063ab374119dbe5b04f4c6625519a44f4ea75594525975ba661dfd9f9ff439`), which the registry's evidence revision now names for the
 operations `direct_actions` and `exact_skill_selection`. The receipt records
 `sessionActivation: next-turn` and `instructions: not_observed`: selection is
 not observed loaded instruction use, which stays open as HOST-EXACT-SKILL-USE in
@@ -1423,8 +1429,10 @@ inventory; its fixture discovery check requires both colliding fixture tools in
 the session inventory, so an empty or malformed inventory fails the run. Earlier
 captures recorded an empty list because of the old flat projection. The person
 probe first starts the session MCP runtime with public `mcp.app.discover`. One
-uncommitted Linux x86-64 VPS run listed both colliding tools; it is discovery
-evidence only, and exact MCP use remains blocked.
+Linux x86-64 VPS run at bba0cf1 listed both colliding tools; it is now committed
+as `docs/evidence/m10/openclaw-mcp-use-20261101-vps3.json` and bound by the
+#255 MCP record. It is discovery evidence only, exact MCP use remains blocked,
+and no CI run of the corrected harness exists yet.
 
 #250 implements bounded native configuration preflight with the installed
 OpenClaw 2026.10.7 validator under Node, including strict/plugin checks and
@@ -1472,8 +1480,8 @@ request. HOST-EXACT-SKILL-USE (#239) and MCP use with real approvals (#204)
 remain open. The changed adapter bytes have a new exact revision, and the
 shipped `direct_actions`/`exact_skill_selection` entry is re-pinned to it
 (`943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`), as for the spec 0.63 scope fix. Its evidence revision names
-the fresh capture of this revision (CI run 41307043410,
-`openclaw-native-actions-20261101-adapter.json`, SHA-256 `babba902bb57…`). `tests/test_openclaw_install.py` fails when the registry and
+the fresh capture of this revision (CI run 41318389858,
+`openclaw-native-actions-20261101-adapter.json`, SHA-256 `35436e519245…`). `tests/test_openclaw_install.py` fails when the registry and
 the built adapter digest of the release artifact drift.
 
 #240 host_config evidence must validate with the pinned host's own validator
@@ -1578,8 +1586,11 @@ preflight, the pinned-CLI plugin install, and the frozen plan run through the
 existing driver over operator-captured row observations, bundled with
 SHA-256 digests and graded offline. #269: the install follows the host's
 lifecycle (install, configure `baseUrl`, enable, inspect), because the pinned
-host installs the plugin disabled until it is configured. They are verified over
-fixture bundles and a host double only. The owner-run trial itself (#259), its frozen inputs and genuine
+host installs the plugin disabled until it is configured. The bundle is
+private, the install record keeps no host free text, and the provisional gate
+binds closed preflight/install records to the frozen package. They are verified
+over fixture bundles and a host double only. The owner-run trial itself (#259),
+its frozen inputs and genuine
 native row observations remain open; no provisional cost has been recorded.
 
 #201 native benchmark contract checkpoint (spec 0.61): explicit local-cold

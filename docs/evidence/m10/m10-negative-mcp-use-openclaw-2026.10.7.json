@@ -21,9 +21,9 @@
     "hostname_sha256": "bafcdd4933633f2d8c15bec38b13546e4d879cd8b65095a56e713b8336cedd01"
   },
   "revisions": {
-    "repository_commit": "acc40415a46ddbac1b29595a8bf136576c1a1cba",
-    "adapter_revision": "653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f",
-    "harness_sha256": "e84b4e7da8cfffe3c6a5ec93895e75c4ca634db1bd84ab7a6080dd24e5777ba8"
+    "repository_commit": "bba0cf109c459157cd3e8a62c521100a5e6a9712",
+    "adapter_revision": "f3241577e903feddd3da61fd58513b4a3e90889552d9bd7f52a302fd81f52c6c",
+    "harness_sha256": "60697f9d1fd8cd05ddc890007fa0f0b4579930333aea53e60328bb89982a3fa2"
   },
   "operation": {
     "name": "mcp_use",
@@ -36,8 +36,8 @@
     {
       "role": "inventory",
       "path": "openclaw-host-use-search-20261101-vps.json",
-      "sha256": "50271d4e98ed564f2f8672d3920b305c5e213636aaa6ec185bdad28d590d7ec6",
-      "bytes": 17932
+      "sha256": "cea5178f3190e03d422c5123012349a211d86afea6242dedf5eeae51ea4595c4",
+      "bytes": 19315
     },
     {
       "role": "capture",
@@ -56,6 +56,12 @@
       "path": "openclaw-mcp-use-20261101-vps2.json",
       "sha256": "25461d2a1c2c238747842a638e273181bfb155c7cf9ef050018b620ee762cbcc",
       "bytes": 208679
+    },
+    {
+      "role": "capture",
+      "path": "openclaw-mcp-use-20261101-vps3.json",
+      "sha256": "a618b25366718969745e49ee32250451b69de628b4619b70be26558bdecabc1f",
+      "bytes": 215681
     }
   ],
   "review": {
@@ -64,5 +70,5 @@
     "reviewer_logins": [],
     "approved_at": null
   },
-  "recorded_at": "2026-11-01T09:16:37Z"
+  "recorded_at": "2026-11-01T14:58:19Z"
 }
