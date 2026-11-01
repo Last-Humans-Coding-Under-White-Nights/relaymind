@@ -810,7 +810,8 @@ a changed library head after selection, an entry removed after selection, and
 `sessions.reset`. Controls use supported native library/session RPCs on the same
 authenticated browser connection; their direct activation is fixture setup, not
 an additional qualified adapter path. The closed `observed` values distinguish
-`loaded_pinned_revision`, `loaded_other_bytes`, `refused`, and `not_loaded`.
+`loaded_pinned_revision`, `loaded_other_bytes`, `refused`, `not_loaded`, and
+`control_refused`.
 An unfinished capture uses `incomplete` and fails the observation predicate;
 its already received tool/request evidence is retained. A tool-result request
 without its asynchronous native hook stays `incomplete` after the bounded
@@ -821,6 +822,12 @@ revision and can record a different syntactically valid revision as
 `loaded_other_bytes`; only the positive proof requires the selected path.
 A retained old pin is reported as observed even when the library head changed
 or the entry was removed; it is never relabeled a successful rejection control.
+On the pinned 2026.10.7 host `sessions.reset` requires `operator.admin`, which
+the configured person policy does not grant (the native Control UI itself uses
+`sessions.create` without that scope). Only that exact native
+`FORBIDDEN`/`MISSING_SCOPE` refusal, with the session unchanged, is recorded as
+`control_refused`: no turn runs and any turn evidence fails the predicate. It is
+a host outcome, not a rejection RelayMind performed (#255).
 
 `ordinary_skill_loaded_use_pass` and the capture check
 `ordinary_skill_loaded_use_observation` mean that the positive byte round trip
