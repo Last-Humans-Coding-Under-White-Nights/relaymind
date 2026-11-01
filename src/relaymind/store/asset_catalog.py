@@ -245,7 +245,9 @@ class AssetCatalogStore:
                     raise ValueError
                 body = search["body"]
                 if body is not None:
-                    text(body, 262144)
+                    # The stored body keeps the instruction-body rules it was
+                    # admitted under, not the offered-field ones (spec 0.66 4.6).
+                    text(body, 262144, body=True)
                 digest = projection_digest(record, body)
                 if (
                     row["asset_id"] != record.asset_id

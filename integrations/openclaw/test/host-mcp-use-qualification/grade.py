@@ -9,6 +9,7 @@ requires observed raw native evidence and separate review.
 import hashlib
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 from relaymind.canonical import canonical_digest
@@ -65,6 +66,28 @@ FIXTURE_FILES = (
 )
 
 
+def control_ui_outputs(package: Path) -> list[Path]:
+    """Browser bundle outputs: its tsconfig inputs and every module they import."""
+    config = json.loads((package / "tsconfig.control-ui.json").read_text(encoding="utf-8"))
+    pending = [package / name for name in config["include"]]
+    seen: set[Path] = set()
+    while pending:
+        source = pending.pop()
+        if source in seen:
+            continue
+        seen.add(source)
+        text = source.read_text(encoding="utf-8")
+        # tsc emits a module for every relative import, type-only ones included.
+        pending.extend(
+            source.parent / name for name in re.findall(r"""from\s+["'](\./[^"']+\.ts)["']""", text)
+        )
+    return [
+        package / "dist/control-ui" / source.relative_to(package / "src").with_suffix(".js")
+        for source in sorted(seen)
+        if not source.name.endswith(".d.ts")
+    ]
+
+
 def required_sources() -> set[str]:
     """Fixed source families, including host, SDK, adapter and fixture bytes."""
     package = ROOT / "integrations/openclaw"
@@ -80,8 +103,7 @@ def required_sources() -> set[str]:
         Path(__file__).with_name("approval_ui.py"),
         *sorted(Path(__file__).parent.glob("*.mjs")),
         *sorted(Path(__file__).parent.glob("*.json")),
-        package / "dist/control-ui/control-ui.js",
-        package / "dist/control-ui/recommendation-json.js",
+        *control_ui_outputs(package),
     ]
     # Derive expected outputs from sources, never from a possibly absent dist/.
     for source in sorted((package / "src").rglob("*.ts")):

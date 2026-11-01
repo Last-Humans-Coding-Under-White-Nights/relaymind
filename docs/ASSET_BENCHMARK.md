@@ -662,9 +662,14 @@ unverified input still keeps the report below `qualified`. The label commands
 take `--labelling owner_machine` for the owner plus one recorded machine
 annotator (`owner_machine.v1`; the owner may also be the tuner, the machine
 annotator holds the annotator role only, the owner adjudicates every case and
-every disagreement needs a nonempty reason). A `negative` record with scope `host_operation` closes the
-`skill_loaded_use` or `mcp_use` gate with the operation disabled
-(`known_host_limitations`). The module is
+every disagreement needs a nonempty reason; only the owner custodian may
+also tune). A platform record may carry the corpus review, and any freeze,
+tasks or labels it binds must be the resolved inputs. Every Time field must be
+a real UTC instant (`invalid_record_time`). Under spec 12.6.6 an approved
+`negative` record with scope `host_operation` closes the `skill_loaded_use`
+or `mcp_use` gate with the operation disabled; `known_host_limitations`
+returns those records for the roadmap, docs and reports to list. No approved
+negative record exists yet, so none is listed. The module is
 `relaymind.evaluation.asset_qualification_record`.
 
 **Native configuration validation (spec 0.65; #240).** Host, provider, sampling
@@ -752,7 +757,7 @@ and `grade-adaptation`, which are already the one-command final grade.
 | `label-worksheet --catalog K --cases C --judgments T1 T2 … --output W` | Checks the returned templates (unchanged binding and prompts, every case judged, exactly two distinct annotators per case) and writes the adjudicator's worksheet: both raw judgments, per-answer agreement and the recomputed agreement groups |
 | `label-freeze --catalog K --cases C --judgments T1 T2 … --worksheet W --output L` | Assembles `AssetLabelsV1` from the raw judgments and the completed adjudications. Raw judgments cannot change in the worksheet, agreement is recomputed, and the unchanged release validator checks roles, coverage and inclusion |
 | `preregister-host --tasks T --freeze F --output P` | Verifies the task set against its freeze and records the input, freeze and plan digests, task and lane counts, and acceptance eligibility (`kind_not_acceptance`, `below_minimum_tasks`, `missing_required_lanes`). AC36 pairs the whole tasks with the five required lanes, so a set without at least one task in each is not eligible; the spec states no larger per-lane host-task count |
-| `preregister-episodes --episodes E --freeze F [--lock L --evidence-root R] --output P` | The same for `AssetEpisodesV1`. With the corpus it also binds the episodes to it and counts probes outside the `held_out` split, probes with no included adjudication and correction targets missing from the pool. Reasons include `below_minimum_episodes`, `corpus_not_acceptance`, `corpus_not_frozen`, `unlabelled_probes` and, without the corpus, `corpus_unverified` |
+| `preregister-episodes --episodes E --freeze F [--lock L --evidence-root R] --output P` | The same for `AssetEpisodesV1`. With the corpus it also binds the episodes to it and counts probes outside the `held_out` split, probes with no included adjudication and correction targets missing from the pool. Section 12.6.5 requires held-out probe sets, so any probe outside `held_out` makes the set ineligible. Reasons include `below_minimum_episodes`, `corpus_not_acceptance`, `corpus_not_frozen`, `probes_not_held_out`, `unlabelled_probes` and, without the corpus, `corpus_unverified` |
 | `run-host --tasks T --freeze F --journal J --inputs M --environment E [--artifacts A] [--executor-timeout S] --qualification fixture\|provisional --output R -- PROGRAM ARGS…` | Executes the frozen plan through your host executor program and writes the `AssetHostReportV1` (see below). Exit `0` when every planned row has an outcome, `3` after an interruption |
 | `capture-costs --events V --provider P --attempt-prefix X --evidence-id I [--token-relationship R --relationship-evidence I2] [--first-ordinal N] --output O` | Turns RelayMind trace events (a JSON array of TraceEvent objects) into `HostAttempt` objects for the external model calls of the provider arms |
 
@@ -771,7 +776,7 @@ but it holds rows and reset evidence, so it is created owner-only (`0600`, in a
 new `0700` directory) and set back to `0600` on resume. Its header binds the
 preregistered input, freeze and plan digests and the digest of the run's
 execution identity: environment, artifacts, input manifest and qualification
-label. A journal cannot resume with changed inputs or under another identity
+label (for episodes, the corpus release lock instead of artifacts). A journal cannot resume with changed inputs or under another identity
 (`journal_binding`), so rows run on one machine or package are never reported
 under another; start a new journal for a new identity. Each row is recorded as
 `started` before work begins and `finished` with its outcome, flushed to disk
@@ -783,7 +788,12 @@ each time.
   null verdict. It is not rerun, because its consumption is unknown, so the
   cost coverage of that arm stays unknown and the gate blocks.
 - After SIGINT/SIGTERM, rows that never started are `not_run` (`interrupted`)
-  and a later run executes them.
+  and a later run executes them. A second signal stops at once, even inside a
+  hung executor: its process group is killed, no report is written (exit `3`),
+  and the started row is exported as `cancelled` (`interrupted_unrecorded`) on
+  the next run.
+- A journal with no complete record (a crash while its header was written)
+  holds no started row and is initialized again.
 - Only one runner can hold a journal at a time (`journal_locked`). A killed
   runner leaves `J.lock` behind. Check that no runner is still alive, then
   remove the lock.
@@ -798,7 +808,8 @@ standard input it gets
 On standard output it must write `{row,evidence}`: one `HostRow` and its
 `EvidenceRef`s. Each row is checked before it is recorded: plan identity,
 evidence closure and conflicts, report-wide attempt IDs and the row rules
-above. A row that fails these checks, or a nonzero exit or unusable output, is
+above. The row was recorded as started before the program ran, so a `not_run`
+row is invalid. A row that fails these checks, or a nonzero exit or unusable output, is
 recorded as `failed` with reason `executor_invalid_row` or `executor_error`,
 with no attempts and a null verdict. The host's output is never repaired.
 Only the host executes tools and grants approvals.
@@ -806,8 +817,10 @@ Only the host executes tools and grants approvals.
 `--executor-timeout S` is optional and off by default. It is a harness bound,
 not a task budget: a program still running after `S` seconds is killed and its
 row is `failed` (`executor_error`) with unknown consumption, never a host
-`timeout`. Set it above the frozen task budgets. Only the direct child process
-is killed, so the program must stop its own children. Standard output is read
+`timeout`. Set it above the frozen task budgets. The program leads its own
+process group, and the whole group is killed; a descendant that leaves the
+group (for example with `setsid`) is not, and a descendant still holding
+standard output after the program exits makes the output unusable. Standard output is read
 in bounded chunks; a program that writes more than the 256 MiB report bound is
 killed and its row fails with `executor_error`.
 
@@ -823,9 +836,11 @@ one attempt per call:
   `provider_timeout` are `timeout`; other errors are `failed`.
 - `calls` is `1` only when dispatch is evidenced: a successful call, a
   provider error or response, or `provider_timeout`. A gateway-side stop
-  (`cancelled`, `deadline_exceeded`, `time_budget`, `interrupted`) counts only
-  if a token or usage arrived. An unfinished call, or one that never left the
-  gateway (`provider_unreachable`, `missing_credentials`), has null calls.
+  (`cancelled`, `deadline_exceeded`, `time_budget`, `interrupted`) or a
+  transport error (`provider_unreachable`, which also covers a read error after
+  streaming began) counts only if a token or at least one known usage count
+  arrived. An unfinished call, or one never sent (`missing_credentials`), has
+  null calls.
 - `--events` and `--artifacts` are read with the same bounded strict reader as
   every other input: a symlink, an oversized file, duplicate keys or
   non-finite numbers reject.
@@ -864,9 +879,26 @@ for it.
     `--work` never mixes separate runs.
   - **Completeness.** `complete` is true only when all ten startups were useful
     and every memory sample is known.
-- `operations` is the whole AC29 run on one machine (#241). It runs ten clean
-  startups from the generated `--assets` catalog (default 300), each with a new
-  empty store unless you give `--base-config`. It samples a gateway with
+  - **Reused work and harness errors.** `work/catalog` is removed and generated
+    again, so it holds exactly `--assets` skills. A launch that raises before
+    its gateway is ready (it exits, its token never arrives, no port) is a
+    harness error, named `startup_<ordinal>_<reason>` in `harness_errors`: the
+    report is still written and the command exits 2. A launch that the
+    one-second deadline cancels is a slow startup (`deadline_exceeded`), a
+    recorded result. A gateway that would fail only after that deadline cannot
+    be told apart from a slow one at this point.
+- `operations` runs the lexical portion of the AC29 protocol on one machine, as
+  a fixture (#241). It is not the whole AC29 run: spec 0.65 section 12.6 says
+  lexical-only evidence does not close the protocol. Not measured here are
+  all-phase worker and device memory coverage (the report covers only the
+  gateway process), embedding, rebuild and inference contention, separate
+  download, scan-detection and OpenClaw startup times, the committed
+  300-asset acceptance catalog and the interactive host approvals. It runs ten
+  clean startups from the generated `--assets` catalog (default 300), each with
+  a new empty store unless you give `--base-config`. A reused `--work` is
+  cleared first of the kit's own subdirectories (`catalog`, `config`,
+  `imports`, `startups`, `baseline`, `workload`); an operator's
+  `--base-config` store is never touched. It samples a gateway with
   recommendations disabled as the memory baseline. It then runs the existing
   60-second driver (`run_workload`): 120 slots at 2 requests per second,
   concurrency one, a derived lexical rebuild at the start, and four 25-record
@@ -880,7 +912,14 @@ for it.
     `relaymind.evaluation.asset_operations_child`. This is the unchanged
     launcher plus one JSON command per standard-input line, which calls the
     gateway's own `AssetCatalogService.rescan` / `rebuild`. Each reply carries
-    the stored job outcome and event chain. It is evaluation-only: it opens no
+    the stored job outcome and event chain, and `job_id`, the job the request
+    awaited: the catalog owner runs one job at a time and answers a request
+    when its job is recorded finished, so that is the latest-finished job of
+    that source that was not finished when the request began. A periodic or
+    repair job that started after it is listed but never bound. When no job or
+    more than one qualifies, `job_id` is null with `job_missing` or
+    `job_ambiguous`, recorded as the harness error `rescan_job_missing`,
+    `rebuild_job_ambiguous` and so on. It is evaluation-only: it opens no
     socket and adds no endpoint.
   - **Memory.** Resident memory of the workload gateway is sampled every 250 ms.
     The sampled PID is the one the gateway reports for itself at startup
@@ -900,9 +939,10 @@ for it.
     CI variables, the spec bounds for reading, and the unchanged
     `summarize_operations` result. It is always `fixture` / `not_applicable`.
   - **Exit codes.** A slow startup, a late batch or a failed request is a
-    recorded result (exit 0). Exit 2 means a harness error: a baseline or
-    workload gateway that does not start or exits before readiness (for
-    example `workload_gateway_exited`), a control call without a reply, or
+    recorded result (exit 0). Exit 2 means a harness error: a startup, baseline
+    or workload gateway that does not start or exits before readiness (for
+    example `startup_3_gateway_exited` or `workload_gateway_exited`), a
+    control call without a reply, a job the reply could not bind, or
     unavailable job evidence. A control reply of `job_evidence_unavailable`
     (the gateway could not read its job store) is recorded as
     `rescan_job_evidence_unavailable` or `rebuild_job_evidence_unavailable`,
@@ -953,6 +993,8 @@ python scripts/asset_operations_run.py platform --install-check install-check.js
 
 All three commands create the output's parent directory. A configuration, input
 or write failure prints the reason and exits with code 2 instead of a traceback.
+That includes a manifest whose environment lock is not a JSON object
+(`environment_lock_invalid`).
 
 The AC29 and AC37 numbers that count come only from the Apple M1 8 GiB macOS
 and native x86-64 Windows machines; those runs remain open in #241, #235 and
@@ -963,11 +1005,15 @@ and native x86-64 Windows machines; those runs remain open in #241, #235 and
 The separate workflow `.github/workflows/platform-runs.yml` (`Platform runs`)
 runs the kit on `macos-latest` (Apple Silicon, arm64), `windows-latest` (native
 x86-64 Windows) and `ubuntu-latest`. It starts by hand (`workflow_dispatch`)
-or on a pull request that changes the workflow, its scripts or the kit modules,
-so ordinary pull requests stay fast. Each platform runs:
+or on a pull request that changes a file the run depends on: `src/relaymind`,
+its scripts, `integrations/openclaw`, the default skills, the test helpers and
+fixtures the bundle and the ordinary harness load, `pyproject.toml` and the
+specification. Other pull requests stay fast. Each platform runs:
 
-1. `asset_operations_run.py operations`, the AC29 run above, first, while the
-   runner is quiet;
+1. `asset_operations_run.py operations`, the lexical AC29 fixture run above,
+   first, while the runner is quiet. Its exit code goes to `operations.exit`
+   and the step passes, so a harness error never skips the steps below; the
+   last step, `Harness result`, fails the job when that code is not 0;
 2. the release artifact (`npm run pack:release`) and the pinned host's
    install-to-uninstall lifecycle (`scripts/openclaw_install_check.py`). A failed
    lifecycle step is kept in the export and its exit code in
@@ -984,7 +1030,15 @@ so ordinary pull requests stay fast. Each platform runs:
 4. `asset_platform_run.py platform`, which writes the runner's `environment.json`,
    a fixture companion bundle locked to it, and `platform.json`. The bundle is
    built from the test fixtures of `tests/test_asset_whole_task_inputs.py`, not
-   genuine host tasks. Without an install-check record it writes
+   genuine host tasks. The bundle's `runner_inventory` is the S3 grader's own,
+   closed to `src/relaymind`, `pyproject.toml` and
+   `scripts/asset_whole_task.py`. The other files the platform run executes or
+   loads are bound by the registered evidence `platform-runner-files` (path,
+   SHA-256 and size of each): the workflow, `asset_operations_run.py`,
+   `asset_platform_run.py`, `openclaw_install_check.py`, the ordinary
+   installed-host harness with the action and person harnesses it is built on,
+   and the test helpers the bundle and the harness import. The release tarball
+   is bound by `release.json` and `SHA256SUMS`. Without an install-check record it writes
    `platform-not-built.json` (`install_check_missing`) instead, exits 2, and
    `verify` reports that record as a failure. An output directory that already
    holds a `bundle/` is refused (`platform_out_dir_exists`). Input and write
@@ -992,10 +1046,14 @@ so ordinary pull requests stay fast. Each platform runs:
    reason instead of a traceback;
 5. `asset_platform_run.py verify`, which grades everything again with the
    existing graders. Each operations summary is recomputed by
-   `summarize_operations` from the stored samples. Each platform report is
-   graded by `grade-platform` (it must be `not_applicable`), and its steps are
-   derived again from the registered originals. The result also goes to the
-   job summary.
+   `summarize_operations` from the stored samples, and a report with any
+   `harness_errors` fails. Each platform report is graded by `grade-platform`
+   (it must be `not_applicable`), its `platform-runner-files` must equal this
+   checkout's files, and its steps are derived again from the registered
+   originals with this checkout's driver. A `platform.json` without its
+   `bundle/` (`platform_bundle_missing`), or a bundle without its report
+   (`platform_report_missing`), fails. The result also goes to the job
+   summary.
 
 The job fails only on a harness error; it never uses `continue-on-error`. A
 slow runner, a late batch or a failed lifecycle step stays visible in the
@@ -1021,8 +1079,8 @@ python scripts/asset_platform_run.py verify \
   docs/evidence/<date>-asset-platform-runs-github-runners/<run-id>
 ```
 
-`verify` prints one line per report and exits 1 when any report fails a grader
-or none is found. Run it from a checkout at the run's commit
+`verify` prints one line per report and exits 1 when any report fails a grader,
+records harness errors, is missing its other half, or none is found. Run it from a checkout at the run's commit
 (`runner.variables.GITHUB_SHA` in `operations.json`; for a pull request this is
 its merge commit). The inventory check compares the bundle with the running
 grader.
@@ -1154,21 +1212,29 @@ result.
   reports `Darwin`, `arm64`, CPU `Apple M1` and exactly 8 GiB of memory;
 - `environment_lock`: every value in the manifest's `environment_lock` matches;
 - `host_version`: `openclaw --version` names only `2026.10.7` (the plugin's
-  `PINNED_OPENCLAW`), which the freeze's host and SDK versions also name;
+  `PINNED_OPENCLAW`), which the freeze's host and SDK versions also name; a
+  suffixed version such as `2026.10.7-beta.2` or `2026.10.7.1` is another version;
 - `release_checksum`: the tarball's SHA-256 is the one in `SHA256SUMS` and
   `release.json` beside it (`npm run pack:release`), and `release.json` pins
   that host;
 - `frozen_package`: exactly one frozen package has the tarball's SHA-256 and
   size, and its version is the release version.
 
-**Install.** The install changes the operator's actual host. It follows the
-operator guide's lifecycle (`integrations/openclaw/README.md`, step 4):
+**Install.** The install changes the operator's actual host, so it checks
+first and runs no host command that changes anything when a check fails: a
+release that fails `release_checksum` is rejected (`release_checksum`, exit
+`2`), and a host whose `--version` does not name only the pinned version is
+blocked (`host_version`, exit `3`). Then neither the work directory nor the
+record is written. It follows the operator guide's lifecycle (`integrations/openclaw/README.md`, step 4):
 install, configure, enable, inspect. The pinned host installs the plugin
 disabled until it is configured, so the kit sets `baseUrl` (`--base-url`,
 default `http://127.0.0.1:8080/v1`, the gateway's default loopback listener)
 and then runs `plugins enable relaymind` (#269). The URL must meet the
 plugin's own `baseUrl` rules (http or https, a loopback host, the `/v1` root,
-no credentials, query or fragment); any other value is refused with
+no credentials, query or fragment), applied after the same WHATWG URL parse
+the plugin uses, so the kit accepts and refuses exactly what the plugin does
+and configures the plugin's normal form (for example `http://127.1:8080/v1`
+is configured as `http://127.0.0.1:8080/v1`); any other value is refused with
 `invalid_base_url` before any host command runs, and is never written to a
 record or an error message. Each step is recorded with
 its exit code; a failed step stops the rest, which are `not_run`. Each step's
@@ -1314,8 +1380,11 @@ python integrations/openclaw/test/host-walkthrough/record.py record \
 The harness starts the browser with `HOME` inside the work directory, so it
 sees only system fonts. On a host without a CJK font, the Chinese labels still
 match but render as empty boxes. `--font-dir` copies the `.otf`, `.ttf` and
-`.ttc` files of a directory into that isolated home before the host is
-installed. The manifest lists their names and digests under `fonts`. Use a
+`.ttc` files of a directory once into the work root (`fonts/`), then installs
+that copy into each isolated home's `$XDG_DATA_HOME/fonts` (Linux fontconfig)
+as part of the install step, before the host is installed. The manifest lists
+the names and digests of that copy under `fonts`, so they are the bytes every
+language installed. Use a
 work root whose path holds no user name, because the source locator and the
 capture show it.
 
@@ -1336,9 +1405,16 @@ If the predicate fails, the step named by the harness failure is `failed` with
 the harness reason. Earlier steps with screenshots are `not_verified`, and
 later ones are `not_run`. A screenshot alone never makes a step recorded. If a
 language's child fails or times out (15 minutes), the recorder still writes
-`manifest.json` with `complete: false`. It sets the language `reason` to
+`manifest.json`. Each child runs in its own process session: on a timeout or
+an interruption, and also when the child exits on its own (a crash included),
+the recorder sends SIGTERM to whatever is left in the process group (so the
+harness can stop its gateway and proxy), waits up to 15 seconds, then sends
+SIGKILL, so no process left in that group keeps running. The manifest has
+`complete: false`. It sets the language `reason` to
 `child_failed` or `child_timeout`, and every outcome-dependent step to
 `not_run` with `capture_missing`, or `capture_invalid` for a torn capture.
+A repeated `--languages` value is refused before anything is created
+(`languages_repeated`, exit `2`, no manifest).
 Any partial files are still listed by digest, including every
 `screens/*.png` that `screens.json` does not name (a killed child never saves
 it). Such a screenshot belongs to no step. A torn `screens.json`, a listed file

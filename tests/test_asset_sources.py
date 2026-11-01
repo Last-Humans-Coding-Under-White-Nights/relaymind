@@ -108,6 +108,32 @@ def test_root_entry_prevents_child_fallback_even_when_invalid(tmp_path):
     assert len(capture(tmp_path).documents) == 1
 
 
+def test_invalid_root_after_a_child_generation_is_a_partial_generation(tmp_path):
+    """RM34/AC25, spec 0.66 section 4.6.1: a rejected root never aborts the scan.
+
+    The prior child record is omitted because the root takes precedence; it
+    stays (stale) in a partial generation and is never removed.
+    """
+    skill(tmp_path / "child")
+    first = capture(tmp_path)
+    previous = sources.SourceInventory(
+        "example",
+        1,
+        tuple(
+            sources.InventoryAsset(d.record, first.package_paths[d.record.asset_id])
+            for d in first.documents
+        ),
+        owners={d.record.asset_id: "example" for d in first.documents},
+    )
+    (tmp_path / "SKILL.md").write_text("invalid")
+    got = capture(tmp_path, previous=previous)
+    assert got.documents == ()
+    assert not got.complete
+    assert got.rejected_count == 1
+    assert got.exclusions == ({"asset_id": package_id("."), "reason": "invalid_data"},)
+    assert got.removed_asset_ids == frozenset()
+
+
 @pytest.mark.parametrize(
     ("payload", "reason"),
     [
@@ -251,6 +277,38 @@ def test_symlinked_manifest_beside_a_rejected_skill_fails_the_whole_scan(tmp_pat
     assert not isinstance(caught.value, sources.CandidateRejected)
 
 
+def test_scan_failure_after_a_rejected_candidate_keeps_its_rejection(tmp_path):
+    """RM34/AC25, spec 0.66 section 4.6.1: a failed scan keeps its rejection evidence."""
+    from relaymind.store import RunStore
+    from relaymind.store.asset_catalog import AssetCatalogStore
+
+    root = tmp_path / "skills"
+    (root / "bad").mkdir(parents=True)
+    (root / "bad" / "SKILL.md").write_bytes(b"\xff\xfe not utf-8")
+    skill(root / "good")
+    outside = tmp_path / "outside-manifest.json"
+    outside.write_text('{"version":"1"}')
+    symlink(root / "good" / "skill.manifest.json", outside)
+    with pytest.raises(sources.SourceFailure) as caught:
+        capture(root)
+    failure = caught.value
+    assert failure.reason == "invalid_data"
+    assert not isinstance(failure, sources.CandidateRejected)
+    assert failure.rejected_count == 2
+    assert failure.exclusions == (
+        {"asset_id": package_id("bad"), "reason": "invalid_data"},
+        {"asset_id": None, "reason": "invalid_data"},
+    )
+    with RunStore() as store:
+        catalog = AssetCatalogStore(store)
+        catalog.record_failure(
+            "example", rejected_count=failure.rejected_count, exclusions=failure.exclusions
+        )
+        source = catalog.snapshot().sources[0]
+        assert source["rejected_count"] == 2
+        assert source["exclusions"][0] == {"asset_id": package_id("bad"), "reason": "invalid_data"}
+
+
 def test_scan_level_failures_still_fail_the_whole_scan(tmp_path):
     """RM34/AC25: path safety, budgets and a missing root are not per-file rejections."""
     root = bundled(tmp_path / "skills")
@@ -273,6 +331,59 @@ def test_oversized_original_is_a_rejected_candidate_but_job_bytes_stay_whole(tmp
     got = capture(root)
     assert got.exclusions == ({"asset_id": package_id("huge"), "reason": "size_limit"},)
     assert len(got.documents) == len(BUNDLED_SHA256)
+
+
+def grow_while_reading(monkeypatch, target, size):
+    """Extend target past size after its first chunk is read (after the size check)."""
+    actual = os.read
+    inode = target.stat().st_ino
+    grown = [False]
+
+    def read(fd, amount):
+        raw = actual(fd, amount)
+        if raw and not grown[0] and os.fstat(fd).st_ino == inode:
+            grown[0] = True
+            with target.open("r+b") as handle:
+                handle.truncate(size + 1)
+        return raw
+
+    monkeypatch.setattr(os, "read", read)
+    return grown
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX read path")
+def test_growth_past_the_limit_during_reading_fails_the_whole_scan(tmp_path, monkeypatch):
+    """RM34/AC25, spec 0.66 section 4.6.1: a change during capture is not a rejection."""
+    root = tmp_path / "skills"
+    skill(root / "good")
+    growing = skill(root / "growing")
+    grown = grow_while_reading(monkeypatch, growing, 10 * 1024 * 1024)
+    with pytest.raises(sources.SourceFailure) as caught:
+        capture(root)
+    assert grown[0]
+    assert not isinstance(caught.value, sources.CandidateRejected)
+    assert caught.value.reason == "source_unavailable"
+
+
+def test_a_changed_oversized_candidate_fails_the_whole_scan(tmp_path, monkeypatch):
+    """RM34/AC25, spec 0.66 section 4.6.1: a rejected file is still verified as unchanged."""
+    root = tmp_path / "skills"
+    skill(root / "good")
+    (root / "huge").mkdir()
+    huge = root / "huge" / "SKILL.md"
+    with huge.open("wb") as handle:
+        handle.truncate(10 * 1024 * 1024 + 1)
+    real = sources._Stage.verify
+
+    def changed(self):
+        with huge.open("r+b") as handle:
+            handle.truncate(10 * 1024 * 1024 + 2)
+        return real(self)
+
+    monkeypatch.setattr(sources._Stage, "verify", changed)
+    with pytest.raises(sources.SourceFailure) as caught:
+        capture(root)
+    assert caught.value.reason == "source_unavailable"
 
 
 def test_source_secret_values_redacted_but_schema_declarations_untouched(tmp_path):
