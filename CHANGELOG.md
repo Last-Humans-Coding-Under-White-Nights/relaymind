@@ -9,15 +9,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Native host configuration preflight (#250; RM16/RM39/RM40/RM44;
   AC31/AC35/AC36/AC37): a bounded Node checker uses pinned OpenClaw 2026.10.7
   validation, including defaults, strict refinements and plugin schemas, and
-  returns a closed verdict with the validator file digest. The Python wrapper
-  enforces a timeout; input resolution rejects invalid native preflights and
+  returns a closed verdict with the SHA-256 of every pinned host entry point it
+  imports. The Python wrapper enforces a timeout and accepts only that pinned
+  validator identity; input resolution rejects invalid native preflights and
   retains validator identities by config digest. Offline resolution can consume
   captured verdicts without Node; native fixture tests run in the OpenClaw CI job.
   The isolated state (no operator HOME or credentials) installs the packaged
   RelayMind plugin when the config names `relaymind`, so ordinary installed
   discovery validates its settings without `plugins.load.paths`. A referenced
-  plugin whose schema the host did not inspect (undiscovered, or a discovery
-  owner the host preserved uninspected) is `unavailable` with reason
+  plugin (in `plugins.entries` or `plugins.allow`) whose schema the host did
+  not inspect (undiscovered, or a discovery owner the host preserved
+  uninspected) is `unavailable` with reason
   `plugin_schema_not_inspected`, never `valid`; every verdict carries a closed
   `reason`.
   Qualified captured-evidence verification remains open in #240.

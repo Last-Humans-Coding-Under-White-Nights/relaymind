@@ -1397,11 +1397,13 @@ evidence only, and exact MCP use remains blocked.
 #250 implements bounded native configuration preflight with the installed
 OpenClaw 2026.10.7 validator under Node, including strict/plugin checks and
 native default handling, with a Python timeout and closed verdicts recording
-the host version and validator file SHA-256. The child state is a disposable
+the host version and the SHA-256 of every pinned host entry point the checker
+imports; any other validator identity is rejected. The child state is a disposable
 directory without operator credentials; when the config names `relaymind` it
 holds only the packaged RelayMind plugin (the built integration, or the
 unpacked release passed as `plugin_root`), so installed-plugin discovery checks
-its settings. A referenced plugin without an inspected schema is `unavailable`
+its settings. A plugin referenced in `plugins.entries` or `plugins.allow`
+without an inspected schema is `unavailable`
 (`plugin_schema_not_inspected`), not `valid`. Valid/invalid, Unicode-pattern,
 plugin-schema, installed RelayMind, unknown/uninspected plugin and
 unavailable-host fixtures run in the OpenClaw CI job.
