@@ -960,3 +960,43 @@ def test_a_blocked_trial_command_reports_blocked(tmp_path, capsys):
     assert main(argv) == 3
     outcome = json.loads(capsys.readouterr().err)
     assert outcome == dict(status="blocked", reason="host_version")
+
+
+# --- fourth review follow-ups (PR #262) ---------------------------------------
+
+
+def test_trial_run_preflight_and_install_under_a_symlinked_parent_are_read(
+    tmp_path, bundle, monkeypatch
+):
+    """macOS /tmp is a symlink: --preflight and --install directly under it are read."""
+    monkeypatch.setattr(kit, "observed_environment", lambda: M1)
+    tarball, preflight = cli_records(tmp_path, bundle)
+    real = tmp_path / "records"
+    real.mkdir()
+    preflight.rename(real / "preflight.json")
+    install = kit.install_plugin(fake_host(tmp_path), tarball, tmp_path / "install")
+    (real / "install.json").write_text(json.dumps(install), encoding="utf-8")
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    argv = ["trial-run", "--inputs", str(frozen_manifest(bundle)), "--observations"]
+    argv += [str(observations(tmp_path, bundle)), "--bundle", str(tmp_path / "out")]
+    argv += ["--preflight", str(link / "preflight.json"), "--resolver", str(bundle.resolver)]
+    argv += ["--install", str(link / "install.json"), "--tarball", str(tarball)]
+    argv += ["--qualification", "fixture"]
+    assert main(argv) == 3
+    assert json.loads((tmp_path / "out" / "grade.json").read_bytes())["status"] == "graded"
+
+
+def test_an_os_error_is_reported_without_its_path(tmp_path, bundle, capsys):
+    """A refused trial never prints a local path or a raw OS message."""
+    work = tmp_path / "secret-work-dir"
+    work.mkdir()
+    argv = ["trial", "--inputs", str(frozen_manifest(bundle)), "--tarball"]
+    argv += [str(release(tmp_path)), "--observations", str(observations(tmp_path, bundle))]
+    argv += ["--bundle", str(tmp_path / "out"), "--work", str(work)]
+    argv += ["--qualification", "fixture", "--", *fake_host(tmp_path)]
+    assert main(argv) == 2
+    captured = capsys.readouterr()
+    assert json.loads(captured.err) == dict(status="rejected", reason="invalid_input")
+    assert "secret-work-dir" not in captured.err + captured.out
+    assert str(tmp_path) not in captured.err + captured.out
