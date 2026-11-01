@@ -21,6 +21,7 @@ from relaymind.evaluation.asset_labelling import (
     label_template,
     raw_judgments,
 )
+from test_asset_corpus import load, relock, write
 from whole_task_helpers import expanded_release
 
 
@@ -274,13 +275,17 @@ def _machine_dual(tmp_path, adjudicator_roles=("adjudicator",)):
     return catalog, cases, labels
 
 
-def _dual_round_trip(catalog, cases, labels):
-    templates = [
+def _dual_templates(catalog, cases, labels):
+    return [
         filled(
             label_template(catalog, cases, a, labelling="machine_dual_owner_approved"), labels, a
         )
         for a in ("judge-a", "judge-b")
     ]
+
+
+def _dual_round_trip(catalog, cases, labels):
+    templates = _dual_templates(catalog, cases, labels)
     judgments = raw_judgments(catalog, cases, templates, labelling="machine_dual_owner_approved")
     worksheet = adjudication_worksheet(
         catalog, cases, judgments, labelling="machine_dual_owner_approved"
@@ -531,12 +536,7 @@ def test_a_worksheet_for_other_documents_is_a_binding_error(tmp_path, field):
 def _dual_disagreement(tmp_path, reason):
     """machine_dual labels where judge-b says negative to judge-a's positive."""
     catalog, cases, labels = _machine_dual(tmp_path)
-    templates = [
-        filled(
-            label_template(catalog, cases, a, labelling="machine_dual_owner_approved"), labels, a
-        )
-        for a in ("judge-a", "judge-b")
-    ]
+    templates = _dual_templates(catalog, cases, labels)
     templates[1]["items"][0]["judgment"].update({"class": "negative", "acceptable_asset_ids": []})
     judgments = raw_judgments(catalog, cases, templates, labelling="machine_dual_owner_approved")
     worksheet = adjudicated(
@@ -565,39 +565,20 @@ def test_a_machine_dual_agreement_needs_no_adjudication_reason(tmp_path):
 
 def test_release_validation_rejects_a_machine_dual_disagreement_without_a_reason(tmp_path):
     """The same check runs when a committed release is loaded, not only at freeze."""
-    from relaymind.evaluation.asset_corpus import load_asset_release
-
     catalog, cases, judgments, worksheet = _dual_disagreement(tmp_path, "adjudicator: positive")
     frozen = freeze_labels(
         catalog, cases, judgments, worksheet, labelling="machine_dual_owner_approved"
     )
     root = tmp_path / "release"
-
-    def write(name, document):
-        (root / f"{name}.json").write_text(json.dumps(document, indent=2), encoding="utf-8")
-
-    def relock():
-        lock = json.loads((root / "lock.json").read_text(encoding="utf-8"))
-        for name in ("catalog", "cases", "labels"):
-            lock[name]["digest"] = canonical_digest(
-                json.loads((root / f"{name}.json").read_text(encoding="utf-8"))
-            )
-        lock.pop("digest")
-        lock["digest"] = canonical_digest(lock)
-        write("lock", lock)
-
-    def load():
-        return load_asset_release(root / "lock.json", evidence_root=root, related_roots={})
-
-    write("catalog", catalog)
-    write("labels", frozen)
-    relock()
-    assert load().labels["agreement"]["method"] == "machine_dual.v1"
+    write(root, "catalog", catalog)
+    write(root, "labels", frozen)
+    relock(root)
+    assert load(root).labels["agreement"]["method"] == "machine_dual.v1"
     frozen["adjudications"][0]["reason"] = "  "
-    write("labels", frozen)
-    relock()
+    write(root, "labels", frozen)
+    relock(root)
     with pytest.raises(AssetCorpusError, match="adjudication_reason_missing"):
-        load()
+        load(root)
 
 
 @pytest.mark.parametrize("annotators", [("judge-a",), ("judge-a", "judge-a")])

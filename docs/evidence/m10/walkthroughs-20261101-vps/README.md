@@ -27,3 +27,10 @@ or token. The work directory is a neutral `/tmp/rm-walkthrough` path, and the
 accounts shown are disposable fixture accounts. Known UI gaps seen in these
 runs are tracked in #270: English labels in the zh-CN detail block, escaped
 path characters, and a wide JSON line.
+
+The privacy statement above covers the screenshots and sampled video frames.
+Both committed `capture.json` files also contain the VPS's private RFC1918
+address in bind, peer and proxy metadata. That internal address is retained
+because the captures are bound by `manifest.json`; changing it would change
+the recorded evidence. It is not a public address or a credential. The
+capture metadata was not covered by the visual privacy review described above.

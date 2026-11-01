@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+import helpers
 from relaymind.assets.catalog import CatalogSnapshot, validate_asset_record
 from relaymind.canonical import canonical_json
 from test_asset_catalog import record
@@ -618,7 +619,7 @@ def test_cancel_resistant_late_work_cannot_publish_or_block():
     from relaymind.selection.asset_chain import RecommendationFailure, SelectionBudget
 
     async def run():
-        budget = SelectionBudget()
+        budget = SelectionBudget(clock=helpers.FakeClock())
         entered, release = asyncio.Event(), asyncio.Event()
         events = []
 
@@ -710,7 +711,7 @@ def test_runtime_unavailable_and_no_lexical_self_fallback():
                 api().parse_asset_request(request()),
                 primary=LexicalAssetSelector(None),
                 lexical_floor=LexicalAssetSelector(None),
-                budget=SelectionBudget(),
+                budget=SelectionBudget(clock=helpers.FakeClock()),
                 primary_ms=150,
                 fallback_enabled=True,
                 current_catalog=lambda: snapshot(),
@@ -805,7 +806,7 @@ def test_builtin_dependency_failure_is_unavailable():
                 api().parse_asset_request(request()),
                 primary=Broken(None),
                 lexical_floor=None,
-                budget=SelectionBudget(),
+                budget=SelectionBudget(clock=helpers.FakeClock()),
                 primary_ms=150,
                 fallback_enabled=True,
                 current_catalog=lambda: snapshot(),
@@ -966,7 +967,7 @@ def test_coordinator_rejects_untrusted_scope_or_permissions_before_dispatch():
                 api().parse_asset_request(request(catalog=[] if empty else [record()])),
                 primary=primary,
                 lexical_floor=None,
-                budget=SelectionBudget(),
+                budget=SelectionBudget(clock=helpers.FakeClock()),
                 primary_ms=150,
                 fallback_enabled=False,
                 current_catalog=lambda: snapshot(),
@@ -1061,7 +1062,7 @@ def test_precommit_fence_can_close_budget_before_late_attempt_event():
         SelectionBudget,
     )
 
-    budget = SelectionBudget()
+    budget = SelectionBudget(clock=helpers.FakeClock())
     primary = Primary()
 
     def observe(event):
@@ -1315,7 +1316,7 @@ def test_request_own_cancel_signal_stays_a_recommendation_failure():
 
     async def run():
         primary = SlowPrimary()
-        budget = SelectionBudget()
+        budget = SelectionBudget(clock=helpers.FakeClock())
         task = asyncio.create_task(coordinate(primary, budget=budget))
         await primary.started.wait()
         budget.cancel()

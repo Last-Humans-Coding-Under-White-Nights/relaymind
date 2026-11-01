@@ -22,6 +22,7 @@ INVALID = "invalid_base_url"
 _DEFAULT_PORTS = {"http": 80, "https": 443}
 _C0_OR_SPACE = "".join(chr(c) for c in range(0x21))
 _HEX = "0123456789abcdefABCDEF"
+_FORBIDDEN_HOST = frozenset("\x00\t\n\r #/:<>?@[\\]^|%\x7f") | {chr(c) for c in range(0x20)}
 
 
 class _Failure(Exception):
@@ -207,8 +208,7 @@ def _host(text: str) -> str:
         return "[::1]" if pieces == (0, 0, 0, 0, 0, 0, 0, 1) else "[]"
     domain = _percent_decode(text).decode("utf-8", errors="replace")
     ascii_domain = _domain_to_ascii(domain)
-    forbidden = set("\x00\t\n\r #/:<>?@[\\]^|%\x7f") | {chr(c) for c in range(0x20)}
-    if any(c in forbidden for c in ascii_domain):
+    if any(c in _FORBIDDEN_HOST for c in ascii_domain):
         raise _Failure
     if _ends_in_a_number(ascii_domain):
         return _ipv4(ascii_domain)

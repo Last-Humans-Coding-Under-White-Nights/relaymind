@@ -1,6 +1,7 @@
 """RM34/AC25: explicit configuration and one bounded cancellable catalog worker."""
 
 import asyncio
+import hashlib
 import logging
 import os
 import threading
@@ -17,7 +18,7 @@ from relaymind.launcher import LaunchError, build_app, load_config
 from relaymind.store import RunStore
 from relaymind.store.asset_catalog import AssetCatalogStore as facade
 from relaymind.store.run_store import utc_iso
-from test_asset_sources import imported, skill
+from test_asset_sources import capture, imported, package_id, skill
 
 
 def settings(path, *, kind="local_directory", refresh=None):
@@ -813,30 +814,71 @@ def test_periodic_sources_are_scheduled_oldest_due_first(tmp_path):
         assert order == ["a", "b", "c", "a", "b", "c"]
 
 
-def test_one_rejected_skill_publishes_the_others_as_a_partial_generation(tmp_path):
+@pytest.mark.parametrize("prior_generation", [False, True])
+def test_one_rejected_skill_publishes_the_others_as_a_partial_generation(
+    tmp_path, prior_generation
+):
     """RM34/AC25 (#268, spec 0.66 section 4.6.1): a bad file never hides its siblings."""
     root = tmp_path / "source"
-    skill(root / "good")
+    good = skill(root / "good")
     skill(root / "other", description="Other skill")
-    (root / "bad").mkdir()
-    (root / "bad" / "SKILL.md").write_text("---\nname: bad\n---\nno description\n")
     clock = FakeClock()
     with RunStore(clock=clock) as run_store:
         catalog = facade(run_store)
         service = s.AssetCatalogService(settings(root), catalog, clock=clock)
 
         async def run():
-            await service.tick()
+            if prior_generation:
+                retired = skill(root / "retired", description="Retired skill")
+                await service.tick()
+                initial = catalog.snapshot()
+                assert initial.catalog_revision == 1
+                assert initial.sources[0]["complete"]
+                assert all(not a.stale for a in initial.assets)
+                retired.unlink()
+                skill(root / "good", description="Updated skill", body="Updated instructions.")
+                clock.advance(1)
+            (root / "bad").mkdir()
+            (root / "bad" / "SKILL.md").write_text("---\nname: bad\n---\nno description\n")
+            before = catalog.snapshot()
+            staged = capture(root, previous=catalog.inventory("example"))
+            preview = catalog.preview(
+                catalog.prepare(staged), expected_revision=before.catalog_revision, base=before
+            )
+            result = await service.rescan("example")
             await service.stop()
-            snapshot = catalog.snapshot()
-            assert sorted(a.description for a in snapshot.assets) == [
-                "Greeting skill",
-                "Other skill",
-            ]
-            source = snapshot.sources[0]
-            assert not source["complete"] and not source["stale"]
-            assert source["rejected_count"] == 1
-            assert [e["reason"] for e in source["exclusions"]] == ["invalid_data"]
+            assert result.removed_asset_ids == ()
+            assert catalog.inventory("example").tombstones == frozenset()
+            for snapshot in (preview, catalog.snapshot()):
+                assert snapshot.catalog_revision == before.catalog_revision + 1
+                records = {a.asset_id: a for a in snapshot.assets}
+                expected = {package_id("good"), package_id("other")}
+                if prior_generation:
+                    expected.add(package_id("retired"))
+                    retained = records[package_id("retired")]
+                    original = next(a for a in initial.assets if a.asset_id == retained.asset_id)
+                    assert retained.stale
+                    assert retained.description == original.description
+                    assert retained.content_hash == original.content_hash
+                assert set(records) == expected
+                updated = records[package_id("good")]
+                assert not updated.stale
+                assert updated.description == (
+                    "Updated skill" if prior_generation else "Greeting skill"
+                )
+                assert updated.content_hash == hashlib.sha256(good.read_bytes()).hexdigest()
+                assert not records[package_id("other")].stale
+                assert records[package_id("other")].description == "Other skill"
+                source = snapshot.sources[0]
+                assert not source["complete"] and not source["stale"]
+                assert source["rejected_count"] == 1
+                assert list(source["exclusions"]) == [
+                    {"asset_id": package_id("bad"), "reason": "invalid_data"},
+                ]
+            documents = {d.record.asset_id: d for d in catalog.search_documents()}
+            assert documents[package_id("good")].body == (
+                "Updated instructions." if prior_generation else "Say hello."
+            )
             outcome = catalog.job_outcomes()[0]
             assert outcome["state"] == "succeeded"
             published = [

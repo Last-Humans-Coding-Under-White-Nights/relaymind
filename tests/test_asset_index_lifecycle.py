@@ -7,7 +7,7 @@ import pytest
 
 from helpers import ScriptedAdapter
 from launcher_helpers import write_config
-from recommendation_helpers import BODY, client_for, setup
+from recommendation_helpers import BODY, build_app, client_for, setup
 from relaymind import launcher
 from relaymind.assets.settings import SourceConfig
 from relaymind.assets.sources import CaptureContext, SourceFailure, capture_source
@@ -25,7 +25,7 @@ def test_source_update_prepares_index_while_old_generation_still_serves(tmp_path
 
     async def go():
         config = configured_catalog(tmp_path, warmup=False, detect=False)
-        launched = launcher.build_app(config, local_adapter=ScriptedAdapter())
+        launched = build_app(config, local_adapter=ScriptedAdapter())
         service = launched.app.state.recommendations
         catalog = launched.app.state.asset_catalog
         async with launched.app.router.lifespan_context(launched.app):
@@ -70,7 +70,7 @@ def test_failed_index_preparation_cannot_commit_new_source_content(tmp_path, mon
 
     async def go():
         config = configured_catalog(tmp_path, warmup=False, detect=False)
-        launched = launcher.build_app(config, local_adapter=ScriptedAdapter())
+        launched = build_app(config, local_adapter=ScriptedAdapter())
         service = launched.app.state.recommendations
         catalog = launched.app.state.asset_catalog
         async with launched.app.router.lifespan_context(launched.app):
@@ -284,7 +284,7 @@ def test_noop_source_capture_can_publish_changed_policy_without_source_failure(t
     """RM38/AC29: successful unchanged capture and changed eligibility share one safe commit."""
 
     async def go():
-        launched = launcher.build_app(
+        launched = build_app(
             configured_catalog(tmp_path, warmup=False, detect=False),
             local_adapter=ScriptedAdapter(),
         )
@@ -450,7 +450,7 @@ def test_restart_and_derived_work_preserve_feedback_key_and_one_lifetime_owner(t
         warmup=False,
         detect=False,
     )
-    launched = launcher.build_app(config, local_adapter=ScriptedAdapter())
+    launched = build_app(config, local_adapter=ScriptedAdapter())
     worker, service = launched.app.state.asset_catalog, launched.app.state.recommendations
     # This fixture isolates restoration/derived work from the independently
     # tested periodic source scan; the source is deliberately offline.
@@ -483,7 +483,7 @@ def test_source_cas_loser_cannot_overwrite_another_committed_generation(tmp_path
     from test_chat_disconnect_cancel import until
 
     async def go():
-        launched = launcher.build_app(
+        launched = build_app(
             configured_catalog(tmp_path, warmup=False, detect=False),
             local_adapter=ScriptedAdapter(),
         )
@@ -530,7 +530,7 @@ def test_durable_commit_before_failed_memory_swap_recovers_without_source_downlo
 
     async def go():
         config = configured_catalog(tmp_path, warmup=False, detect=False)
-        launched = launcher.build_app(config, local_adapter=ScriptedAdapter())
+        launched = build_app(config, local_adapter=ScriptedAdapter())
         worker, service = launched.app.state.asset_catalog, launched.app.state.recommendations
         async with launched.app.router.lifespan_context(launched.app):
             await worker.rescan("example")
@@ -555,7 +555,7 @@ def test_durable_commit_before_failed_memory_swap_recovers_without_source_downlo
                     assert db.execute("SELECT count(*) FROM recommendations").fetchone()[0] == 1
         launched.orchestrator.store.close()
         (tmp_path / "ordinary" / "SKILL.md").unlink()
-        restored = launcher.build_app(config, local_adapter=ScriptedAdapter())
+        restored = build_app(config, local_adapter=ScriptedAdapter())
         restored.app.state.asset_catalog._next["example"] = float("inf")
         try:
             async with restored.app.router.lifespan_context(restored.app):
@@ -664,7 +664,7 @@ def test_cancel_while_waiting_for_refresh_owner_preserves_compatible_offer(tmp_p
     from test_chat_disconnect_cancel import until
 
     async def go():
-        launched = launcher.build_app(
+        launched = build_app(
             configured_catalog(tmp_path, warmup=False, detect=False),
             local_adapter=ScriptedAdapter(),
         )
@@ -695,7 +695,7 @@ def test_noop_source_capture_repairs_unknown_offer_binding_with_new_revision(tmp
     """RM38/AC29: source no-op must not reuse a revision whose derived offer proof was lost."""
 
     async def go():
-        launched = launcher.build_app(
+        launched = build_app(
             configured_catalog(tmp_path, warmup=False, detect=False),
             local_adapter=ScriptedAdapter(),
         )

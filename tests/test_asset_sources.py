@@ -184,6 +184,24 @@ def test_body_markup_and_repeated_fences_stay_internal_data(tmp_path):
     assert capture(tmp_path).exclusions[0]["reason"] == "invalid_data"
 
 
+@pytest.mark.parametrize("with_manifest", [False, True])
+def test_invalid_utf8_skill_rejects_only_its_candidate(tmp_path, with_manifest):
+    """RM34/AC25: invalid UTF-8 is a candidate rejection, not a source failure."""
+    (tmp_path / "bad").mkdir()
+    (tmp_path / "bad" / "SKILL.md").write_bytes(b"\xff\xfe not utf-8")
+    if with_manifest:
+        (tmp_path / "bad" / "skill.manifest.json").write_text('{"version":"1"}')
+    skill(tmp_path / "good")
+
+    got = capture(tmp_path)
+
+    assert [d.record.asset_id for d in got.documents] == [package_id("good")]
+    assert not got.complete
+    assert got.rejected_count == 1
+    assert got.exclusions == ({"asset_id": package_id("bad"), "reason": "invalid_data"},)
+    assert got.removed_asset_ids == frozenset()
+
+
 # Verbatim copies of OpenClaw 2026.10.7 bundled skills (package `openclaw`, MIT).
 BUNDLED = Path(__file__).parent / "fixtures" / "openclaw-bundled-skills"
 BUNDLED_SHA256 = {
@@ -649,6 +667,34 @@ def test_frontmatter_precedence_manifest_validation_and_no_resource_reads(tmp_pa
         got = capture(tmp_path)
         assert got.documents == () and not got.complete
         assert got.exclusions == ({"asset_id": package_id("."), "reason": "invalid_data"},)
+
+
+@pytest.mark.parametrize(
+    ("payload", "reason"),
+    [
+        pytest.param(b"[]", "invalid_data", id="non-object"),
+        pytest.param(b"\xff\xfe", "invalid_data", id="invalid-utf8"),
+        pytest.param(None, "size_limit", id="oversized"),
+    ],
+)
+def test_invalid_optional_manifest_rejects_only_its_candidate(tmp_path, payload, reason):
+    """RM34/AC25: optional manifest JSON, encoding and size checks are per package."""
+    skill(tmp_path / "bad")
+    skill(tmp_path / "good")
+    manifest = tmp_path / "bad" / "skill.manifest.json"
+    if payload is None:
+        with manifest.open("wb") as handle:
+            handle.truncate(4 * 1024 * 1024 + 1)
+    else:
+        manifest.write_bytes(payload)
+
+    got = capture(tmp_path)
+
+    assert [d.record.asset_id for d in got.documents] == [package_id("good")]
+    assert not got.complete
+    assert got.rejected_count == 1
+    assert got.exclusions == ({"asset_id": package_id("bad"), "reason": reason},)
+    assert got.removed_asset_ids == frozenset()
 
 
 @pytest.mark.skipif(os.name == "nt", reason="colon filenames are POSIX-only")

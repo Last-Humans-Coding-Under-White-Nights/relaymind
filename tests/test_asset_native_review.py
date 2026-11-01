@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from helpers import FakeClock
 from relaymind.assets.embedding_activation import BackendRegistration
 from relaymind.evaluation import asset_diagnostic_runner
 from relaymind.evaluation.asset_native_runtime import NativeBenchmarkRuntime
@@ -87,6 +88,7 @@ def test_source_setup_failure_disposes_real_owner_before_query_loop(
             with pytest.raises(failure):
                 await asset_diagnostic_runner.run_source_benchmark(
                     load(development_input),
+                    clock=FakeClock(),
                     production_config=development_input / "fixture.toml",
                     preparation=local_config() if mode == "local" else None,
                 )
@@ -127,6 +129,7 @@ def test_source_failed_native_setup_keeps_planned_rows_and_actual_job_evidence(
     report = asyncio.run(
         asset_diagnostic_runner.run_source_benchmark(
             load(development_input),
+            clock=FakeClock(),
             production_config=development_input / "fixture.toml",
             preparation=local_config(),
             repetitions=3,
@@ -191,6 +194,7 @@ def test_source_cancelled_setup_stays_interrupted_after_catalog_change(
         task = asyncio.create_task(
             asset_diagnostic_runner.run_source_benchmark(
                 load(development_input),
+                clock=FakeClock(),
                 production_config=development_input / "fixture.toml",
                 preparation=local_config(total_ms=2000),
                 repetitions=3,
