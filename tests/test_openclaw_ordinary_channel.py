@@ -2708,10 +2708,13 @@ def test_main_only_replaces_base_gateway_when_observation_is_requested(
 
     monkeypatch.setattr(recommendation_helpers, "setup", base_setup)
 
+    served = []
+
     class Server:
         base_url = "http://127.0.0.1:12345"
 
         def __init__(self, app):
+            served.append(app)
             assert (app is base_apps[-1]) is (not observe)
             assert (
                 any(getattr(route, "path", None) == "/v1/chat/completions" for route in app.routes)
@@ -2731,7 +2734,17 @@ def test_main_only_replaces_base_gateway_when_observation_is_requested(
         assert (extension.observation is not None) is observe
         tokens.append(extension.application_token)
         assert extension.application_token != "a" * 40
-        assert (48, extension.application_token) in generated
+        if observe:
+            # The served app must accept exactly the token the plugin is given.
+            from fastapi.testclient import TestClient
+
+            client = TestClient(served[-1])
+            good = {"Authorization": "Bearer " + extension.application_token}
+            assert client.get("/v1/models", headers=good).status_code == 200
+            bad = {"Authorization": "Bearer " + "b" * 40}
+            assert client.get("/v1/models", headers=bad).status_code == 401
+        else:
+            assert (48, extension.application_token) in generated
         out.write_text(json.dumps(loaded_fixture(api)))
         return 0
 
