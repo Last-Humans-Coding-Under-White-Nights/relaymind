@@ -13,6 +13,8 @@
     "labelling",
     "annotators",
     "agreement",
+    "prompt_authorship",
+    "drafter",
     "corpus_review",
     "preregistration",
     "runs_started_at",
@@ -55,6 +57,7 @@
     "labelling": {
       "enum": [
         "owner_machine",
+        "machine_dual_owner_approved",
         "independent",
         "not_applicable"
       ]
@@ -117,6 +120,141 @@
           }
         },
         {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "machine_a",
+            "machine_b",
+            "adjudicator",
+            "family_relation"
+          ],
+          "properties": {
+            "machine_a": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "annotator_id",
+                "model_id",
+                "prompt_sha256",
+                "temperature",
+                "saw_tuning_results",
+                "saw_arm_outputs"
+              ],
+              "properties": {
+                "annotator_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "x-maxBytes": 256
+                },
+                "model_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "x-maxBytes": 256
+                },
+                "prompt_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+                },
+                "temperature": {
+                  "const": 0
+                },
+                "saw_tuning_results": {
+                  "const": false
+                },
+                "saw_arm_outputs": {
+                  "const": false
+                }
+              }
+            },
+            "machine_b": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "annotator_id",
+                "model_id",
+                "prompt_sha256",
+                "temperature",
+                "saw_tuning_results",
+                "saw_arm_outputs"
+              ],
+              "properties": {
+                "annotator_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "x-maxBytes": 256
+                },
+                "model_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "x-maxBytes": 256
+                },
+                "prompt_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+                },
+                "temperature": {
+                  "const": 0
+                },
+                "saw_tuning_results": {
+                  "const": false
+                },
+                "saw_arm_outputs": {
+                  "const": false
+                }
+              }
+            },
+            "adjudicator": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "annotator_id",
+                "model_id",
+                "prompt_sha256",
+                "temperature",
+                "saw_tuning_results",
+                "saw_arm_outputs"
+              ],
+              "properties": {
+                "annotator_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "x-maxBytes": 256
+                },
+                "model_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "x-maxBytes": 256
+                },
+                "prompt_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+                },
+                "temperature": {
+                  "const": 0
+                },
+                "saw_tuning_results": {
+                  "const": false
+                },
+                "saw_arm_outputs": {
+                  "const": false
+                }
+              }
+            },
+            "family_relation": {
+              "enum": [
+                "different_family",
+                "same_family"
+              ]
+            }
+          }
+        },
+        {
           "type": "null"
         }
       ]
@@ -151,6 +289,51 @@
                   "type": "null"
                 }
               ]
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "prompt_authorship": {
+      "enum": [
+        "original",
+        "machine_drafted_owner_approved",
+        "not_applicable"
+      ]
+    },
+    "drafter": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "author_id",
+            "model_id",
+            "prompt_sha256",
+            "temperature"
+          ],
+          "properties": {
+            "author_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "model_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "prompt_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
+            },
+            "temperature": {
+              "const": 0
             }
           }
         },

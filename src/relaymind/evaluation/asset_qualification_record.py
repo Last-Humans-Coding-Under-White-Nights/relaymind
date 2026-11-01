@@ -40,7 +40,7 @@ from relaymind.evaluation.asset_benchmark_io import (
     validate_closed_document,
 )
 from relaymind.evaluation.asset_corpus_io import DOCUMENT_BYTES, parse_json, read_local
-from relaymind.evaluation.asset_judgments import METHODS
+from relaymind.evaluation.asset_judgments import DRAFTED, METHODS
 from relaymind.evaluation.asset_qualification import CustodianReview
 from relaymind.evaluation.asset_whole_task import WholeTaskRejected
 from relaymind.schema_util import load_packaged_schema
@@ -67,11 +67,12 @@ _PREREGISTERED = ("host_acceptance", "adaptation")
 _MACHINE_SCOPES = ("platform", "walkthrough", "host_operation")
 _NEGATIVE_FINDINGS = {"skill_loaded_use": "stop_point_absent", "mcp_use": "exact_route_absent"}
 _KAPPA_TOLERANCE = 1e-9
+MACHINE_DUAL_PROFILE = "machine_dual_owner_approved"
 # JSON input documents whose canonical digest must equal the resolved input.
 _INPUT_ROLES = ("freeze", "tasks", "episodes", "labels")
 _HOST_SCOPES = {"early_trial": "host_trial", "acceptance": "host_acceptance"}
 # Labelling profiles that record their annotators and Cohen's kappa agreement.
-_AGREEMENT_PROFILES = frozenset({"owner_machine"})
+_AGREEMENT_PROFILES = frozenset({"owner_machine", MACHINE_DUAL_PROFILE})
 
 
 _TIME = re.compile(r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z")
@@ -129,7 +130,8 @@ def _check_rules(record: Mapping) -> None:
     # One unambiguous subject per bound input document.
     if any(roles[role] > 1 for role in ("report", *_INPUT_ROLES)):
         _reject("record_subjects")
-    # Labelling: owner_machine names both annotators and the raw agreement.
+    # Labelling: owner_machine and machine_dual name their annotators and the
+    # raw agreement; independent human labels carry no machine annotators.
     annotators, agreement = record["annotators"], record["agreement"]
     if scope in _LABELLED and labelling == "not_applicable":
         _reject("labelling_profile")
@@ -142,7 +144,8 @@ def _check_rules(record: Mapping) -> None:
     elif annotators is not None or agreement is not None:
         _reject("labelling_profile")
     if labelling == "owner_machine" and (
-        annotators["owner_annotator_id"] == annotators["machine"]["annotator_id"]
+        "owner_annotator_id" not in annotators
+        or annotators["owner_annotator_id"] == annotators["machine"]["annotator_id"]
     ):
         _reject("labelling_profile")
     # Every Time field is a real instant, whether or not it is compared.
@@ -158,6 +161,9 @@ def _check_rules(record: Mapping) -> None:
     # (host, adaptation and platform scopes); others carry none.
     if scope not in REPORT_SCOPES and record["corpus_review"] is not None:
         _reject("record_corpus_review")
+    if labelling == MACHINE_DUAL_PROFILE:
+        _check_machine_dual(annotators)
+    _check_prompt_authorship(record, scope)
     # Preregistration: a commit and its time before any run.
     prereg, started = record["preregistration"], record["runs_started_at"]
     if scope in _PREREGISTERED and prereg is None:
@@ -203,6 +209,39 @@ def _check_rules(record: Mapping) -> None:
             _reject("invalid_qualification_record")
 
 
+def _label_ids(annotators: Mapping | None) -> set[str]:
+    if annotators is None:
+        return set()
+    if "owner_annotator_id" in annotators:
+        return {annotators["owner_annotator_id"], annotators["machine"]["annotator_id"]}
+    return {annotators[k]["annotator_id"] for k in ("machine_a", "machine_b", "adjudicator")}
+
+
+def _check_machine_dual(annotators: Mapping) -> None:
+    """Spec 12.6.6: three distinct machine IDs; one model is one family; two templates."""
+    # The owner/machine shape does not describe machine_dual labels.
+    if "machine_a" not in annotators or len(_label_ids(annotators)) != 3:
+        _reject("labelling_profile")
+    a, b = annotators["machine_a"], annotators["machine_b"]
+    # One model ID is one family; the same_family fallback always needs two
+    # independently written templates, whether or not the model IDs differ.
+    if a["model_id"] == b["model_id"] and annotators["family_relation"] != "same_family":
+        _reject("labelling_profile")
+    if annotators["family_relation"] == "same_family" and a["prompt_sha256"] == b["prompt_sha256"]:
+        _reject("labelling_profile")
+
+
+def _check_prompt_authorship(record: Mapping, scope: str) -> None:
+    """Spec 12.6.6: labelled scopes name their prompt authorship; drafted ones a drafter."""
+    authorship, drafter = record["prompt_authorship"], record["drafter"]
+    if (scope in _LABELLED) == (authorship == "not_applicable"):
+        _reject("prompt_authorship")
+    if (authorship == DRAFTED) != (drafter is not None):
+        _reject("prompt_authorship")
+    if drafter is not None and drafter["author_id"] in _label_ids(record["annotators"]):
+        _reject("prompt_authorship")
+
+
 @dataclass(frozen=True)
 class QualificationRecord:
     """A structurally valid record whose bound digests all matched."""
@@ -227,6 +266,10 @@ class QualificationRecord:
     @property
     def labelling(self) -> str:
         return self.document["labelling"]
+
+    @property
+    def prompt_authorship(self) -> str:
+        return self.document["prompt_authorship"]
 
     @property
     def machine(self) -> Mapping | None:
@@ -318,6 +361,21 @@ class QualificationRecord:
                 or any(row["adjudicator_id"] != owner for row in labels["adjudications"])
             ):
                 _reject("labelling_roles")
+        if self.labelling == MACHINE_DUAL_PROFILE:
+            annotators = self.document["annotators"]
+            expected = {annotators[k]["annotator_id"] for k in ("machine_a", "machine_b")}
+            adjudicator = annotators["adjudicator"]["annotator_id"]
+            if {row["annotator_id"] for row in labels["judgments"]} != expected or any(
+                row["adjudicator_id"] != adjudicator for row in labels["adjudications"]
+            ):
+                _reject("labelling_mismatch")
+            # The catalog Persons hold exactly these roles (12.6.6).
+            roles = {**{i: ["annotator"] for i in expected}, adjudicator: ["adjudicator"]}
+            if any(
+                person not in people or list(people[person]["roles"]) != wanted
+                for person, wanted in roles.items()
+            ):
+                _reject("labelling_roles")
         agreement = self.document["agreement"]
         if agreement is None:
             return
@@ -333,6 +391,120 @@ class QualificationRecord:
         ):
             _reject("record_agreement_mismatch")
 
+    def check_grade(self, grade: Mapping) -> None:
+        """A grade presented under this record carries its labelling (spec 12.6.6).
+
+        Every report graded under the record says so: the qualification output
+        carries the record's ``labelling`` and ``prompt_authorship``. A grade
+        made without the record (both null) or under another profile rejects.
+        """
+        qualification = grade.get("qualification") if isinstance(grade, Mapping) else None
+        if not isinstance(qualification, Mapping) or (
+            qualification.get("labelling"),
+            qualification.get("prompt_authorship"),
+        ) != (self.labelling, self.prompt_authorship):
+            _reject("record_grade_mismatch")
+
+    def check_cases(self, cases: Mapping) -> None:
+        """The frozen cases agree with the record's prompt authorship (spec 12.6.6).
+
+        A drafted record: the drafter writes every prompt of the release, so
+        every case is drafted and names the drafter alone. An original record:
+        no case is drafted; translated or generated validation cases may occur
+        and never count (section 12.6.1).
+        """
+        authorship = self.prompt_authorship
+        if authorship == "not_applicable":
+            return
+        drafter = self.document["drafter"]
+        for case in cases["cases"]:
+            if authorship == DRAFTED:
+                if case["authorship"] != DRAFTED or case["author_ids"] != [drafter["author_id"]]:
+                    _reject("prompt_authorship_mismatch")
+            elif case["authorship"] == DRAFTED:
+                _reject("prompt_authorship_mismatch")
+
+
+def _read_bound(root: Path, ref: Mapping, limit: int) -> bytes:
+    """The bytes of one bound file, checked against its size and SHA-256."""
+    try:
+        payload = read_local(root, ref["path"], limit)
+    except (OSError, ValueError) as exc:
+        raise WholeTaskRejected("record_subject_unavailable") from exc
+    if len(payload) != ref["bytes"] or hashlib.sha256(payload).hexdigest() != ref["sha256"]:
+        _reject("record_digest_mismatch")
+    return payload
+
+
+def _check_report_dispatch(record: Mapping, payload: bytes, root: Path) -> None:
+    """A preregistered host report's bound dispatch evidence corroborates it."""
+    try:
+        report = parse_json(payload)
+    except ValueError as exc:
+        raise WholeTaskRejected("record_input_mismatch") from exc
+    # Full report shape is checked by the report verifier. When rows are
+    # present, its bound evidence must corroborate preregistration.
+    if not isinstance(report, dict) or "rows" not in report:
+        return
+    first = first_host_dispatch(report, root)
+    if first is None:
+        _reject("preregistration_missing")
+    if _time(record["preregistration"]["committed_at"]) > _time(first):
+        _reject("preregistration_late")
+    if _time(record["runs_started_at"]) > _time(first):
+        _reject("record_input_mismatch")
+
+
+def first_host_dispatch(report: Mapping, root: Path | None = None) -> str | None:
+    """RM16/RM44: earliest evidenced dispatch, never an assistant end time.
+
+    A host dispatch capture covers the entire row, including native attempts
+    whose individual start times the host does not expose. Without it, every
+    attempt must have a start; a missing row start cannot be repaired by a
+    later known one. The record may name an earlier planned dispatch.
+    """
+    times = []
+    for row in report.get("rows", []):
+        if row.get("status") == "not_run":
+            continue
+        refs = [
+            ref
+            for ref in report.get("evidence", [])
+            if ref["id"] in row.get("evidence_ids", []) and ref["id"].startswith("host-dispatch:")
+        ]
+        if refs:
+            if len(refs) != 1 or root is None:
+                return None
+            ref = refs[0]
+            payload = _read_bound(root, ref, DOCUMENT_BYTES)
+            try:
+                capture = parse_json(payload)
+            except ValueError as exc:
+                raise WholeTaskRejected("record_input_mismatch") from exc
+            if (
+                not isinstance(capture, dict)
+                or set(capture) != {"schema_version", "task_id", "arm", "started_at"}
+                or capture["schema_version"] != 1
+                or capture["task_id"] != row["task_id"]
+                or capture["arm"] != row["arm"]
+                or not isinstance(capture["started_at"], str)
+                or ref.get("provenance") != "observed"
+            ):
+                _reject("record_input_mismatch")
+            dispatch = _time(capture["started_at"])
+            # A capture after a known attempt cannot describe its dispatch.
+            for attempt in row["attempts"]:
+                for key in ("started_at", "ended_at"):
+                    if attempt.get(key) is not None and dispatch > _time(attempt[key]):
+                        _reject("record_input_mismatch")
+            times.append(capture["started_at"])
+        else:
+            starts = [a["started_at"] for a in row["attempts"]]
+            if not starts or any(t is None for t in starts):
+                return None
+            times.extend(starts)
+    return min(times, key=_time) if times else None
+
 
 def load_record(path: Path) -> QualificationRecord:
     """Read, validate and verify one record; subject paths are relative to it."""
@@ -347,15 +519,13 @@ def load_record(path: Path) -> QualificationRecord:
     _check_rules(record)
     canonical = {}
     for subject in record["subjects"]:
-        try:
-            payload = read_local(path.parent, subject["path"], REPORT_BYTES)
-        except (OSError, ValueError) as exc:
-            raise WholeTaskRejected("record_subject_unavailable") from exc
+        payload = _read_bound(path.parent, subject, REPORT_BYTES)
         if (
-            hashlib.sha256(payload).hexdigest() != subject["sha256"]
-            or len(payload) != subject["bytes"]
+            subject["role"] == "report"
+            and record["scope"] in _HOST_SCOPES.values()
+            and record["preregistration"] is not None
         ):
-            _reject("record_digest_mismatch")
+            _check_report_dispatch(record, payload, path.parent / Path(subject["path"]).parent)
         if subject["role"] in _INPUT_ROLES:
             try:
                 canonical[subject["role"]] = canonical_digest(parse_json(payload))

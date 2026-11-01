@@ -1,0 +1,12 @@
+[server]
+host = "127.0.0.1"
+port = 18431
+[store]
+path = "/private/var/tmp/relaymind-trial-259/gateway-provider_only/relaymind.sqlite3"
+[external_model]
+model = "glm-5.3-flash"
+context_limit = 128000
+api_key_env = "RELAYMIND_EXTERNAL_API_KEY"
+[policy]
+degraded_mode = false
+enabled_workflows = []

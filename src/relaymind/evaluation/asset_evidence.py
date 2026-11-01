@@ -191,6 +191,20 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.66 merged: machine_dual labelling, machine-drafted prompts,
+            # the #266 corpus review and owner-only tuner waiver (merged stack).
+            ("a0f45c291a6f085966faf9983a1f8c5739a671b3473f9cac41ac3804b3eb414c", 630112),
+            # Reviewed 0.66 merged: machine_dual labelling with the precise
+            # negative-finding definitions.
+            ("df3124836f7689198d3f94ad85d54d49dfb0d91443323698b86a78b89cbb6f84", 629920),
+            # Reviewed 0.66 merged: machine-drafted prompts, machine_dual labelling and
+            # the #266 record input, scope and identity rules.
+            ("089ac28256320b916d0305efe4b307cdd836a9e6eb79947f06b2380de47d2a76", 629593),
+            # Reviewed 0.66 with machine-drafted prompts, machine_dual labelling,
+            # the #268 amendment and the LHCWN rename.
+            ("6e84ff5a1df955fa81be5b23ad9d7ea9dd6ac9fbd8bf5757dc37f47b559a7889", 628842),
+            # Reviewed 0.66 machine-drafted prompts and machine_dual labelling.
+            ("e7d32fbff7848920acf30dbf6a91e3ba86231e10eb50b5d0c5ba670edc0907d5", 626858),
             # Reviewed 0.66 with the #268 amendment, the #266 corpus review and
             # owner-only tuner waiver (merged stack).
             ("b9601be8e69589a4bb3c218ead64c8251166ade4a81d4452ea3bd5f14c5d76ee", 625458),

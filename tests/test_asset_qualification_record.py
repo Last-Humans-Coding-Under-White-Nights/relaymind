@@ -64,6 +64,8 @@ def host_record(root, **overrides) -> dict:
             ),
         ),
         agreement=dict(paired_cases=10, class_agreements=8, cohen_kappa=0.6),
+        prompt_authorship="original",
+        drafter=None,
         corpus_review=None,
         preregistration=dict(commit=COMMIT, committed_at="2026-11-02T00:00:00Z"),
         runs_started_at="2026-11-03T00:00:00Z",
@@ -106,6 +108,7 @@ def platform_record(root, machine, **overrides) -> dict:
         labelling="not_applicable",
         annotators=None,
         agreement=None,
+        prompt_authorship="not_applicable",
         preregistration=None,
         runs_started_at=None,
         machine=machine,
@@ -123,6 +126,7 @@ def negative_record(root, **overrides) -> dict:
         labelling="not_applicable",
         annotators=None,
         agreement=None,
+        prompt_authorship="not_applicable",
         preregistration=None,
         runs_started_at=None,
         machine=dict(
@@ -462,6 +466,282 @@ def test_an_approved_record_carries_the_corpus_custodian_review(tmp_path):
     assert load_record(save(tmp_path, pending)).custodian_review() is None
 
 
+# --- spec 0.66 section 12.6.6 machine-drafted prompts and machine_dual labels (#260) --
+
+
+def _machine(annotator_id, prompt_sha256=H, model_id="example-model-2026-10-01"):
+    return dict(
+        annotator_id=annotator_id,
+        model_id=model_id,
+        prompt_sha256=prompt_sha256,
+        temperature=0,
+        saw_tuning_results=False,
+        saw_arm_outputs=False,
+    )
+
+
+def dual_record(root, **overrides) -> dict:
+    values = dict(
+        labelling="machine_dual_owner_approved",
+        annotators=dict(
+            machine_a=_machine("machine-a", "1" * 64),
+            machine_b=_machine("machine-b", "2" * 64),
+            adjudicator=_machine("machine-adjudicator", "3" * 64),
+            family_relation="same_family",
+        ),
+        prompt_authorship="machine_drafted_owner_approved",
+        drafter=dict(
+            author_id="machine-drafter",
+            model_id="example-model-2026-10-01",
+            prompt_sha256="4" * 64,
+            temperature=0,
+        ),
+    )
+    values.update(overrides)
+    return host_record(root, **values)
+
+
+def test_a_machine_dual_record_with_drafted_prompts_loads(tmp_path):
+    record = load_record(save(tmp_path, dual_record(tmp_path)))
+    assert record.labelling == "machine_dual_owner_approved"
+    assert record.prompt_authorship == "machine_drafted_owner_approved"
+    assessment = _assess(record, REPORT_SHA)
+    assert assessment.as_output()["labelling"] == "machine_dual_owner_approved"
+    assert assessment.as_output()["prompt_authorship"] == "machine_drafted_owner_approved"
+
+
+@pytest.mark.parametrize(
+    ("mutate", "reason"),
+    [
+        # Same model and same template is one annotator, not two.
+        (
+            lambda r: r["annotators"]["machine_b"].update(prompt_sha256="1" * 64),
+            "labelling_profile",
+        ),
+        # One model ID cannot be two model families.
+        (lambda r: r["annotators"].update(family_relation="different_family"), "labelling_profile"),
+        (
+            lambda r: r["annotators"]["adjudicator"].update(annotator_id="machine-a"),
+            "labelling_profile",
+        ),
+        (lambda r: r["annotators"]["machine_b"].update(temperature=1), "invalid_qualification"),
+        # The owner/machine shape does not describe machine_dual labels.
+        (
+            lambda r: r.update(
+                annotators=dict(owner_annotator_id="owner", machine=_machine("machine-a"))
+            ),
+            "labelling_profile",
+        ),
+        (lambda r: r.update(drafter=None), "prompt_authorship"),
+        (lambda r: r["drafter"].update(author_id="machine-b"), "prompt_authorship"),
+        (lambda r: r.update(prompt_authorship="not_applicable"), "prompt_authorship"),
+    ],
+)
+def test_contradictory_machine_dual_records_reject(tmp_path, mutate, reason):
+    record = dual_record(tmp_path)
+    mutate(record)
+    with pytest.raises(WholeTaskRejected, match=reason):
+        load_record(save(tmp_path, record))
+
+
+def test_same_family_annotators_need_two_templates_even_with_two_model_ids(tmp_path):
+    """Spec 12.6.6: the same_family fallback needs two independently written templates.
+
+    Two different model IDs of one family do not lift that rule (review of #276).
+    """
+    record = dual_record(tmp_path)
+    record["annotators"]["machine_b"].update(
+        model_id="example-model-2026-10-02", prompt_sha256="1" * 64
+    )
+    with pytest.raises(WholeTaskRejected, match="labelling_profile"):
+        load_record(save(tmp_path, record))
+
+
+def test_same_family_annotators_with_two_models_and_two_templates_load(tmp_path):
+    record = dual_record(tmp_path)
+    record["annotators"]["machine_b"].update(model_id="example-model-2026-10-02")
+    assert load_record(save(tmp_path, record)).labelling == "machine_dual_owner_approved"
+
+
+def test_owner_machine_shape_cannot_carry_machine_dual_annotators(tmp_path):
+    record = host_record(
+        tmp_path,
+        annotators=dual_record(tmp_path)["annotators"],
+    )
+    with pytest.raises(WholeTaskRejected, match="labelling_profile"):
+        load_record(save(tmp_path, record))
+
+
+def test_original_prompts_have_no_drafter(tmp_path):
+    record = host_record(tmp_path, drafter=dual_record(tmp_path)["drafter"])
+    with pytest.raises(WholeTaskRejected, match="prompt_authorship"):
+        load_record(save(tmp_path, record))
+
+
+def _dual_labels(adjudicator="machine-adjudicator"):
+    pairs = [("positive", "positive")] * 6 + [("negative", "negative")] * 2
+    pairs += [("positive", "negative"), ("negative", "positive")]
+    labels = _labels(pairs, method="machine_dual.v1")
+    for row in labels["judgments"]:
+        row["annotator_id"] = {"owner": "machine-a", "machine": "machine-b"}[row["annotator_id"]]
+    labels["judgments"].sort(key=lambda r: (r["case_id"], r["annotator_id"]))
+    labels["adjudications"] = [
+        dict(case_id=f"case-{n:02d}", adjudicator_id=adjudicator) for n in range(10)
+    ]
+    labels["agreement"]["groups"] = [dict(lane="all", paired_cases=10, class_agreements=8)]
+    return labels
+
+
+DUAL_PEOPLE = {
+    "machine-a": dict(id="machine-a", roles=["annotator"]),
+    "machine-b": dict(id="machine-b", roles=["annotator"]),
+    "machine-adjudicator": dict(id="machine-adjudicator", roles=["adjudicator"]),
+}
+
+
+def _dual_kappa_record(tmp_path):
+    document = dual_record(tmp_path)
+    document["agreement"]["cohen_kappa"] = round(0.22 / 0.42, 12)
+    return load_record(save(tmp_path, document))
+
+
+def test_machine_dual_record_matches_the_frozen_annotators_and_adjudicator(tmp_path):
+    record = _dual_kappa_record(tmp_path)
+    record.check_labels(_dual_labels(), DUAL_PEOPLE)
+    with pytest.raises(WholeTaskRejected, match="labelling_mismatch"):
+        record.check_labels(_dual_labels(adjudicator="machine-a"), DUAL_PEOPLE)
+
+
+@pytest.mark.parametrize(
+    ("person", "roles"),
+    [
+        ("machine-a", ["annotator", "tuner"]),
+        ("machine-b", ["annotator", "author"]),
+        ("machine-adjudicator", ["adjudicator", "tuner"]),
+        ("machine-adjudicator", ["adjudicator", "annotator"]),
+        ("machine-a", None),  # not a catalog Person at all
+    ],
+)
+def test_machine_dual_record_checks_the_catalog_persons_roles(tmp_path, person, roles):
+    """Spec 12.6.6 (review of #276): the two machine annotators hold ``annotator``
+    only and the machine adjudicator ``adjudicator`` only, checked against the
+    catalog Persons even when check_labels is called directly."""
+    record = _dual_kappa_record(tmp_path)
+    people = copy.deepcopy(DUAL_PEOPLE)
+    if roles is None:
+        del people[person]
+    else:
+        people[person]["roles"] = roles
+    with pytest.raises(WholeTaskRejected, match="labelling_roles"):
+        record.check_labels(_dual_labels(), people)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {},  # machine_dual labels over drafted prompts
+        dict(prompt_authorship="original", drafter=None),  # machine_dual labels only
+        # owner_machine labels over drafted prompts
+        dict(
+            labelling="owner_machine",
+            annotators=dict(owner_annotator_id="owner", machine=_machine("machine")),
+        ),
+    ],
+)
+def test_an_approved_trial_profile_may_omit_preregistration(tmp_path, overrides):
+    """RM40/RM44, AC31/AC36: 12.6.6 requires preregistration by scope."""
+    record = dual_record(tmp_path, scope="host_trial", preregistration=None, **overrides)
+    pending = copy.deepcopy(record)
+    pending["review"].update(pull_request=None, reviewer_logins=[], approved_at=None)
+    assert not load_record(save(tmp_path, pending, "pending.json")).approved
+    assert load_record(save(tmp_path, record)).approved
+
+
+@pytest.mark.parametrize("scope", ["host_acceptance", "adaptation"])
+def test_approved_acceptance_profiles_still_require_preregistration(tmp_path, scope):
+    """RM40/RM42/RM44, AC31/AC33/AC36: the two required scopes reject."""
+    record = dual_record(tmp_path, scope=scope, preregistration=None)
+    if scope == "adaptation":
+        next(s for s in record["subjects"] if s["role"] == "tasks")["role"] = "episodes"
+    with pytest.raises(WholeTaskRejected, match="preregistration_missing"):
+        load_record(save(tmp_path, record))
+
+
+def test_an_independent_original_trial_record_may_omit_preregistration(tmp_path):
+    record = host_record(
+        tmp_path,
+        scope="host_trial",
+        labelling="independent",
+        annotators=None,
+        agreement=None,
+        preregistration=None,
+    )
+    assert load_record(save(tmp_path, record)).approved
+
+
+def _grade(labelling, prompt_authorship):
+    return dict(
+        status="graded",
+        qualification=dict(
+            claimed="provisional",
+            assessed="provisional",
+            reasons=[REVIEW_UNDEFINED],
+            labelling=labelling,
+            prompt_authorship=prompt_authorship,
+        ),
+    )
+
+
+def test_a_grade_presented_under_a_record_carries_its_labelling(tmp_path):
+    """Spec 12.6.6: a report graded under the record carries the record's
+    ``labelling`` and ``prompt_authorship`` in its qualification output."""
+    record = load_record(save(tmp_path, dual_record(tmp_path)))
+    record.check_grade(_grade("machine_dual_owner_approved", "machine_drafted_owner_approved"))
+    for grade in (
+        _grade(None, None),
+        _grade("independent", "machine_drafted_owner_approved"),
+        _grade("machine_dual_owner_approved", "original"),
+        dict(status="graded"),
+        dict(status="rejected", qualification=None),
+    ):
+        with pytest.raises(WholeTaskRejected, match="record_grade_mismatch"):
+            record.check_grade(grade)
+
+
+def _cases(authorship, author="machine-drafter"):
+    return dict(
+        cases=[dict(id="case-00", authorship=authorship, author_ids=[author])],
+    )
+
+
+def test_record_prompt_authorship_must_match_the_frozen_cases(tmp_path):
+    drafted = load_record(save(tmp_path, dual_record(tmp_path)))
+    drafted.check_cases(_cases("machine_drafted_owner_approved"))
+    for cases in (_cases("original"), _cases("machine_drafted_owner_approved", "someone")):
+        with pytest.raises(WholeTaskRejected, match="prompt_authorship_mismatch"):
+            drafted.check_cases(cases)
+    original = load_record(save(tmp_path, host_record(tmp_path), "original.json"))
+    original.check_cases(_cases("original", "author"))
+    with pytest.raises(WholeTaskRejected, match="prompt_authorship_mismatch"):
+        original.check_cases(_cases("machine_drafted_owner_approved"))
+
+
+@pytest.mark.parametrize("authorship", ["translated", "generated"])
+def test_an_original_record_allows_translated_or_generated_validation_cases(tmp_path, authorship):
+    """Spec 12.6.1/12.6.6 (RM40/AC31; review of #276): translated or generated cases may
+    exercise validation and never count, so they do not contradict ``original``; a
+    drafted release, by contrast, is drafted throughout."""
+    original = load_record(save(tmp_path, host_record(tmp_path), "original.json"))
+    cases = _cases("original", "author")
+    cases["cases"].append(dict(id="case-01", authorship=authorship, author_ids=["author"]))
+    original.check_cases(cases)
+    drafted = load_record(save(tmp_path, dual_record(tmp_path)))
+    mixed = _cases("machine_drafted_owner_approved")
+    mixed["cases"].append(dict(id="case-01", authorship=authorship, author_ids=["author"]))
+    with pytest.raises(WholeTaskRejected, match="prompt_authorship_mismatch"):
+        drafted.check_cases(mixed)
+
+
 # --- the record's input subjects are the report's resolved inputs (12.6.6) --------
 
 
@@ -738,7 +1018,7 @@ def _qualifying_corpus(monkeypatch, seen):
     from relaymind.evaluation import asset_whole_task_qualification as module
     from relaymind.evaluation.asset_qualification import QualificationAssessment
 
-    def assess(release, *, custodian_review=None):
+    def assess(release, *, custodian_review=None, prompt_authorship=None):
         seen.append(custodian_review)
         ok = custodian_review is not None and custodian_review.lock_digest == H
         return QualificationAssessment(
@@ -836,3 +1116,56 @@ def test_a_record_for_another_report_rejects_as_unbound_before_input_checks(tmp_
     inputs.release = None  # never reached: the binding rejects first
     with pytest.raises(WholeTaskRejected, match="qualification_record_unbound"):
         assess_inputs("host", report, inputs, record=record, report_sha256="c" * 64)
+
+
+@pytest.mark.parametrize(
+    "started,dispatch,preregistered,expected",
+    [
+        (None, None, "2026-11-03T00:00:05Z", "preregistration_missing"),
+        ("2026-11-03T00:00:00Z", None, "2026-11-03T00:00:05Z", "preregistration_late"),
+        (None, "2026-11-03T00:00:00Z", "2026-11-03T00:00:05Z", "preregistration_late"),
+        (None, "2026-11-03T00:00:00Z", "2026-11-02T00:00:00Z", None),
+    ],
+)
+def test_preregistration_uses_bound_dispatch_not_an_end_time(
+    tmp_path, started, dispatch, preregistered, expected
+):
+    """RM16/RM44, AC36: preregistration between dispatch and completion is late."""
+    record = host_record(tmp_path)
+    record["preregistration"]["committed_at"] = preregistered
+    record["runs_started_at"] = "2026-11-03T00:00:10Z" if expected else dispatch
+    row = dict(
+        task_id="task-1",
+        arm="native",
+        status="completed",
+        evidence_ids=[],
+        attempts=[dict(started_at=started, ended_at="2026-11-03T00:00:10Z")],
+    )
+    evidence = []
+    if dispatch:
+        payload = json.dumps(
+            dict(schema_version=1, task_id="task-1", arm="native", started_at=dispatch)
+        ).encode()
+        (tmp_path / "dispatch.json").write_bytes(payload)
+        row["evidence_ids"] = ["host-dispatch:0001"]
+        evidence = [
+            dict(
+                id="host-dispatch:0001",
+                path="dispatch.json",
+                sha256=hashlib.sha256(payload).hexdigest(),
+                bytes=len(payload),
+                provenance="observed",
+            )
+        ]
+    report = json.dumps(dict(rows=[row], evidence=evidence)).encode()
+    record["subjects"] = [s for s in record["subjects"] if s["role"] != "report"]
+    record["subjects"].append(_subject(tmp_path, "report", "report.json", report))
+    record["subjects"].sort(key=lambda s: s["path"])
+    if expected:
+        with pytest.raises(WholeTaskRejected, match=expected):
+            load_record(save(tmp_path, record))
+    else:
+        assert load_record(save(tmp_path, record)).approved
+        (tmp_path / "dispatch.json").write_text("changed")
+        with pytest.raises(WholeTaskRejected, match="record_digest_mismatch"):
+            load_record(save(tmp_path, record))

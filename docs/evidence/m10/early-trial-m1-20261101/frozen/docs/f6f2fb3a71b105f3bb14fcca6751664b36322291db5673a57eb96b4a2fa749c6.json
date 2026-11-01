@@ -1,0 +1,1 @@
+{"architecture":"arm64","cpu":"Apple M1","dependencies_digest":"c69b1799b0e0a68c875d5dda19a24e346332840efb4d1d38839b895c2ddd9f1e","gpu":[{"cores":"7","device":null,"model":"Apple M1"}],"os":"Darwin","os_version":"macOS 27.0.1","python":"3.12.0","ram_bytes":8589934592,"runtime":null,"runtime_config_digest":null,"runtime_version":null}

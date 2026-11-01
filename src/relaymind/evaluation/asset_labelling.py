@@ -28,9 +28,12 @@ from collections.abc import Mapping, Sequence
 from relaymind.canonical import canonical_digest
 from relaymind.evaluation.asset_corpus_io import _VALIDATORS, AssetCorpusError, _CorpusValidator
 from relaymind.evaluation.asset_judgments import (
+    MACHINE_DUAL,
     METHODS,
+    OWNER_MACHINE,
     _answer,
     agreement,
+    check_machine_dual,
     check_object_order,
     check_owner_machine_pair,
     check_person,
@@ -108,10 +111,12 @@ def label_template(
 ) -> dict:
     """One annotator's blind template over every frozen case.
 
-    ``labelling`` is ``independent`` (section 12.6.1) or the spec 0.66
-    section 12.6.6 ``owner_machine`` profile, where the owner may also tune.
+    ``labelling`` is ``independent`` (section 12.6.1) or a spec 0.66
+    section 12.6.6 profile: ``owner_machine``, where the owner may also tune,
+    or ``machine_dual_owner_approved``, two machine annotators and a distinct
+    machine adjudicator whose frozen labels the owner approves.
     """
-    owner_machine = _method(labelling) == METHODS["owner_machine"]
+    owner_machine = _method(labelling) == OWNER_MACHINE
     people, case_map = _documents(catalog, cases)
     check_person(annotator_id, people, "annotator", owner_machine=owner_machine)
     return dict(
@@ -134,7 +139,8 @@ def raw_judgments(
     Every case needs exactly two judgments by distinct annotators; a template
     whose binding or prompt text differs from the frozen cases rejects.
     """
-    owner_machine = _method(labelling) == METHODS["owner_machine"]
+    method = _method(labelling)
+    owner_machine = method == OWNER_MACHINE
     people, case_map = _documents(catalog, cases)
     assets = {entry["record"]["asset_id"]: entry for entry in catalog["assets"]}
     binding = _binding(catalog, cases)
@@ -182,6 +188,8 @@ def raw_judgments(
         raise AssetCorpusError("raw_judgment_coverage")
     if owner_machine:
         check_owner_machine_pair((j["annotator_id"] for j in judgments), people)
+    if method == MACHINE_DUAL:
+        check_machine_dual((j["annotator_id"] for j in judgments), (), people)
     return judgments
 
 

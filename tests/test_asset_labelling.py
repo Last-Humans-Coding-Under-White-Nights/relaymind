@@ -21,6 +21,7 @@ from relaymind.evaluation.asset_labelling import (
     label_template,
     raw_judgments,
 )
+from test_asset_corpus import load, relock, write
 from whole_task_helpers import expanded_release
 
 
@@ -254,6 +255,201 @@ def test_owner_machine_labelling_needs_a_machine_with_the_annotator_role_only(
         freeze_labels(catalog, cases, judgments, adjudicated_, labelling="owner_machine")
 
 
+# --- spec 0.66 section 12.6.6 machine_dual_owner_approved labelling (#260) ----------
+
+
+def _machine_dual(tmp_path, adjudicator_roles=("adjudicator",)):
+    """Two machine annotators and a distinct machine adjudicator; no human labeller."""
+    catalog, cases, labels = corpus(tmp_path)
+    catalog["people"].append(
+        dict(
+            id="machine-adjudicator",
+            roles=sorted(adjudicator_roles),
+            competencies=[],
+            evidence_ids=["adjudication", "independence"],
+        )
+    )
+    catalog["people"].sort(key=lambda p: p["id"].encode())
+    for row in labels["adjudications"]:
+        row["adjudicator_id"] = "machine-adjudicator"
+    return catalog, cases, labels
+
+
+def _dual_templates(catalog, cases, labels):
+    return [
+        filled(
+            label_template(catalog, cases, a, labelling="machine_dual_owner_approved"), labels, a
+        )
+        for a in ("judge-a", "judge-b")
+    ]
+
+
+def _dual_round_trip(catalog, cases, labels):
+    templates = _dual_templates(catalog, cases, labels)
+    judgments = raw_judgments(catalog, cases, templates, labelling="machine_dual_owner_approved")
+    worksheet = adjudication_worksheet(
+        catalog, cases, judgments, labelling="machine_dual_owner_approved"
+    )
+    return freeze_labels(
+        catalog,
+        cases,
+        judgments,
+        adjudicated(worksheet, labels),
+        labelling="machine_dual_owner_approved",
+    )
+
+
+def test_machine_dual_labelling_freezes_with_its_own_method(tmp_path):
+    """Spec 12.6.6: two machine annotators, a third machine adjudicator, machine_dual.v1."""
+    frozen = _dual_round_trip(*_machine_dual(tmp_path))
+    assert frozen["agreement"]["method"] == "machine_dual.v1"
+    assert {a["adjudicator_id"] for a in frozen["adjudications"]} == {"machine-adjudicator"}
+
+
+def test_machine_dual_adjudicator_is_a_distinct_adjudicator_only_person(tmp_path):
+    """The third pass is neither an annotator nor a tuner (spec 12.6.6)."""
+    catalog, cases, labels = _machine_dual(tmp_path)
+    for row in labels["adjudications"]:
+        row["adjudicator_id"] = "judge-a"
+    next(p for p in catalog["people"] if p["id"] == "judge-a")["roles"] = [
+        "adjudicator",
+        "annotator",
+    ]
+    with pytest.raises(AssetCorpusError, match="role_conflict"):
+        _dual_round_trip(catalog, cases, labels)
+
+
+@pytest.mark.parametrize("roles", [("adjudicator", "tuner"), ("adjudicator", "custodian")])
+def test_machine_dual_adjudicator_holds_no_other_role(tmp_path, roles):
+    with pytest.raises(AssetCorpusError, match="role_conflict"):
+        _dual_round_trip(*_machine_dual(tmp_path, adjudicator_roles=roles))
+
+
+def test_machine_dual_annotators_hold_the_annotator_role_only(tmp_path):
+    catalog, cases, labels = _machine_dual(tmp_path)
+    next(p for p in catalog["people"] if p["id"] == "judge-b")["roles"] = ["annotator", "author"]
+    with pytest.raises(AssetCorpusError, match="role_conflict"):
+        _dual_round_trip(catalog, cases, labels)
+
+
+# --- spec 0.66 section 12.6.6 machine-drafted prompts: the drafter (review of #276) --
+
+
+def _drafted(tmp_path, roles=("author",), competencies=()):
+    """machine_dual labels over cases written by one recorded drafting model."""
+    catalog, cases, labels = _machine_dual(tmp_path)
+    catalog["people"].append(
+        dict(
+            id="machine-drafter",
+            roles=sorted(roles),
+            competencies=sorted(competencies),
+            evidence_ids=["authorship"],
+        )
+    )
+    catalog["people"].sort(key=lambda p: p["id"].encode())
+    for case in cases["cases"]:
+        case.update(authorship="machine_drafted_owner_approved", author_ids=["machine-drafter"])
+    labels["cases_digest"] = canonical_digest(cases)
+    return catalog, cases, labels
+
+
+def test_machine_drafted_cases_freeze_with_an_author_only_drafter(tmp_path):
+    """Spec 12.6.6: the drafter has role author only and empty competencies."""
+    frozen = _dual_round_trip(*_drafted(tmp_path))
+    assert frozen["agreement"]["method"] == "machine_dual.v1"
+
+
+@pytest.mark.parametrize("roles", [("author", "tuner"), ("annotator", "author")])
+def test_machine_drafter_holds_no_other_role(tmp_path, roles):
+    """A tuner, annotator or adjudicator is never the drafter."""
+    with pytest.raises(AssetCorpusError, match="drafter_role"):
+        _dual_round_trip(*_drafted(tmp_path, roles=roles))
+
+
+def test_machine_drafter_has_no_competencies(tmp_path):
+    with pytest.raises(AssetCorpusError, match="drafter_role"):
+        _dual_round_trip(*_drafted(tmp_path, competencies=("proficient_en",)))
+
+
+def test_machine_drafted_cases_name_exactly_one_drafter(tmp_path):
+    """One recorded drafting model writes every drafted prompt of the release."""
+    catalog, cases, labels = _drafted(tmp_path)
+    catalog["people"].append(
+        dict(id="machine-drafter-2", roles=["author"], competencies=[], evidence_ids=["authorship"])
+    )
+    catalog["people"].sort(key=lambda p: p["id"].encode())
+    cases["cases"][0]["author_ids"] = ["machine-drafter", "machine-drafter-2"]
+    labels["cases_digest"] = canonical_digest(cases)
+    with pytest.raises(AssetCorpusError, match="drafter_role"):
+        _dual_round_trip(catalog, cases, labels)
+
+
+def test_a_drafted_release_is_drafted_throughout(tmp_path):
+    """Spec 12.6.6 (RM40/AC31; review of #276): the drafter writes every prompt of the
+    release, so a release never mixes drafted cases with other authorship."""
+    catalog, cases, labels = _drafted(tmp_path)
+    original = next(p for p in catalog["people"] if "author" in p["roles"] and p["competencies"])
+    cases["cases"][0].update(authorship="original", author_ids=[original["id"]])
+    labels["cases_digest"] = canonical_digest(cases)
+    with pytest.raises(AssetCorpusError, match="drafted_authorship_mixed"):
+        _dual_round_trip(catalog, cases, labels)
+
+
+# --- spec 0.66 section 12.6.6 release-wide drafter and machine_dual invariants -------
+
+
+def _person(roles, competencies=()):
+    return dict(roles=list(roles), competencies=list(competencies))
+
+
+DUAL_PEOPLE = {
+    "drafter-1": _person(["author"]),
+    "drafter-2": _person(["author"]),
+    "machine-a": _person(["annotator"]),
+    "machine-b": _person(["annotator"]),
+    "machine-c": _person(["annotator"]),
+    "adjudicator-1": _person(["adjudicator"]),
+    "adjudicator-2": _person(["adjudicator"]),
+}
+
+
+def _drafted_case(case_id, author):
+    return dict(id=case_id, authorship="machine_drafted_owner_approved", author_ids=[author])
+
+
+def test_a_drafted_release_names_one_drafter_across_its_cases():
+    """Spec 12.6.6 (RM40/AC31; review of #276): one recorded drafting model writes
+    every prompt of the release, so two cases with two different single drafters
+    reject even though each case alone names one author-only drafter."""
+    from relaymind.evaluation.asset_judgments import check_drafted_cases
+
+    one = [_drafted_case("case-1", "drafter-1"), _drafted_case("case-2", "drafter-1")]
+    check_drafted_cases(one, DUAL_PEOPLE)
+    two = [_drafted_case("case-1", "drafter-1"), _drafted_case("case-2", "drafter-2")]
+    with pytest.raises(AssetCorpusError, match="drafter_role"):
+        check_drafted_cases(two, DUAL_PEOPLE)
+
+
+def test_machine_dual_needs_exactly_two_annotators_across_the_release():
+    """Spec 12.6.6: exactly two annotator IDs occur across the release."""
+    from relaymind.evaluation.asset_judgments import check_machine_dual
+
+    check_machine_dual(["machine-a", "machine-b", "machine-a"], ["adjudicator-1"], DUAL_PEOPLE)
+    for annotators in (["machine-a"], ["machine-a", "machine-b", "machine-c"]):
+        with pytest.raises(AssetCorpusError, match="raw_judgment_coverage"):
+            check_machine_dual(annotators, ["adjudicator-1"], DUAL_PEOPLE)
+
+
+def test_machine_dual_has_one_adjudicator_across_the_release():
+    """Spec 12.6.6: one distinct adjudicator ID writes every Adjudication."""
+    from relaymind.evaluation.asset_judgments import check_machine_dual
+
+    with pytest.raises(AssetCorpusError, match="role_conflict"):
+        check_machine_dual(
+            ["machine-a", "machine-b"], ["adjudicator-1", "adjudicator-2"], DUAL_PEOPLE
+        )
+
+
 def _owner_labels(tmp_path, *, disagree=False):
     catalog, cases, labels = _owner_machine(tmp_path)
     templates = _owner_templates(catalog, cases, labels)
@@ -332,6 +528,57 @@ def test_a_worksheet_for_other_documents_is_a_binding_error(tmp_path, field):
     worksheet[field] = 9 if field == "release" else "a" * 64
     with pytest.raises(AssetCorpusError, match="worksheet_binding"):
         freeze_labels(catalog, cases, judgments, worksheet)
+
+
+# --- spec 0.66 section 12.6.6 machine_dual adjudication reasons (review of #276) ----
+
+
+def _dual_disagreement(tmp_path, reason):
+    """machine_dual labels where judge-b says negative to judge-a's positive."""
+    catalog, cases, labels = _machine_dual(tmp_path)
+    templates = _dual_templates(catalog, cases, labels)
+    templates[1]["items"][0]["judgment"].update({"class": "negative", "acceptable_asset_ids": []})
+    judgments = raw_judgments(catalog, cases, templates, labelling="machine_dual_owner_approved")
+    worksheet = adjudicated(
+        adjudication_worksheet(catalog, cases, judgments, labelling="machine_dual_owner_approved"),
+        labels,
+    )
+    worksheet["items"][0]["adjudication"]["reason"] = reason
+    return catalog, cases, judgments, worksheet
+
+
+@pytest.mark.parametrize("reason", ["", " ", "\t\n "])
+def test_a_machine_dual_disagreement_needs_an_adjudication_reason(tmp_path, reason):
+    """Spec 12.6.6: the machine adjudicator gives a nonempty reason on every disagreement."""
+    catalog, cases, judgments, worksheet = _dual_disagreement(tmp_path, reason)
+    with pytest.raises(AssetCorpusError, match="adjudication_reason_missing"):
+        freeze_labels(catalog, cases, judgments, worksheet, labelling="machine_dual_owner_approved")
+
+
+def test_a_machine_dual_agreement_needs_no_adjudication_reason(tmp_path):
+    catalog, cases, labels = _machine_dual(tmp_path)
+    for row in labels["adjudications"]:
+        row["reason"] = ""
+    frozen = _dual_round_trip(catalog, cases, labels)
+    assert frozen["agreement"]["method"] == "machine_dual.v1"
+
+
+def test_release_validation_rejects_a_machine_dual_disagreement_without_a_reason(tmp_path):
+    """The same check runs when a committed release is loaded, not only at freeze."""
+    catalog, cases, judgments, worksheet = _dual_disagreement(tmp_path, "adjudicator: positive")
+    frozen = freeze_labels(
+        catalog, cases, judgments, worksheet, labelling="machine_dual_owner_approved"
+    )
+    root = tmp_path / "release"
+    write(root, "catalog", catalog)
+    write(root, "labels", frozen)
+    relock(root)
+    assert load(root).labels["agreement"]["method"] == "machine_dual.v1"
+    frozen["adjudications"][0]["reason"] = "  "
+    write(root, "labels", frozen)
+    relock(root)
+    with pytest.raises(AssetCorpusError, match="adjudication_reason_missing"):
+        load(root)
 
 
 @pytest.mark.parametrize("annotators", [("judge-a",), ("judge-a", "judge-a")])

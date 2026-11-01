@@ -8,6 +8,49 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- #259 early installed-skill trial on the owner's Apple M1 8 GiB MacBook (RM16,
+  RM39, RM40, RM44; AC30, AC31, AC36; spec 0.66 sections 12.6.5, 12.6.6) in
+  `docs/evidence/m10/early-trial-m1-20261101/`: frozen inputs (one
+  `machine_drafted_owner_approved` task, `machine_dual_owner_approved` labels,
+  8-skill catalog), the provisional bundle graded `blocked`, and the pending
+  record `m10-early-trial-m1-openclaw-2026.10.7-20261101`. Native completed and
+  was judged a success blind. provider_only failed when the default 30 s
+  `external_seconds` budget cut off four generations. recommendations is
+  `not_run`: no person sign-in on macOS. The evidence helpers
+  (`build_trial_inputs.py`, `observe_row.py`, `machine_passes.py`) only drive the
+  existing kit and checker. One task gives no general result; no gate is claimed.
+  Its frozen `setup.md` cites the loaded-use negative record that #267 later
+  withdrew; the trial README and the walkthrough README now say loaded skill
+  use is disabled because it is unqualified (#280), not a host limitation.
+
+- Verifier support for the 0.66 machine-drafted prompts and `machine_dual`
+  labels (#260; RM40, RM42, RM44; AC31, AC33, AC36): `machine_dual.v1` in
+  AssetLabelsV1 with role checks (two annotator-only machines, one distinct
+  adjudicator-only machine), `--labelling machine_dual_owner_approved` on the
+  label commands, the `machine_drafted_owner_approved` case authorship counted
+  without the author competence rule, and the record's checks against the
+  frozen labels and cases. Graded output reports `prompt_authorship`.
+  Fixture-tested only. Review of #276: drafted cases count only when an owner-run
+  record declares `machine_drafted_owner_approved` (without one they fill no
+  lane); a drafted release is drafted throughout (`drafted_authorship_mixed`);
+  an `original` record rejects drafted cases but allows translated or generated
+  validation cases. The trial's `record` step now matches the current checker,
+  and a repeated machine pass keeps the earlier call bytes. Second review of
+  #276: `machine_dual` `check_labels` checks the catalog Persons' roles;
+  `QualificationRecord.check_grade` rejects a grade that does not carry the
+  record's labelling and prompt authorship. The M1 trial record now names
+  `2b4e439`, the commit holding its `harness_sha256` bytes, and has a null
+  `preregistration`: its lock was neither committed nor owner-approved before a
+  separate preregistration commit, so it stays pending and non-qualifying.
+  Its committed grade was made without the record, as its README states. The
+  `record` command stops on an uncommitted harness, and the success adjudicator
+  is asked only for the disagreements. Further review narrows mandatory
+  preregistration to host_acceptance and adaptation, as section 12.6.6 states;
+  host_trial approval is not rejected solely for lacking it. Preregistered host
+  records check bound dispatch evidence instead of trusting an end-time upper
+  bound. Maintained trial scripts record dispatch before host execution and
+  bind superseded drafts through the catalog, cases and lock. Archived harness
+  and evidence bytes stay unchanged; the trial README documents their gaps.
 - #274 native Windows platform evidence (RM38; AC29, AC37), with a pending
   qualification draft in `docs/evidence/m10/windows-platform-run-2026-11-01/`.
   The 15 install-check lifecycle steps pass. The separate platform report
@@ -71,6 +114,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   settlement document records the correction.
 
 ### Fixed
+
+- Spec 0.66 section 12.6.6 owner-run checks (review of #276; RM40, RM44; AC31,
+  AC36): a `same_family` machine_dual record now needs two different template
+  digests even when its two model IDs differ. The release validator now
+  requires every `machine_drafted_owner_approved` case to name one drafter, the
+  same for the whole release, with role `author` only and no competencies, so a
+  tuner, annotator or adjudicator can no longer pass as the drafter
+  (`drafter_role`). The committed #259 trial evidence passes both rules
+  unchanged.
 
 - `scripts/asset_whole_task.py trial-install` (and `trial`) failed on a fresh
   OpenClaw 2026.10.7 host, which installs the plugin disabled until it is
@@ -491,6 +543,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   cancellation still fail the whole scan. The markup and repeated-line rules
   apply to offered record fields; the internal instruction body keeps only the
   NFC, encoding, control and size rules.
+  A later 0.66 addition (#260) adds `machine_drafted_owner_approved` prompt
+  authorship (one pinned drafting model, owner approval by PR review) and
+  `machine_dual_owner_approved` labelling (two blind machine annotators,
+  `same_family` when only one model family is available, Cohen's kappa before
+  a third machine adjudication pass, owner approval of the frozen labels). The
+  record gains `prompt_authorship`, `drafter` and a machine annotators shape;
+  reports never say `independent` for these labels.
 - Specification 0.64 → 0.65 (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;
   AC25/AC28/AC30/AC31/AC35–AC37): defines native skill loaded-byte delivery,
   immutable-pin versus removal semantics and the later-use authority fence;

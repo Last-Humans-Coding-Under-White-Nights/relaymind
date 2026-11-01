@@ -1,0 +1,111 @@
+{
+ "schema_version": 1,
+ "record_id": "m10-early-trial-m1-openclaw-2026.10.7-20261101",
+ "profile": "owner_run",
+ "outcome": "positive",
+ "scope": "host_trial",
+ "labelling": "machine_dual_owner_approved",
+ "annotators": {
+  "machine_a": {
+   "annotator_id": "machine-annotator-a",
+   "model_id": "glm-5.3-flash",
+   "prompt_sha256": "b65fa942f246e52ea215c2fa72ced6e66713255dd1404d714396cabb0a6f1261",
+   "temperature": 0,
+   "saw_tuning_results": false,
+   "saw_arm_outputs": false
+  },
+  "machine_b": {
+   "annotator_id": "machine-annotator-b",
+   "model_id": "glm-4.7",
+   "prompt_sha256": "26f0133c709030e1ecbd764c0187e74a11b0cce1855589ad31b1ba45ee673b90",
+   "temperature": 0,
+   "saw_tuning_results": false,
+   "saw_arm_outputs": false
+  },
+  "adjudicator": {
+   "annotator_id": "machine-adjudicator",
+   "model_id": "glm-5.3",
+   "prompt_sha256": "16629b8bd350c2cbb1e845f02a8b9ebbb53005cc8be5ad1c938df06c38486ad5",
+   "temperature": 0,
+   "saw_tuning_results": false,
+   "saw_arm_outputs": false
+  },
+  "family_relation": "same_family"
+ },
+ "prompt_authorship": "machine_drafted_owner_approved",
+ "drafter": {
+  "author_id": "machine-drafter",
+  "model_id": "glm-5.3-flash",
+  "prompt_sha256": "e0a8b53817186cd33cf8c80c1fe1a5e9d2c13a96e4affa9d9c175d72fe3c8c18",
+  "temperature": 0
+ },
+ "agreement": {
+  "paired_cases": 1,
+  "class_agreements": 1,
+  "cohen_kappa": null
+ },
+ "corpus_review": null,
+ "preregistration": null,
+ "runs_started_at": "2026-11-01T09:46:02.976000Z",
+ "machine": {
+  "role": "target_macos_m1_8gib",
+  "os": "Darwin",
+  "os_build": "macOS 27.0.1 26A434",
+  "os_version": "macOS 27.0.1",
+  "architecture": "arm64",
+  "cpu_model": "Apple M1",
+  "ram_bytes": 8589934592,
+  "hostname_sha256": "bd804e5f81a7c50b2823f12e562e1ac9f029a4ba4513ef5450370bd3972b4e24"
+ },
+ "revisions": {
+  "repository_commit": "2b4e4391d75a52de3b6f026bf65934908f4175ec",
+  "adapter_revision": null,
+  "harness_sha256": "533273ac95fe83cb8e0f9d3577e1dbee8868759c8ba7df52d808323c0d02b6d3"
+ },
+ "operation": null,
+ "subjects": [
+  {
+   "role": "freeze",
+   "path": "early-trial-m1-20261101/bundle/docs/4f60ed01d9b59365ef3e1954ba8f47a6f4b5bb21b10aa93c4c545ec84149de6e.json",
+   "sha256": "eadc8d337a09fa4c7da3ddbd175a9497ca0613d029507deef57a839a6a0e2080",
+   "bytes": 3586
+  },
+  {
+   "role": "labels",
+   "path": "early-trial-m1-20261101/bundle/docs/5df36f4f939a3c6fa1d371b604c46e6c8d177f6da5c8f42fd85a436007ef826e.json",
+   "sha256": "dadd8877b416e4a4323afe30803bb96e74a0708db45a5577eb5b289a10da7d22",
+   "bytes": 3164
+  },
+  {
+   "role": "corpus_lock",
+   "path": "early-trial-m1-20261101/bundle/docs/8ca8c1577241ba59c8432e3eecbc570715f1fdefdff2bbd5b5f862b6c8ae4eeb.json",
+   "sha256": "09c435a38664c5e31562891e1a405d59c036a78cbd10dc074a7aba0c08357091",
+   "bytes": 3201
+  },
+  {
+   "role": "tasks",
+   "path": "early-trial-m1-20261101/bundle/docs/ebeb1dc07192d406197b50f559f662e6dc4b2d23c2224a4f5033105f758b3fba.json",
+   "sha256": "748f86ccb734eee70e8eb2a16e2e59a1e13088c13068b7c92581f9e0ab547403",
+   "bytes": 2157
+  },
+  {
+   "role": "environment",
+   "path": "early-trial-m1-20261101/bundle/docs/f6f2fb3a71b105f3bb14fcca6751664b36322291db5673a57eb96b4a2fa749c6.json",
+   "sha256": "3a3189df6c6f78e8a6d725c02c2c6d36321ffc78528e264fa8d80032f598b46c",
+   "bytes": 336
+  },
+  {
+   "role": "report",
+   "path": "early-trial-m1-20261101/bundle/report.json",
+   "sha256": "a6066e733793731f017ef110e82e5b4b83f0fe2c0b77eae48998fda8a6e988bc",
+   "bytes": 9811
+  }
+ ],
+ "review": {
+  "owner_login": "devnullexile",
+  "pull_request": null,
+  "reviewer_logins": [],
+  "approved_at": null
+ },
+ "recorded_at": "2026-11-01T09:53:52Z"
+}

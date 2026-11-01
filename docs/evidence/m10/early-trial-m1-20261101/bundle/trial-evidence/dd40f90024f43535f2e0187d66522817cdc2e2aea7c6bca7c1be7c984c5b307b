@@ -1,0 +1,13 @@
+{
+  "ok": false,
+  "status": "timeout",
+  "final": "",
+  "payloads": [],
+  "model": null,
+  "provider": null,
+  "sessionId": "fcd5c78b-5297-462b-b5aa-b51daae0c8b2",
+  "error": {
+    "message": "LLM request timed out.",
+    "kind": "timeout"
+  }
+}

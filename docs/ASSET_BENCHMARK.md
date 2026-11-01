@@ -663,14 +663,20 @@ take `--labelling owner_machine` for the owner plus one recorded machine
 annotator (`owner_machine.v1`; the owner may also be the tuner, the machine
 annotator holds the annotator role only, the owner adjudicates every case and
 every disagreement needs a nonempty reason; only the owner custodian may
-also tune). A platform record may carry the corpus review, and any freeze,
-tasks or labels it binds must be the resolved inputs. Every Time field must be
-a real UTC instant (`invalid_record_time`). Under spec 12.6.6 an approved
-`negative` record with scope `host_operation` closes the `skill_loaded_use`
-or `mcp_use` gate with the operation disabled; `known_host_limitations`
-returns those records for the roadmap, docs and reports to list. A pending
-record lifts nothing. No approved negative record exists yet, so none is
-listed. The module is
+also tune). `--labelling machine_dual_owner_approved`
+(`machine_dual.v1`) is for two machine annotators and a distinct machine
+adjudicator (each holds only its one role); the owner approves the frozen labels
+by PR review. Cases may then use `machine_drafted_owner_approved` authorship, and
+the record names the drafter. Every case of such a release is drafted, and the
+drafted cases count in the cohort only when the record declares that prompt
+authorship. The output reports the record's `prompt_authorship`. A platform
+record may carry the corpus review, and any freeze, tasks or labels it binds
+must be the resolved inputs. Every Time field must be a real UTC instant
+(`invalid_record_time`). Under spec 12.6.6 an approved `negative` record with
+scope `host_operation` closes the `skill_loaded_use` or `mcp_use` gate with the
+operation disabled; `known_host_limitations` returns those records for the
+roadmap, docs and reports to list. A pending record lifts nothing. No approved
+negative record exists yet, so none is listed. The module is
 `relaymind.evaluation.asset_qualification_record`.
 
 **Native configuration validation (spec 0.65; #240).** Host, provider, sampling

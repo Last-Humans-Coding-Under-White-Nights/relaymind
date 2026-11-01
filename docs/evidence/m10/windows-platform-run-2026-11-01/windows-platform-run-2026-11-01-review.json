@@ -5,6 +5,8 @@
   "outcome": "positive",
   "scope": "platform",
   "labelling": "not_applicable",
+  "prompt_authorship": "not_applicable",
+  "drafter": null,
   "annotators": null,
   "agreement": null,
   "corpus_review": null,
