@@ -1471,12 +1471,16 @@ room for each binding's dispatch marker and longest receipt under the byte
 cap, and compiled each host schema pattern once per operation. These bytes are
 re-pinned to adapter revision
 `37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`. The
-ordinary installed-host run of these exact bytes (CI run 41335800361, pinned
-OpenClaw 2026.10.7, Ubuntu runner, commit c791c0f, PR merge checkout
-44d4f9f) passed the ordinary-pass and ordinary-skill-pass predicates with all
-15 harness sources matching; its unmodified capture replaces
+host qualification harnesses then built their backend on the real wall clock
+(the test default `FakeClock` stamped every view in the past, so the
+installed adapter refused the first selection), which changed the harness
+sources but not the adapter bytes. The ordinary installed-host run of these
+exact adapter bytes with that harness (CI run 41351781170, pinned OpenClaw
+2026.10.7, Ubuntu runner, commit 293d73e, PR merge checkout 503adf0) passed
+the ordinary-pass and ordinary-skill-pass predicates with all 15 harness
+sources matching; its unmodified capture replaces
 `openclaw-native-actions-20261101-adapter.json` (SHA-256
-`1212d0e28080b08999f936b70416a70c6cef14802eef35d4553a45682a65b093`), which
+`58c6df0ba6dc32f454ef2c131b5e498f971876877108427d29755fbd230fefe4`), which
 the registry's evidence revision names. As before, this is Linux
 functional evidence with disposable accounts. `tests/test_openclaw_install.py` fails when the registry and
 the built adapter digest of the release artifact drift.
