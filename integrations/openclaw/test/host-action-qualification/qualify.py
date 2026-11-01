@@ -447,12 +447,25 @@ class ActionComposition:
         raise ValueError("composed_revocation_not_observed")
 
 
+def fixture_backend(path):
+    """RM36/RM39: the disposable backend on the real wall clock.
+
+    The installed adapter compares ``choice_expires_at`` with the host's own
+    ``Date.now()``, so the backend must stamp views with the same real clock.
+    The store tests' default FakeClock is fixed in the past and would expire
+    every choice before the host could select it.
+    """
+    from recommendation_helpers import setup
+    from relaymind.store import TraceClock
+
+    return setup(path, clock=TraceClock())
+
+
 def main(argv=None):
     import argparse
     import threading
 
     from api_helpers import RunningServer
-    from recommendation_helpers import setup
     from relaymind.recommendations.registrations import (
         ActionRegistrations,
         Registration,
@@ -467,7 +480,7 @@ def main(argv=None):
     person = person_module()
     backend = args.work_dir.parent / (args.work_dir.name + "-gateway")
     backend.mkdir(mode=0o700, exist_ok=False)
-    app, service, runs, _ = setup(backend)
+    app, service, runs, _ = fixture_backend(backend)
     hold, entered, release = threading.Event(), threading.Event(), threading.Event()
 
     @app.middleware("http")
