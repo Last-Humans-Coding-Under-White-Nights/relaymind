@@ -4,8 +4,9 @@ on:
   push:
     branches: [master]
     tags: ['v*']
-  # No base-branch filter: stacked PRs (feature branch onto feature
-  # branch) must get CI too.
+  # No base-branch filter: stacked PRs must get CI too, on Linux only to
+  # conserve CI capacity. Every PR must target master and pass the full
+  # Linux/macOS/Windows matrix before merge; pushes also run all platforms.
   pull_request:
   workflow_dispatch:
 
@@ -140,6 +141,19 @@ jobs:
       - name: Release artifact
         working-directory: integrations/openclaw
         run: npm run pack:release -- ../../release/openclaw
+
+      # Share the check job's browser cache; plugin test tiers remain serial.
+      - name: Playwright version
+        id: playwright
+        shell: bash
+        run: |
+          python -c "from importlib.metadata import version; print('version=' + version('playwright'))" >> "$GITHUB_OUTPUT"
+          echo "PLAYWRIGHT_BROWSERS_PATH=${RUNNER_TEMP}/ms-playwright" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium-shell
 
       - name: Install browser for plugin UI tests
         run: playwright install --with-deps --only-shell chromium

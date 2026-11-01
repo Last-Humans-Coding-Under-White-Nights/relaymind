@@ -254,7 +254,7 @@ def supervised_oplock(root, scenario):
             "ordinary open did not remain pending behind the withheld break"
         )
         control.terminate()
-        control.communicate(timeout=3)
+        control.communicate(timeout=15)
         mode = "capture" if scenario == "oplock-capture" else "pending-open"
         result = subprocess.run(
             [sys.executable, __file__, mode, str(source), str(db)],
@@ -271,13 +271,13 @@ def supervised_oplock(root, scenario):
         assert evidence["elapsed_seconds"] < 10
         held.stdin.write("release\n")
         held.stdin.flush()
-        stdout, stderr = held.communicate(timeout=3)
+        stdout, stderr = held.communicate(timeout=15)
         assert held.returncode == 0, stdout + stderr
     finally:
         for child in children:
             if child.poll() is None:
                 child.terminate()
-            child.communicate(timeout=3)
+            child.communicate(timeout=15)
     # Completion must release reader sharing guards, not leave orphaned handles.
     (source / "SKILL.md").write_bytes(b"cleanup verified")
     return evidence

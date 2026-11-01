@@ -96,7 +96,9 @@ def _check_actual_action_contract(tmp_path, kind):
             catalog,
             registry,
         ):
-            parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
+            response = await client.post("/relay/v1/recommendations", json=BODY)
+            assert response.status_code == 200, response.text
+            parent = response.json()
             rid = parent["recommendation_id"]
             choice = dict(kind=kind)
             if kind == "asset":
@@ -142,18 +144,18 @@ def test_actual_action_contract_does_not_depend_on_runner_scheduling(tmp_path, m
     longer than the 500 ms budget answers 504 with no recommendation_id, so the
     action evidence is never exercised. The clock must not be the host clock.
     """
-    from relaymind.store.run_store import TraceClock
-
     ticks = {"count": 0}
+    host_monotonic = time.monotonic
 
-    def starved(self):
+    def starved():
         # Every read is one second later than the previous one: a runner that
         # keeps losing the CPU between two deadline checks.
         ticks["count"] += 1
-        return time.monotonic() + ticks["count"]
+        return host_monotonic() + ticks["count"]
 
-    monkeypatch.setattr(TraceClock, "monotonic", starved)
+    monkeypatch.setattr(time, "monotonic", starved)
     _check_actual_action_contract(tmp_path, "none")
+    assert ticks["count"] > 0
 
 
 def test_gateway_cancellation_keeps_its_distinct_null_action():

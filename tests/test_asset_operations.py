@@ -45,6 +45,8 @@ def _synthetic_timing(record, start, *, elapsed=0.05, observed_ms=50.0):
     These fixtures test the AC29 grader, not this machine: under parallel test
     workers a real 300 ms or 1 s budget is not a property of the code.
     """
+    if record.view is None or not record.events:
+        return record
     view = copy.deepcopy(dict(record.view))
     events = [copy.deepcopy(dict(event)) for event in record.events]
     view["result"]["observed_ms"] = observed_ms
@@ -90,6 +92,19 @@ def validated_request_cohort(tmp_path_factory):
 
 def _measured_workload(records):
     return WorkloadSamples("measured", requests=list(records), origin_at=0.0)
+
+
+@pytest.mark.parametrize("missing_view", [True, False])
+def test_synthetic_timing_preserves_failed_samples(validated_request_cohort, missing_view):
+    """RM16/RM38/AC29: missing evidence stays a failed sample in the denominator."""
+    record = replace(
+        validated_request_cohort[0],
+        view=None if missing_view else validated_request_cohort[0].view,
+        events=(),
+        outcome="failed",
+        error="deadline_exceeded",
+    )
+    assert _synthetic_timing(record, 10.0) == record
 
 
 def test_schedule_requires_fixed_origin_cadence_and_single_request_slot(
@@ -713,7 +728,8 @@ def test_launch_and_cleanup_failures_keep_ten_independent_samples(tmp_path):
     """RM38/AC29: an OS launch or cleanup error is one failed launch, not abort."""
 
     async def go():
-        app, service, runs, _ = setup(tmp_path, settings=_STARTUP_SETTINGS)
+        clock = FakeClock()
+        app, service, runs, _ = setup(tmp_path, settings=_STARTUP_SETTINGS, clock=clock)
         await service.start()
         enters = []
 
@@ -730,14 +746,12 @@ def test_launch_and_cleanup_failures_keep_ten_independent_samples(tmp_path):
 
         samples = []
         try:
-            await measure_startups(launch, BODY, samples=samples)
+            await measure_startups(launch, BODY, samples=samples, clock=clock.monotonic)
             assert len(samples) == 10 and enters == list(range(10))
             assert [sample.outcome for sample in samples[:2]] == ["failed", "failed"]
             assert [sample.error for sample in samples[:2]] == ["startup_failed"] * 2
-            # The OS errors stay with their own launch; later launches still run.
-            # Whether each later launch is fast enough to be useful within the
-            # real one-second budget depends on the runner, not on this rule.
-            assert all(sample.error != "startup_failed" for sample in samples[2:])
+            # The OS errors stay with their own launch; later launches are useful.
+            assert all(sample.outcome == "useful" for sample in samples[2:])
             assert all("sensitive" not in str(sample.error) for sample in samples)
         finally:
             await service.stop()
