@@ -213,13 +213,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   records stay, stale) instead of a whole-scan failure, and a scan that fails
   after a candidate rejection keeps that rejection in its recorded exclusions
   and rejected count (spec 0.66 section 4.6.1).
-- The loaded-use observation harness records the exact person-scope
-  `sessions.reset` refusal (`operator.admin` required on the pinned host) as
-  `control_refused`, with no turn, instead of raising
-  `ordinary_skill_control_failed`. CI run 41286397320 hit that error. Any other
-  refusal, and any turn evidence on a refused control, still fails the
-  predicate (#255). The second VPS run observed the refusal as
-  `control_refused`; no CI run has confirmed it yet.
 
 - Owner-run qualification records and `owner_machine` labelling (#251; RM16,
   RM39, RM40, RM42, RM44; AC30, AC31, AC33, AC35–AC37; spec 0.66 section
