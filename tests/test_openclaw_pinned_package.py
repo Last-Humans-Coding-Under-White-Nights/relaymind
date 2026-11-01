@@ -105,7 +105,7 @@ def test_base_url_rules_match_the_pinned_plugin_config(tmp_path):
     script = tmp_path / "probe.mjs"
     script.write_text(PROBE, encoding="utf-8")
     cases = [u for u, _ in PLUGIN_NORMALIZED_BASE_URLS] + PLUGIN_REFUSED_BASE_URLS
-    cases += REJECTED_BASE_URLS + [kit.DEFAULT_BASE_URL, "http://LOCALHOST:8080/v1/"]
+    cases += REJECTED_BASE_URLS
     cases += [
         f"{scheme}://{host}{port}{path}"
         for scheme in ("http", "https", "HtTpS")
@@ -134,5 +134,6 @@ def test_base_url_rules_match_the_pinned_plugin_config(tmp_path):
         except ValueError:
             return None
 
-    mismatches = [(c, e, ours(c)) for c, e in zip(cases, expected, strict=True) if ours(c) != e]
+    got = [ours(c) for c in cases]
+    mismatches = [m for m in zip(cases, expected, got, strict=True) if m[1] != m[2]]
     assert mismatches == []

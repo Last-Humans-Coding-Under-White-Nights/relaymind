@@ -26,7 +26,7 @@ from relaymind.selection.asset_preparation import (
     preparation_binding,
     validate_preparation_record,
 )
-from relaymind.store import RunStore
+from relaymind.store import RunStore, TraceClock
 from relaymind.store.asset_catalog import AssetCatalogStore
 
 
@@ -121,7 +121,15 @@ class NativeBenchmarkRuntime:
         return now
 
     @classmethod
-    async def create(cls, production, release, effective, *, requested_kinds=None):
+    async def create(
+        cls,
+        production,
+        release,
+        effective,
+        *,
+        requested_kinds=None,
+        clock: TraceClock | None = None,
+    ):
         selected = effective["requested_kinds"] if requested_kinds is None else requested_kinds
         kinds = tuple(sorted(set(selected)))
         if not kinds or any(kind not in ("skill", "mcp_tool") for kind in kinds):
@@ -133,7 +141,7 @@ class NativeBenchmarkRuntime:
         try:
             if root.is_symlink():
                 raise AssetCorpusError("unsafe_file")
-            runtime.runs = RunStore(root / "evaluation.sqlite3")
+            runtime.runs = RunStore(root / "evaluation.sqlite3", clock=clock)
             runtime.catalog = AssetCatalogStore(runtime.runs)
             eligible = {item["asset_id"] for item in effective["eligibility"] if item["eligible"]}
             documents = tuple(

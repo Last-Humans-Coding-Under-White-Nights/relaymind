@@ -7,11 +7,11 @@ import type {
 import { decodeJson } from "./recommendation-json.ts";
 import {
   chineseLocale,
-  formatRecommendation,
   nativeSkillLabel,
   neutralizeControls,
 } from "./recommendation-display.ts";
 import type { RecommendationViewV1 } from "./recommendation-types.ts";
+import { renderRecommendation } from "./recommendation-render.ts";
 
 function textBlock(): HTMLPreElement {
   const element = document.createElement("pre");
@@ -330,21 +330,22 @@ function mountPanel(
       current();
       if (started !== generation) throw Error("retired");
       const value = receipt(result.receipt_json);
-      if (typeof value.feedback_revision === "bigint")
-        feedbackRevision = String(value.feedback_revision);
       if (result.label === "recommendation") {
-        // Format first: a receipt that cannot be displayed must not replace
-        // the recommendation that the visible evidence and actions bind to.
-        const text = formatRecommendation(value as RecommendationViewV1, {
+        // Validate and format before changing any receipt-bound state: rejected
+        // receipts must leave the visible evidence, actions and CAS intact.
+        const text = renderRecommendation(value as RecommendationViewV1, {
           locale: host.locale,
           format: "text",
         });
         view = value;
+        feedbackRevision = String(value.feedback_revision);
         selectedAsset = null;
         evidence.textContent = text;
         status.textContent = "";
         renderChoices();
       } else {
+        if (typeof value.feedback_revision === "bigint")
+          feedbackRevision = String(value.feedback_revision);
         if (input.kind === "choose") {
           if (input.request.choice.kind === "asset")
             selectedAsset =

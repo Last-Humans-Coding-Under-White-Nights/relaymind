@@ -181,9 +181,15 @@ def test_bound_key_and_unavailable_before_every_key_lookup(tmp_path):
     asyncio.run(go())
 
 
-def test_disabled_routes_use_recommendation_error_envelope(tmp_path):
+def test_disabled_routes_use_recommendation_error_envelope(tmp_path, monkeypatch):
     from api_helpers import call, healthy_gateway, make_app
+    from helpers import FakeClock
+    from relaymind.api import recommendations
+    from relaymind.selection.asset_chain import SelectionBudget
 
+    monkeypatch.setattr(
+        recommendations, "SelectionBudget", lambda: SelectionBudget(clock=FakeClock())
+    )
     app = make_app(healthy_gateway(tmp_path))
     response = call(app, "GET", "/relay/v1/recommendations/readiness")
     assert response.status_code == 200 and response.json()["reason"] == "disabled"

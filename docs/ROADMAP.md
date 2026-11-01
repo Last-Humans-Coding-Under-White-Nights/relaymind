@@ -1084,8 +1084,10 @@ is now `control_refused` on the real host. That run exited 2 because the
 62c4dcd predicate expected one pin in the session's selection listing while
 the host lists every pin of the owner profile; the selected-skill pin check
 (5d92b64) is already in this branch, and the current predicate accepts the
-committed capture. A CI run of the current harness is still missing. The CI and
-VPS2 MCP captures show an empty `tools.effective` list only because the old
+committed capture. [CI run 41340879424](https://github.com/LHCWN/relaymind/actions/runs/41340879424)
+at ed21e007 completed loaded-use observation with the reset case
+`control_refused`; its captures are workflow artifacts, not committed here.
+The older CI and VPS2 MCP captures show an empty `tools.effective` list only because the old
 probe read `payload.tools` instead of the host's `groups[].tools`; a third VPS
 run at bba0cf1 with the #249 fix lists both colliding tools and is still
 `blocked`, and the MCP record binds it. The MCP finding is unchanged. #259, #260 and #261 remain open and
@@ -1120,14 +1122,19 @@ feedback values.
 Source locators remain the exact offered record: spec sections 4.6.1 and 7.6
 define local locators as resolved `SKILL.md` paths and return that record in
 the scoped view; no home-path abbreviation/redaction rule is specified.
-In text mode a source backslash is doubled and the quote inside the quoted
-description is escaped, so source text cannot imitate a neutralized control
-or a field; one locale rule (`zh`, `zh-CN`, `zh_CN`, `zh-Hans`) serves the
-panel and its evidence, and a receipt that cannot be displayed leaves the
-shown recommendation and its actions in place.
+In text mode only a backslash introducing literal `\u{` notation is doubled;
+ordinary Windows path and description backslashes stay exact. The quote inside
+the quoted description is escaped, so source text cannot imitate a neutralized
+control or a field; one locale rule (`zh`, `zh-CN`, `zh_CN`, `zh-Hans`) serves the
+panel and its evidence. A recommendation receipt is validated against the
+published contract before updating the shown evidence, actions or feedback
+revision; malformed receipts leave all three in place. Native skill labels
+distinguish literal control notation using the same text helper. The ledger
+comment limits its 0600 owner-only access claim to POSIX; Windows access depends
+on the filesystem ACL.
 The adapter revision is repinned to the built bytes that include these review
 fixes and the #256 ledger and fence fixes
-(`d47d07640a0280a37580ca015a4a83a151d5ac9bdfd0500b69010edbf64e53c8`).
+(`38a65c787be8ddfbed99527c4e3b2c167d4a308bd2b566d2cf18acac975f06b4`).
 The committed capture below ran the earlier bytes
 (`ddeb3c70d69c3d6de61902b41b05008853c777b1e13c04ec9d7cc827db01b894`), so it
 must be recaptured from CI for the new revision before merge.
@@ -1485,7 +1492,9 @@ probe first starts the session MCP runtime with public `mcp.app.discover`. One
 Linux x86-64 VPS run at bba0cf1 listed both colliding tools; it is now committed
 as `docs/evidence/m10/openclaw-mcp-use-20261101-vps3.json` and bound by the
 #255 MCP record. It is discovery evidence only, exact MCP use remains blocked,
-and no CI run of the corrected harness exists yet.
+and [CI run 41340879424](https://github.com/LHCWN/relaymind/actions/runs/41340879424)
+at ed21e007 confirmed the corrected discovery and blocked exact-use result.
+That newer CI capture remains a workflow artifact, not committed evidence.
 
 #250 implements bounded native configuration preflight with the installed
 OpenClaw 2026.10.7 validator under Node, including strict/plugin checks and
@@ -1563,10 +1572,14 @@ PID but was not created by it (PID 1 in a container), reserved the exact
 room for each binding's dispatch marker and longest receipt under the byte
 cap, and compiled each host schema pattern once per operation. These bytes are
 re-pinned to adapter revision
-`37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`; the
-evidence revision still names the earlier capture, so the evidence must be
-recaptured from CI for this new revision before the entry is qualified evidence
-for it. As before, this is Linux
+`37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`. The
+ordinary installed-host run of these exact bytes (CI run 41335800361, pinned
+OpenClaw 2026.10.7, Ubuntu runner, commit c791c0f, PR merge checkout
+44d4f9f) passed the ordinary-pass and ordinary-skill-pass predicates with all
+15 harness sources matching; its unmodified capture replaces
+`openclaw-native-actions-20261101-adapter.json` (SHA-256
+`1212d0e28080b08999f936b70416a70c6cef14802eef35d4553a45682a65b093`), which
+the registry's evidence revision names. As before, this is Linux
 functional evidence with disposable accounts. `tests/test_openclaw_install.py` fails when the registry and
 the built adapter digest of the release artifact drift.
 

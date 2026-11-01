@@ -11,15 +11,22 @@ borrow) that a provider check might use as the section 7.6.1 fence, so
 lists either operation.
 """
 
+import collections
 import copy
+import functools
 import hashlib
 import importlib.util
+import io
 import json
 import re
+import shutil
 import subprocess
+import sys
+import tarfile
 from pathlib import Path
 
 import pytest
+import yaml
 
 from relaymind.evaluation.asset_qualification_record import known_host_limitations, load_record
 
@@ -69,29 +76,39 @@ def _module(name, relative):
     return value
 
 
+@functools.cache
 def _capture(name):
+    """One parsed evidence file, read once per session; callers must not mutate it."""
     return json.loads((EVIDENCE / name).read_text())
+
+
+def _inventory():
+    return _capture(INVENTORY.name)
 
 
 def cited_source_mismatches(inventory):
     """Cited host sources whose path or SHA-256 differ from the inventory files table."""
-    rows = inventory["files"]
-    files = {row["path"]: row["sha256"] for row in rows}
-    problems = [("duplicate", path) for path in files if sum(r["path"] == path for r in rows) > 1]
-    for section in (inventory["skill_loaded_use"]["surfaces"], inventory["mcp_use"]["routes"]):
-        for row in section:
-            for source in row["source"]:
-                if files.get(source["path"]) != source["sha256"]:
-                    problems.append((row["name"], source["path"]))
-    for source in inventory["skill_loaded_use"]["reset_policy_source"]:
-        if files.get(source["path"]) != source["sha256"]:
-            problems.append(("reset_policy_source", source["path"]))
+    counts = collections.Counter(row["path"] for row in inventory["files"])
+    files = {row["path"]: row["sha256"] for row in inventory["files"]}
+    problems = [("duplicate", path) for path, count in counts.items() if count > 1]
+    loaded = inventory["skill_loaded_use"]
+    cited = [
+        (row["name"], row["source"])
+        for row in (*loaded["surfaces"], *inventory["mcp_use"]["routes"])
+    ]
+    cited.append(("reset_policy_source", loaded["reset_policy_source"]))
+    for name, sources in cited:
+        problems += [
+            (name, source["path"])
+            for source in sources
+            if files.get(source["path"]) != source["sha256"]
+        ]
     return problems
 
 
 def test_inventory_concludes_each_finding_and_binds_host_files():
     """Every cited host file names the exact (path, SHA-256) of the files table (#255)."""
-    inventory = json.loads(INVENTORY.read_text())
+    inventory = _inventory()
     assert inventory["host"]["version"] == "2026.10.7"
     assert inventory["skill_loaded_use"]["finding"] == "not_established"
     assert inventory["mcp_use"]["finding"] == "exact_route_absent"
@@ -101,7 +118,7 @@ def test_inventory_concludes_each_finding_and_binds_host_files():
 
 
 def test_a_changed_cited_host_hash_is_detected():
-    inventory = json.loads(INVENTORY.read_text())
+    inventory = _inventory()
     changed = copy.deepcopy(inventory)
     changed["mcp_use"]["routes"][0]["source"][0]["sha256"] = "0" * 64
     assert cited_source_mismatches(changed) == [
@@ -119,7 +136,7 @@ def test_a_changed_cited_host_hash_is_detected():
 
 def test_inventory_states_the_spec_0_66_finding_scope():
     """Spec 0.66 section 12.6.6: stop-only points and App view routes do not count."""
-    inventory = json.loads(INVENTORY.read_text())
+    inventory = _inventory()
     loaded, mcp = inventory["skill_loaded_use"], inventory["mcp_use"]
     assert "stop or fence" not in loaded["question"]
     for text in (loaded["question"], loaded["conclusion"]):
@@ -149,7 +166,7 @@ def test_inventory_records_the_retained_borrow_as_a_fence_candidate():
     aborts its signal on revocation. The inventory cites that implementation and
     leaves the finding open instead of claiming stop_point_absent.
     """
-    inventory = json.loads(INVENTORY.read_text())
+    inventory = _inventory()
     retained = _surface(inventory, "GatewaySessionAccessAuthority.retain()")
     paths = {source["path"] for source in retained["source"]}
     assert HOST + "dist/request-authorization-DsdcZTZi.mjs" in paths
@@ -161,7 +178,7 @@ def test_inventory_records_the_retained_borrow_as_a_fence_candidate():
 
 def test_inventory_lists_before_prompt_build_and_tool_authority():
     """Spec 7.6.1: before_prompt_build and ctx.toolAuthority are not person authority."""
-    inventory = json.loads(INVENTORY.read_text())
+    inventory = _inventory()
     row = _surface(inventory, "before_prompt_build (requiresToolAuthority, ctx.toolAuthority)")
     paths = {source["path"] for source in row["source"]}
     assert HOST + "docs/plugins/hooks/prompt-and-session.md" in paths
@@ -192,7 +209,7 @@ def attempted_route_mismatches(inventory, load=_capture):
 
 def test_inventory_lists_the_attempted_routes_from_the_captures():
     """Spec 12.6.6: the search captures name the attempted routes, and what was not tried."""
-    inventory = json.loads(INVENTORY.read_text())
+    inventory = _inventory()
     assert attempted_route_mismatches(inventory) == []
     attempted = inventory["attempted_routes"]
     assert {row["method"] for row in attempted["mcp_use"]} == {
@@ -205,6 +222,31 @@ def test_inventory_lists_the_attempted_routes_from_the_captures():
     changed = copy.deepcopy(inventory)
     changed["attempted_routes"]["mcp_use"][0]["status"] = "refused"
     assert attempted_route_mismatches(changed)
+
+
+def test_inventory_route_omissions_are_limited_to_the_documented_older_reads():
+    """RM16/RM39; AC35: preserve bound evidence and expose its known coverage gap.
+
+    The settlement prose documents these two omitted old-projection reads;
+    every method/status pair from the corrected VPS3 capture is listed.
+    """
+    subjects = load_record(MCP_RECORD).document["subjects"]
+    observed = {
+        (subject["path"], event["method"], event["status"])
+        for subject in subjects
+        if subject["role"] == "capture"
+        for event in _capture(subject["path"]).get("mcp_use", {}).get("inventories", [])
+        if event["method"].startswith(("mcp.app.", "tools."))
+    }
+    listed = {
+        (row["capture"], row["method"], row["status"])
+        for row in _inventory()["attempted_routes"]["mcp_use"]
+    }
+    assert listed <= observed
+    assert observed - listed == {
+        ("openclaw-mcp-use-20261101-ci.json", "tools.effective", "ok"),
+        ("openclaw-mcp-use-20261101-vps2.json", "tools.effective", "ok"),
+    }
 
 
 def test_no_negative_skill_loaded_use_record_is_committed():
@@ -298,7 +340,7 @@ def test_vps3_tracked_sources_match_the_record_commit():
         ["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=ROOT, capture_output=True
     )
     if present.returncode != 0:
-        pytest.skip(f"commit {commit} is not in this clone")
+        pytest.fail(f"commit {commit} is not in this clone; the record check requires full history")
     tracked = set(
         subprocess.run(
             ["git", "ls-tree", "-r", "--name-only", commit],
@@ -321,12 +363,182 @@ def test_vps3_tracked_sources_match_the_record_commit():
     assert changed == []
 
 
+def test_missing_record_commit_fails_instead_of_skipping(monkeypatch):
+    """RM16/RM39; AC35: absent historical source cannot pass as a skipped check."""
+    run = subprocess.run
+
+    def missing_commit(args, **kwargs):
+        if args[:2] == ["git", "cat-file"]:
+            return subprocess.CompletedProcess(args, 1)
+        return run(args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", missing_commit)
+    with pytest.raises(pytest.fail.Exception, match="not in this clone"):
+        try:
+            test_vps3_tracked_sources_match_the_record_commit()
+        except pytest.skip.Exception as exc:
+            raise AssertionError("missing commit was skipped") from exc
+
+
+def test_ci_runs_record_checks_with_history_and_installed_packages():
+    """RM16/RM39; AC35: CI must execute source and installed-byte checks."""
+    jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())["jobs"]
+    for job_name in ("check", "openclaw-plugin"):
+        job = jobs[job_name]
+        checkout = next(s for s in job["steps"] if s.get("uses") == "actions/checkout@v4")
+        assert checkout.get("with", {}).get("fetch-depth") == 0
+    plugin = jobs["openclaw-plugin"]
+    assert plugin["env"]["RELAYMIND_OPENCLAW_NODE"] == "1"
+    assert any("tests/test_m10_host_use_records.py" in s.get("run", "") for s in plugin["steps"])
+
+
+def _assert_capture_privacy(text):
+    assert "runnervm" not in text
+    assert re.findall(r"host=(?!sha256:[0-9a-f]{64})[^ |\\\"]+", text) == []
+    # These are the documented VPS substitution and the standard CI account.
+    allowed = {"/home/vps-user", "/home/runner"}
+    homes = re.findall(r"/(?:home|Users)/[^/\\\"\s]+", text)
+    assert set(homes) <= allowed, homes
+    assert re.findall(r"[A-Za-z]:\\+(?i:Users)\\+[^\\\"\s]+", text) == []
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/home/private-account/work",
+        "/Users/private-account/work",
+        "C:\\Users\\private-account\\work",
+        "C:/Users/private-account/work",
+        "/home/vps-user-extra/work",
+        "/home/runner-extra/work",
+    ],
+)
+def test_capture_privacy_rejects_personal_home_paths(path):
+    """RM16/RM37: workspace and source locators must not publish account names."""
+    for key in ("workspaceDir", "source_locator"):
+        with pytest.raises(AssertionError):
+            _assert_capture_privacy(json.dumps({key: path}))
+
+
+@pytest.mark.parametrize("path", ["/home/vps-user/work", "/home/runner/work", "/tmp/work"])
+def test_capture_privacy_allows_documented_placeholders(path):
+    """RM16/RM37: retain the documented VPS placeholder and standard CI home."""
+    _assert_capture_privacy(json.dumps({"workspaceDir": path}))
+
+
+def file_hash_mismatches(rows, root):
+    """Missing or changed files relative to an independently installed/built tree."""
+    return [
+        row["path"]
+        for row in rows
+        if not (root / row["path"]).is_file()
+        or hashlib.sha256((root / row["path"]).read_bytes()).hexdigest() != row["sha256"]
+    ]
+
+
+def build_recorded_adapter(commit, root):
+    """Build the historical adapter in a disposable tree using the pinned compiler."""
+    archive = subprocess.run(
+        ["git", "archive", commit, "integrations/openclaw"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    )
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as files:
+        files.extractall(root, filter="data")
+    package = root / "integrations/openclaw"
+    current = ROOT / "integrations/openclaw"
+    # Reuse npm ci's dependencies only when the entire dependency lock agrees.
+    assert (package / "package-lock.json").read_bytes() == (
+        current / "package-lock.json"
+    ).read_bytes()
+    modules = package / "node_modules"
+    if sys.platform == "win32":
+        import _winapi
+
+        _winapi.CreateJunction(str(current / "node_modules"), str(modules))
+    else:
+        modules.symlink_to(current / "node_modules", target_is_directory=True)
+    for config in ("tsconfig.build.json", "tsconfig.control-ui.json"):
+        result = subprocess.run(
+            [shutil.which("node"), str(modules / "typescript/bin/tsc"), "-p", config],
+            cwd=package,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+    return root
+
+
+def built_adapter_revision(dist):
+    result = subprocess.run(
+        [
+            shutil.which("node"),
+            "--input-type=module",
+            "-e",
+            "const n = await import(process.argv[1]); console.log(n.nativeAdapterRevision());",
+            (dist / "recommendation-native.js").resolve().as_uri(),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip()
+
+
+def test_file_hash_check_rejects_missing_and_changed_bytes(tmp_path):
+    """RM16/RM39; AC35: consistent inventory claims cannot replace installed bytes."""
+    path = tmp_path / "host.js"
+    path.write_bytes(b"original")
+    rows = [{"path": path.name, "sha256": hashlib.sha256(b"original").hexdigest()}]
+    assert file_hash_mismatches(rows, tmp_path) == []
+    path.write_bytes(b"different")
+    assert file_hash_mismatches(rows, tmp_path) == [path.name]
+    path.unlink()
+    assert file_hash_mismatches(rows, tmp_path) == [path.name]
+
+
+def test_installed_pinned_host_matches_inventory():
+    """RM16/RM39; AC35: hash the actual package, not just repeated inventory rows."""
+    from test_openclaw_host_transport import require_node_build_dependencies
+
+    require_node_build_dependencies()
+    rows = _inventory()["files"]
+    assert rows and all(row["path"].startswith(HOST) for row in rows)
+    assert file_hash_mismatches(rows, ROOT) == []
+
+
+def test_vps3_built_adapter_matches_record(tmp_path):
+    """RM16/RM39; AC35: reproduce the recorded build and its adapter revision."""
+    from test_openclaw_host_transport import require_node_build_dependencies
+
+    require_node_build_dependencies()
+    revisions = load_record(MCP_RECORD).document["revisions"]
+    build = build_recorded_adapter(revisions["repository_commit"], tmp_path)
+    rows = _capture("openclaw-mcp-use-20261101-vps3.json")["source_inventory"]
+    built = [row for row in rows if row["path"].startswith("integrations/openclaw/dist/")]
+    assert len(built) == 37
+    assert file_hash_mismatches(built, build) == []
+    installed = [row for row in rows if "/node_modules/" in row["path"]]
+    assert len(installed) == 34
+    assert file_hash_mismatches(installed, ROOT) == []
+    dist = build / "integrations/openclaw/dist"
+    assert built_adapter_revision(dist) == revisions["adapter_revision"]
+    # The recomputation must read emitted bytes, including files outside the entry point.
+    with (dist / "config.js").open("ab") as stream:
+        stream.write(b"\n// changed build\n")
+    assert built_adapter_revision(dist) != revisions["adapter_revision"]
+    (dist / "config.js").unlink()
+    assert file_hash_mismatches(built, build) == ["integrations/openclaw/dist/config.js"]
+
+
 def test_the_255_captures_publish_no_plaintext_host_name():
     """Spec 12.6.6: only the SHA-256 of a machine's hostname is published."""
     for path in sorted(EVIDENCE.glob("openclaw-*-20261101-*.json")):
         text = path.read_text()
-        assert "runnervm" not in text, path.name
-        assert re.findall(r"host=(?!sha256:[0-9a-f]{64})[^ |\\\"]+", text) == [], path.name
+        _assert_capture_privacy(text)
 
 
 def test_current_loaded_use_predicate_accepts_the_vps2_capture():
