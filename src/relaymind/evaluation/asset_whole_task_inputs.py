@@ -9,7 +9,7 @@ a digest, identity or structure contradiction is *rejected*.
 """
 
 import hashlib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -42,6 +42,7 @@ from relaymind.evaluation.asset_whole_task_corpus import (
     verify_episode_configs,
     verify_reference_closure,
 )
+from relaymind.evaluation.asset_whole_task_host_config import PINNED_VALIDATOR, validate_verdict
 
 SINGLETONS = ("environment_lock", "runner_inventory", "protocol_inventory")
 _ROOTS = {
@@ -117,6 +118,7 @@ class WholeTaskInputs:
     labels: Mapping[str, Mapping] = field(default_factory=dict)
     evidence: Mapping[str, Mapping] = field(default_factory=dict)
     unverified: tuple[str, ...] = ()
+    host_config_validation: Mapping[str, Mapping] = field(default_factory=dict)
 
 
 def _limit(kind: str) -> int:
@@ -187,10 +189,18 @@ def resolve_whole_task_inputs(
     manifest_path: Path,
     *,
     resolver: OfflineResolver | None = None,
+    host_config_checker: Callable[[Mapping], dict] | None = None,
+    host_config_validation: Mapping[str, Mapping] | None = None,
 ) -> WholeTaskInputs:
     """Resolve and bind every companion document a host/adaptation report needs.
 
     ``kind`` is ``host`` (host and platform reports) or ``adaptation``.
+    Native preflight is explicit: pass ``check_host_config`` as
+    ``host_config_checker`` at capture time. Offline callers may instead supply
+    captured closed verdicts keyed by the exact configuration digests. Neither
+    path authenticates evidence, source extraction or effective defaults, so
+    configuration semantics and qualified evidence review remain unverified.
+    With neither option, resolution never launches Node or a host.
     """
     root_kind, freeze_kind = _ROOTS[kind]
     manifest_path = Path(manifest_path).absolute()
@@ -292,6 +302,34 @@ def resolve_whole_task_inputs(
                 if str(exc) in _UNRESOLVED:
                     raise WholeTaskBlocked("inventory_preimage_unresolved") from None
                 raise WholeTaskRejected(str(exc)) from None
+    validation = {}
+    if host_config_checker is not None or host_config_validation is not None:
+        if kind != "host" or (
+            host_config_checker is not None and host_config_validation is not None
+        ):
+            raise WholeTaskRejected("host_config_validation_mode")
+        if (
+            freeze["host"]["name"] != "openclaw"
+            or freeze["host"]["version"] != PINNED_VALIDATOR["host_version"]
+        ):
+            raise WholeTaskBlocked("host_config_validator_unavailable")
+        digests = {arm["host_config_digest"] for arm in freeze["configurations"]}
+        if host_config_validation is not None and set(host_config_validation) != digests:
+            raise WholeTaskRejected("host_config_validation_binding")
+        for digest in sorted(digests):
+            try:
+                verdict = validate_verdict(
+                    host_config_checker(configs[digest])
+                    if host_config_checker is not None
+                    else host_config_validation[digest]
+                )
+            except (ValueError, TypeError):
+                raise WholeTaskRejected("host_config_validation_verdict") from None
+            if verdict["status"] == "invalid":
+                raise WholeTaskRejected("host_config_invalid")
+            if verdict["status"] == "unavailable":
+                raise WholeTaskBlocked("host_config_validator_unavailable")
+            validation[digest] = verdict
     return WholeTaskInputs(
         manifest,
         root,
@@ -303,4 +341,5 @@ def resolve_whole_task_inputs(
         labels=release_labels(release),
         evidence=payloads,
         unverified=tuple(unverified),
+        host_config_validation=validation,
     )

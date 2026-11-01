@@ -1394,6 +1394,27 @@ probe first starts the session MCP runtime with public `mcp.app.discover`. One
 uncommitted Linux x86-64 VPS run listed both colliding tools; it is discovery
 evidence only, and exact MCP use remains blocked.
 
+#250 implements bounded native configuration preflight with the installed
+OpenClaw 2026.10.7 validator under Node, including strict/plugin checks and
+native default handling, with a Python timeout and closed verdicts recording
+the host version and the SHA-256 of every pinned host entry point the checker
+imports; any other validator identity is rejected. The child state is a disposable
+directory without operator credentials; when the config names `relaymind` it
+holds only the packaged RelayMind plugin (the built integration, or the
+unpacked release passed as `plugin_root`), so installed-plugin discovery checks
+its settings. A plugin referenced in `plugins.entries` or `plugins.allow`
+without an inspected schema is `unavailable`
+(`plugin_schema_not_inspected`), not `valid`. Valid/invalid, Unicode-pattern,
+plugin-schema, installed RelayMind, unknown/uninspected plugin and
+unavailable-host fixtures run in the OpenClaw CI job.
+`resolve_whole_task_inputs(..., host_config_checker=check_host_config)` opts
+into native preflight; `host_config_validation={digest: verdict}` instead
+supplies captured closed verdicts without a process launch. Both reject
+native-invalid configs and retain validator identities by host_config_digest. Ordinary offline grading never invokes Node;
+without captured validation, host configurations remain unverified.
+This local preflight does not authenticate historical captures or qualify
+any acceptance gate; the reviewed evidence verifier remains #240.
+
 #239/#204 adapter checkpoint (spec 0.65; RM16/RM37/RM39; AC28/AC30/AC35): the
 OpenClaw adapter now carries the loaded-use fence
 (`src/recommendation-native-use.ts`) and the conditional `relaymind.mcp` handler
@@ -1501,8 +1522,10 @@ graders verify the frozen corpus closure, bind host tasks and episodes to it,
 check the off/on adaptation ablation, and recompute every dispatched probe's
 offer. `asset_episode_driver.py` runs episodes through the real
 recommendation lifecycle on the locked corpus projection (evaluation-only, so
-never qualified). The parsing of native host and section 14.5.2 configurations
-and a qualified-evidence verifier remain open (#229/#240); spec 0.65 defines
+never qualified). Native host preflight is implemented by #250; source-bound
+configuration
+validation/extraction and a qualified-evidence verifier remain open
+(#229/#240); spec 0.65 defines
 the native validation evidence required, so qualified acceptance
 grades blocked, never pass. No new measured gate is claimed; genuine episodes,
 paired host tasks and platform runs still need real corpora, hosts and

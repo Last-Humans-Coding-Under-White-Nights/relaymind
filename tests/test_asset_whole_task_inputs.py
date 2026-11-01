@@ -63,12 +63,12 @@ def _inventory(kind: str) -> dict:
 class Bundle:
     """One companion bundle written below tmp_path, with no implicit lookups."""
 
-    def __init__(self, tmp_path: Path):
+    def __init__(self, tmp_path: Path, *, host_config: dict | None = None):
         self.root = tmp_path / "bundle"
         self.root.mkdir()
         configs = {name: {"name": name, "value": 1} for name in ("provider", "sampling")}
         for arm in ARMS:
-            configs["host-" + arm] = {"host": arm}
+            configs["host-" + arm] = {"host": arm} if host_config is None else host_config
         configs["recommendations"] = {"enabled": True}
         configs["native-inventory"] = {"tools": ["a", "b"]}
         for task_id in ("t1", "t2"):
@@ -119,7 +119,8 @@ class Bundle:
         self.add_raw("lock", (release / "lock.json").read_bytes())
         for kind in ("catalog", "cases", "labels"):
             self.add_raw(kind, (release / self.lock[kind]["path"]).read_bytes())
-        for value in configs.values():
+        for digest_value in sorted(set(digest.values())):
+            value = next(v for v in configs.values() if canonical_digest(v) == digest_value)
             self.add("referenced_config", value)
         self.add("environment_lock", ENVIRONMENT)
         resolver_entries = []
