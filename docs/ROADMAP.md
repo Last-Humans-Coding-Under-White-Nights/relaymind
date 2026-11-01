@@ -1373,8 +1373,14 @@ revision; its only code change adds the reviewed specification evidence anchor.
 #250 implements bounded native configuration preflight with the installed
 OpenClaw 2026.10.7 validator under Node, including strict/plugin checks and
 native default handling, with a Python timeout and closed verdicts recording
-the host version and validator file SHA-256. Valid/invalid, Unicode-pattern,
-plugin-schema and unavailable-host fixtures run in the OpenClaw CI job.
+the host version and validator file SHA-256. The child state is a disposable
+directory without operator credentials; when the config names `relaymind` it
+holds only the packaged RelayMind plugin (the built integration, or the
+unpacked release passed as `plugin_root`), so installed-plugin discovery checks
+its settings. A referenced plugin without an inspected schema is `unavailable`
+(`plugin_schema_not_inspected`), not `valid`. Valid/invalid, Unicode-pattern,
+plugin-schema, installed RelayMind, unknown/uninspected plugin and
+unavailable-host fixtures run in the OpenClaw CI job.
 `resolve_whole_task_inputs(..., host_config_checker=check_host_config)` opts
 into native preflight; `host_config_validation={digest: verdict}` instead
 supplies captured closed verdicts without a process launch. Both reject

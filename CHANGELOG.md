@@ -13,6 +13,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   enforces a timeout; input resolution rejects invalid native preflights and
   retains validator identities by config digest. Offline resolution can consume
   captured verdicts without Node; native fixture tests run in the OpenClaw CI job.
+  The isolated state (no operator HOME or credentials) installs the packaged
+  RelayMind plugin when the config names `relaymind`, so ordinary installed
+  discovery validates its settings without `plugins.load.paths`. A referenced
+  plugin whose schema the host did not inspect (undiscovered, or a discovery
+  owner the host preserved uninspected) is `unavailable` with reason
+  `plugin_schema_not_inspected`, never `valid`; every verdict carries a closed
+  `reason`.
   Qualified captured-evidence verification remains open in #240.
 - Platform runs on GitHub-hosted runners (#241, #235; RM38, RM39, RM44; AC29,
   AC37): a separate `Platform runs` workflow on `macos-latest`,
