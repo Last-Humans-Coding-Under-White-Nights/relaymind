@@ -137,16 +137,16 @@ def cmd_judge(args) -> None:
     template = (HERE / "prompts" / args.template).read_text(encoding="utf-8")
     ledger = harness.Ledger(args.ledger, args.cap)
     out = read(args.output) if args.output.exists() else {}
-    todo = [i for i in items if i["blind_id"] not in out]
-    for start in range(0, len(todo), args.batch):
-        batch = todo[start : start + args.batch]
+    # Batches are fixed positions in the full item sequence, so a resume never
+    # gives a new batch the name of one already sent.
+    for number, batch in harness.batches(items, args.batch, lambda i: i["blind_id"] not in out):
         asked = {i["blind_id"] for i in batch}
         request = [{k: i[k] for k in ("blind_id", "request", "rubric", "answer")} for i in batch]
         messages = [
             dict(role="system", content=template),
             dict(role="user", content=json.dumps(request, ensure_ascii=False)),
         ]
-        name = f"{args.name}-{start // args.batch + 1:03d}"
+        name = f"{args.name}-{number:03d}"
         answer = harness.chat(ledger, args.name, messages, args.log, name)
         try:
             rows = harness.answer_json(answer)["judgments"]
@@ -194,9 +194,7 @@ def cmd_adjudicate(args) -> None:
 
     ledger = harness.Ledger(args.ledger, args.cap)
     template = (HERE / "prompts" / "judge-adjudicator.txt").read_text(encoding="utf-8")
-    todo = [i for i in disputed if i not in final]
-    for start in range(0, len(todo), args.batch):
-        batch = todo[start : start + args.batch]
+    for number, batch in harness.batches(disputed, args.batch, lambda i: i not in final):
         request = [
             dict(
                 {k: items[i][k] for k in ("blind_id", "request", "rubric", "answer")},
@@ -208,7 +206,7 @@ def cmd_adjudicate(args) -> None:
             dict(role="system", content=template),
             dict(role="user", content=json.dumps(request, ensure_ascii=False)),
         ]
-        name = f"judge-adjudicator-{start // args.batch + 1:03d}"
+        name = f"judge-adjudicator-{number:03d}"
         answer = harness.chat(ledger, "judge-adjudicator", messages, args.log, name)
         try:
             rows = harness.answer_json(answer)["adjudications"]
@@ -277,9 +275,10 @@ def cmd_apply(args) -> None:
             provenance="observed",
         )
     apply_verdicts(report, by_row)
-    report["evidence"] = sorted(
-        [*report["evidence"], *files.values()], key=lambda e: e["id"].encode()
-    )
+    # Idempotent: a rerun over an applied report replaces its judging entries.
+    by_id = {e["id"]: e for e in report["evidence"]}
+    by_id.update((e["id"], e) for e in files.values())
+    report["evidence"] = sorted(by_id.values(), key=lambda e: e["id"].encode())
     report["summary"] = host_summary(report, tasks, freeze)
     args.output.write_bytes((json.dumps(report, ensure_ascii=False, indent=1) + "\n").encode())
     print(json.dumps(report["summary"]["arms"]))

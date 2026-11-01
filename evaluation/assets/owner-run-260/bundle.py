@@ -20,6 +20,7 @@ REPO = HERE.parents[2]
 sys.path.insert(0, str(REPO / "src"))
 
 from relaymind.canonical import canonical_digest, canonical_json  # noqa: E402
+from relaymind.evaluation import asset_evidence  # noqa: E402
 
 
 def read(path):
@@ -31,21 +32,12 @@ def payload_of(value) -> bytes:
 
 
 def inventory(kind: str) -> dict:
-    if kind == "runner_inventory":
-        paths = ["pyproject.toml", "scripts/asset_whole_task.py"]
-        paths += [
-            p.relative_to(REPO).as_posix()
-            for p in (REPO / "src/relaymind").rglob("*.py")
-            if "__pycache__" not in p.parts
-        ]
-    else:
-        paths = ["docs/SPECIFICATION.md"]
-        paths += [p.relative_to(REPO).as_posix() for p in (REPO / "src/relaymind").rglob("*.json")]
-    files = []
-    for path in sorted(set(paths)):
-        data = (REPO / path).read_bytes()
-        files.append(dict(path=path, sha256=hashlib.sha256(data).hexdigest(), bytes=len(data)))
-    return dict(schema_version=1, files=files)
+    """The runner or protocol inventory, from the same helper ``run_episodes.py`` uses.
+
+    The bundled preimage then has the digest the EffectiveConfigV1
+    ``runner_digest``/``protocol_digest`` name.
+    """
+    return asset_evidence.file_inventory(REPO, protocol=kind == "protocol_inventory")
 
 
 def put(base: Path, relative: str, payload: bytes) -> None:

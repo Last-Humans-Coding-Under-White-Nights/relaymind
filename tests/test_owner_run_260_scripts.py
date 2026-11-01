@@ -1188,3 +1188,577 @@ def test_annotation_rejects_inconsistent_answers_without_coercion(change):
     raw.update(change)
     with pytest.raises(ValueError):
         harness._classes(raw, {"asset:one": "A001"})
+
+
+# --- fourth review of #278 -----------------------------------------------------------
+
+run_episodes_script = _module("run_episodes")
+
+
+def test_bundle_and_episode_runner_bind_the_same_inventories():
+    """RM44 (AC33): the bundled runner and protocol inventories are the ones the
+    episode runner's EffectiveConfigV1 digests name."""
+    runner, protocol = run_episodes_script.inventory_digests(ROOT)
+    assert canonical_digest(bundle_script.inventory("runner_inventory")) == runner
+    assert canonical_digest(bundle_script.inventory("protocol_inventory")) == protocol
+
+
+class _Interrupted(Exception):
+    pass
+
+
+def _replying(names, reply, *, stop_after=None):
+    """A chat double that records batch names and stops after ``stop_after`` calls."""
+
+    def chat(ledger, stage, messages, log, name, **kwargs):
+        if stop_after is not None and len(names) >= stop_after:
+            raise _Interrupted(name)
+        names.append(name)
+        request = json.loads(messages[1]["content"])
+        return dict(choices=[dict(message=dict(content=json.dumps(reply(request))))])
+
+    return chat
+
+
+def test_resumed_success_judging_never_reuses_a_batch_name(tmp_path, monkeypatch):
+    """RM16, RM44 (AC36): batch names come from stable positions in the item sequence."""
+    blind = [dict(blind_id=f"x{n}", request="r", rubric=["c"], answer="a") for n in range(5)]
+    write(tmp_path / "items.json", dict(items=blind))
+
+    def reply(request):
+        return dict(judgments=[dict(blind_id=i["blind_id"], success=True) for i in request])
+
+    args = SimpleNamespace(
+        items=tmp_path / "items.json",
+        output=tmp_path / "a.json",
+        log=tmp_path / "log",
+        ledger=tmp_path / "ledger.json",
+        template="judge-a.txt",
+        name="judge-a",
+        cap=10**9,
+        batch=2,
+    )
+    monkeypatch.setattr(judge, "HERE", tmp_path)
+    (tmp_path / "prompts").mkdir()
+    (tmp_path / "prompts" / "judge-a.txt").write_text("judge")
+    first = []
+    monkeypatch.setattr(judge.harness, "chat", _replying(first, reply, stop_after=1))
+    with pytest.raises(_Interrupted):
+        judge.cmd_judge(args)
+    resumed = []
+    monkeypatch.setattr(judge.harness, "chat", _replying(resumed, reply))
+    judge.cmd_judge(args)
+    assert first == ["judge-a-001"]
+    assert resumed == ["judge-a-002", "judge-a-003"]
+    assert set(read(args.output)) == {i["blind_id"] for i in blind}
+
+
+def test_resumed_success_adjudication_never_reuses_a_batch_name(tmp_path, monkeypatch):
+    blind = [dict(blind_id=f"x{n}", request="r", rubric=["c"], answer="a") for n in range(3)]
+    write(tmp_path / "items.json", dict(items=blind))
+    write(tmp_path / "a.json", {i["blind_id"]: verdict() for i in blind})
+    write(tmp_path / "b.json", {i["blind_id"]: verdict(False) for i in blind})
+
+    def reply(request):
+        return dict(
+            adjudications=[dict(blind_id=i["blind_id"], success=True, reason="r") for i in request]
+        )
+
+    args = SimpleNamespace(
+        items=tmp_path / "items.json",
+        a=tmp_path / "a.json",
+        b=tmp_path / "b.json",
+        output=tmp_path / "judgments.json",
+        log=tmp_path / "log",
+        ledger=tmp_path / "ledger.json",
+        cap=10**9,
+        batch=1,
+    )
+    first = []
+    monkeypatch.setattr(judge.harness, "chat", _replying(first, reply, stop_after=1))
+    with pytest.raises(_Interrupted):
+        judge.cmd_adjudicate(args)
+    resumed = []
+    monkeypatch.setattr(judge.harness, "chat", _replying(resumed, reply))
+    judge.cmd_adjudicate(args)
+    assert first == ["judge-adjudicator-001"]
+    assert resumed == ["judge-adjudicator-002", "judge-adjudicator-003"]
+
+
+def _apply_fixture(tmp_path):
+    mapping = {"x1": dict(task_id="t1", arm="native")}
+    write(tmp_path / "map.json", dict(map=mapping))
+    write(
+        tmp_path / "judgments.json",
+        judgments({"x1": verdict()}, {"x1": verdict()}, {"x1": dict(success=True, reason="agree")}),
+    )
+    report = dict(
+        rows=[dict(task_id="t1", arm="native", status="completed", success=None, evidence_ids=[])],
+        evidence=[dict(id="a:first"), dict(id="z:last")],
+    )
+    write(tmp_path / "report.json", report)
+    write(tmp_path / "tasks.json", {})
+    write(tmp_path / "freeze.json", {})
+    return SimpleNamespace(
+        report=tmp_path / "report.json",
+        tasks=tmp_path / "tasks.json",
+        freeze=tmp_path / "freeze.json",
+        map=tmp_path / "map.json",
+        judgments=tmp_path / "judgments.json",
+        evidence=tmp_path / "evidence",
+        output=tmp_path / "report.json",
+    )
+
+
+def test_applying_verdicts_twice_keeps_one_strictly_sorted_evidence_list(tmp_path, monkeypatch):
+    """RM16 (AC36): rerunning apply over its own output is idempotent."""
+    from relaymind.evaluation import asset_whole_task
+
+    monkeypatch.setattr(asset_whole_task, "host_summary", lambda *a: dict(arms=[]))
+    args = _apply_fixture(tmp_path)
+    judge.cmd_apply(args)
+    once = read(args.output)
+    judge.cmd_apply(args)
+    twice = read(args.output)
+    assert twice == once
+    ids = [e["id"].encode() for e in twice["evidence"]]
+    assert ids == sorted(set(ids))
+    assert [e["id"] for e in twice["evidence"]] == [
+        "a:first",
+        "judging:blind-map",
+        "judging:success-judgments",
+        "z:last",
+    ]
+
+
+def test_the_host_report_is_written_into_a_new_directory(tmp_path, monkeypatch):
+    class FakeRun:
+        def __init__(self, args):
+            pass
+
+        def setup(self):
+            pass
+
+        def close(self):
+            pass
+
+        def spent(self):
+            return 0
+
+        execute = skip_reason = None
+
+    monkeypatch.setattr(run_host, "Run", FakeRun)
+    monkeypatch.setattr(run_host, "read", lambda path: {})
+    monkeypatch.setattr(run_host, "run_host_plan", lambda *a, **k: dict(summary=dict(arms=[])))
+    argv = ["run_host.py", "--model", MODEL]
+    for name in (
+        "tasks",
+        "freeze",
+        "lock",
+        "release-root",
+        "journal",
+        "environment",
+        "ledger",
+        "tarball",
+        "openclaw",
+        "work",
+        "evidence",
+    ):
+        argv += ["--" + name, str(tmp_path / name)]
+    output = tmp_path / "new" / "nested" / "report.json"
+    argv += ["--output", str(output)]
+    monkeypatch.setattr(sys, "argv", argv)
+    run_host.main()
+    assert read(output) == dict(summary=dict(arms=[]))
+
+
+def test_a_settled_row_counts_one_top_level_call_like_the_harness_ledger(tmp_path):
+    """RM03: the host ledger keeps the same top-level calls count as harness.Ledger."""
+    b = run_host.Budget(tmp_path / "ledger.json", cap=10**9, row_budget=200_000, max_output=8_000)
+    for key in ("t1-native", "t2-provider_only"):
+        assert b.reserve(key) is None
+        b.settle(key, key.split("-", 1)[1], prompt=10, completion=5, charged=15)
+    b.settle("t1-native", "native", prompt=10, completion=5, charged=15)  # once only
+    saved = read(tmp_path / "ledger.json")
+    assert saved["calls"] == 2
+    assert saved["calls"] == sum(s["calls"] for s in saved["stages"].values())
+
+
+def test_transcript_databases_are_read_in_sorted_order(tmp_path, monkeypatch):
+    run = object.__new__(run_host.Run)
+    for name in ("b", "a", "c"):
+        (tmp_path / name).mkdir()
+        with sqlite3.connect(tmp_path / name / "openclaw-agent.sqlite") as conn:
+            conn.execute(
+                "CREATE TABLE transcript_events(seq INTEGER, event_json TEXT, event_zstd BLOB)"
+            )
+            conn.execute(
+                "INSERT INTO transcript_events VALUES(1, ?, NULL)",
+                (json.dumps(dict(usage=dict(input=1, output=1), responseId=name)),),
+            )
+    paths = sorted(tmp_path.rglob("openclaw-agent.sqlite"))
+    monkeypatch.setattr(
+        run_host.Path, "rglob", lambda self, pattern: iter(reversed(paths)), raising=True
+    )
+    found = run.transcript_usage(tmp_path)
+    assert [f["responseId"] for f in found] == ["a", "b", "c"]
+
+
+def test_the_call_log_accepts_a_null_created_time_and_model(tmp_path):
+    """RM16: a provider that omits created/model yields unknown fields, not a TypeError."""
+    logs = tmp_path / "log"
+    logs.mkdir()
+    for name, body in (
+        ("a", b'{"created": null, "model": null}'),
+        ("b", b'{"model": "glm-5.3"}'),
+        ("c", b'{"created": 0, "model": "glm-5.3"}'),
+    ):
+        (logs / f"{name}.request.json").write_bytes(b"{}")
+        (logs / f"{name}.response.json").write_bytes(body)
+    out = tmp_path / "log.json"
+    harness.cmd_log(
+        SimpleNamespace(
+            log=logs,
+            copy_to=tmp_path / "copy",
+            output=out,
+            template="drafter.txt",
+            role="author",
+            rejected=None,
+        )
+    )
+    log = read(out)
+    assert [(c["served_model"], c["served_on"]) for c in log["calls"]] == [
+        (None, None),
+        ("glm-5.3", None),
+        ("glm-5.3", "1970-01-01"),
+    ]
+    assert log["served_models"] == ["glm-5.3"]
+    assert log["dates"] == ["1970-01-01"]
+
+
+def _annotation_fixture(tmp_path, n):
+    write(tmp_path / "catalog.json", dict(assets=[dict(record=dict(asset_id="asset:one"))]))
+    template = tmp_path / "template.json"
+    write(
+        template,
+        dict(
+            annotator_id="machine-annotator-a",
+            items=[
+                dict(
+                    case_id=f"c{k:02d}",
+                    lane="en_to_en",
+                    task_text="Find it",
+                    language_tags=["en"],
+                    judgment=None,
+                )
+                for k in range(n)
+            ],
+        ),
+    )
+    return template
+
+
+def _annotation_reply(request):
+    return dict(
+        judgments=[
+            dict(
+                case_id=i["case_id"],
+                acceptable=["A001"],
+                language_valid=True,
+                independent_case=True,
+                notes="",
+                **{"class": "positive"},
+            )
+            for i in request
+        ]
+    )
+
+
+def test_resumed_annotation_keeps_the_seeded_order_and_new_batch_names(tmp_path, monkeypatch):
+    """RM40 (AC31): a resume continues the annotator's one seeded order, and its
+    batches never reuse a name of the interrupted run."""
+    monkeypatch.setattr(harness, "catalog_listing", lambda catalog: "A001 asset:one")
+
+    def run(root, max_batches):
+        names, order = [], []
+
+        def chat(ledger, stage, messages, log, name, **kwargs):
+            names.append(name)
+            request = json.loads(messages[1]["content"])
+            order.extend(i["case_id"] for i in request)
+            return dict(
+                choices=[dict(message=dict(content=json.dumps(_annotation_reply(request))))]
+            )
+
+        monkeypatch.setattr(harness, "chat", chat)
+        harness.cmd_annotate(
+            SimpleNamespace(
+                root=root,
+                template=root / "template.json",
+                ledger=root / "ledger",
+                cap=10**9,
+                output=root / "out.json",
+                batch=1,
+                max_batches=max_batches,
+                log=root / "log",
+            )
+        )
+        return names, order
+
+    whole = tmp_path / "whole"
+    whole.mkdir()
+    _annotation_fixture(whole, 12)
+    names, order = run(whole, 0)
+    parts = tmp_path / "parts"
+    parts.mkdir()
+    _annotation_fixture(parts, 12)
+    first_names, first_order = run(parts, 4)
+    later_names, later_order = run(parts, 0)
+    assert first_order + later_order == order
+    assert first_names + later_names == names
+    assert not set(first_names) & set(later_names)
+
+
+def test_resumed_label_adjudication_never_reuses_a_batch_name(tmp_path, monkeypatch):
+    write(tmp_path / "catalog.json", dict(assets=[dict(record=dict(asset_id="asset:one"))]))
+    raw = dict(
+        acceptable_asset_ids=["asset:one"],
+        language_valid=True,
+        independent_case=True,
+        notes="",
+        **{"class": "positive"},
+    )
+    cases, worksheet = [], []
+    for k in range(3):
+        cases.append(dict(id=f"c{k}", lane="en_to_en", task_text="Find it"))
+        worksheet.append(
+            dict(
+                case_id=f"c{k}",
+                agrees=dict(joint=False),
+                judgments=[raw, dict(raw, **{"class": "ambiguous"})],
+                adjudication=None,
+            )
+        )
+    write(tmp_path / "cases.json", dict(cases=cases))
+    write(tmp_path / "worksheet.json", dict(items=worksheet))
+    monkeypatch.setattr(harness, "catalog_listing", lambda catalog: "A001 asset:one")
+
+    def reply(request):
+        return dict(
+            adjudications=[
+                dict(
+                    case_id=i["case_id"],
+                    acceptable=["A001"],
+                    language_valid=True,
+                    independent_case=True,
+                    reason="r",
+                    **{"class": "positive"},
+                )
+                for i in request
+            ]
+        )
+
+    args = SimpleNamespace(
+        root=tmp_path,
+        worksheet=tmp_path / "worksheet.json",
+        output=tmp_path / "out.json",
+        ledger=tmp_path / "ledger",
+        cap=10**9,
+        batch=1,
+        log=tmp_path / "log",
+    )
+    first = []
+    monkeypatch.setattr(harness, "chat", _replying(first, reply, stop_after=1))
+    with pytest.raises(_Interrupted):
+        harness.cmd_adjudicate(args)
+    resumed = []
+    monkeypatch.setattr(harness, "chat", _replying(resumed, reply))
+    harness.cmd_adjudicate(args)
+    assert first == ["machine-adjudicator-001"]
+    assert resumed == ["machine-adjudicator-002", "machine-adjudicator-003"]
+
+
+def test_record_scopes_come_from_the_schema_and_outcome_and_model_are_arguments(tmp_path):
+    """RM44 (spec 0.66 section 12.6.6): every schema scope, both outcomes, and the
+    model identity are arguments; the defaults are those of the committed record."""
+    schema = read(ROOT / "src/relaymind/evaluation/schemas/asset_qualification_record.v1.json")
+    parser = record_script.build_parser()
+    actions = {a.dest: a for a in parser._actions}
+    assert list(actions["scope"].choices) == schema["properties"]["scope"]["enum"]
+    assert list(actions["outcome"].choices) == schema["properties"]["outcome"]["enum"]
+    committed = read(EVIDENCE / "m10-owner-run-260-adaptation.json")
+    assert actions["outcome"].default == committed["outcome"]
+    assert actions["model_id"].default == committed["drafter"]["model_id"]
+    machines = [a for k, a in committed["annotators"].items() if k != "family_relation"]
+    assert {a["model_id"] for a in machines} == {actions["model_id"].default}
+    machine, environment = tmp_path / "machine.json", tmp_path / "environment.json"
+    write(machine, dict(os="linux"))
+    write(environment, dict(os="linux", os_version="Linux-7"))
+    subject = tmp_path / "report.json"
+    write(subject, {})
+    harness_file = tmp_path / "harness.py"
+    harness_file.write_text("")
+    args = parser.parse_args(
+        [
+            "--scope",
+            "host_trial",
+            "--outcome",
+            "negative",
+            "--model-id",
+            "other-model",
+            "--record-id",
+            "r1",
+            "--record-dir",
+            str(tmp_path),
+            "--subject",
+            "report",
+            str(subject),
+            "--machine",
+            str(machine),
+            "--environment",
+            str(environment),
+            "--prereg-commit",
+            "0" * 40,
+            "--prereg-time",
+            "2026-11-01T00:00:00Z",
+            "--runs-started-at",
+            "2026-11-01T00:00:00Z",
+            "--repository-commit",
+            "0" * 40,
+            "--harness",
+            str(harness_file),
+            "--owner-login",
+            "owner",
+        ]
+    )
+    record = record_script.build_record(args)
+    assert (record["scope"], record["outcome"]) == ("host_trial", "negative")
+    assert record["drafter"]["model_id"] == "other-model"
+    assert {a["model_id"] for k, a in record["annotators"].items() if k != "family_relation"} == {
+        "other-model"
+    }
+
+
+@pytest.mark.parametrize("platform", ["linux", "win32"])
+def test_the_host_turn_stop_ends_the_whole_tree_on_each_platform(monkeypatch, platform):
+    """Windows has no POSIX process groups: the turn's tree is ended with taskkill;
+    POSIX keeps signalling the process group."""
+    calls = []
+
+    class Child:
+        pid = 4242
+        returncode = None
+
+        def wait(self, timeout=None):
+            if timeout is not None and self.returncode is None:
+                raise run_host.subprocess.TimeoutExpired("child", timeout)
+            return 1
+
+        def poll(self):
+            return self.returncode
+
+        def kill(self):
+            calls.append("kill")
+            self.returncode = 1
+
+    child = Child()
+
+    def popen(command, **options):
+        calls.append(("popen", options))
+        return child
+
+    def run(command, **options):
+        calls.append(("run", command))
+        child.returncode = 1
+
+    def killpg(pid, sig):
+        calls.append(("killpg", pid, sig))
+        if sig == run_host.signal.SIGKILL:
+            child.returncode = -9
+
+    monkeypatch.setattr(run_host.sys, "platform", platform)
+    monkeypatch.setattr(run_host.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, raising=False)
+    monkeypatch.setattr(run_host.subprocess, "Popen", popen)
+    monkeypatch.setattr(run_host.subprocess, "run", run)
+    monkeypatch.setattr(run_host.os, "killpg", killpg, raising=False)
+    result = run_host.run_bounded(
+        ["host"], env=None, timeout=-1, usage=lambda: 0, limit_reached=lambda used: False
+    )
+    assert result["status"] == "timed_out"
+    options = calls[0][1]
+    if platform == "win32":
+        assert options["creationflags"] == 0x200 and "start_new_session" not in options
+        assert ("run", ["taskkill", "/F", "/T", "/PID", "4242"]) in calls
+        assert not any(c[0] == "killpg" for c in calls if isinstance(c, tuple))
+        assert "kill" not in calls
+    else:
+        assert options["start_new_session"] is True and "creationflags" not in options
+        assert ("killpg", 4242, run_host.signal.SIGTERM) in calls
+        assert not any(c[0] == "run" for c in calls if isinstance(c, tuple))
+
+
+def test_windows_stop_falls_back_to_kill_when_taskkill_is_missing(monkeypatch):
+    calls = []
+
+    class Child:
+        pid = 7
+        returncode = None
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+        def kill(self):
+            calls.append("kill")
+            self.returncode = 1
+
+    def missing(command, **options):
+        raise FileNotFoundError("taskkill")
+
+    monkeypatch.setattr(run_host.sys, "platform", "win32")
+    monkeypatch.setattr(run_host.subprocess, "run", missing)
+    run_host._stop(Child())
+    assert calls == ["kill"]
+
+
+def test_a_timed_out_row_has_reason_timeout(tmp_path, monkeypatch):
+    """RM16 (AC36): a runner timeout is not attributed to a host failure."""
+    run = object.__new__(run_host.Run)
+    run.frozen = run_host.frozen_arm_configs(FREEZE, CONFIGS, MODEL)
+    run.budget = budget(tmp_path)
+    run.prompts = {"c1": "prompt"}
+    run.work = tmp_path / "work"
+    run.evidence_root = tmp_path / "evidence"
+    run.secrets = []
+    run.native = SimpleNamespace(command=["fixture-host"], env={}, config_path="c")
+    run.gate = SimpleNamespace(
+        open_row=lambda *a: None,
+        charged=lambda: 10,
+        refused=False,
+        close_row=lambda: dict(prompt=8, completion=2, charged=10, refused=False),
+    )
+    outcome = {}
+
+    def executed(*args, **kwargs):
+        return dict(
+            status=outcome["status"],
+            exit_code=outcome.get("code"),
+            elapsed_ms=1,
+            row_tokens_at_stop=None,
+            stdout="",
+            stderr="",
+        )
+
+    monkeypatch.setattr(run_host, "run_bounded", executed)
+    config = next(c for c in FREEZE["configurations"] if c["arm"] == "native")
+    for n, (status, code, row_status, reason) in enumerate(
+        [
+            ("timed_out", None, "timeout", "timeout"),
+            ("failed", 1, "failed", "host_failed"),
+        ]
+    ):
+        outcome.update(status=status, code=code)
+        row, _ = run.execute(dict(id=f"t{n}", prompt_case_id="c1"), "native", config)
+        assert (row["status"], row["reason"]) == (row_status, reason)
