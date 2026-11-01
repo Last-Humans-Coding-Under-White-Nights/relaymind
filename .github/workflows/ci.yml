@@ -26,6 +26,8 @@ jobs:
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      pull-requests: read
     outputs:
       os: ${{ steps.os.outputs.os }}
     steps:
@@ -33,7 +35,15 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.base_ref }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # In a stacked pull request github.base_ref names the bottom of the
+          # stack, so ask the API for this pull request's own base branch.
+          if [ "$EVENT" = "pull_request" ] && [ -n "$PR" ]; then
+            BASE=$(gh api "repos/$REPO/pulls/$PR" --jq .base.ref)
+          fi
           if [ "$EVENT" = "pull_request" ] && [ "$BASE" != "master" ]; then
             os='["ubuntu-latest"]'
           else

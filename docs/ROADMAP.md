@@ -1107,8 +1107,10 @@ neutralizes control characters, and wraps long evidence and feedback values.
 Source locators remain the exact offered record: spec sections 4.6.1 and 7.6
 define local locators as resolved `SKILL.md` paths and return that record in
 the scoped view; no home-path abbreviation/redaction rule is specified.
-The adapter revision is repinned to the new built bytes; evidenceRevision is
-unchanged: **recapture pending before merge**. Browser fixtures do not establish
+The adapter revision is repinned to the built bytes that combine these
+changes with the #256 review fixes
+(`a82313a995479eb61239c3307dc9fc145ea2dc506ab9872b481da5e2c9d960c6`);
+evidenceRevision is unchanged: **recapture pending before merge**. Browser fixtures do not establish
 native host qualification for those bytes.
 
 The #192 implementation supplies independent catalog discovery: closed records
@@ -1345,14 +1347,19 @@ isolation and connection retirement. Its unmodified capture is
 (SHA-256 `d5c186ac552b6028cd47c9bd4679f79259eab1092d20dd95b48c36fa35437a39`), which the registry's evidence revision names. The 31 October
 capture remains the record of the earlier revision. The loaded-use fence and
 the conditional MCP use path (#239/#204) change the adapter bytes again; the
-registry now pins the new exact revision
+registry pinned the exact revision
 `653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`, and
-the ordinary installed-host run of these exact bytes (CI run 41286397320,
+the ordinary installed-host run of those exact bytes (CI run 41286397320,
 pinned OpenClaw 2026.10.7, Ubuntu runner, commit 548588a, PR merge checkout
 6a4a99f) passed the ordinary-pass and ordinary-skill-pass predicates with all
 15 harness sources matching. Its unmodified capture is
 [openclaw-native-actions-20261101-adapter.json](evidence/m10/openclaw-native-actions-20261101-adapter.json)
-(SHA-256 `933fb4e7c8b3057305fae165561825984a63325275b821be84b008dd574589f7`), which the registry's evidence revision names. As before, this is
+(SHA-256 `933fb4e7c8b3057305fae165561825984a63325275b821be84b008dd574589f7`), which the registry's evidence revision names. The #256
+review fixes (ledger single settle and close, in-flight receipt recovery,
+honest gateway failure codes, attributable conversation blocks, independent
+registration) change the adapter bytes again: the entry is re-pinned to
+`d5b6048af14dce5b6069dea2bd1a7e8abf57077e08d8b20d390791389dd22572`, and the evidence recapture of these bytes is pending before merge;
+the capture above records the earlier revision. As before, this is
 Linux functional evidence with disposable accounts, not macOS/Windows or
 owner-run acceptance. The person-ingress harness hardening raised in the #224 review
 (#228) changed evidence-bound harness files; a fresh ordinary installed-host
@@ -1458,9 +1465,10 @@ spec 0.65 names no qualified native boundary that can stop the next model
 request. HOST-EXACT-SKILL-USE (#239) and MCP use with real approvals (#204)
 remain open. The changed adapter bytes have a new exact revision, and the
 shipped `direct_actions`/`exact_skill_selection` entry is re-pinned to it
-(`653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`), as for the spec 0.63 scope fix. Its evidence revision names
-the fresh ordinary installed-host capture of this revision
-(`openclaw-native-actions-20261101-adapter.json`, SHA-256 `933fb4e7c8b3…`). `tests/test_openclaw_install.py` fails when the registry and
+(`d5b6048af14dce5b6069dea2bd1a7e8abf57077e08d8b20d390791389dd22572`), as for the spec 0.63 scope fix. Its evidence revision still
+names the capture of the earlier revision `653902615edf…`
+(`openclaw-native-actions-20261101-adapter.json`, SHA-256 `933fb4e7c8b3…`);
+the evidence recapture of this revision is pending before merge. `tests/test_openclaw_install.py` fails when the registry and
 the built adapter digest of the release artifact drift.
 
 #240 host_config evidence must validate with the pinned host's own validator
