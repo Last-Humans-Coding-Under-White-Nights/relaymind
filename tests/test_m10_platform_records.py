@@ -20,6 +20,43 @@ def test_the_windows_platform_record_is_present():
     assert any("windows" in path.name for path in RECORDS)
 
 
+def _owner_run_records():
+    """Every committed spec 12.6.6 record under docs/evidence/m10, at any depth."""
+    import json
+
+    found = []
+    for path in sorted(EVIDENCE.rglob("*.json")):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            continue
+        if isinstance(document, dict) and document.get("profile") == "owner_run":
+            found.append(path)
+    return found
+
+
+OWNER_RUN_RECORDS = _owner_run_records()
+M1_TRIAL = EVIDENCE / "m10-early-trial-m1-openclaw-2026.10.7-20261101.json"
+
+
+@pytest.mark.parametrize(
+    "path", OWNER_RUN_RECORDS, ids=lambda path: path.relative_to(EVIDENCE).as_posix()
+)
+def test_every_committed_owner_run_record_loads(path):
+    """RM16; spec 0.66 12.6.6 (review of #276): every committed record still loads."""
+    assert load_record(path).document["profile"] == "owner_run"
+
+
+def test_the_m1_trial_record_is_a_pending_machine_dual_drafted_host_trial():
+    assert M1_TRIAL in OWNER_RUN_RECORDS
+    record = load_record(M1_TRIAL)
+    assert record.scope == "host_trial"
+    assert record.labelling == "machine_dual_owner_approved"
+    assert record.prompt_authorship == "machine_drafted_owner_approved"
+    assert record.machine["role"] == "target_macos_m1_8gib"
+    assert not record.approved
+
+
 def test_every_m10_evidence_folder_keeps_its_exact_bytes_on_every_checkout():
     """RM16/AC29: digest-bound M10 evidence must not get CRLF on a Windows checkout.
 

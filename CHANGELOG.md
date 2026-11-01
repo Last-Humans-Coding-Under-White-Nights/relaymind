@@ -76,6 +76,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `not_run`: no person sign-in on macOS. The evidence helpers
   (`build_trial_inputs.py`, `observe_row.py`, `machine_passes.py`) only drive the
   existing kit and checker. One task gives no general result; no gate is claimed.
+  Its frozen `setup.md` cites the loaded-use negative record that #267 later
+  withdrew; the trial README and the walkthrough README now say loaded skill
+  use is disabled because it is unqualified (#280), not a host limitation.
 
 - Verifier support for the 0.66 machine-drafted prompts and `machine_dual`
   labels (#260; RM40, RM42, RM44; AC31, AC33, AC36): `machine_dual.v1` in
@@ -89,7 +92,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   lane); a drafted release is drafted throughout (`drafted_authorship_mixed`);
   an `original` record rejects drafted cases but allows translated or generated
   validation cases. The trial's `record` step now matches the current checker,
-  and a repeated machine pass keeps the earlier call bytes.
+  and a repeated machine pass keeps the earlier call bytes. Second review of
+  #276: an approved record of the `machine_dual_owner_approved` or
+  `machine_drafted_owner_approved` profile needs a preregistration
+  (`preregistration_missing`), since the owner approves the lock before it;
+  `machine_dual` `check_labels` checks the catalog Persons' roles;
+  `QualificationRecord.check_grade` rejects a grade that does not carry the
+  record's labelling and prompt authorship. The M1 trial record now names
+  `2b4e439`, the commit holding its `harness_sha256` bytes, and has a null
+  `preregistration`: its lock was neither committed nor owner-approved before a
+  separate preregistration commit, so it stays pending and cannot be approved.
+  Its committed grade was made without the record, as its README states. The
+  `record` command stops on an uncommitted harness, and the success adjudicator
+  is asked only for the disagreements.
 - #274 native Windows platform evidence (RM38; AC29, AC37), with a pending
   qualification draft in `docs/evidence/m10/windows-platform-run-2026-11-01/`.
   The packaged lifecycle passes; fixture qualification and unobserved host
@@ -100,33 +115,46 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   in a digest-bound release attachment with a compact repository record.
 
 - #255 host use settlement (RM16/RM37/RM39; AC30/AC35; spec 0.66 sections
-  7.6.1, 7.6.2, 12.6.6) adds two pending negative `host_operation` records for
+  7.6.1, 7.6.2, 12.6.6) adds one pending negative `host_operation` record for
   OpenClaw 2026.10.7, with the VPS host surface inventory and the CI/VPS
-  captures they bind (`docs/evidence/m10/`):
-  - `skill_loaded_use` is `stop_point_absent`. Hooks, middleware and the
-    provider can stop a read or a request, but none can re-verify fresh person
-    authority, the session incarnation and the pinned bytes, so none can fence
-    the next model request.
+  captures (`docs/evidence/m10/`):
   - `mcp_use` is `exact_route_absent`. No supported route invokes an
     independent, non-App MCP tool by its exact native identity: `tools.invoke`
     is name-only and the harness runtimes are private; the App-scoped
-    `mcp.app.callTool` does not count.
+    `mcp.app.callTool` does not count. These verdicts rest on the pinned host
+    source; the inventory's `attempted_routes` lists what the captures
+    attempted (`mcp.app.discover`, `tools.effective`, `mcp.app.listTools`) and
+    what was not called.
+  - `skill_loaded_use` has **no** negative record. Hooks, middleware and the
+    provider can stop a read or a request but cannot re-verify fresh person
+    authority, the session incarnation and the pinned bytes on their own. The
+    host's `GatewaySessionAccessAuthority.retain()` borrow, however, re-checks
+    the person's grant and the exact session incarnation at call time and
+    could back a provider `onPayload` fence, which spec 7.6.1 admits once
+    qualified. `stop_point_absent` is therefore not established, and the
+    pending record that asserted it was withdrawn after review. The inventory
+    records the borrow's source, its open questions and the
+    `before_prompt_build`/`ctx.toolAuthority` hook.
 
-  Both operations stay disabled. The records lift nothing until they are
-  approved. `tests/test_m10_host_use_records.py` loads them with the checker.
-  The records also bind the second VPS run's captures (`*-20261101-vps2.json`,
+  Both operations stay disabled. The MCP record lifts nothing until it is
+  approved. `tests/test_m10_host_use_records.py` loads it with the checker,
+  checks every cited host file hash (including the reset policy sources), ties
+  the attempted routes to the captures, ties the record's commit and harness to
+  the VPS3 capture and its tracked sources to that commit's bytes, and checks
+  that no #255 capture publishes a plaintext hostname (the CI loaded-use
+  capture's runner hostname is now its SHA-256). The MCP record also binds the
+  second VPS run's MCP capture (`openclaw-mcp-use-20261101-vps2.json`,
   checkout 62c4dcd), with the user name and hostname rewritten. Person ingress
-  passed there, and MCP use was `blocked`. That loaded-use run exited 2 on the
-  62c4dcd single-pin check, because the host lists the whole profile's pins;
-  the selected-skill pin check (5d92b64) is already in this branch and accepts
-  the committed capture, which a test now checks. The MCP record also binds a
-  third VPS run at bba0cf1 (`openclaw-mcp-use-20261101-vps3.json`) with the
-  #249 discovery fix: `tools.effective` lists both colliding tools, and the
-  result is still `blocked`. The earlier "empty list" was the old harness
-  projection (`payload.tools` instead of `groups[].tools`), not a host result;
-  the settlement document records the correction. The inventory text now states
-  the spec 0.66 finding definitions, and the test checks every cited host file
-  hash against the inventory's file table.
+  passed there, and MCP use was `blocked`. That run's loaded-use capture exited
+  2 on the 62c4dcd single-pin check, because the host lists the whole
+  profile's pins; the selected-skill pin check (5d92b64) is already in this
+  branch and accepts the committed capture, which a test now checks. The MCP
+  record also binds a third VPS run at bba0cf1
+  (`openclaw-mcp-use-20261101-vps3.json`) with the #249 discovery fix:
+  `tools.effective` lists both colliding tools, and the result is still
+  `blocked`. The earlier "empty list" was the old harness projection
+  (`payload.tools` instead of `groups[].tools`), not a host result; the
+  settlement document records the correction.
 
 ### Fixed
 
@@ -267,6 +295,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     after the reply stream ended fails at once with `control_closed`, a job
     reported in two replies is kept once in its latest state, and memory
     phases are listed only when a workload sample is known.
+  - Fourth review fixes: the verify step writes its job summary even when
+    verify fails, then fails with verify's exit code. `platform-runner-files`
+    binds only tracked files, so local files such as `.DS_Store` never change
+    it, and a test checks that every bound file checks out with LF (or as
+    exact bytes). A gateway that exits before its token is `gateway_exited`,
+    not a token timeout; the gateway child ends quietly when the parent has
+    closed its pipe; ordinary-step failure messages go to stderr.
 - Episode and host-task run kit (#236, #237; RM40–RM44; AC31–AC36): blind
   label templates, adjudication worksheet and `AssetLabelsV1` freeze;
   `preregister-host`/`preregister-episodes` checks; a resumable, crash-safe
@@ -520,14 +555,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   frozen corpus) and is null on walkthrough and host_operation records; under
   `owner_machine` the tuner exclusion is waived for the owner custodian only.
   "Customer" wording about who runs trials becomes owner/operator. No metric,
-  threshold or budget changes.
-  A later 0.66 addition (#260) adds `machine_drafted_owner_approved` prompt
-  authorship (one pinned drafting model, owner approval by PR review) and
-  `machine_dual_owner_approved` labelling (two blind machine annotators,
-  `same_family` when only one model family is available, Cohen's kappa before
-  a third machine adjudication pass, owner approval of the frozen labels). The
-  record gains `prompt_authorship`, `drafter` and a machine annotators shape;
-  reports never say `independent` for these labels.
   threshold or budget changes. Amended before release (#268; RM34/AC25;
   sections 4.6, 4.6.1, 14.5): each ordinary local SKILL.md candidate is
   admitted or rejected on its own. A rejected file records one
@@ -537,6 +564,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   cancellation still fail the whole scan. The markup and repeated-line rules
   apply to offered record fields; the internal instruction body keeps only the
   NFC, encoding, control and size rules.
+  A later 0.66 addition (#260) adds `machine_drafted_owner_approved` prompt
+  authorship (one pinned drafting model, owner approval by PR review) and
+  `machine_dual_owner_approved` labelling (two blind machine annotators,
+  `same_family` when only one model family is available, Cohen's kappa before
+  a third machine adjudication pass, owner approval of the frozen labels). The
+  record gains `prompt_authorship`, `drafter` and a machine annotators shape;
+  reports never say `independent` for these labels.
 - Specification 0.64 → 0.65 (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;
   AC25/AC28/AC30/AC31/AC35–AC37): defines native skill loaded-byte delivery,
   immutable-pin versus removal semantics and the later-use authority fence;

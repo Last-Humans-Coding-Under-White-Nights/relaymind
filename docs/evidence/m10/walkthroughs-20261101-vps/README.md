@@ -14,7 +14,11 @@ of that run only:
 Result: both `en-US` and `zh-CN` are `complete: true`. The steps open,
 recommend, choose, correct, inspect, delete, reset and select_skill are
 `recorded`. Loaded skill use, MCP use and MCP approval are `blocked` with
-their fixed reasons, since #255 settles both as known host limitations.
+their fixed reasons. Loaded skill use is blocked because it is unqualified
+(`skill_loaded_use_unqualified`), not as a host limitation: the pending negative
+record that called it one was withdrawn (#267), and its qualification attempt is
+#280. MCP use has a pending negative record (`exact_route_absent`) that lifts
+nothing until it is approved.
 
 The screenshots and videos (about 17 MB) are not committed. They stay with
 the owner, bound by the digests in `manifest.json`. A privacy review of all 44
