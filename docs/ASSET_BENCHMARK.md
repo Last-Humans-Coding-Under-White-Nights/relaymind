@@ -645,19 +645,24 @@ cannot change that.
 `docs/evidence/m10/`. It binds by SHA-256 the report, freeze, tasks or
 episodes, labels, captures and media it covers (paths relative to the record),
 names the machine (`target_macos_m1_8gib`, `target_windows_x64` or
-`linux_host`; OS build, CPU, RAM and a hostname digest), the repository commit
+`linux_host`; OS build, the tooling's `os_version`, CPU, RAM and a hostname digest), the repository commit
 and harness/adapter revisions, and the preregistration commit. It is approved
 by a pull request review by at least one organization member other than the
 owner; the PR number, reviewer logins and approval time are added after the
 merge. Only an approved record that binds the report's exact bytes removes
-`qualified_evidence_review`; a changed byte, another report or scope, a machine
-other than the report's platform, or a labelling/agreement that differs from
-the frozen labels rejects (exit 2). Its `labelling` (`owner_machine` or
+`qualified_evidence_review`. It rejects (exit 2) on a changed byte, another
+report or scope (`host_trial` only for an `early_trial` task document,
+`host_acceptance` only for `acceptance`), a freeze/tasks/episodes/labels
+subject that is not the resolved input, a platform field (OS, architecture,
+`os_version`, CPU, RAM) that contradicts the report (a null report field leaves
+`machine_identity_unverified`), or labelling, people or agreement that differ
+from the frozen labels. Its `labelling` (`owner_machine` or
 `independent`) is reported next to the tier. A fixture input or any other
 unverified input still keeps the report below `qualified`. The label commands
 take `--labelling owner_machine` for the owner plus one recorded machine
 annotator (`owner_machine.v1`; the owner may also be the tuner, the machine
-annotator never). A `negative` record with scope `host_operation` closes the
+annotator holds the annotator role only, the owner adjudicates every case and
+every disagreement needs a nonempty reason). A `negative` record with scope `host_operation` closes the
 `skill_loaded_use` or `mcp_use` gate with the operation disabled
 (`known_host_limitations`). The module is
 `relaymind.evaluation.asset_qualification_record`.

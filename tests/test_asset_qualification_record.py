@@ -88,6 +88,7 @@ def macbook(**overrides) -> dict:
         role="target_macos_m1_8gib",
         os="Darwin",
         os_build="27A100",
+        os_version="macOS 27.0",
         architecture="arm64",
         cpu_model="Apple M1",
         ram_bytes=GIB8,
@@ -128,6 +129,7 @@ def negative_record(root, **overrides) -> dict:
             role="linux_host",
             os="Linux",
             os_build="Ubuntu 24.04.1 LTS 6.8.0-45-generic",
+            os_version="Linux-6.8.0-45-generic-x86_64-with-glibc2.39",
             architecture="x86_64",
             cpu_model="AMD EPYC",
             ram_bytes=4 * 1024**3,
@@ -347,27 +349,63 @@ def _platform(tmp_path, machine, environment):
     return _assess(record, sha, kind="platform", claimed="measured", platform=environment)
 
 
+MAC_ENVIRONMENT = dict(
+    ENVIRONMENT,
+    os="Darwin",
+    os_version="macOS 27.0",
+    architecture="arm64",
+    cpu="Apple M1",
+    ram_bytes=GIB8,
+)
+
+
 def test_a_target_machine_record_measures_its_platform_report(tmp_path):
-    environment = dict(ENVIRONMENT, os="Darwin", architecture="arm64", ram_bytes=GIB8)
-    assert _platform(tmp_path, macbook(), environment).assessed == "qualified"
+    assert _platform(tmp_path, macbook(), MAC_ENVIRONMENT).assessed == "qualified"
 
 
-def test_a_platform_report_from_another_machine_rejects(tmp_path):
-    environment = dict(ENVIRONMENT, os="Darwin", architecture="arm64", ram_bytes=2 * GIB8)
+@pytest.mark.parametrize(
+    "change",
+    [
+        dict(ram_bytes=2 * GIB8),
+        dict(cpu="Apple M2"),
+        dict(os_version="macOS 26.1"),
+        dict(architecture="x86_64"),
+    ],
+)
+def test_a_platform_report_from_another_machine_rejects(tmp_path, change):
+    """Spec 12.6.6: OS, version, architecture, CPU and RAM must all match."""
     with pytest.raises(WholeTaskRejected, match="record_machine_mismatch"):
-        _platform(tmp_path, macbook(), environment)
+        _platform(tmp_path, macbook(), dict(MAC_ENVIRONMENT, **change))
+
+
+@pytest.mark.parametrize("field", ["cpu", "os_version", "ram_bytes"])
+def test_an_unrecorded_platform_identity_field_stays_unverified(tmp_path, field):
+    assessment = _platform(tmp_path, macbook(), dict(MAC_ENVIRONMENT, **{field: None}))
+    assert assessment.assessed == "provisional"
+    assert "machine_identity_unverified" in assessment.reasons
 
 
 # --- Cohen's kappa over the owner/machine raw judgments --------------------------
 
 
-def _labels(pairs, method="owner_machine.v1"):
-    judgments = []
+def _labels(pairs, method="owner_machine.v1", adjudicator="owner"):
+    judgments, adjudications = [], []
     for n, (owner, machine) in enumerate(pairs):
         case = f"case-{n:02d}"
         judgments.append(dict(case_id=case, annotator_id="machine", **{"class": machine}))
         judgments.append(dict(case_id=case, annotator_id="owner", **{"class": owner}))
-    return dict(judgments=judgments, agreement=dict(method=method, groups=[]))
+        adjudications.append(dict(case_id=case, adjudicator_id=adjudicator))
+    return dict(
+        judgments=judgments,
+        adjudications=adjudications,
+        agreement=dict(method=method, groups=[]),
+    )
+
+
+PEOPLE = {
+    "owner": dict(id="owner", roles=["adjudicator", "annotator", "custodian", "tuner"]),
+    "machine": dict(id="machine", roles=["annotator"]),
+}
 
 
 def test_class_kappa_is_cohens_kappa_over_the_two_annotators():
@@ -389,13 +427,23 @@ def test_record_kappa_must_match_the_frozen_labels(tmp_path):
     ]
     bad = copy.deepcopy(record.document)
     with pytest.raises(WholeTaskRejected, match="record_agreement_mismatch"):
-        record.check_labels(labels)
+        record.check_labels(labels, PEOPLE)
     bad["agreement"]["cohen_kappa"] = round(0.22 / 0.42, 12)
-    load_record(save(tmp_path, bad, "fixed.json")).check_labels(labels)
+    fixed = load_record(save(tmp_path, bad, "fixed.json"))
+    fixed.check_labels(labels, PEOPLE)
     with pytest.raises(WholeTaskRejected, match="labelling_mismatch"):
-        load_record(save(tmp_path, bad, "fixed.json")).check_labels(
-            dict(labels, agreement=dict(labels["agreement"], method="double_annotation.v1"))
+        fixed.check_labels(
+            dict(labels, agreement=dict(labels["agreement"], method="double_annotation.v1")),
+            PEOPLE,
         )
+    # The named machine holds the annotator role only; the named owner adjudicates.
+    tuner = dict(PEOPLE, machine=dict(id="machine", roles=["annotator", "tuner"]))
+    with pytest.raises(WholeTaskRejected, match="labelling_roles"):
+        fixed.check_labels(labels, tuner)
+    pairs_labels = _labels(pairs, adjudicator="someone-else")
+    pairs_labels["agreement"]["groups"] = labels["agreement"]["groups"]
+    with pytest.raises(WholeTaskRejected, match="labelling_roles"):
+        fixed.check_labels(pairs_labels, PEOPLE)
 
 
 def test_an_approved_record_carries_the_corpus_custodian_review(tmp_path):
@@ -413,3 +461,64 @@ def test_an_approved_record_carries_the_corpus_custodian_review(tmp_path):
     pending = host_record(tmp_path, corpus_review=review)
     pending["review"].update(pull_request=None, reviewer_logins=[], approved_at=None)
     assert load_record(save(tmp_path, pending)).custodian_review() is None
+
+
+# --- the record's input subjects are the report's resolved inputs (12.6.6) --------
+
+
+TASKS = dict(schema_version=1, kind="acceptance", tasks=[])
+FREEZE = dict(schema_version=1, freeze="frozen")
+
+
+def _input_record(root, scope="host_acceptance", tasks=TASKS, freeze=FREEZE, **overrides):
+    record = host_record(root, scope=scope, **overrides)
+    payloads = {"tasks": json.dumps(tasks).encode(), "freeze": json.dumps(freeze).encode()}
+    for subject in record["subjects"]:
+        if subject["role"] in payloads:
+            payload = payloads[subject["role"]]
+            (root / subject["path"]).write_bytes(payload)
+            subject.update(sha256=hashlib.sha256(payload).hexdigest(), bytes=len(payload))
+    if scope == "host_trial":
+        record.update(preregistration=None, runs_started_at=None)
+    return load_record(save(root, record))
+
+
+def _inputs(root=TASKS, freeze=FREEZE):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(root=root, freeze=freeze)
+
+
+def test_the_bound_tasks_and_freeze_are_the_resolved_inputs(tmp_path):
+    _input_record(tmp_path).check_inputs("host", _inputs())
+
+
+@pytest.mark.parametrize(
+    "inputs",
+    [
+        _inputs(root=dict(TASKS, tasks=[{"id": "other"}])),
+        _inputs(freeze=dict(FREEZE, freeze="other")),
+    ],
+)
+def test_unrelated_freeze_or_task_subjects_reject(tmp_path, inputs):
+    with pytest.raises(WholeTaskRejected, match="record_input_mismatch"):
+        _input_record(tmp_path).check_inputs("host", inputs)
+
+
+def test_a_duplicate_input_subject_rejects(tmp_path):
+    record = host_record(tmp_path)
+    record["subjects"].append(_subject(tmp_path, "tasks", "tasks2.json", b'{"tasks":2}'))
+    with pytest.raises(WholeTaskRejected, match="record_subjects"):
+        load_record(save(tmp_path, record))
+
+
+@pytest.mark.parametrize(
+    ("scope", "kind"),
+    [("host_trial", "acceptance"), ("host_acceptance", "early_trial")],
+)
+def test_the_host_scope_must_match_the_task_document_kind(tmp_path, scope, kind):
+    """An acceptance report cannot be reviewed by a trial record without preregistration."""
+    tasks = dict(TASKS, kind=kind)
+    record = _input_record(tmp_path, scope=scope, tasks=tasks)
+    with pytest.raises(WholeTaskRejected, match="qualification_record_scope"):
+        record.check_inputs("host", _inputs(root=tasks))

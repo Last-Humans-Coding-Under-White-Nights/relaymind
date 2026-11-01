@@ -113,12 +113,28 @@ def assess_qualification(
     return WholeTaskQualification(kind, claimed, assessed, tuple(sorted(reasons)), labelling)
 
 
+# Report Environment field -> record machine field (spec 0.66 section 12.6.6).
+_MACHINE_FIELDS = (
+    ("os", "os"),
+    ("architecture", "architecture"),
+    ("os_version", "os_version"),
+    ("cpu", "cpu_model"),
+    ("ram_bytes", "ram_bytes"),
+)
+
+
 def _check_platform_machine(machine: Mapping, platform: Mapping, reasons: set[str]) -> None:
-    """The record's machine identity must be the one the report measured."""
-    if (machine["os"], machine["architecture"]) != (platform["os"], platform["architecture"]) or (
-        platform["ram_bytes"] is not None and platform["ram_bytes"] != machine["ram_bytes"]
-    ):
-        raise WholeTaskRejected("record_machine_mismatch")
+    """The record's machine identity must be the one the report measured.
+
+    A contradicting field rejects; a field the report did not record leaves
+    the identity unverified, never matched.
+    """
+    for env_field, machine_field in _MACHINE_FIELDS:
+        value = platform.get(env_field) if isinstance(platform, Mapping) else None
+        if value is None:
+            reasons.add("machine_identity_unverified")
+        elif value != machine[machine_field]:
+            raise WholeTaskRejected("record_machine_mismatch")
     if machine["role"] == "linux_host":
         reasons.add("platform_not_target")
 
@@ -160,7 +176,8 @@ def assess_inputs(
     """
     release = inputs.release
     if record is not None:
-        record.check_labels(release.labels)
+        record.check_inputs(kind, inputs)
+        record.check_labels(release.labels, {p["id"]: p for p in release.catalog["people"]})
         if custodian_review is None:
             custodian_review = record.custodian_review()
     status = assess_asset_release(release, custodian_review=custodian_review).status
