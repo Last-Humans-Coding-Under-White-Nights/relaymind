@@ -93,3 +93,16 @@ it.each([
   ] as const)
     expect(resolve(operation)).toBeUndefined();
 });
+
+// Review 4435448011: a non-array registry qualifies nothing instead of throwing.
+it.each([null, undefined, {}, "entries"])(
+  "fails closed for a non-array registry %s",
+  (entries) => {
+    const resolve = registryResolver(
+      entries as any,
+      "2026.10.7",
+      () => REVISION,
+    );
+    expect(resolve("direct_actions")).toBeUndefined();
+  },
+);

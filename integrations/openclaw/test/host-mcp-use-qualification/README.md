@@ -35,7 +35,7 @@ original schemas and every server call, including rejected calls; it appends at
 most one bounded JSON string to its own sandbox per valid call and records its
 counter/result in a separate `effect` record joined to the `call` by `call_id`.
 Host-only exposed-name/schema/session/requester fields come from a separate
-`host_calls` receipt, never from the server. Revision 2 adds an optional field, so stale-schema tests can
+`host_calls` receipt, never from the server. Revision 2 adds a bounded optional field, so stale-schema tests can
 distinguish exact authorization from argument validity. No input accepts a path.
 The host CLI probes both servers; the person probe records only method, status
 and tool names from the response to
@@ -80,8 +80,10 @@ traces, using the published TraceEvent types. This tier currently exports no run
 traces, so `zero_gateway_execution` stays false. Missing traces cannot establish
 zero execution. Accounting helpers independently
 check both schema hash forms, provenance, intended server/file/result, one-shot
-effects, and zero-call stale rejection; their synthetic unit inputs are not
-native receipts. The exact-use, policy/currentness, approval and baseline terms
+effects, and zero-call rejection for each negative control (stale binding,
+policy, identity, replay, cancellation, timeout, expiry and revocation); their
+synthetic unit inputs are not native receipts. The exact-use, policy/currentness,
+approval and baseline terms
 remain false until a reviewed raw native resolver exists. Consequently
 `mcp_use_pass(capture)` currently cannot pass. Caller `checks`, `passed`,
 `qualified` or summary counters cannot lift that block.

@@ -1,10 +1,16 @@
-"""RM37/RM42 AC28/AC33: real scoped feedback, no-op inference and fail-closed guards."""
+"""RM37/RM42 AC28/AC33: real scoped feedback, no-op inference and fail-closed guards.
+
+Each test runs a real selection under the recommendation deadline, so the
+fixture uses a frozen clock: a runner descheduled for longer than the 500 ms
+budget would receive a 504 with no result before the stage is applied.
+"""
 
 import asyncio
 import json
 
 import pytest
 
+from helpers import FakeClock
 from recommendation_helpers import BODY
 from test_asset_adaptation_store import correct
 from test_asset_user_actions import action_client
@@ -65,7 +71,14 @@ def test_ranked_history_invokes_actual_stage_and_revision_change_blocks_ready(tm
     from test_embedding_backend import NativeDouble
 
     async def run():
-        async with action_client(tmp_path) as (client, app, service, runs, catalog, _):
+        async with action_client(tmp_path, clock=FakeClock()) as (
+            client,
+            app,
+            service,
+            runs,
+            catalog,
+            _,
+        ):
             parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
             await correct(client, parent, 0, "first")
             semantic = config(tmp_path)
@@ -112,7 +125,14 @@ def test_no_history_and_valid_no_match_have_no_similarity_calls_but_recheck_revi
             raise AssertionError("No inference allowed on no-op stage")
 
     async def run():
-        async with action_client(tmp_path) as (client, app, service, runs, catalog, _):
+        async with action_client(tmp_path, clock=FakeClock()) as (
+            client,
+            app,
+            service,
+            runs,
+            catalog,
+            _,
+        ):
             parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
             semantic = config(tmp_path)
             stage = api().AdaptationStage(
@@ -155,7 +175,14 @@ def test_similarity_failure_retains_actual_work_and_is_unavailable(tmp_path):
             return [[0, 0] for _ in batch]
 
     async def run():
-        async with action_client(tmp_path) as (client, app, service, runs, catalog, _):
+        async with action_client(tmp_path, clock=FakeClock()) as (
+            client,
+            app,
+            service,
+            runs,
+            catalog,
+            _,
+        ):
             parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
             await correct(client, parent, 0, "first")
             semantic = config(tmp_path)
