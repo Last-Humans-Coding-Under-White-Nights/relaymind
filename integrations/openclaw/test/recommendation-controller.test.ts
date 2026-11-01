@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { createRecommendationController as controller } from "../src/recommendation-controller.ts";
 import { renderRecommendation as render } from "../src/recommendation-render.ts";
+import { formatRecommendation } from "../src/recommendation-display.ts";
+import { decodeJson } from "../src/recommendation-json.ts";
+import type { RecommendationViewV1 } from "../src/recommendation-types.ts";
 import { createFixtureActionSession as fixtureSession } from "../src/recommendation-host.ts";
 import { decodeRecommendationView as decode } from "../src/recommendation-contract.ts";
 const createRecommendationController: any = controller,
@@ -13,6 +16,76 @@ const fixture = readFileSync(
   new URL("./fixtures/recommendation-view.v1.json", import.meta.url),
   "utf8",
 );
+it("displays fractional scores from the lossless native receipt as numbers (RM39/AC30)", () => {
+  const receipt = decodeJson(fixture.replaceAll('"score": 2', '"score": 0.75'));
+  const text = formatRecommendation(receipt as RecommendationViewV1, {
+    format: "text",
+  });
+  expect(text).toContain("Recorded score: 0.75; token_overlap_count");
+  expect(text).not.toContain("[object Object]");
+});
+// RM39/AC30; RM12: text-only UI localizes labels without rewriting evidence.
+it.each([
+  [
+    "en-US",
+    [
+      "Recommendation",
+      "State",
+      "Decision",
+      "Candidate 1",
+      "Kind",
+      "Source",
+      "Source locator",
+      "Source version",
+      "Content hash",
+      "Availability",
+      "Description",
+      "Recorded score",
+      "Evidence fields",
+    ],
+  ],
+  [
+    "zh-CN",
+    [
+      "推荐",
+      "状态",
+      "决定",
+      "候选项 1",
+      "类型",
+      "来源",
+      "来源位置",
+      "来源版本",
+      "内容哈希",
+      "可用性",
+      "描述",
+      "记录分数",
+      "证据字段",
+    ],
+  ],
+])("localizes every detail label for %s", (locale, labels) => {
+  const view = decodeRecommendationView(fixture);
+  const text = renderRecommendation(view, { locale, format: "text" });
+  expect(
+    text.split("\n").map((line: string) => line.slice(0, line.indexOf(":"))),
+  ).toEqual(labels);
+});
+it("preserves ordinary text and the exact offered locator while neutralizing controls", () => {
+  const view = decodeRecommendationView(fixture);
+  view.displayed_candidates[0].asset.source_locator = "/home/operator/技能/SKILL.md";
+  view.displayed_candidates[0].asset.description =
+    '你好 **source** <img src=x> [link](https://example.test) "quote"\n\t\r\u001b\u0085\u202e\u2066\u2028\u2029';
+  const text = renderRecommendation(view, { locale: "en-US", format: "text" });
+  expect(text).toContain("Source locator: /home/operator/技能/SKILL.md");
+  expect(text).toContain(
+    'Description: "你好 **source** <img src=x> [link](https://example.test) "quote"',
+  );
+  expect(text).toContain(
+    "\\u{a}\\u{9}\\u{d}\\u{1b}\\u{85}\\u{202e}\\u{2066}\\u{2028}\\u{2029}",
+  );
+  expect(text).toContain("Recorded score: 2; token_overlap_count");
+  expect(text).toContain("Evidence fields: /description, /identity/package_id");
+  expect(text.split("\n")).toHaveLength(13);
+});
 it("denies forged actor and arbitrary contexts locally with zero action calls", async () => {
   let calls = 0;
   const c = createRecommendationController({

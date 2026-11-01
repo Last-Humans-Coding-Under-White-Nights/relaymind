@@ -1097,6 +1097,16 @@ manifest. Loaded skill use, MCP use and host MCP approval are recorded as
 `functional_fixture` tier does not satisfy the qualified-host walkthrough of
 #238.
 
+#270 (RM12/RM39; AC30) localizes all recommendation-detail labels for `en-US`
+and `zh-CN`, displays ordinary characters through text-only DOM rendering,
+neutralizes control characters, and wraps long evidence and feedback values.
+Source locators remain the exact offered record: spec sections 4.6.1 and 7.6
+define local locators as resolved `SKILL.md` paths and return that record in
+the scoped view; no home-path abbreviation/redaction rule is specified.
+The adapter revision is repinned to the new built bytes; evidenceRevision is
+unchanged: **recapture pending before merge**. Browser fixtures do not establish
+native host qualification for those bytes.
+
 The #192 implementation supplies independent catalog discovery: closed records
 and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
 imports, safe internal searchable bodies, atomic shared-SQLite publication,

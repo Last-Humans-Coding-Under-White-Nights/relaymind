@@ -27,7 +27,7 @@ export const NATIVE_QUALIFICATIONS: readonly NativeQualification[] =
   Object.freeze([
     Object.freeze({
       hostVersion: "2026.10.7" as const,
-      adapterRevision: "653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f",
+      adapterRevision: "2de9493dc2ed614d9febc5a7aa5cfb1f3f2e4ec6906a7fde74840b69b3a48599",
       operations: Object.freeze(["direct_actions", "exact_skill_selection"] as const),
       evidenceRevision: "933fb4e7c8b3057305fae165561825984a63325275b821be84b008dd574589f7",
     }),
