@@ -191,14 +191,19 @@ def _trial(args) -> int:
                 )
             tarball = args.tarball
         elif args.command == "trial-run":
-            preflight, _ = read_json_path(args.preflight)
+            preflight, _ = read_json_path(asset_trial_kit.real_path(args.preflight))
             # Offline bundling may run elsewhere: the report keeps the target
             # machine's environment as the preflight recorded it.
             environment = asset_trial_kit.preflight_environment(preflight)
-            install = read_json_path(args.install)[0] if args.install else None
+            install = (
+                read_json_path(asset_trial_kit.real_path(args.install))[0] if args.install else None
+            )
             tarball = args.tarball
     except (WholeTaskBlocked, WholeTaskRejected, AssetCorpusError, OSError, ValueError) as exc:
-        reason = getattr(exc, "reason", str(exc))
+        # An identifier only: an OSError's text names local paths and is never printed.
+        reason = getattr(exc, "reason", None)
+        if not (isinstance(reason, str) and reason.isidentifier()):
+            reason = str(exc) if str(exc).isidentifier() else "invalid_input"
         blocked = isinstance(exc, WholeTaskBlocked)
         status = "blocked" if blocked else "rejected"
         print(json.dumps(dict(status=status, reason=reason)), file=sys.stderr)
