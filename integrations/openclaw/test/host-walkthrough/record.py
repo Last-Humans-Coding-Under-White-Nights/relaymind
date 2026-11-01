@@ -303,11 +303,15 @@ def walkthrough_composition(language: str, shooter: Shooter, font_dir: Path | No
 # --- manifest -------------------------------------------------------------------------
 
 
-def _media(base: Path, relative: str) -> Path:
+def _safe(relative: str) -> bool:
     path = PurePosixPath(relative)
-    if path.is_absolute() or not path.parts or ".." in path.parts or "\\" in relative:
+    return not (path.is_absolute() or not path.parts or ".." in path.parts or "\\" in relative)
+
+
+def _media(base: Path, relative: str) -> Path:
+    if not _safe(relative):
         raise ValueError("walkthrough_media_path")
-    target = base.joinpath(*path.parts)
+    target = base.joinpath(*PurePosixPath(relative).parts)
     if target.is_symlink() or not target.is_file():
         raise ValueError("walkthrough_media_path")
     return target
@@ -387,6 +391,60 @@ def _digest(evidence: dict, out: Path, evidence_id: str, path: Path) -> str:
     return evidence_id
 
 
+def _screens(base: Path, out: Path, evidence: dict, language: str, problems: set) -> tuple:
+    """screens.json and every screenshot under ``screens/``, listed or not.
+
+    A killed child may never save ``screens.json``, and a torn one may name a
+    missing or unsafe file. Every PNG that exists is listed by digest; only a
+    safe listed one is attached to its step. Problems get fixed reasons.
+    """
+    screens_id, shots, listed = None, {}, []
+    if _present(base, "screens.json"):
+        try:
+            screens_path = _media(base, "screens.json")
+        except ValueError:
+            problems.add("screens_invalid")
+        else:
+            screens_id = _digest(evidence, out, language + "/screens", screens_path)
+            try:
+                listed = json.loads(screens_path.read_bytes())
+            except ValueError:
+                listed = None
+            if not isinstance(listed, list):
+                problems.add("screens_invalid")
+                listed = []
+    attached = set()
+    for shot in listed:
+        if not (
+            isinstance(shot, dict)
+            and shot.get("step") in STEP_NAMES
+            and isinstance(shot.get("file"), str)
+        ):
+            problems.add("screens_invalid")
+            continue
+        try:
+            path = _media(base, shot["file"])
+        except ValueError:
+            problems.add("screenshot_missing" if _safe(shot["file"]) else "screenshot_path")
+            continue
+        relative = path.relative_to(base).as_posix()
+        attached.add(relative)
+        shots.setdefault(shot["step"], []).append(
+            _digest(evidence, out, language + "/" + relative, path)
+        )
+    for path in sorted((base / "screens").glob("*.png")):
+        relative = "screens/" + path.name
+        if relative in attached:
+            continue
+        try:
+            _digest(evidence, out, language + "/" + relative, _media(base, relative))
+        except ValueError:
+            problems.add("screenshot_path")
+            continue
+        problems.add("screenshot_unlisted")
+    return screens_id, shots
+
+
 def build_manifest(
     out: Path, outcomes: dict, *, predicates: dict | None = None, fonts: list | None = None
 ) -> dict:
@@ -398,37 +456,37 @@ def build_manifest(
         if language not in outcomes:
             continue
         base = out / language
+        problems = set()
         # A failed or timed-out child may leave no, or torn, outputs: record
         # what exists by digest and leave every step unrecorded.
         capture, capture_id, problem = None, None, "capture_missing"
         if _present(base, "capture.json"):
-            capture_path = _media(base, "capture.json")
-            capture_id = _digest(evidence, out, language + "/capture", capture_path)
+            problem = "capture_invalid"
             try:
-                capture = json.loads(capture_path.read_bytes())
+                capture_path = _media(base, "capture.json")
             except ValueError:
-                capture = None
-            problem = None if isinstance(capture, dict) else "capture_invalid"
-            capture = capture if isinstance(capture, dict) else None
-        screens_id, shots = None, {}
-        if _present(base, "screens.json"):
-            screens_path = _media(base, "screens.json")
-            screens_id = _digest(evidence, out, language + "/screens", screens_path)
+                problems.add("capture_path")
+            else:
+                capture_id = _digest(evidence, out, language + "/capture", capture_path)
+                try:
+                    capture = json.loads(capture_path.read_bytes())
+                except ValueError:
+                    capture = None
+                capture = capture if isinstance(capture, dict) else None
+        screens_id, shots = _screens(base, out, evidence, language, problems)
+        videos = []
+        for path in sorted((base / "video").glob("*.webm")):
             try:
-                listed = json.loads(screens_path.read_bytes())
-            except ValueError:
-                listed = []
-            for shot in listed if isinstance(listed, list) else []:
-                path = _media(base, shot["file"])
-                shots.setdefault(shot["step"], []).append(
-                    _digest(evidence, out, language + "/" + shot["file"], path)
+                videos.append(
+                    _digest(
+                        evidence,
+                        out,
+                        f"{language}/video/{path.name}",
+                        _media(base, "video/" + path.name),
+                    )
                 )
-        videos = [
-            _digest(
-                evidence, out, f"{language}/video/{path.name}", _media(base, "video/" + path.name)
-            )
-            for path in sorted((base / "video").glob("*.webm"))
-        ]
+            except ValueError:
+                problems.add("video_path")
         if capture is None:
             passed = {name: False for name in predicates}
             steps = _missing_steps(problem)
@@ -449,11 +507,13 @@ def build_manifest(
                 capture=capture_id,
                 screens=screens_id,
                 videos=videos,
+                media_problems=sorted(problems),
                 steps=steps,
             )
         )
     complete = [entry["language"] for entry in languages] == list(LANGUAGES) and all(
         entry["exit_code"] == 0
+        and not entry["media_problems"]
         and all(s["status"] in ("recorded", "blocked") for s in entry["steps"])
         for entry in languages
     )
