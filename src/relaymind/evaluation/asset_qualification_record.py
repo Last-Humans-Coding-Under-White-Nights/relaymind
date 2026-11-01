@@ -123,9 +123,12 @@ def _check_rules(record: Mapping) -> None:
         _reject("labelling_profile")
     # Preregistration: a commit and its time before any run.
     prereg, started = record["preregistration"], record["runs_started_at"]
-    if scope in _PREREGISTERED and (prereg is None or started is None):
+    if scope in _PREREGISTERED and prereg is None:
         _reject("preregistration_missing")
-    if prereg is not None and started is not None:
+    # A recorded preregistration is always checked against the first dispatch.
+    if prereg is not None:
+        if started is None:
+            _reject("preregistration_missing")
         if _time(prereg["committed_at"]) > _time(started):
             _reject("preregistration_late")
     # Machine identity.
@@ -148,7 +151,9 @@ def _check_rules(record: Mapping) -> None:
         _reject("record_outcome")
     # Review: a pull request approved by someone other than the owner.
     review = record["review"]
-    if review["owner_login"] in review["reviewer_logins"]:
+    # GitHub logins are case-insensitive.
+    owner_login = review["owner_login"].casefold()
+    if any(login.casefold() == owner_login for login in review["reviewer_logins"]):
         _reject("self_review")
     if review["approved_at"] is not None and (
         review["pull_request"] is None or not review["reviewer_logins"]
@@ -228,6 +233,8 @@ class QualificationRecord:
                 _reject("qualification_record_scope")
             bound = {"tasks": root, "freeze": inputs.freeze}
         elif kind == "adaptation":
+            if self.scope != "adaptation":
+                _reject("qualification_record_scope")
             bound = {"episodes": root, "freeze": inputs.freeze}
         else:
             return
@@ -255,7 +262,8 @@ class QualificationRecord:
             if {row["annotator_id"] for row in labels["judgments"]} != {owner, machine}:
                 _reject("labelling_mismatch")
             if (
-                machine not in people
+                owner not in people
+                or machine not in people
                 or list(people[machine]["roles"]) != ["annotator"]
                 or any(row["adjudicator_id"] != owner for row in labels["adjudications"])
             ):

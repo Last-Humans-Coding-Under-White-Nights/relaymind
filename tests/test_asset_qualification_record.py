@@ -521,3 +521,64 @@ def test_the_host_scope_must_match_the_task_document_kind(tmp_path, scope, kind)
     record = _input_record(tmp_path, scope=scope, tasks=tasks)
     with pytest.raises(WholeTaskRejected, match="qualification_record_scope"):
         record.check_inputs("host", _inputs(root=tasks))
+
+
+# --- ArcsinX review of #266 -------------------------------------------------------
+
+
+@pytest.mark.parametrize("scope", ["host_trial", "host_acceptance"])
+def test_a_host_record_cannot_review_an_adaptation_report(tmp_path, scope):
+    """The scope is checked before any input comparison (12.6.6)."""
+    from relaymind.evaluation.asset_whole_task_qualification import assess_inputs
+
+    tasks = dict(TASKS, kind="early_trial" if scope == "host_trial" else "acceptance")
+    record = _input_record(tmp_path, scope=scope, tasks=tasks)
+    episodes = dict(schema_version=1, episodes=[])
+    with pytest.raises(WholeTaskRejected, match="qualification_record_scope"):
+        record.check_inputs("adaptation", _inputs(root=episodes))
+    report = dict(qualification="qualified", evidence=[], artifacts=[])
+    inputs = _inputs(root=episodes)
+    inputs.release = None  # never reached: the scope rejects first
+    with pytest.raises(WholeTaskRejected, match="qualification_record_scope"):
+        assess_inputs("adaptation", report, inputs, record=record)
+
+
+def test_an_owner_missing_from_the_catalog_people_rejects(tmp_path):
+    record = host_record(tmp_path)
+    record["agreement"]["cohen_kappa"] = round(0.22 / 0.42, 12)
+    loaded = load_record(save(tmp_path, record))
+    pairs = [("positive", "positive")] * 6 + [("negative", "negative")] * 2
+    pairs += [("positive", "negative"), ("negative", "positive")]
+    labels = _labels(pairs)
+    labels["agreement"]["groups"] = [dict(lane="all", paired_cases=10, class_agreements=8)]
+    loaded.check_labels(labels, PEOPLE)
+    with pytest.raises(WholeTaskRejected, match="labelling_roles"):
+        loaded.check_labels(labels, {"machine": PEOPLE["machine"]})
+
+
+@pytest.mark.parametrize("scope", ["host_trial", "platform"])
+def test_a_recorded_preregistration_always_needs_its_run_start(tmp_path, scope):
+    """Any record with a preregistration is checked for ordering; none is skipped."""
+    prereg = dict(commit=COMMIT, committed_at="2026-11-02T00:00:00Z")
+    if scope == "platform":
+        record = platform_record(tmp_path, macbook())
+        record.update(preregistration=prereg)
+    else:
+        record = host_record(tmp_path, scope=scope, preregistration=prereg)
+    record["runs_started_at"] = None
+    with pytest.raises(WholeTaskRejected, match="preregistration_missing"):
+        load_record(save(tmp_path, record))
+    record["runs_started_at"] = "2026-11-01T00:00:00Z"
+    with pytest.raises(WholeTaskRejected, match="preregistration_late"):
+        load_record(save(tmp_path, record))
+    record["runs_started_at"] = "2026-11-03T00:00:00Z"
+    assert load_record(save(tmp_path, record)).scope == scope
+
+
+@pytest.mark.parametrize("reviewer", ["Owner-Login", "OWNER-LOGIN", "owner-login"])
+def test_self_review_is_case_insensitive(tmp_path, reviewer):
+    """GitHub logins compare case-insensitively."""
+    record = host_record(tmp_path)
+    record["review"]["reviewer_logins"] = [reviewer]
+    with pytest.raises(WholeTaskRejected, match="self_review"):
+        load_record(save(tmp_path, record))
