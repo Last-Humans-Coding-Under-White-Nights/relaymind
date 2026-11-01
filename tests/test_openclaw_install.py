@@ -356,10 +356,83 @@ def _ci_job(ci_text: str) -> dict:
 CI_FILE = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ci.yml"
 
 
+@pytest.mark.parametrize("job_name", ["check", "openclaw-plugin"])
+@pytest.mark.parametrize(
+    "event_name,base_ref,api_base,expected",
+    [
+        ("pull_request", "master", "master", ["ubuntu-latest", "macos-latest", "windows-latest"]),
+        ("push", "", None, ["ubuntu-latest", "macos-latest", "windows-latest"]),
+        ("workflow_dispatch", "", None, ["ubuntu-latest", "macos-latest", "windows-latest"]),
+        ("pull_request", "feature", "feature", ["ubuntu-latest"]),
+        # A stacked pull request: base_ref names the stack's bottom (master),
+        # while the pull request's own base is a feature branch.
+        ("pull_request", "master", "feature", ["ubuntu-latest"]),
+    ],
+)
+def test_ci_platform_matrix_for_each_event(
+    job_name, event_name, base_ref, api_base, expected, tmp_path
+):
+    """RM33/AC24: stacked PRs save capacity; master PRs and pushes cover every OS."""
+    import yaml
+
+    workflow = yaml.safe_load(CI_FILE.read_text("utf-8"))
+    job = workflow["jobs"][job_name]
+    # Both jobs take their platforms from the plan job's output ...
+    assert job["needs"] == "plan"
+    assert job["strategy"]["matrix"]["os"] == "${{ fromJSON(needs.plan.outputs.os) }}"
+    # ... and the plan step's own script decides them for each event.
+    plan = workflow["jobs"]["plan"]
+    assert plan["permissions"] == {"pull-requests": "read"}
+    (step,) = plan["steps"]
+    assert step["env"]["BASE"] == "${{ github.base_ref }}"
+    assert step["env"]["PR"] == "${{ github.event.pull_request.number }}"
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash is required to run the plan step")
+    # A stand-in gh answers the pull request lookup with its own base branch.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_gh = bin_dir / "gh"
+    fake_gh.write_text('#!/usr/bin/env bash\necho "$FAKE_API_BASE"\n', encoding="utf-8")
+    fake_gh.chmod(0o755)
+    output = tmp_path / "github_output"
+    env = dict(
+        os.environ,
+        EVENT=event_name,
+        BASE=base_ref,
+        PR="7" if event_name == "pull_request" else "",
+        REPO="owner/repo",
+        FAKE_API_BASE=api_base or "",
+        GITHUB_OUTPUT=str(output),
+        PATH=str(bin_dir) + os.pathsep + os.environ["PATH"],
+    )
+    subprocess.run([bash, "-c", step["run"]], env=env, check=True, capture_output=True)
+    (line,) = output.read_text("utf-8").splitlines()
+    key, value = line.split("=", 1)
+    assert key == "os"
+    assert json.loads(value) == expected
+
+
+def test_ci_plugin_browser_is_cached_before_install():
+    """RM33/AC24: the serial plugin tiers reuse the versioned Chromium shell."""
+    steps = _ci_job(CI_FILE.read_text("utf-8"))["steps"]
+    version = next(s for s in steps if s.get("id") == "playwright")
+    assert "version('playwright')" in version["run"]
+    assert '>> "$GITHUB_OUTPUT"' in version["run"]
+    assert "PLAYWRIGHT_BROWSERS_PATH=${RUNNER_TEMP}/ms-playwright" in version["run"]
+    assert '>> "$GITHUB_ENV"' in version["run"]
+    cache = next(s for s in steps if s.get("uses") == "actions/cache@v4")
+    assert cache["with"] == {
+        "path": "${{ runner.temp }}/ms-playwright",
+        "key": "playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium-shell",
+    }
+    install = next(s for s in steps if s.get("run", "").startswith("playwright install"))
+    assert steps.index(version) < steps.index(cache) < steps.index(install)
+
+
 def test_ci_builds_tests_and_runs_the_artifact_through_the_pinned_host_on_each_platform():
     """CI checks the declared host range, builds the release, and runs the host lifecycle."""
     job = _ci_job(CI_FILE.read_text("utf-8"))
-    assert job["strategy"]["matrix"]["os"] == ["ubuntu-latest", "macos-latest", "windows-latest"]
     assert job["env"]["RELAYMIND_OPENCLAW_NODE"] == "1"
     (node,) = [s for s in job["steps"] if s.get("uses", "").startswith("actions/setup-node")]
     engines = json.loads((PACKAGE / "package.json").read_text("utf-8"))["engines"]["node"]

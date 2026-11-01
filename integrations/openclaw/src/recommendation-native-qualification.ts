@@ -9,14 +9,15 @@ export interface NativeQualification {
   readonly operations: readonly NativeOperation[];
   readonly evidenceRevision: string;
 }
-// Direct actions only: reviewed signed-person composition and exact ordinary runtime closure.
-// Exact skill selection/loaded use, runtime snapshots and MCP remain unqualified.
+// Direct actions and exact Skill Library selection: reviewed signed-person composition,
+// exact ordinary runtime closure and the ordinary installed-host skill selection run.
+// Loaded instruction use, runtime snapshots and MCP remain unqualified.
 export const NATIVE_QUALIFICATIONS: readonly NativeQualification[] =
   Object.freeze([
     Object.freeze({
       hostVersion: "2026.10.7" as const,
       adapterRevision: "f3241577e903feddd3da61fd58513b4a3e90889552d9bd7f52a302fd81f52c6c",
-      operations: Object.freeze(["direct_actions"] as const),
-      evidenceRevision: "ca88ffcbcea2558975c74e3a25f38c58f552e6108576dc2cad032a7b6118ec53",
+      operations: Object.freeze(["direct_actions", "exact_skill_selection"] as const),
+      evidenceRevision: "06d7e42aa1ea407136c66e1a6d8862cf552f2c88a1b2794391622175f8828793",
     }),
   ]);

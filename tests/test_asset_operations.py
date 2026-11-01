@@ -1,6 +1,7 @@
 """RM38/AC29: deterministic observations for the operational protocol."""
 
 import asyncio
+import copy
 import shutil
 import time
 from contextlib import asynccontextmanager
@@ -10,10 +11,11 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
+from helpers import FakeClock
 from recommendation_helpers import BODY, client_for, setup
 from relaymind.assets.catalog import acquisition_budgets
 from relaymind.assets.service import AssetCatalogService
-from relaymind.assets.settings import AssetSettings, SourceConfig
+from relaymind.assets.settings import AssetSettings, RecommendationSettings, SourceConfig
 from relaymind.evaluation.asset_operations import (
     BatchSample,
     ImportBatch,
@@ -30,13 +32,46 @@ from relaymind.evaluation.asset_operations import (
 from relaymind.store.recommendation_event import validate_view
 from test_asset_sources import capture, skill
 
+# Startup tests keep the real one-second launch rule. A recommendation budget
+# just under it leaves a busy runner headroom without changing that rule.
+_STARTUP_SETTINGS = RecommendationSettings(
+    enabled=True, user_id="u", workspace_id="w", total_ms=950, primary_ms=150
+)
+
+
+def _synthetic_timing(record, start, *, elapsed=0.05, observed_ms=50.0):
+    """Real view and events with synthetic times, so host speed never decides a test.
+
+    These fixtures test the AC29 grader, not this machine: under parallel test
+    workers a real 300 ms or 1 s budget is not a property of the code.
+    """
+    if record.view is None or not record.events or record.view.get("result") is None:
+        return record
+    view = copy.deepcopy(dict(record.view))
+    events = [copy.deepcopy(dict(event)) for event in record.events]
+    view["result"]["observed_ms"] = observed_ms
+    events[-1]["payload"]["result"] = view["result"]
+    return replace(
+        record,
+        started_at=start,
+        finished_at=start + elapsed,
+        view=view,
+        events=tuple(events),
+    )
+
 
 @pytest.fixture(scope="module")
 def validated_request_cohort(tmp_path_factory):
     """Real API evidence with synthetic timestamps; never AC29 measurement."""
 
     async def collect():
-        app, service, runs, _ = setup(tmp_path_factory.mktemp("operations-cohort"))
+        # A frozen clock keeps the 500 ms budget from expiring between two
+        # checks when a parallel worker loses the CPU. These records are
+        # fixture evidence for the AC29 grader; their outcome must not depend
+        # on this machine.
+        app, service, runs, _ = setup(
+            tmp_path_factory.mktemp("operations-cohort"), clock=FakeClock()
+        )
         await service.start()
         try:
             async with await client_for(app) as client:
@@ -45,12 +80,7 @@ def validated_request_cohort(tmp_path_factory):
                     for i in range(120)
                 ]
             return [
-                replace(
-                    record,
-                    scheduled_at=i / 2,
-                    started_at=i / 2,
-                    finished_at=i / 2 + record.client_elapsed_ms / 1000,
-                )
+                replace(_synthetic_timing(record, i / 2), scheduled_at=i / 2)
                 for i, record in enumerate(records)
             ]
         finally:
@@ -62,6 +92,24 @@ def validated_request_cohort(tmp_path_factory):
 
 def _measured_workload(records):
     return WorkloadSamples("measured", requests=list(records), origin_at=0.0)
+
+
+@pytest.mark.parametrize("shape", ["no_view", "no_events", "no_result"])
+def test_synthetic_timing_preserves_failed_samples(validated_request_cohort, shape):
+    """RM16/RM38/AC29: missing evidence stays a failed sample in the denominator."""
+    sample = validated_request_cohort[0]
+    view = None if shape == "no_view" else dict(sample.view)
+    if shape == "no_result":
+        # A failed or cancelled recommendation keeps its trace but has no result.
+        view.update(state="failed", result=None)
+    record = replace(
+        sample,
+        view=view,
+        events=() if shape == "no_events" else sample.events,
+        outcome="failed",
+        error="deadline_exceeded",
+    )
+    assert _synthetic_timing(record, 10.0) == record
 
 
 def test_schedule_requires_fixed_origin_cadence_and_single_request_slot(
@@ -579,7 +627,7 @@ def test_production_observations_require_nonempty_lexical_and_new_keys(tmp_path)
     """RM38/AC29: authenticated production responses and stored attempts prove usefulness."""
 
     async def go():
-        app, service, runs, _ = setup(tmp_path)
+        app, service, runs, _ = setup(tmp_path, clock=FakeClock())
         await service.start()
         try:
             async with await client_for(app) as client:
@@ -620,7 +668,7 @@ def test_event_fetch_timeout_does_not_extend_measured_response(tmp_path):
     """RM38/AC29: evidence collection is bounded but excluded from service latency."""
 
     async def go():
-        app, service, runs, _ = setup(tmp_path)
+        app, service, runs, _ = setup(tmp_path, clock=FakeClock())
         await service.start()
         try:
             async with await client_for(app) as production:
@@ -654,7 +702,7 @@ def test_startup_counts_context_entry_and_keeps_ten_failures(tmp_path):
     """RM38/AC29: process creation and token handover precede the first useful answer."""
 
     async def go():
-        app, service, runs, _ = setup(tmp_path)
+        app, service, runs, _ = setup(tmp_path, settings=_STARTUP_SETTINGS)
         await service.start()
         calls = []
 
@@ -685,7 +733,8 @@ def test_launch_and_cleanup_failures_keep_ten_independent_samples(tmp_path):
     """RM38/AC29: an OS launch or cleanup error is one failed launch, not abort."""
 
     async def go():
-        app, service, runs, _ = setup(tmp_path)
+        clock = FakeClock()
+        app, service, runs, _ = setup(tmp_path, settings=_STARTUP_SETTINGS, clock=clock)
         await service.start()
         enters = []
 
@@ -702,9 +751,11 @@ def test_launch_and_cleanup_failures_keep_ten_independent_samples(tmp_path):
 
         samples = []
         try:
-            await measure_startups(launch, BODY, samples=samples)
+            await measure_startups(launch, BODY, samples=samples, clock=clock.monotonic)
             assert len(samples) == 10 and enters == list(range(10))
             assert [sample.outcome for sample in samples[:2]] == ["failed", "failed"]
+            assert [sample.error for sample in samples[:2]] == ["startup_failed"] * 2
+            # The OS errors stay with their own launch; later launches are useful.
             assert all(sample.outcome == "useful" for sample in samples[2:])
             assert all("sensitive" not in str(sample.error) for sample in samples)
         finally:
@@ -718,7 +769,7 @@ def test_startup_entry_timeout_keeps_original_deadline_and_later_launches(tmp_pa
     """RM38/AC29: token handover delay consumes the one-second launch budget."""
 
     async def go():
-        app, service, runs, _ = setup(tmp_path)
+        app, service, runs, _ = setup(tmp_path, settings=_STARTUP_SETTINGS)
         await service.start()
         count = 0
 
@@ -749,7 +800,7 @@ def test_startup_response_deadline_excludes_normal_slow_process_cleanup(tmp_path
     """RM38/AC29: a useful response is timed before drain and termination."""
 
     async def go():
-        app, service, runs, _ = setup(tmp_path)
+        app, service, runs, _ = setup(tmp_path, settings=_STARTUP_SETTINGS)
         await service.start()
         exits = []
 
@@ -1172,7 +1223,9 @@ def production_batch_samples(tmp_path_factory):
             )
             for document in capture(template).documents
         }
-        app, service, runs, catalog = setup(tmp_path, populate=False)
+        # Frozen clock: see validated_request_cohort. The probes below must be
+        # useful on a busy runner too.
+        app, service, runs, catalog = setup(tmp_path, populate=False, clock=FakeClock())
         source = tmp_path / "source"
         worker = AssetCatalogService(
             AssetSettings((SourceConfig("example", "local_directory", source),)),
@@ -1188,7 +1241,8 @@ def production_batch_samples(tmp_path_factory):
                     begin = batch_number * 25
                     for number in range(begin, begin + 25):
                         shutil.copytree(template / f"p{number}", source / f"p{number}")
-                    receipt = time.monotonic()
+                    # Synthetic receipt and probe times (see _synthetic_timing).
+                    receipt = float(batch_number * 10)
                     await worker.rescan("example")
                     probes = []
                     expected = []
@@ -1219,6 +1273,10 @@ def production_batch_samples(tmp_path_factory):
                         if probe.view and probe.view["result"]
                         for candidate in probe.view["result"]["final_candidates"]
                     }
+                    probes = [
+                        _synthetic_timing(probe, receipt + 0.01 + 0.1 * k)
+                        for k, probe in enumerate(probes)
+                    ]
                     visible = max(probe.finished_at for probe in probes)
                     batches.append(
                         BatchSample(

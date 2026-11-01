@@ -6,6 +6,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Exact native Skill Library selection through the ordinary installed host
+  (#197; RM39, AC30): the qualification saves a skill with
+  `skills.library.save`, maps it to the chosen asset, selects it with
+  `relaymind.skill` and checks `skills.library.list`. The evidence predicate
+  binds skill ID, revision, asset ID, content hash and source version, and
+  requires the unmapped-skill, cross-session and own-session foreign-person
+  refusals with their exact error codes. Browser failures and the overall
+  deadline remain failures through skill selection.
+
+- CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation or native-preparation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
+- CI: the shared asset benchmark fixture uses a deterministic recommendation
+  budget instead of the production 500/150 ms pair, so a loaded runner cannot
+  expire a confident HTTP selector attempt and flatten its paired coverage.
+  Deliberate timeout cases keep explicit small budgets, the HTTP cancellation
+  test uses the shared fixed clock, and a slowed-selector regression test
+  proves the old deadline failed on every host.
+- CI: a small `plan` job picks the platforms (and logs its decision); both
+  `check` and `openclaw-plugin` take them from it and run stacked PRs on Linux only to
+  conserve CI capacity, with no base-branch filter. Every PR must target
+  `master` and pass the full Linux/macOS/Windows matrix before merge; pushes
+  also run all three platforms. `openclaw-plugin` now shares the Chromium
+  shell cache keyed by OS and Playwright version; its test tiers remain serial.
 - Stabilize installed OpenClaw qualification on loaded runners (RM16/RM39;
   AC30): use bounded ten-second host-event waits, keep fixture holds alive
   through retirement observation, and capture only fixed ordinary substeps and
