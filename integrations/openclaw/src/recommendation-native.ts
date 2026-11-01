@@ -149,46 +149,57 @@ export function registerQualifiedNativeMethods(
   api: OpenClawPluginApi,
   dependencies: () => ReturnType<typeof nativeRecommendationDependencies>,
   qualification: QualificationResolver,
-  host: { mcpRoute?: NativeMcpRoute; ledger?: NativeUseLedger },
+  host: { mcpRoute?: NativeMcpRoute; openLedger?: () => NativeUseLedger },
 ): void {
-  if (!qualification("direct_actions")) {
+  // Each method registers only when its own operation qualifies.
+  const actions = qualification("direct_actions") !== undefined;
+  const skill = qualification("exact_skill_selection") !== undefined;
+  const mcp = qualification("mcp_use")?.mcp;
+  const route = host.mcpRoute;
+  const mcpReady =
+    mcp !== undefined &&
+    route !== undefined &&
+    // Spec 0.65 7.6.2 condition 1: no use without durable dispatch history.
+    host.openLedger !== undefined &&
+    route.route === mcp.route &&
+    route.transport === mcp.transport &&
+    route.toolScope === mcp.toolScope;
+  if (!actions)
     api.logger.warn(
       "Native recommendation actions unavailable: qualification pending",
     );
-    return;
-  }
+  if (!actions && !skill && !mcpReady) return;
   const shared = dependencies();
   const options = {
     scope: "operator.write",
     profileAccess: "required",
     sessionAccess: { mode: "write" },
   } as const;
-  api.registerGatewayMethod(
-    "relaymind.recommendations",
-    createNativeActionHandler(shared),
-    options,
-  );
-  if (qualification("exact_skill_selection"))
+  if (actions)
+    api.registerGatewayMethod(
+      "relaymind.recommendations",
+      createNativeActionHandler(shared),
+      options,
+    );
+  if (skill)
     api.registerGatewayMethod(
       "relaymind.skill",
       createNativeSkillHandler(shared),
       options,
     );
-  const mcp = qualification("mcp_use")?.mcp;
-  const route = host.mcpRoute;
-  // Spec 0.65 7.6.2 condition 1: no use without durable dispatch history.
-  const ledger = host.ledger;
-  if (
-    mcp &&
-    route &&
-    ledger &&
-    route.route === mcp.route &&
-    route.transport === mcp.transport &&
-    route.toolScope === mcp.toolScope
-  )
+  if (mcpReady) {
+    // The registration owns the ledger it opens and releases it on stop.
+    const ledger = host.openLedger!();
+    api.on("gateway_stop", () => ledger.close());
     api.registerGatewayMethod(
       "relaymind.mcp",
-      createNativeMcpHandler({ ...shared, qualification, route, ledger }),
+      createNativeMcpHandler({
+        ...shared,
+        qualification,
+        route: route!,
+        ledger,
+      }),
       options,
     );
+  }
 }

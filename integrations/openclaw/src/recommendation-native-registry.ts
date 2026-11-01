@@ -76,7 +76,11 @@ export function registryResolver(
   adapterRevision: () => string,
 ): QualificationResolver {
   return (operation) => {
-    if (hostVersion !== PINNED_OPENCLAW || entries.length === 0)
+    if (
+      !Array.isArray(entries) ||
+      hostVersion !== PINNED_OPENCLAW ||
+      entries.length === 0
+    )
       return undefined;
     let revision: string;
     try {
