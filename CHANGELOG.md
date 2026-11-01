@@ -32,6 +32,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   refusals with their exact error codes. Browser failures and the overall
   deadline remain failures through skill selection.
 
+- CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
+- CI: both `check` and `openclaw-plugin` run stacked PRs on Linux only to
+  conserve CI capacity, with no base-branch filter. Every PR must target
+  `master` and pass the full Linux/macOS/Windows matrix before merge; pushes
+  also run all three platforms. `openclaw-plugin` now shares the Chromium
+  shell cache keyed by OS and Playwright version; its test tiers remain serial.
 - Stabilize installed OpenClaw qualification on loaded runners (RM16/RM39;
   AC30): use bounded ten-second host-event waits, keep fixture holds alive
   through retirement observation, and capture only fixed ordinary substeps and
