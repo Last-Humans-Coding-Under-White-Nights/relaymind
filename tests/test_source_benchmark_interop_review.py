@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from helpers import FakeClock
 from test_asset_diagnostic import development_input as development_input
 from test_asset_diagnostic_runner import api, english_case, production
 from test_asset_index_preparation_integration import indexed_server as indexed_server
@@ -152,7 +153,9 @@ def test_source_comparison_allows_stateless_indexed_and_same_profile_endpoints(
 
     stateless = asyncio.run(
         api().run_source_benchmark(
-            load(development_input), production_config=production(development_input)
+            load(development_input),
+            clock=FakeClock(),
+            production_config=production(development_input),
         )
     )
     compared = api().compare_source_benchmarks(stateless, ready_source_report)
