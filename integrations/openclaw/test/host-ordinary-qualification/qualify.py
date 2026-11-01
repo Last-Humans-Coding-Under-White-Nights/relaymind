@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
@@ -38,7 +39,6 @@ ORDINARY_UI_ACTIONS = frozenset(
 
 
 HOST_EVENT_WAIT_SECONDS = BASE.person_module().HOST_EVENT_WAIT_SECONDS
-read_native_events = BASE.person_module().read_native_events
 ORDINARY_FAILURE_STEPS = frozenset(
     {
         "configure",
@@ -270,10 +270,12 @@ _SKILL_NEGATIVES = {
 
 
 def library_revision_listed(listed, skill_id, revision):
-    """Require a successful native listing containing the exact saved revision."""
+    """Require a successful native listing with the exact saved, not removed, revision."""
     try:
         return listed["ok"] is True and any(
-            entry["skillId"] == skill_id and entry["revision"] == revision
+            entry["skillId"] == skill_id
+            and entry["revision"] == revision
+            and entry.get("removed") is not True
             for entry in listed["payload"]["entries"]
         )
     except (KeyError, TypeError):
@@ -374,6 +376,77 @@ _CASE_FIELDS = {
 }
 
 
+def closed_native_data(reason: str) -> Callable:
+    """Translate malformed external structure at a named observation boundary."""
+
+    def decorate(function):
+        @wraps(function)
+        def guarded(*args, **kwargs):
+            try:
+                return function(*args, **kwargs)
+            except (
+                KeyError,
+                TypeError,
+                AttributeError,
+                IndexError,
+                UnicodeError,
+                json.JSONDecodeError,
+            ):
+                raise ValueError(reason) from None
+
+        return guarded
+
+    return decorate
+
+
+def native_frame(reply: object, reason: str) -> dict:
+    if not isinstance(reply, dict) or not isinstance(reply.get("frame"), dict):
+        raise ValueError(reason)
+    return reply["frame"]
+
+
+def native_payload(reply: object, reason: str) -> dict:
+    frame = native_frame(reply, reason)
+    if frame.get("ok") is not True or not isinstance(frame.get("payload"), dict):
+        raise ValueError(reason)
+    return frame["payload"]
+
+
+def native_scope(reply: object, reason: str) -> dict[str, str]:
+    payload = native_payload(reply, reason)
+    if not all(isinstance(payload.get(field), str) and payload[field] for field in _SCOPE_FIELDS):
+        raise ValueError(reason)
+    return {field: payload[field] for field in _SCOPE_FIELDS}
+
+
+def native_tools(events: list[dict], run_id: str) -> list[dict]:
+    """Reject malformed hooks before filtering valid hooks by their native run."""
+    tools = []
+    for record in events:
+        if not isinstance(record, dict):
+            raise ValueError("ordinary_skill_native_event_invalid")
+        if record.get("kind") != "native_skill_tool":
+            continue
+        event, context = record.get("event"), record.get("context")
+        if (
+            not isinstance(event, dict)
+            or not isinstance(context, dict)
+            or not all(
+                isinstance(event.get(field), str) and event[field]
+                for field in ("toolName", "toolCallId", "runId")
+            )
+            or not isinstance(event.get("params"), dict)
+            or not all(
+                isinstance(context.get(field), str) and context[field]
+                for field in ("runId", "toolCallId", "sessionKey", "sessionId")
+            )
+        ):
+            raise ValueError("ordinary_skill_native_event_invalid")
+        if context["runId"] == run_id:
+            tools.append(dict(event=event, context=context))
+    return tools
+
+
 def read_observer_events(path, start=0, *, with_offset=False):
     """RM39/AC30: reread a torn tail once; every committed record is strict."""
     for attempt in range(2):
@@ -406,12 +479,13 @@ def selected_pin(listed, mapping):
         if listed["frame"]["ok"] is not True:
             raise ValueError("ordinary_skill_control_failed")
         pins = listed["frame"]["payload"]["session"]["selections"]
-        matching = [
-            pin
-            for pin in pins
-            if pin["skillId"] == mapping["skillId"] and pin["revision"] == mapping["revision"]
-        ]
-        if len(matching) == 1 and isinstance(matching[0]["name"], str) and matching[0]["name"]:
+        matching = [pin for pin in pins if pin["skillId"] == mapping["skillId"]]
+        if (
+            len(matching) == 1
+            and matching[0]["revision"] == mapping["revision"]
+            and isinstance(matching[0]["name"], str)
+            and matching[0]["name"]
+        ):
             return matching[0]
     except (KeyError, TypeError):
         pass
@@ -424,27 +498,41 @@ def bounded_skill_content(content):
     return content
 
 
+def _request_messages(attempt):
+    if not isinstance(attempt, dict) or not isinstance(attempt.get("body"), dict):
+        return []
+    messages = attempt["body"].get("messages")
+    if not isinstance(messages, list) or not all(isinstance(item, dict) for item in messages):
+        return []
+    return messages
+
+
 def advertised_skill(requests, selected):
     """Return the one native advertisement for this skill, including its revision."""
-    found = []
-    if not requests:
+    try:
+        found = []
+        if not requests:
+            return None
+        for message in _request_messages(requests[0]):
+            if message["role"] != "system":
+                continue
+            for block in re.findall(
+                r"<skill>\s*(.*?)\s*</skill>", _text_content(message.get("content")), re.S
+            ):
+                name = re.search(r"<name>(.*?)</name>", block, re.S)
+                location = re.search(r"<location>(.*?)</location>", block, re.S)
+                if name and location:
+                    match = re.search(
+                        r"/skill-library/"
+                        + re.escape(selected["skillId"])
+                        + r"/revisions/([a-f0-9]{64})/SKILL\.md$",
+                        location.group(1).strip(),
+                    )
+                    if match:
+                        found.append((name.group(1).strip(), match.group(1)))
+        return found[0] if len(found) == 1 else None
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError):
         return None
-    for message in requests[0]["body"]["messages"]:
-        if message["role"] != "system":
-            continue
-        for block in re.findall(r"<skill>\s*(.*?)\s*</skill>", message["content"], re.S):
-            name = re.search(r"<name>(.*?)</name>", block, re.S)
-            location = re.search(r"<location>(.*?)</location>", block, re.S)
-            if name and location:
-                match = re.search(
-                    r"/skill-library/"
-                    + re.escape(selected["skillId"])
-                    + r"/revisions/([a-f0-9]{64})/SKILL\.md$",
-                    location.group(1).strip(),
-                )
-                if match:
-                    found.append((name.group(1).strip(), match.group(1)))
-    return found[0] if len(found) == 1 else None
 
 
 def _text_content(content):
@@ -467,52 +555,58 @@ def _contains_observation_task(content, task):
 
 def _loaded_round_trip(case, *, require_selected=True):
     """Actual native result and receiving HTTP tool message, joined by call ID."""
-    selected, current = case["selected"], case["current"]
-    run_id = case["chat"]["frame"]["payload"]["runId"]
-    if len(case["tools"]) != 1 or len(case["requests"]) != 2:
+    try:
+        selected, current = case["selected"], case["current"]
+        run_id = case["chat"]["frame"]["payload"]["runId"]
+        if len(case["tools"]) != 1 or len(case["requests"]) != 2:
+            return False
+        tool = case["tools"][0]
+        event, context = tool["event"], tool["context"]
+        call_id = event["toolCallId"]
+        if (
+            not call_id
+            or event["toolName"] != "skills_read"
+            or event.get("error")
+            or event["params"] != {"name": selected["name"]}
+            or event["runId"] != run_id
+            or context["runId"] != run_id
+            or context["toolCallId"] != call_id
+            or any(context[field] != current[field] for field in ("sessionKey", "sessionId"))
+            or (
+                require_selected
+                and _text_content(event["result"]["content"]) != selected["content"]
+            )
+        ):
+            return False
+        first, second = [item["body"]["messages"] for item in case["requests"]]
+        if any(message["role"] == "tool" for message in first):
+            return False
+        advertisement = advertised_skill(case["requests"], selected)
+        if (
+            advertisement is None
+            or advertisement[0] != selected["name"]
+            or advertisement[1] != case["advertised_revision"]
+            or (require_selected and advertisement[1] != selected["revision"])
+        ):
+            return False
+        results = [message for message in second if message["role"] == "tool"]
+        calls = [
+            call
+            for message in second
+            if message["role"] == "assistant"
+            for call in message.get("tool_calls", [])
+        ]
+        return (
+            len(results) == 1
+            and results[0]["tool_call_id"] == call_id
+            and _text_content(results[0]["content"]) == _text_content(event["result"]["content"])
+            and len(calls) == 1
+            and calls[0]["id"] == call_id
+            and calls[0]["function"]["name"] == "skills_read"
+            and json.loads(calls[0]["function"]["arguments"]) == {"name": selected["name"]}
+        )
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError):
         return False
-    tool = case["tools"][0]
-    event, context = tool["event"], tool["context"]
-    call_id = event["toolCallId"]
-    if (
-        not call_id
-        or event["toolName"] != "skills_read"
-        or event.get("error")
-        or event["params"] != {"name": selected["name"]}
-        or event["runId"] != run_id
-        or context["runId"] != run_id
-        or context["toolCallId"] != call_id
-        or any(context[field] != current[field] for field in ("sessionKey", "sessionId"))
-        or (require_selected and _text_content(event["result"]["content"]) != selected["content"])
-    ):
-        return False
-    first, second = [item["body"]["messages"] for item in case["requests"]]
-    if any(message["role"] == "tool" for message in first):
-        return False
-    advertisement = advertised_skill(case["requests"], selected)
-    if (
-        advertisement is None
-        or advertisement[0] != selected["name"]
-        or advertisement[1] != case["advertised_revision"]
-        or (require_selected and advertisement[1] != selected["revision"])
-    ):
-        return False
-    results = [message for message in second if message["role"] == "tool"]
-    calls = [
-        call
-        for message in second
-        if message["role"] == "assistant"
-        for call in message.get("tool_calls", [])
-    ]
-    return (
-        len(results) == 1
-        and results[0]["tool_call_id"] == call_id
-        and _text_content(results[0]["content"]) == _text_content(event["result"]["content"])
-        and len(calls) == 1
-        and calls[0]["id"] == call_id
-        and calls[0]["function"]["name"] == "skills_read"
-        and json.loads(calls[0]["function"]["arguments"]) == {"name": selected["name"]}
-    )
 
 
 # The pinned 2026.10.7 host gates sessions.reset on operator.admin, which the
@@ -532,84 +626,104 @@ _RESET_SCOPE_REFUSAL = {
 
 def _reset_refused(case):
     """The exact person-scope sessions.reset refusal, with the session unchanged."""
-    change, before = case["intervention"], case["before"]
-    return (
-        case["case"] == "reset"
-        and isinstance(change, dict)
-        and change["method"] == "sessions.reset"
-        and change["params"]
-        == dict(key=before["sessionKey"], expectedSessionId=before["sessionId"], reason="reset")
-        and change["frame"].get("ok") is False
-        and change["frame"].get("error") == _RESET_SCOPE_REFUSAL
-        and case["current"] == before
-    )
+    try:
+        change, before = case["intervention"], case["before"]
+        return (
+            case["case"] == "reset"
+            and isinstance(change, dict)
+            and change.get("method") == "sessions.reset"
+            and change.get("params")
+            == dict(key=before["sessionKey"], expectedSessionId=before["sessionId"], reason="reset")
+            and isinstance(change.get("frame"), dict)
+            and change["frame"].get("ok") is False
+            and change["frame"].get("error") == _RESET_SCOPE_REFUSAL
+            and case["current"] == before
+        )
+    except (KeyError, TypeError, AttributeError, IndexError):
+        return False
 
 
 def loaded_use_observation(case):
     """Closed observations, with no stale/deleted/reset acceptance rule invented."""
-    if _reset_refused(case):
-        return "control_refused"
-    if case["chat"]["frame"]["ok"] is False or case["terminal"].get("state") in {
-        "error",
-        "aborted",
-    }:
-        return "refused"
-    if _loaded_round_trip(case):
-        return "loaded_pinned_revision"
-    if any(
-        tool["event"].get("result") and not tool["event"].get("error") for tool in case["tools"]
-    ):
-        return "loaded_other_bytes"
-    return "not_loaded"
+    if not isinstance(case, dict):
+        return "incomplete"
+    try:
+        if _reset_refused(case):
+            return "control_refused"
+        if case["chat"]["frame"].get("ok") is False or case["terminal"].get("state") in {
+            "error",
+            "aborted",
+        }:
+            return "refused"
+        if _loaded_round_trip(case):
+            return "loaded_pinned_revision"
+        if any(
+            tool["event"].get("result") and not tool["event"].get("error") for tool in case["tools"]
+        ):
+            return "loaded_other_bytes"
+        return "not_loaded"
+    except (KeyError, TypeError, AttributeError, IndexError):
+        return "incomplete"
 
 
 def _control_observed(case):
-    name, before, current = case["case"], case["before"], case["current"]
-    if name == "positive":
-        return case["intervention"] is None and before == current
-    if _reset_refused(case):
-        return True
-    change = case["intervention"]
-    if change["frame"]["ok"] is not True:
-        return False
-    params, selected = change["params"], case["selected"]
-    if name == "reset":
+    try:
+        name, before, current = case["case"], case["before"], case["current"]
+        if not all(
+            isinstance(scope, dict)
+            and all(isinstance(scope.get(field), str) and scope[field] for field in _SCOPE_FIELDS)
+            for scope in (before, current)
+        ):
+            return False
+        if name == "positive":
+            return case["intervention"] is None and before == current
+        if _reset_refused(case):
+            return True
+        change = case["intervention"]
+        if change["frame"].get("ok") is not True:
+            return False
+        params, selected = change["params"], case["selected"]
+        if name == "reset":
+            entry = change["frame"]["payload"]["entry"]
+            return (
+                change["method"] == "sessions.reset"
+                and params
+                == dict(
+                    key=before["sessionKey"], expectedSessionId=before["sessionId"], reason="reset"
+                )
+                and before["sessionKey"] == current["sessionKey"]
+                and before["lifecycleRevision"] != current["lifecycleRevision"]
+                and entry["sessionId"] == current["sessionId"]
+                and entry["lifecycleRevision"] == current["lifecycleRevision"]
+            )
+        if (
+            before != current
+            or params["skillId"] != selected["skillId"]
+            or params["expectedRevision"] != selected["revision"]
+        ):
+            return False
+        if name == "deleted":
+            receipt = change["frame"]["payload"]
+            entry = receipt["entry"]
+            return (
+                change["method"] == "skills.library.mutate"
+                and params["action"] == "remove"
+                and receipt["state"] == "removed"
+                and entry["removed"] is True
+                and entry["skillId"] == selected["skillId"]
+                and entry["revision"] == selected["revision"]
+            )
         entry = change["frame"]["payload"]["entry"]
         return (
-            change["method"] == "sessions.reset"
-            and params
-            == dict(key=before["sessionKey"], expectedSessionId=before["sessionId"], reason="reset")
-            and before["sessionKey"] == current["sessionKey"]
-            and before["lifecycleRevision"] != current["lifecycleRevision"]
-            and entry["sessionId"] == current["sessionId"]
-            and entry["lifecycleRevision"] == current["lifecycleRevision"]
-        )
-    if (
-        before != current
-        or params["skillId"] != selected["skillId"]
-        or params["expectedRevision"] != selected["revision"]
-    ):
-        return False
-    if name == "deleted":
-        receipt = change["frame"]["payload"]
-        entry = receipt["entry"]
-        return (
-            change["method"] == "skills.library.mutate"
-            and params["action"] == "remove"
-            and receipt["state"] == "removed"
-            and entry["removed"] is True
+            name == "stale"
+            and change["method"] == "skills.library.save"
+            and params["content"] != selected["content"]
             and entry["skillId"] == selected["skillId"]
-            and entry["revision"] == selected["revision"]
+            and _REVISION.fullmatch(entry["revision"]) is not None
+            and entry["revision"] != selected["revision"]
         )
-    entry = change["frame"]["payload"]["entry"]
-    return (
-        name == "stale"
-        and change["method"] == "skills.library.save"
-        and params["content"] != selected["content"]
-        and entry["skillId"] == selected["skillId"]
-        and _REVISION.fullmatch(entry["revision"]) is not None
-        and entry["revision"] != selected["revision"]
-    )
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError):
+        return False
 
 
 def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
@@ -669,7 +783,7 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
                 return False
             read = selected["read"]
             if (
-                read["ok"] is not True
+                read.get("ok") is not True
                 or read["payload"]["content"] != selected["content"]
                 or read["payload"]["entry"]["skillId"] != selected["skillId"]
                 or read["payload"]["entry"]["revision"] != selected["revision"]
@@ -683,19 +797,21 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
                 instructions="not_observed",
             )
             selection = case["selection"]
-            if selection["ok"] is not True or not _control_observed(case):
+            if selection.get("ok") is not True or not _control_observed(case):
                 return False
             if case["case"] == "positive":
                 if selection["payload"] != expected:
                     return False
             else:
                 payload = selection["payload"]
-                pins = payload["selections"]
+                # Native listings include unrelated pins from the owner profile.
+                pins = [
+                    pin for pin in payload["selections"] if pin["skillId"] == selected["skillId"]
+                ]
                 if (
                     payload["sessionKey"] != case["before"]["sessionKey"]
                     or payload["sessionActivation"] != "next-turn"
                     or len(pins) != 1
-                    or pins[0]["skillId"] != selected["skillId"]
                     or pins[0]["revision"] != selected["revision"]
                     or pins[0]["name"] != selected["name"]
                 ):
@@ -730,7 +846,7 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
             chat, terminal = case["chat"], case["terminal"]
             subscription = case["subscription"]
             if (
-                subscription["ok"] is not True
+                subscription.get("ok") is not True
                 or subscription["subscribed"] is not True
                 or subscription["key"] != case["current"]["sessionKey"]
                 or not isinstance(subscription["socket_id"], str)
@@ -755,7 +871,7 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
             ):
                 return False
             host_id = chat["params"]["idempotencyKey"]
-            if chat["frame"]["ok"] is True:
+            if chat["frame"].get("ok") is True:
                 if (
                     chat["frame"]["payload"]["runId"] != host_id
                     or terminal["runId"] != host_id
@@ -767,7 +883,7 @@ def ordinary_skill_loaded_use_pass(capture, *, require_positive=True):
                 if not minimum <= len(case["requests"]) <= 2:
                     return False
             elif (
-                chat["frame"]["ok"] is not False
+                chat["frame"].get("ok") is not False
                 or not chat["frame"].get("error")
                 or case["requests"]
                 or case["tools"]
@@ -849,10 +965,20 @@ class LoadedUseGatewayObservation:
         self.generations = 0
         self.window_start = 0
 
+    @closed_native_data("ordinary_skill_generation_bound")
     def begin(self, selected, task):
+        self.selected = None
+        if not isinstance(selected, dict) or not all(
+            isinstance(selected.get(field), str) and selected[field]
+            for field in ("skillId", "revision", "content")
+        ):
+            raise ValueError("ordinary_skill_generation_bound")
+        if not isinstance(task, str) or not task:
+            raise ValueError("ordinary_skill_task_mismatch")
         self.selected, self.task, self.generations = dict(selected), task, 0
         self.window_start = len(self.requests)
 
+    @closed_native_data("ordinary_skill_task_mismatch")
     def generate(self, request):
         from gateway_helpers import text_turn, tool_turn
 
@@ -880,7 +1006,6 @@ class LoadedUseGatewayObservation:
                     if path in block and name:
                         names.append(name.group(1).strip())
             if len(names) == 1 and "skills_read" in {tool.name for tool in request.tool_schemas}:
-                self.advertised_name = names[0]
                 return tool_turn(
                     "skills_read", call_id="read" + secrets.token_hex(12), name=names[0]
                 )
@@ -924,11 +1049,21 @@ def loaded_use_gateway(work, recommendations):
             body.extend(chunk)
         # Starlette replays the bounded body to downstream request validation.
         request._body = bytes(body)
+        try:
+            parsed_body = json.loads(body)
+            failure_reason = None
+        except (ValueError, UnicodeDecodeError):
+            parsed_body = None
+            failure_reason = "invalid_json"
         record = dict(
             request_id=str(uuid.uuid4()),
             idempotency_key=request.headers.get("Idempotency-Key"),
-            body=json.loads(body),
+            body=parsed_body,
+            status=None,
+            run_id=None,
         )
+        if failure_reason is not None:
+            record["failure_reason"] = failure_reason
         overflow = len(observation.requests) - observation.window_start >= 4
         if overflow:
             # One retained overflow per window; repeated rejection cannot fill the global cap.
@@ -936,7 +1071,14 @@ def loaded_use_gateway(work, recommendations):
                 observation.requests.append(dict(record, status=429, run_id=None))
             return JSONResponse({"error": "observation_request_bound"}, status_code=429)
         observation.requests.append(record)
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except asyncio.CancelledError:
+            record["failure_reason"] = "request_cancelled"
+            raise
+        except Exception:
+            record["failure_reason"] = "request_failed"
+            raise
         record.update(
             status=response.status_code, run_id=response.headers.get("X-RelayMind-Run-Id")
         )
@@ -1305,6 +1447,7 @@ class OrdinaryComposition(BASE.ActionComposition):
                 raise ValueError("ordinary_zero_http_failed")
 
     @ordinary_step("save_library_skill")
+    @closed_native_data("ordinary_skill_save_failed")
     def save_library_skill(self, rpc, page):
         """Save the gateway's exact fixture SKILL.md into this person's library."""
         saved = rpc(
@@ -1316,7 +1459,7 @@ class OrdinaryComposition(BASE.ActionComposition):
                 content=self.skill_text,
             ),
         )
-        payload = saved["frame"].get("payload") if saved["frame"].get("ok") is True else None
+        payload = native_payload(saved, "ordinary_skill_save_failed")
         entry = None
         if isinstance(payload, dict):
             entry = payload.get("entry") if isinstance(payload.get("entry"), dict) else payload
@@ -1375,6 +1518,9 @@ class OrdinaryComposition(BASE.ActionComposition):
                 )
             )
         skill["negatives"] = negatives
+        if any(item["ok"] is not False for item in negatives):
+            # An admitted refusal case ends the step before any UI or listing call.
+            raise ValueError("ordinary_skill_selection_failed")
         ui_page.get_by_role("button", name="Select native skill", exact=True).click()
         ui_page.get_by_role("combobox", name="Select native skill").select_option(
             value=json.dumps(
@@ -1398,6 +1544,7 @@ class OrdinaryComposition(BASE.ActionComposition):
         ):
             raise ValueError("ordinary_skill_selection_failed")
 
+    @closed_native_data("ordinary_skill_turn_timeout")
     def loaded_use_turn(self, rpc, page, session, case, *, timeout=60):
         """Collect a bounded native browser turn; hooks only observe, never dispatch."""
         subscription = rpc(
@@ -1405,17 +1552,20 @@ class OrdinaryComposition(BASE.ActionComposition):
             "sessions.messages.subscribe",
             dict(key=case["current"]["sessionKey"], subscriptionId="relaymind-loaded-observation"),
         )
+        payload = native_payload(subscription, "ordinary_skill_subscription_failed")
+        socket_id = subscription.get("socket_id")
         if (
-            subscription["frame"].get("ok") is not True
-            or subscription["frame"]["payload"].get("subscribed") is not True
-            or subscription["frame"]["payload"].get("key") != case["current"]["sessionKey"]
+            payload.get("subscribed") is not True
+            or payload.get("key") != case["current"]["sessionKey"]
+            or not isinstance(socket_id, str)
+            or not socket_id
         ):
             raise ValueError("ordinary_skill_subscription_failed")
         case["subscription"] = dict(
             ok=True,
             subscribed=True,
-            key=subscription["frame"]["payload"]["key"],
-            socket_id=subscription["socket_id"],
+            key=payload["key"],
+            socket_id=socket_id,
         )
         self.observation.begin(case["selected"], case["task"])
         start = len(self.observation.requests)
@@ -1425,7 +1575,10 @@ class OrdinaryComposition(BASE.ActionComposition):
             idempotencyKey=str(uuid.uuid4()),
         )
         sent = rpc(page, "chat.send", params)
-        case["chat"] = dict(params=params, frame=sent["frame"], socket_id=sent["socket_id"])
+        frame = native_frame(sent, "ordinary_skill_turn_timeout")
+        if not isinstance(sent.get("socket_id"), str) or not sent["socket_id"]:
+            raise ValueError("ordinary_skill_turn_timeout")
+        case["chat"] = dict(params=params, frame=frame, socket_id=sent["socket_id"])
         case.update(
             tools=[],
             requests=[],
@@ -1434,28 +1587,31 @@ class OrdinaryComposition(BASE.ActionComposition):
             terminal={},
             observed="incomplete",
         )
-        if sent["frame"].get("ok") is False:
+        if frame.get("ok") is False:
             case["observed"] = "refused"
             return
+        payload = native_payload(sent, "ordinary_skill_turn_timeout")
+        run_id = payload.get("runId")
+        if not isinstance(run_id, str) or not run_id or run_id != params["idempotencyKey"]:
+            raise ValueError("ordinary_skill_turn_timeout")
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            terminal = page.evaluate(
-                "id => window.__rmPersonWire.turnEvents(id)", sent["frame"]["payload"]["runId"]
-            )
+            terminal = page.evaluate("id => window.__rmPersonWire.turnEvents(id)", run_id)
+            if not isinstance(terminal, list):
+                raise ValueError("ordinary_skill_terminal_ambiguous")
             if terminal:
-                if len(terminal) != 1:
+                if (
+                    len(terminal) != 1
+                    or not isinstance(terminal[0], dict)
+                    or terminal[0].get("state") not in ("final", "error", "aborted")
+                ):
                     raise ValueError("ordinary_skill_terminal_ambiguous")
                 case["terminal"] = terminal[0]
                 break
             page.wait_for_timeout(100)
         else:
             events = read_observer_events(self.event_file)
-            case["tools"] = [
-                dict(event=event["event"], context=event["context"])
-                for event in events
-                if event.get("kind") == "native_skill_tool"
-                and event.get("context", {}).get("runId") == params["idempotencyKey"]
-            ]
+            case["tools"] = native_tools(events, params["idempotencyKey"])
             case["requests"] = self.observation.requests[start:]
             raise ValueError("ordinary_skill_turn_timeout")
         # Tool hooks are asynchronous; allow their bounded delivery to catch up
@@ -1463,17 +1619,12 @@ class OrdinaryComposition(BASE.ActionComposition):
         deadline = time.monotonic() + 3
         while True:
             events = read_observer_events(self.event_file)
-            case["tools"] = [
-                dict(event=event["event"], context=event["context"])
-                for event in events
-                if event.get("kind") == "native_skill_tool"
-                and event.get("context", {}).get("runId") == params["idempotencyKey"]
-            ]
+            case["tools"] = native_tools(events, params["idempotencyKey"])
             case["requests"] = self.observation.requests[start:]
             has_result = any(
-                message["role"] == "tool"
+                message.get("role") == "tool"
                 for attempt in case["requests"]
-                for message in attempt["body"]["messages"]
+                for message in _request_messages(attempt)
             )
             case["provider_attempts"] = [
                 record
@@ -1490,14 +1641,11 @@ class OrdinaryComposition(BASE.ActionComposition):
                 raise ValueError("ordinary_skill_turn_timeout")
             page.wait_for_timeout(50)
         after = rpc(page, "rmqualification.person", session)
-        if (
-            after["frame"].get("ok") is not True
-            or {field: after["frame"]["payload"][field] for field in _SCOPE_FIELDS}
-            != case["current"]
-        ):
+        if native_scope(after, "ordinary_skill_scope_changed") != case["current"]:
             raise ValueError("ordinary_skill_scope_changed")
         case["observed"] = loaded_use_observation(case)
 
+    @closed_native_data("ordinary_skill_control_failed")
     def observe_loaded_use(self, rpc, page, session, capture):
         """One bridge-selected positive and three isolated native control sessions."""
         value = dict(tier="deterministic_native_observation", qualification="unavailable", cases=[])
@@ -1524,14 +1672,11 @@ class OrdinaryComposition(BASE.ActionComposition):
                         revision=skill["mapping"]["revision"],
                     ),
                 )
-                selection = dict(
-                    ok=activated["frame"].get("ok"), payload=activated["frame"].get("payload")
-                )
+                frame = native_frame(activated, "ordinary_skill_control_failed")
+                selection = dict(ok=frame.get("ok"), payload=frame.get("payload"))
             mapping = skill["mapping"]
             person = rpc(page, "rmqualification.person", selected_session)
-            if person["frame"].get("ok") is not True:
-                raise ValueError("ordinary_skill_scope_changed")
-            scope = {field: person["frame"]["payload"][field] for field in _SCOPE_FIELDS}
+            scope = native_scope(person, "ordinary_skill_scope_changed")
             read = rpc(
                 page,
                 "skills.library.read",
@@ -1541,15 +1686,14 @@ class OrdinaryComposition(BASE.ActionComposition):
                     revision=mapping["revision"],
                 ),
             )
-            if read["frame"].get("ok") is not True:
-                raise ValueError("ordinary_skill_read_failed")
-            payload = read["frame"]["payload"]
+            payload = native_payload(read, "ordinary_skill_read_failed")
+            content = bounded_skill_content(payload.get("content"))
             listed = rpc(page, "skills.library.list", dict(sessionKey=scope["sessionKey"]))
             pin = selected_pin(listed, mapping)
             selected = dict(
                 skillId=mapping["skillId"],
                 revision=mapping["revision"],
-                content=bounded_skill_content(payload["content"]),
+                content=content,
                 content_sha256=skill["content_sha256"],
                 name=pin["name"],
                 read=dict(ok=True, payload=payload),
@@ -1599,20 +1743,21 @@ class OrdinaryComposition(BASE.ActionComposition):
                     key=scope["sessionKey"], expectedSessionId=scope["sessionId"], reason="reset"
                 )
                 changed = rpc(page, "sessions.reset", params)
-                case["intervention"] = dict(
-                    method="sessions.reset", params=params, frame=changed["frame"]
-                )
-                if changed["frame"].get("ok") is True:
-                    entry = changed["frame"]["payload"]["entry"]
-                    selected_session = dict(
-                        sessionKey=scope["sessionKey"],
-                        expectedSessionId=entry["sessionId"],
-                        expectedLifecycleRevision=entry["lifecycleRevision"],
+                try:
+                    case["intervention"] = dict(
+                        method="sessions.reset", params=params, frame=changed["frame"]
                     )
-                    current = rpc(page, "rmqualification.person", selected_session)
-                    case["current"] = {
-                        field: current["frame"]["payload"][field] for field in _SCOPE_FIELDS
-                    }
+                    if changed["frame"].get("ok") is True:
+                        entry = changed["frame"]["payload"]["entry"]
+                        selected_session = dict(
+                            sessionKey=scope["sessionKey"],
+                            expectedSessionId=entry["sessionId"],
+                            expectedLifecycleRevision=entry["lifecycleRevision"],
+                        )
+                        current = rpc(page, "rmqualification.person", selected_session)
+                        case["current"] = native_scope(current, "ordinary_skill_control_failed")
+                except (KeyError, TypeError, AttributeError):
+                    raise ValueError("ordinary_skill_control_failed") from None
             if not _control_observed(case):
                 raise ValueError("ordinary_skill_control_failed")
             if _reset_refused(case):
@@ -1800,7 +1945,12 @@ def main(argv=None):
     app, service, runs, _ = setup(backend)
     gateway, observation = None, None
     if args.observe_loaded_use:
+        # create_app issues its own fresh random application token and checks
+        # requests against it (section 7.1); replacing it would reject the
+        # plugin's model requests.
         app, gateway, observation = loaded_use_gateway(backend / "inference", service)
+    else:
+        app.state.application_token = secrets.token_urlsafe(48)
     action_token = secrets.token_urlsafe(48)
     registration = ActionRegistrations(runs)  # Actual DEFAULT production resolver.
     registration.replace(

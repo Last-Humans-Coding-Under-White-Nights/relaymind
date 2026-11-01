@@ -48,6 +48,7 @@ from relaymind.store.run_store import ForegroundWindow, utc_iso
 from relaymind.tools.registry import StrictValidator
 
 __all__ = [
+    "CandidateRejected",
     "CaptureContext",
     "InventoryAsset",
     "SourceCapture",
@@ -82,6 +83,36 @@ class SourceFailure(Exception):
         self.exclusions = failure_exclusions(reason, asset_id)
 
 
+class CandidateRejected(SourceFailure):
+    """One local candidate's own bytes failed a per-file check (spec 0.66 section 4.6.1).
+
+    A local directory scan excludes that candidate and keeps the others; every
+    other reader still treats it as a whole-source failure.
+    """
+
+
+# Reasons a candidate's own staged bytes can produce. Gate reasons (cancelled,
+# deadline) and budget reasons from the shared job context stay scan-level.
+_CANDIDATE_REASONS = frozenset({"invalid_data", "size_limit"})
+
+
+def _candidate(function: Callable[[], Any]) -> Any:
+    """Run a pure check of staged candidate bytes; content errors reject only it."""
+    try:
+        return function()
+    except CandidateRejected:
+        raise
+    except SourceFailure as exc:
+        if exc.reason not in _CANDIDATE_REASONS:
+            raise
+        raise CandidateRejected(exc.reason) from None
+    except AssetValidationError as exc:
+        reason = "size_limit" if str(exc) == "size_limit" else "invalid_data"
+        raise CandidateRejected(reason) from None
+    except (UnicodeError, yaml.YAMLError, RecursionError, ValueError, TypeError, KeyError):
+        raise CandidateRejected("invalid_data") from None
+
+
 @dataclass
 class CaptureContext:
     captured_at: datetime
@@ -100,6 +131,7 @@ class CaptureContext:
     batch_durations_ms: list[float] = field(default_factory=list)
     batch_started: float = field(init=False)
     batch_records: int = 0
+    batch_rejected: int = 0
     batch_observations: list[dict] = field(default_factory=list)
     batch_bytes: int = 0
     rejected_count: int = 0
@@ -191,11 +223,18 @@ class CaptureContext:
 
     def finish_record(self) -> None:
         self.batch_records += 1
-        if self.batch_records == 25:
+        if self.batch_records + self.batch_rejected == 25:
+            self.finish_batch()
+
+    def reject_record(self) -> None:
+        """One candidate excluded on its own (spec 0.66 section 4.6.1)."""
+        self.rejected_count += 1
+        self.batch_rejected += 1
+        if self.batch_records + self.batch_rejected == 25:
             self.finish_batch()
 
     def finish_batch(self) -> None:
-        if self.batch_records:
+        if self.batch_records or self.batch_rejected:
             now = self.monotonic()
             duration = max(0, (now - self.batch_started) * 1000)
             self.batch_durations_ms.append(duration)
@@ -203,7 +242,7 @@ class CaptureContext:
                 dict(
                     timestamp=utc_iso(self.utc_now()),
                     accepted_count=self.batch_records,
-                    rejected_count=0,
+                    rejected_count=self.batch_rejected,
                     received_bytes=self.received_bytes - self.batch_bytes,
                     duration_ms=duration,
                 )
@@ -211,6 +250,7 @@ class CaptureContext:
             self.batch_bytes = self.received_bytes
             self.batch_started = now
             self.batch_records = 0
+            self.batch_rejected = 0
 
 
 def source_config_digest(source: SourceConfig) -> str:
@@ -296,7 +336,7 @@ class _Stage:
             if key == forbidden:
                 raise SourceFailure("invalid_data")
             if initial.size > limit:
-                raise SourceFailure("size_limit")
+                raise CandidateRejected("size_limit")
             if key in self.physical:
                 fingerprint, digest, data = self.physical[key]
                 if fingerprint != initial.fingerprint:
@@ -317,7 +357,7 @@ class _Stage:
                 total += len(chunk)
                 self.context.add_bytes(len(chunk))
                 if total > limit:
-                    raise SourceFailure("size_limit")
+                    raise CandidateRejected("size_limit")
                 digest.update(chunk)
                 if retain:
                     chunks.append(chunk)
@@ -586,6 +626,39 @@ def _skill_document(
     )
 
 
+def _local_asset_id(source: SourceConfig, package: str) -> str:
+    return "skill:" + canonical_digest(
+        {"source_id": source.source_id, "relative_package_path": package}
+    )
+
+
+def _local_candidate(
+    stage: _Stage, source: SourceConfig, package: str, relative: str, context: CaptureContext
+):
+    """Stage and project one candidate; CandidateRejected names only its own bytes."""
+    original, digest = stage.read(relative, MAX_ASSET_BYTES)
+    metadata, body = _candidate(lambda: _frontmatter(original, context))
+    if not isinstance(metadata.get("metadata", {}), dict):
+        raise CandidateRejected("invalid_data")
+    manifest = "skill.manifest.json" if package == "." else f"{package}/skill.manifest.json"
+    fallback = {}
+    if stage.exists(manifest):
+        raw, _ = stage.read(manifest, MAX_METADATA_BYTES)
+        fallback = _candidate(lambda: _json(raw, context))
+    return _candidate(
+        lambda: _skill_document(
+            source,
+            package,
+            metadata,
+            body,
+            fallback,
+            digest,
+            str(stage.root.absolute() / relative),
+            context,
+        )
+    )
+
+
 def _local(
     stage: _Stage, source: SourceConfig, previous: SourceInventory, context: CaptureContext
 ) -> SourceCapture:
@@ -605,40 +678,32 @@ def _local(
                 raise SourceFailure("invalid_data")
             if info.is_directory and stage.exists(f"{name}/SKILL.md"):
                 candidates.append(name)
-    documents, paths = [], {}
+    documents, paths, exclusions = [], {}, []
+    rejected: set[str] = set()
     for package in candidates:
         context.add_record()
         relative = "SKILL.md" if package == "." else f"{package}/SKILL.md"
-        original, digest = stage.read(relative, MAX_ASSET_BYTES)
-        metadata, body = _frontmatter(original, context)
-        extra = metadata.get("metadata", {})
-        if not isinstance(extra, dict):
-            raise SourceFailure("invalid_data")
-        manifest = "skill.manifest.json" if package == "." else f"{package}/skill.manifest.json"
-        fallback = {}
-        if stage.exists(manifest):
-            raw, _ = stage.read(manifest, MAX_METADATA_BYTES)
-            fallback = _json(raw, context)
-        document = _skill_document(
-            source,
-            package,
-            metadata,
-            body,
-            fallback,
-            digest,
-            str(stage.root.absolute() / relative),
-            context,
-        )
-        asset_id = document.record.asset_id
+        asset_id = _local_asset_id(source, package)
+        # The derived ID can collide with another source's record; that is a
+        # source-level conflict, never one candidate's rejection.
+        _check_owner(asset_id, previous, source.source_id)
+        try:
+            document = _local_candidate(stage, source, package, relative, context)
+        except CandidateRejected as exc:
+            # Spec 0.66 section 4.6.1: excluded by itself with a fixed reason.
+            rejected.add(asset_id)
+            exclusions.append(failure_exclusions(exc.reason, asset_id)[0])
+            context.reject_record()
+            continue
         documents.append(document)
         paths[asset_id] = package
-        _check_owner(asset_id, previous, source.source_id)
         context.finish_record()
     context.finish_batch()
+    complete = not rejected
     absent = set()
     for item in previous.records:
         context.check()
-        if item.record.asset_id in paths:
+        if item.record.asset_id in paths or item.record.asset_id in rejected:
             continue
         package = item.relative_package_path
         if package is None:
@@ -647,6 +712,9 @@ def _local(
         if stage.exists(location):
             raise SourceFailure("invalid_data")
         absent.add(item.record.asset_id)
+    if not complete:
+        # A partial generation applies no removals; omitted records stay stale.
+        absent.clear()
     stage.verify()
     entries = sorted(
         ({"relative_path": f.relative_path, "sha256": f.sha256} for f in stage.files),
@@ -660,11 +728,13 @@ def _local(
         utc_iso(context.captured_at),
         tuple(documents),
         tuple(stage.files),
-        True,
+        complete,
         frozenset(absent),
         freeze_json(paths),
         context.received_bytes,
         tuple(context.batch_durations_ms),
+        len(exclusions),
+        tuple(exclusions),
     )
 
 

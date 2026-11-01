@@ -1,0 +1,2 @@
+openclaw@2026.10.7 is MIT licensed (license.txt, the package LICENSE file). MIT
+permits acquisition, evaluation, retention and redistribution with the notice.

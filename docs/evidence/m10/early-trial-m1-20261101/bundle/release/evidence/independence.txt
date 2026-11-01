@@ -1,0 +1,6 @@
+Spec 0.66 section 12.6.6 machine_dual_owner_approved, same_family: annotators
+machine-annotator-a and machine-annotator-b (one provider family, glm) each judge
+only their own blind label template and the catalog projections, with two
+independently written templates (machine/annotator-a.md, annotator-b.md), at
+temperature 0, before the worksheet exists. Neither sees the other's judgment,
+tuning results, arm outputs or the drafter's plan.

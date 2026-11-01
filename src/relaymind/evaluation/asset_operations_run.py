@@ -66,6 +66,8 @@ _TOPICS = (
     ("reminder", "Create a reminder.", "创建一个提醒。"),
 )
 _TOKEN_PREFIX = "Application token: "
+_PID_PREFIX = "Gateway-Pid: "
+_PID_ENTRY = "import os; print('Gateway-Pid: ' + str(os.getpid()), flush=True); "
 _CONTROL_PREFIX = b"Control-Reply: "
 _CONTROL_SECONDS = 60.0
 _GRACE_SECONDS = 10.0
@@ -106,8 +108,8 @@ def rss_bytes(pid: int) -> int | None:
     else:
         argv = ["ps", "-o", "rss=", "-p", str(pid)]
     try:
-        result = subprocess.run(argv, capture_output=True, text=True, timeout=5)
-    except (OSError, subprocess.SubprocessError):
+        result = subprocess.run(argv, capture_output=True, text=True, errors="replace", timeout=5)
+    except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
         return None
     if result.returncode != 0:
         return None
@@ -209,7 +211,7 @@ def _child_argv(config: Path) -> list[str]:
     return [
         sys.executable,
         "-c",
-        "from relaymind.launcher import cli; cli()",
+        _PID_ENTRY + "from relaymind.launcher import cli; cli()",
         "serve",
         "--config",
         str(config),
@@ -218,7 +220,7 @@ def _child_argv(config: Path) -> list[str]:
 
 def _controlled_argv(config: Path) -> list[str]:
     entry = "from relaymind.evaluation.asset_operations_child import main; raise SystemExit(main())"
-    return [sys.executable, "-c", entry, "serve", "--config", str(config)]
+    return [sys.executable, "-c", _PID_ENTRY + entry, "serve", "--config", str(config)]
 
 
 def _child_env(extra: Mapping[str, str] | None) -> dict[str, str]:
@@ -231,7 +233,10 @@ def _child_env(extra: Mapping[str, str] | None) -> dict[str, str]:
     return env
 
 
-async def _read_token(process: asyncio.subprocess.Process, deadline: float, log: Path) -> str:
+async def _read_token(
+    process: asyncio.subprocess.Process, deadline: float, log: Path
+) -> tuple[str, int]:
+    pid = None
     with log.open("ab") as target:
         while True:
             remaining = deadline - time.monotonic()
@@ -244,9 +249,21 @@ async def _read_token(process: asyncio.subprocess.Process, deadline: float, log:
             if not line:
                 raise TimeoutError("gateway_token_unavailable")
             text = line.decode("utf-8", "replace")
-            if text.startswith(_TOKEN_PREFIX):
+            if text.startswith(_PID_PREFIX):
+                value = text.removeprefix(_PID_PREFIX).strip()
+                if (
+                    not value.isascii()
+                    or not value.isdecimal()
+                    or int(value) <= 0
+                    or pid is not None
+                ):
+                    raise ValueError("gateway_pid_invalid")
+                pid = int(value)
+            elif text.startswith(_TOKEN_PREFIX):
                 if time.monotonic() < deadline:
-                    return text.removeprefix(_TOKEN_PREFIX).strip()
+                    if pid is None:
+                        raise ValueError("gateway_pid_missing")
+                    return text.removeprefix(_TOKEN_PREFIX).strip(), pid
             else:
                 target.write(line)
                 target.flush()
@@ -284,9 +301,11 @@ async def _wait_ready(
     while True:
         try:
             response = await client.get("/relay/v1/recommendations/readiness")
-            if response.status_code == 200 and response.json().get("state") == "ready":
-                return
-        except (httpx.TransportError, ValueError):
+            if response.status_code == 200:
+                body = response.json()
+                if isinstance(body, dict) and body.get("state") == "ready":
+                    return
+        except (httpx.HTTPError, ValueError):
             pass
         if process.returncode is not None:
             raise RuntimeError("gateway_exited")
@@ -303,7 +322,7 @@ async def _wait_serving(
         try:
             if (await client.get("/v1/models")).status_code == 200:
                 return
-        except httpx.TransportError:
+        except httpx.HTTPError:
             pass
         if process.returncode is not None:
             raise RuntimeError("gateway_exited")
@@ -312,7 +331,12 @@ async def _wait_serving(
         await asyncio.sleep(0.02)
 
 
-async def _stop(process: asyncio.subprocess.Process) -> None:
+async def _stop(process: asyncio.subprocess.Process) -> bool:
+    """Terminate, kill after the grace period, and reap the child.
+
+    Every wait is bounded: a process that ignores ``kill()`` is reported on
+    stderr and never blocks shutdown. True means the child was reaped.
+    """
     if process.returncode is None:
         with contextlib.suppress(ProcessLookupError):
             process.terminate()
@@ -321,7 +345,12 @@ async def _stop(process: asyncio.subprocess.Process) -> None:
         except TimeoutError:
             with contextlib.suppress(ProcessLookupError):
                 process.kill()
-    await process.wait()
+    try:
+        await asyncio.wait_for(process.wait(), _GRACE_SECONDS)
+    except TimeoutError:
+        print("relaymind: gateway process could not be reaped", file=sys.stderr)
+        return False
+    return True
 
 
 @dataclasses.dataclass(frozen=True)
@@ -347,6 +376,10 @@ async def _gateway(
 ):
     work = Path(work).absolute()
     work.mkdir(parents=True, exist_ok=True)
+    # Both logs start clean on every launch, so a reused work directory never
+    # mixes two launches.
+    (work / "stdout.log").unlink(missing_ok=True)
+    (work / "stderr.log").unlink(missing_ok=True)
     port = _free_port()
     catalog = None if catalog is None else Path(catalog).absolute()
     imports = None if imports is None else Path(imports).absolute()
@@ -381,15 +414,16 @@ async def _gateway(
             replies.pop(ordinal, None)
 
     try:
-        token = await _read_token(process, deadline, work / "stdout.log")
+        token, pid = await _read_token(process, deadline, work / "stdout.log")
         drain = asyncio.create_task(_drain(process.stdout, work / "stdout.log", replies))
         async with httpx.AsyncClient(
             base_url=f"http://127.0.0.1:{port}",
             headers={"Authorization": "Bearer " + token},
             timeout=10,
+            trust_env=False,
         ) as client:
             await (_wait_ready if recommendations else _wait_serving)(client, deadline, process)
-            yield Gateway(process.pid, client, control)
+            yield Gateway(pid, client, control)
     finally:
         # Cleanup is owned: a cancellation arriving now still kills and reaps.
         cleanup = asyncio.ensure_future(_stop(process))
@@ -420,8 +454,10 @@ async def serve(
     model tables, absolute paths only) without ``[server]``,
     ``[recommendations]`` or asset sources, which the kit owns. The child's
     stdout (without the token) and stderr go to ``stdout.log`` and
-    ``stderr.log`` in ``work``. On exit, or on cancellation at any point, the
-    process is terminated, killed after a grace period, and reaped.
+    ``stderr.log`` in ``work``. Both logs start clean on every launch, so a
+    reused work directory never mixes two launches. On exit, or on
+    cancellation at any point, the process is terminated, killed after a grace
+    period, and reaped.
     """
     async with _gateway(work, catalog, base_config=base_config, env=env, timeout=timeout) as gw:
         yield gw.pid, gw.client

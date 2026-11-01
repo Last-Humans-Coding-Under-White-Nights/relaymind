@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "status": "ok",
+  "final": "Happy to check — I just need one thing first: **where are you driving from, and which stretch of coast** is the destination? (City names or an airport code work great; I don't have your home location saved anywhere.)\n\nOne heads-up on timing so you can plan around it: today is Sunday Nov 1, so \"this Saturday\" is **Nov 7 — six days out**. My go-to forecast source only covers about 3 days, and hourly rain precision that far out is unreliable from any forecaster. So the plan I'd suggest:\n\n1. **Now** — once you give me the route, I'll pull the general trend for the weekend (wet system vs. dry) so you get an early read.\n2. **Thursday or Friday** — I re-check, since Saturday will be inside the reliable window, and I can give you a proper before-noon vs. afternoon rain comparison.\n\nIf you'd like, I can also set a reminder to re-check automatically on Friday morning so you don't have to think about it — just say the word.\n\nWhich cities should I look up?",
+  "payloads": [
+    {
+      "text": "Happy to check — I just need one thing first: **where are you driving from, and which stretch of coast** is the destination? (City names or an airport code work great; I don't have your home location saved anywhere.)\n\nOne heads-up on timing so you can plan around it: today is Sunday Nov 1, so \"this Saturday\" is **Nov 7 — six days out**. My go-to forecast source only covers about 3 days, and hourly rain precision that far out is unreliable from any forecaster. So the plan I'd suggest:\n\n1. **Now** — once you give me the route, I'll pull the general trend for the weekend (wet system vs. dry) so you get an early read.\n2. **Thursday or Friday** — I re-check, since Saturday will be inside the reliable window, and I can give you a proper before-noon vs. afternoon rain comparison.\n\nIf you'd like, I can also set a reminder to re-check automatically on Friday morning so you don't have to think about it — just say the word.\n\nWhich cities should I look up?",
+      "mediaUrl": null
+    }
+  ],
+  "usage": {
+    "input": 16748,
+    "output": 2114,
+    "cacheRead": 384,
+    "cacheWrite": 0,
+    "reasoningTokens": 1830,
+    "total": 19246,
+    "cost": {
+      "total": 0
+    }
+  },
+  "codeModeEngaged": false,
+  "assistantTurns": 2,
+  "bridgeCalls": {
+    "search": 0,
+    "describe": 0,
+    "call": 2
+  },
+  "toolSummary": {
+    "calls": 4,
+    "tools": [
+      "skills_read",
+      "tool_call",
+      "memory_search"
+    ],
+    "failures": 0
+  },
+  "model": "glm-5.3-flash",
+  "provider": "external-direct",
+  "sessionId": "02e0d9d5-b9e0-4598-8219-caba65e6902e"
+}

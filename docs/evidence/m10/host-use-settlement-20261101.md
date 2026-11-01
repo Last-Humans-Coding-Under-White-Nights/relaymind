@@ -22,8 +22,9 @@ They load with `relaymind.evaluation.asset_qualification_record.load_record`
   Intel Xeon Skylake, 11998482432 bytes RAM).** Node 24.22.1 (nvm) and npm
   11.19.1. `npm ci` and `npm run pack:release` built the same release tarball as
   CI (`63c2c660…24a3`). The host package digests in the inventory were computed
-  here, and they match a second `npm ci` on the MacBook byte for byte. Both
-  tiers were run with the exact CI commands. Neither could start a person trial:
+  here, and they match a second `npm ci` on the MacBook byte for byte. In the
+  first VPS run, both tiers were run with the exact CI commands. Neither could
+  start a person trial:
   - `status: setup_unavailable`, `reason: private_network_unavailable`. The VPS
     has only a public IPv4 on `eth0`. There is no sudo, and AppArmor blocks
     unprivileged user namespaces, so no private interface can be added.
@@ -33,6 +34,37 @@ They load with `relaymind.evaluation.asset_qualification_record.load_record`
 
   The two VPS captures (`*-20261101-vps.json`) record these environment
   outcomes only.
+- **VPS second run (same machine, checkout 62c4dcd, 09:02–09:07 UTC).** The
+  owner then added the libraries and a private dummy interface (`rm0`,
+  10.213.47.1/24). The checkout was a git clone of 62c4dcd, because the person
+  harness records `git rev-parse HEAD`. Python 3.14.4 ran the harness; CI uses
+  3.12. The release tarball was `1ba82f18…4b81`. All three ubuntu tiers ran
+  with the exact CI commands. Every `fixture_plugin_sources` row matches the
+  checkout bytes.
+  - `openclaw-person-ingress-20261101-vps2.json`: `completed`.
+    `ordinary_pass` and `ordinary_skill_pass` are true.
+  - `openclaw-mcp-use-20261101-vps2.json`: `blocked`,
+    `exact_route_unqualified`, exit 0, as in CI. `fixture_discovery_pass` is
+    true and `functional_exact_use` is false. `tools.effective` returned an
+    empty list and `mcp.app.listTools` was refused. Both stdio servers listed
+    `append`; no server call was made.
+  - `openclaw-loaded-use-observation-20261101-vps2.json`: exit 2. The positive,
+    stale and deleted cases observed `loaded_pinned_revision`, as in CI. The
+    reset case is now `control_refused` (the `operator.admin` refusal), so the
+    reset fix works on the real host. `ordinary_skill_loaded_use_pass` is still
+    false, for a different reason. The predicate expects the session's
+    selection listing to hold exactly one pin. The host lists every pin of the
+    owner profile, including pins made in earlier sessions; the stale skill
+    shows its new head revision there. When only the selected skill's pin is
+    checked, the predicate accepts the capture. The CI capture also lists two
+    pins in its stale case. This observation does not change the negative
+    finding: no point fences the next turn.
+
+  Before commit, `/home/<user>/` was rewritten to `/home/vps-user/` (same
+  length) and the hostname to `sha256:<hostname_sha256>` in all three
+  `*-vps2.json` captures. Their predicates give the same results after this.
+  The skill record's revisions now name 62c4dcd and the harness at that
+  commit. The MCP harness bytes are unchanged since acc4041.
 - **GitHub Actions ubuntu (run 41286397320, head 548588a; harness bytes
   identical at acc4041).**
   - `openclaw-loaded-use-observation-20261101-ci.json`: the positive, stale and
@@ -89,5 +121,8 @@ stays unregistered, and the shipped registry lists neither operation.
 
 - Approval of both records in the pull request, then the follow-up commit that
   fills `pull_request`, `reviewer_logins` and `approved_at`.
-- A CI run to confirm that the reset fix turns the observation step green.
+- The observation step is not green yet. The reset fix works on the real host,
+  but the single-pin check in `ordinary_skill_loaded_use_pass` fails on the
+  host's profile-wide pin listing. The harness needs a reviewed change, then a
+  CI run.
 - A later host version reopens both questions.

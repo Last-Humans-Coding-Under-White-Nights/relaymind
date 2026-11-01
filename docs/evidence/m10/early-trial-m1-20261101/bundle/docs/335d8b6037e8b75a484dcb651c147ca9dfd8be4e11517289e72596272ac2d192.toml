@@ -1,0 +1,23 @@
+[server]
+host = "127.0.0.1"
+port = 18432
+[store]
+path = "/private/var/tmp/relaymind-trial-259/gateway-recommendations/relaymind.sqlite3"
+[external_model]
+model = "glm-5.3-flash"
+context_limit = 128000
+api_key_env = "RELAYMIND_EXTERNAL_API_KEY"
+[policy]
+degraded_mode = false
+enabled_workflows = []
+[recommendations]
+enabled = true
+user_id = "owner"
+workspace_id = "early-trial"
+primary = "lexical"
+total_ms = 500
+primary_ms = 150
+[[assets.sources]]
+source_id = "openclaw-bundled-trial"
+kind = "local_directory"
+path = "/private/var/tmp/relaymind-trial-259/catalog"

@@ -3,12 +3,15 @@
 import hashlib
 import json
 import os
+import shutil
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
 from relaymind.assets import sources
 from relaymind.assets.settings import SourceConfig
+from relaymind.canonical import canonical_digest
 from test_asset_catalog import record
 
 
@@ -88,36 +91,161 @@ def test_local_ordinary_folder_identity_original_hash_and_manifest(tmp_path):
     assert sources.SourceInventory.empty("example").records == ()
 
 
+def package_id(package, source_id="example"):
+    return "skill:" + canonical_digest({"source_id": source_id, "relative_package_path": package})
+
+
 def test_root_entry_prevents_child_fallback_even_when_invalid(tmp_path):
+    """RM34/AC25, spec 0.66 section 4.6.1: an invalid root is a rejected candidate."""
     skill(tmp_path / "child")
     (tmp_path / "SKILL.md").write_text("invalid")
-    with pytest.raises(sources.SourceFailure) as caught:
-        capture(tmp_path)
-    assert caught.value.reason == "invalid_data"
-    assert caught.value.rejected_count == 1
+    got = capture(tmp_path)
+    assert got.documents == ()
+    assert not got.complete
+    assert got.rejected_count == 1
+    assert got.exclusions == ({"asset_id": package_id("."), "reason": "invalid_data"},)
     skill(tmp_path)
     assert len(capture(tmp_path).documents) == 1
 
 
 @pytest.mark.parametrize(
-    "payload",
+    ("payload", "reason"),
     [
-        "---\nname: a\nname: b\ndescription: x\n---\nbody",
-        "---\nname: &a hello\ndescription: *a\n---\nbody",
-        "---\nname: !!str hello\ndescription: x\n---\nbody",
-        "---\nname: a\ndescription: x\nmetadata: []\n---\nbody",
-        "---\nname: a\ndescription: x\nmetadata:\n  version: 1\n---\nbody",
-        "---\nname: a\ndescription: x\nmetadata:\n  languages: [en, en]\n---\nbody",
-        "---\nname: a\ndescription: x\n---\n",
-        "---\nname: a\ndescription: x\n---\n<script>unsafe",
-        "---\nname: a\ndescription: x\nextra: " + "[" * 17 + "0" + "]" * 17 + "\n---\nbody",
+        ("---\nname: a\nname: b\ndescription: x\n---\nbody", "invalid_data"),
+        ("---\nname: &a hello\ndescription: *a\n---\nbody", "invalid_data"),
+        ("---\nname: !!str hello\ndescription: x\n---\nbody", "invalid_data"),
+        ("---\nname: a\ndescription: x\nmetadata: []\n---\nbody", "invalid_data"),
+        ("---\nname: a\ndescription: x\nmetadata:\n  version: 1\n---\nbody", "invalid_data"),
+        (
+            "---\nname: a\ndescription: x\nmetadata:\n  languages: [en, en]\n---\nbody",
+            "invalid_data",
+        ),
+        ("---\nname: a\ndescription: x\n---\n", "invalid_data"),
+        ("---\nname: a\ndescription: <script>unsafe\n---\nbody", "invalid_data"),
+        ("---\nname: <b>a</b>\ndescription: x\n---\nbody", "invalid_data"),
+        ("---\nname: a\ndescription: x\n---\nbad \x01 control", "invalid_data"),
+        ("---\nname: a\ndescription: x\n---\n" + "x" * (256 * 1024 + 1), "size_limit"),
+        (
+            "---\nname: a\ndescription: x\nextra: " + "[" * 17 + "0" + "]" * 17 + "\n---\nbody",
+            "invalid_data",
+        ),
     ],
 )
-def test_unsafe_or_malformed_local_input_fails_whole_scan(tmp_path, payload):
-    (tmp_path / "SKILL.md").write_text(payload)
+def test_unsafe_or_malformed_candidate_is_rejected_on_its_own(tmp_path, payload, reason):
+    """RM34/AC25, spec 0.66 section 4.6.1: a rejected file never hides its siblings."""
+    (tmp_path / "bad").mkdir()
+    (tmp_path / "bad" / "SKILL.md").write_text(payload, newline="\n")
+    skill(tmp_path / "good")
+    got = capture(tmp_path)
+    assert [d.record.asset_id for d in got.documents] == [package_id("good")]
+    assert not got.complete
+    assert got.rejected_count == 1
+    assert got.exclusions == ({"asset_id": package_id("bad"), "reason": reason},)
+    assert got.removed_asset_ids == frozenset()
+    assert "<script>" not in json.dumps([dict(e) for e in got.exclusions])
+
+
+def test_body_markup_and_repeated_fences_stay_internal_data(tmp_path):
+    """RM34/AC25, spec 0.66 sections 4.6 and 14.5: body text is bounded, not markup-checked."""
+    body = "Run `tool <id>`.\n" + "```bash\nx\n```\n" * 5 + "<script>data</script>\n"
+    skill(tmp_path, body=body)
+    got = capture(tmp_path)
+    assert got.complete
+    assert got.rejected_count == 0
+    assert got.documents[0].body == body
+    # The offered fields keep the projection rules: repetition in a description rejects.
+    skill(tmp_path, description='"a\\na\\na\\na"')
+    assert capture(tmp_path).exclusions[0]["reason"] == "invalid_data"
+
+
+# Verbatim copies of OpenClaw 2026.10.7 bundled skills (package `openclaw`, MIT).
+BUNDLED = Path(__file__).parent / "fixtures" / "openclaw-bundled-skills"
+BUNDLED_SHA256 = {
+    "diagram-maker": "6195e03fcb04a1a68c4af72165e0c85efcd2719af79380d82e42996ea89ad74a",
+    "gemini": "1aad57691db927cf26b489e15bab4eb909e390ebca361c128f98ab5bcf4bdf43",
+    "sherpa-onnx-tts": "f3a4d30d0e7e14e76dcb5245e197e3dcf490e3f9e8298466e86e4f33847f532d",
+    "tmux": "8aeaa6f3dfe06d58e09721778b8c9e654bcbd47590f26f442c4dc87c9349c572",
+    "weather": "62ab4821aa873949d1c1091836be1659a42b32caadce4bd145f5505a1ceaeec1",
+}
+
+
+def bundled(root):
+    shutil.copytree(BUNDLED, root, ignore=shutil.ignore_patterns("LICENSE"))
+    return root
+
+
+def test_openclaw_bundled_skills_are_admitted(tmp_path):
+    """RM34/AC25 (#268): placeholders, HTML examples and repeated fences in real bodies."""
+    root = bundled(tmp_path / "skills")
+    got = capture(root)
+    assert got.complete
+    assert got.rejected_count == 0
+    by_name = {d.record.identity["package_id"]: d for d in got.documents}
+    assert sorted(by_name) == sorted(BUNDLED_SHA256)
+    for name, digest in BUNDLED_SHA256.items():
+        assert by_name[name].record.content_hash == digest
+        assert by_name[name].record.availability == "unknown"
+        assert by_name[name].record.asset_id == package_id(name)
+    assert "gemini skills <command>" in by_name["gemini"].body
+    assert "<!-- SVG -->" in by_name["diagram-maker"].body
+    assert by_name["tmux"].body.count("```bash\n") > 3
+
+
+def test_one_bad_file_admits_the_good_ones_and_retains_its_prior_record(tmp_path):
+    """RM34/AC25 (#268): partial local scan; no removal while any candidate is rejected."""
+    root = bundled(tmp_path / "skills")
+    first = capture(root)
+    previous = sources.SourceInventory(
+        "example",
+        1,
+        tuple(
+            sources.InventoryAsset(d.record, first.package_paths[d.record.asset_id])
+            for d in first.documents
+        ),
+        owners={d.record.asset_id: "example" for d in first.documents},
+    )
+    (root / "gemini" / "SKILL.md").write_text("---\nname: gemini\n---\n", newline="\n")
+    shutil.rmtree(root / "weather")
+    (root / "not-a-skill").mkdir()
+    got = capture(root, previous=previous)
+    assert not got.complete
+    assert sorted(d.record.identity["package_id"] for d in got.documents) == [
+        "diagram-maker",
+        "sherpa-onnx-tts",
+        "tmux",
+    ]
+    assert got.rejected_count == 1
+    assert got.exclusions == ({"asset_id": package_id("gemini"), "reason": "invalid_data"},)
+    # A partial generation never removes: weather stays (stale) until a complete scan.
+    assert got.removed_asset_ids == frozenset()
+    (root / "gemini" / "SKILL.md").write_bytes((BUNDLED / "gemini" / "SKILL.md").read_bytes())
+    healed = capture(root, previous=previous)
+    assert healed.complete
+    assert healed.removed_asset_ids == frozenset({package_id("weather")})
+
+
+def test_scan_level_failures_still_fail_the_whole_scan(tmp_path):
+    """RM34/AC25: path safety, budgets and a missing root are not per-file rejections."""
+    root = bundled(tmp_path / "skills")
+    for index in range(1000):
+        (root / f"extra-{index:04d}").mkdir()
     with pytest.raises(sources.SourceFailure) as caught:
-        capture(tmp_path)
-    assert "<script>" not in str(caught.value)
+        capture(root)
+    assert caught.value.reason == "record_limit"
+    with pytest.raises(sources.SourceFailure) as caught:
+        capture(tmp_path / "missing")
+    assert caught.value.reason in ("source_unavailable", "invalid_data")
+
+
+def test_oversized_original_is_a_rejected_candidate_but_job_bytes_stay_whole(tmp_path):
+    """RM34/AC25: the 10 MiB SKILL.md cap is per file; the 100 MiB job cap is per scan."""
+    root = bundled(tmp_path / "skills")
+    (root / "huge").mkdir()
+    with (root / "huge" / "SKILL.md").open("wb") as handle:
+        handle.truncate(10 * 1024 * 1024 + 1)
+    got = capture(root)
+    assert got.exclusions == ({"asset_id": package_id("huge"), "reason": "size_limit"},)
+    assert len(got.documents) == len(BUNDLED_SHA256)
 
 
 def test_source_secret_values_redacted_but_schema_declarations_untouched(tmp_path):
@@ -247,9 +375,10 @@ def test_invalid_import_rejects_entire_document(tmp_path, change):
 
 def test_local_limits_cancel_and_deadline_abort_before_publication(tmp_path):
     skill(tmp_path, body="x" * (256 * 1024 + 1))
-    with pytest.raises(sources.SourceFailure) as caught:
-        capture(tmp_path)
-    assert caught.value.reason == "size_limit"
+    # Spec 0.66 section 4.6.1: a per-file bound rejects that candidate only.
+    oversized = capture(tmp_path)
+    assert oversized.documents == () and not oversized.complete
+    assert oversized.exclusions[0]["reason"] == "size_limit"
     skill(tmp_path)
     with pytest.raises(sources.SourceFailure) as caught:
         capture(tmp_path, cancelled=lambda: True)
@@ -376,12 +505,12 @@ def test_frontmatter_precedence_manifest_validation_and_no_resource_reads(tmp_pa
     got = capture(tmp_path)
     assert got.documents[0].record.source_version == "front"
     assert got.documents[0].record.language_tags == ("zh",)
-    manifest.write_text('{"version":true}')
-    with pytest.raises(sources.SourceFailure):
-        capture(tmp_path)
-    manifest.write_text('{"version":"a","version":"b"}')
-    with pytest.raises(sources.SourceFailure):
-        capture(tmp_path)
+    # Spec 0.66 section 4.6.1: an invalid optional manifest rejects its package.
+    for invalid in ('{"version":true}', '{"version":"a","version":"b"}'):
+        manifest.write_text(invalid)
+        got = capture(tmp_path)
+        assert got.documents == () and not got.complete
+        assert got.exclusions == ({"asset_id": package_id("."), "reason": "invalid_data"},)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="colon filenames are POSIX-only")
@@ -459,19 +588,30 @@ def test_explicit_null_frontmatter_version_retains_previous_generation(tmp_path)
         catalog.publish(capture(tmp_path), expected_revision=0)
         first = catalog.snapshot()
         skill(tmp_path, metadata="metadata:\n  version: null\n")
-        with pytest.raises(sources.SourceFailure) as caught:
-            capture(tmp_path, previous=catalog.inventory("example"))
-        catalog.record_failure(
-            "example",
-            rejected_count=caught.value.rejected_count,
-            exclusions=caught.value.exclusions,
-        )
+        partial = capture(tmp_path, previous=catalog.inventory("example"))
+        assert partial.documents == () and not partial.complete
+        catalog.publish(partial, expected_revision=first.catalog_revision)
         snapshot = catalog.snapshot()
-        # Only the failure observation changes the revision; the generation is kept.
+        # Spec 0.66 section 4.6.1: the rejected package's prior record is kept, stale.
         assert snapshot.catalog_revision == first.catalog_revision + 1
         assert snapshot.assets[0].content_hash == first.assets[0].content_hash
         assert snapshot.assets[0].source_version == "valid"
         assert snapshot.assets[0].stale
+        source = snapshot.sources[0]
+        assert not source["complete"] and not source["stale"]
+        assert source["rejected_count"] == 1
+        assert source["exclusions"] == [{"asset_id": package_id("."), "reason": "invalid_data"}]
+        assert source["accepted_count"] == 1
+        # Repairing the file restores one complete generation without the exclusion.
+        skill(tmp_path, metadata="metadata:\n  version: valid\n")
+        catalog.publish(
+            capture(tmp_path, previous=catalog.inventory("example")),
+            expected_revision=snapshot.catalog_revision,
+        )
+        repaired = catalog.snapshot()
+        assert repaired.sources[0]["complete"] and repaired.sources[0]["exclusions"] == []
+        assert repaired.sources[0]["rejected_count"] == 0
+        assert not repaired.assets[0].stale
 
 
 def test_metadata_import_language_tag_must_match_whole_string(tmp_path):

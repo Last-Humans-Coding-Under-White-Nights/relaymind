@@ -20,18 +20,47 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Stacked PRs (base is not master) run Linux only to conserve CI capacity; a
+  # PR to master, pushes and manual runs use all platforms, so every PR gets the
+  # full matrix before it merges. The decision is printed in this job's log.
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      os: ${{ steps.os.outputs.os }}
+    steps:
+      - id: os
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # In a stacked pull request github.base_ref names the bottom of the
+          # stack, so ask the API for this pull request's own base branch.
+          if [ "$EVENT" = "pull_request" ] && [ -n "$PR" ]; then
+            BASE=$(gh api "repos/$REPO/pulls/$PR" --jq .base.ref)
+          fi
+          if [ "$EVENT" = "pull_request" ] && [ "$BASE" != "master" ]; then
+            os='["ubuntu-latest"]'
+          else
+            os='["ubuntu-latest", "macos-latest", "windows-latest"]'
+          fi
+          echo "event=$EVENT base=$BASE platforms=$os"
+          echo "os=$os" >> "$GITHUB_OUTPUT"
+
   check:
+    needs: plan
     strategy:
       # Each platform reports its own result, as the OpenClaw job does.
       fail-fast: false
       matrix:
         # Target platforms per spec (macOS and Windows); Ubuntu as the fast default.
-        # Stacked PRs (base is not master) run Linux only; a PR to master and
-        # master pushes run all platforms, so every PR gets the full matrix
-        # before it merges.
-        os: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref != 'master'
-          && '["ubuntu-latest"]'
-          || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
+        # The plan job picks the platforms (Linux only for stacked PRs).
+        os: ${{ fromJSON(needs.plan.outputs.os) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -92,16 +121,13 @@ jobs:
   # a functional check on a GitHub runner, never live model evidence and never a
   # qualification of a user's machine (section 12.5). Live tests stay opt-in.
   openclaw-plugin:
+    needs: plan
     strategy:
       fail-fast: false
       matrix:
         # The pinned host documents macOS, Linux, and native Windows (WSL2 optional).
-        # Stacked PRs (base is not master) run Linux only; a PR to master and
-        # master pushes run all platforms, so every PR gets the full matrix
-        # before it merges.
-        os: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref != 'master'
-          && '["ubuntu-latest"]'
-          || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
+        # The plan job picks the platforms (Linux only for stacked PRs).
+        os: ${{ fromJSON(needs.plan.outputs.os) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     defaults:

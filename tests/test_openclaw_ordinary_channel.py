@@ -258,7 +258,7 @@ def skill_fixture(api):
         kind="asset", asset_id="example:hello-world", content_hash=digest
     )
     view["displayed_candidates"] = [
-        dict(asset=dict(asset_id="example:hello-world", content_hash=digest))
+        dict(asset=dict(asset_id="example:hello-world", content_hash=digest, source_version=None))
     ]
     capture["ordinary_skill"] = dict(
         library_save=dict(ok=True, skill_id=SKILL_ID, revision=REVISION),
@@ -335,6 +335,7 @@ def test_exact_skill_selection_evidence_passes():
         "negative_missing",
         "mapping_missing_source_version",
         "mapping_other_source_version",
+        "library_entry_removed",
     ],
 )
 def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
@@ -354,6 +355,8 @@ def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
         value["mapping"].pop("sourceVersion")
     elif change == "mapping_other_source_version":
         value["mapping"]["sourceVersion"] = "v2"
+    elif change == "library_entry_removed":
+        value["library_list"]["payload"]["entries"][0]["removed"] = True
     elif change.startswith("mapping_") and change.endswith("_asset"):
         value["mapping"]["assetId"] = {
             "mapping_empty_asset": "",
@@ -1110,6 +1113,81 @@ def test_host_uses_packaged_provider_and_only_native_skill_read(tmp_path):
     assert extension.config["diagnosticsPath"] == str(tmp_path / "provider-attempts.jsonl")
 
 
+def profile_pin_fixture(api):
+    """RM39/AC30: owner-profile listing shape from the 20261101-vps2 capture."""
+    capture = loaded_fixture(api)
+    cases = capture["ordinary_skill_loaded_use"]["cases"]
+    pins = [
+        dict(
+            skillId=case["selected"]["skillId"],
+            revision=case["selected"]["revision"],
+            name=case["selected"]["name"],
+            ownerProfileId="fixture-owner-profile",
+        )
+        for case in cases
+    ]
+    # Native listings retain earlier sessions' pins, including the stale
+    # skill at its new head in the deleted/reset sessions. Preserve order.
+    advanced = dict(pins[1], revision="b" * 64)
+    for case, listing in zip(
+        cases[1:],
+        ([pins[1], pins[0]], [advanced, pins[0], pins[2]], [advanced, pins[0], pins[3]]),
+        strict=True,
+    ):
+        case["selection"]["payload"]["selections"] = listing
+    return capture
+
+
+@pytest.mark.parametrize("case_index", [1, 2, 3])
+@pytest.mark.parametrize(
+    "mutation", [None, "duplicate", "additional_revision", "wrong_revision", "missing"]
+)
+def test_loaded_use_profile_pins_require_one_selected_skill_revision(case_index, mutation):
+    """RM39/AC30: unrelated profile pins never invalidate the exact selected pin."""
+    api = module()
+    capture = profile_pin_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][case_index]
+    pins = case["selection"]["payload"]["selections"]
+    selected = next(pin for pin in pins if pin["skillId"] == case["selected"]["skillId"])
+    if mutation == "duplicate":
+        pins.append(dict(selected))
+    elif mutation == "additional_revision":
+        pins.append(dict(selected, revision="c" * 64))
+    elif mutation == "wrong_revision":
+        selected["revision"] = "c" * 64
+    elif mutation == "missing":
+        pins.remove(selected)
+    assert api.ordinary_skill_loaded_use_pass(capture) is (mutation is None)
+    listed = dict(frame=dict(ok=True, payload=dict(session=dict(selections=pins))))
+    if mutation is None:
+        assert api.selected_pin(listed, case["selected"]) == selected
+    else:
+        with pytest.raises(ValueError, match="^ordinary_skill_control_failed$"):
+            api.selected_pin(listed, case["selected"])
+
+
+def test_profile_pins_reach_the_independent_refused_reset_control(monkeypatch):
+    """RM39/AC30: the vps2 pin listings pass before its refused reset blocks proof."""
+    api = module()
+    capture = profile_pin_fixture(api)
+    reset = capture["ordinary_skill_loaded_use"]["cases"][3]
+    reset["current"] = dict(reset["before"])
+    reset["intervention"]["frame"] = dict(
+        ok=False, error=dict(code="FORBIDDEN", message="missing scope: operator.admin")
+    )
+    observed = []
+    control_observed = api._control_observed
+
+    def record_control(case):
+        result = control_observed(case)
+        observed.append((case["case"], result))
+        return result
+
+    monkeypatch.setattr(api, "_control_observed", record_control)
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+    assert observed == [("positive", True), ("stale", True), ("deleted", True), ("reset", False)]
+
+
 def test_control_native_activation_is_retained_as_native_not_bridge_receipt():
     """RM39/AC30: direct activation is isolated control setup, never adapter qualification."""
     api = module()
@@ -1132,7 +1210,10 @@ def test_control_native_activation_is_retained_as_native_not_bridge_receipt():
     assert not api.ordinary_skill_loaded_use_pass(capture)
 
 
-def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(tmp_path):
+@pytest.mark.parametrize("incomplete_request", [False, True])
+def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(
+    tmp_path, incomplete_request
+):
     """RM39/AC30: the turn collector retains boundary observations, not generated tool bytes."""
     import copy
     import json
@@ -1140,6 +1221,12 @@ def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(tmp_p
 
     api = module()
     case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    if incomplete_request:
+        case["requests"][0].update(
+            body=None, status=None, run_id=None, failure_reason="invalid_json"
+        )
+        case["requests"][1].pop("status")
+        case["requests"][1].pop("run_id")
     archive = tmp_path / "release.tgz"
     archive.write_bytes(b"fixture")
     extension = api.OrdinaryComposition(
@@ -1193,7 +1280,9 @@ def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(tmp_p
         expectedLifecycleRevision=case["current"]["lifecycleRevision"],
     )
     extension.loaded_use_turn(rpc, page, params, result)
-    assert result["observed"] == "loaded_pinned_revision"
+    assert result["observed"] == (
+        "loaded_other_bytes" if incomplete_request else "loaded_pinned_revision"
+    )
     assert result["tools"][0]["event"]["result"]["content"][0]["text"] == CONTENT
     assert result["requests"] == records
     assert [method for method, _ in calls] == [
@@ -1525,7 +1614,12 @@ def test_library_selection_wait_cannot_swallow_browser_failure(tmp_path, monkeyp
         def wait_for(self, **kwargs):
             raise errors[error_kind]
 
-    def rpc(*args):
+    pages = [Page(), Page()]
+
+    def rpc(page, method, params):
+        if method == "relaymind.skill" and (page is pages[1] or params.get("skillId") != SKILL_ID):
+            # The refusal cases are refused, as on the real host.
+            return {"frame": {"ok": False, "error": {"code": "INVALID_REQUEST"}}}
         return {"frame": {"ok": True, "payload": {}}}
 
     skill = skill_fixture(api)["ordinary_skill"]
@@ -1539,9 +1633,7 @@ def test_library_selection_wait_cannot_swallow_browser_failure(tmp_path, monkeyp
         )
     )
     with pytest.raises((ValueError, TimeoutError), match="^" + expected + "$"):
-        extension.select_library_skill(
-            rpc, [Page(), Page()], [{"sessionKey": "s"}, {}], Page(), skill
-        )
+        extension.select_library_skill(rpc, pages, [{"sessionKey": "s"}, {}], Page(), skill)
     assert extension.failure_diagnostics()["ordinary_failure_step"] == "select_library_skill"
 
 
@@ -1624,7 +1716,8 @@ def test_retirement_holds_backend_until_ui_abort_is_observed(tmp_path, monkeypat
     # Earlier requests must not be attributed to the held request.
     prior = json.dumps(dict(retirement["fetch_failures"][0], attempt_id="prior")) + "\n"
     extension.event_file.write_text(prior)
-    extension.retirement_start = len(prior.encode())
+    # The observer uses byte offsets; Windows text writes translate LF to CRLF.
+    extension.retirement_start = extension.event_file.stat().st_size
     extension.held_attempt = retirement["attempt"]
     extension.held_request = "held"
     extension.ui_guard_request = retirement["ui_guard_request"]
@@ -1868,17 +1961,23 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
             payload = person
         elif method == "skills.library.list":
             payload = dict(entries=[dict(skillId=SKILL_ID, revision=REVISION)])
+        elif method == "relaymind.skill" and (
+            page is pages[1] or params.get("skillId") != SKILL_ID
+        ):
+            # The refusal cases are refused, as on the real host.
+            return {"frame": {"ok": False, "error": {"code": "INVALID_REQUEST"}}}
         else:
             payload = {}
         return {"frame": {"ok": True, "payload": payload}}
 
     monkeypatch.setattr(api, "run_ui", lambda *args: {})
+    pages = [Page(), Page()]
     sessions = [{"sessionKey": "agent:main:person-a"}, {"sessionKey": "agent:main:person-b"}]
     expected = (
         "overall_deadline_exceeded" if stage == "cleanup_deadline" else "ordinary_playwright_error"
     )
     with pytest.raises((ValueError, TimeoutError), match="^" + expected + "$"):
-        extension.persons_ready(rpc, [Page(), Page()], sessions, capture)
+        extension.persons_ready(rpc, pages, sessions, capture)
     assert extension.failure_diagnostics() == {
         "ordinary_failure_step": "ui_actions" if stage == "cleanup_deadline" else stage,
         "ordinary_error_class": "other" if stage == "cleanup_deadline" else "playwright_error",
@@ -2175,8 +2274,20 @@ def test_missing_native_pin_has_a_fixed_control_failure(pins):
 
 
 @pytest.mark.parametrize("failure", [None, "ordinary_skill_turn_timeout", "not_text_content"])
+@pytest.mark.parametrize(
+    "reset_failure",
+    [
+        None,
+        "missing_frame",
+        "missing_entry",
+        "invalid_entry",
+        "person_refused",
+        "person_payload",
+        "person_scope",
+    ],
+)
 def test_observation_saves_controls_after_a_completed_or_incomplete_turn(
-    tmp_path, monkeypatch, failure
+    tmp_path, monkeypatch, failure, reset_failure
 ):
     """RM39/AC30: the real save helper must reach controls after the captured positive turn."""
     api = module()
@@ -2213,6 +2324,13 @@ def test_observation_saves_controls_after_a_completed_or_incomplete_turn(
                 and params["expectedLifecycleRevision"] == "L1"
                 else case["before"]
             )
+            if case["case"] == "reset" and scope is case["current"]:
+                if reset_failure == "person_refused":
+                    return dict(frame=dict(ok=False))
+                if reset_failure == "person_payload":
+                    return dict(frame=dict(ok=True, payload=None))
+                if reset_failure == "person_scope":
+                    return dict(frame=dict(ok=True, payload={}))
             return dict(frame=dict(ok=True, payload=scope))
         if method == "skills.library.read":
             selected["read"]["payload"]["entry"]["slug"] = "fixture"
@@ -2240,6 +2358,13 @@ def test_observation_saves_controls_after_a_completed_or_incomplete_turn(
             )
         if method == "skills.library.activate":
             return dict(frame=case["selection"])
+        if method == "sessions.reset":
+            if reset_failure == "missing_frame":
+                return {}
+            if reset_failure == "missing_entry":
+                return dict(frame=dict(ok=True, payload={}))
+            if reset_failure == "invalid_entry":
+                return dict(frame=dict(ok=True, payload=dict(entry=[])))
         return dict(frame=case["intervention"]["frame"])
 
     def turn(rpc, page, session, case):
@@ -2258,6 +2383,11 @@ def test_observation_saves_controls_after_a_completed_or_incomplete_turn(
             raise ValueError(failure)
 
     monkeypatch.setattr(extension, "loaded_use_turn", turn)
+    if reset_failure is not None:
+        with pytest.raises(ValueError, match="^ordinary_skill_control_failed$"):
+            extension.observe_loaded_use(rpc, None, {}, capture)
+        assert visited == ["positive", "stale", "deleted"]
+        return
     extension.observe_loaded_use(rpc, None, {}, capture)
     assert visited == ["positive", "stale", "deleted", "reset"]
     assert extension.failure_diagnostics() == {}
@@ -2573,6 +2703,16 @@ def test_main_only_replaces_base_gateway_when_observation_is_requested(
     api = module()
     setup = recommendation_helpers.setup
     base_apps = []
+    tokens = []
+    random_token = api.secrets.token_urlsafe
+    generated = []
+
+    def token_urlsafe(size):
+        token = random_token(size)
+        generated.append((size, token))
+        return token
+
+    monkeypatch.setattr(api.secrets, "token_urlsafe", token_urlsafe)
 
     def base_setup(*args, **kwargs):
         result = setup(*args, **kwargs)
@@ -2581,11 +2721,14 @@ def test_main_only_replaces_base_gateway_when_observation_is_requested(
 
     monkeypatch.setattr(recommendation_helpers, "setup", base_setup)
 
+    served = []
+
     class Server:
         base_url = "http://127.0.0.1:12345"
 
         def __init__(self, app):
-            assert (app is base_apps[0]) is (not observe)
+            served.append(app)
+            assert (app is base_apps[-1]) is (not observe)
             assert (
                 any(getattr(route, "path", None) == "/v1/chat/completions" for route in app.routes)
                 is observe
@@ -2602,6 +2745,19 @@ def test_main_only_replaces_base_gateway_when_observation_is_requested(
 
     def run(work, out, *, extension):
         assert (extension.observation is not None) is observe
+        tokens.append(extension.application_token)
+        assert extension.application_token != "a" * 40
+        if observe:
+            # The served app must accept exactly the token the plugin is given.
+            from fastapi.testclient import TestClient
+
+            client = TestClient(served[-1])
+            good = {"Authorization": "Bearer " + extension.application_token}
+            assert client.get("/v1/models", headers=good).status_code == 200
+            bad = {"Authorization": "Bearer " + "b" * 40}
+            assert client.get("/v1/models", headers=bad).status_code == 401
+        else:
+            assert (48, extension.application_token) in generated
         out.write_text(json.dumps(loaded_fixture(api)))
         return 0
 
@@ -2609,20 +2765,23 @@ def test_main_only_replaces_base_gateway_when_observation_is_requested(
     monkeypatch.setattr(api.BASE, "person_module", lambda: person)
     archive = tmp_path / "release.tgz"
     archive.write_bytes(b"fixture")
-    assert (
-        api.main(
-            [
-                "--tarball",
-                str(archive),
-                "--work-dir",
-                str(tmp_path / "host"),
-                "--out",
-                str(tmp_path / "capture.json"),
-            ]
-            + (["--observe-loaded-use"] if observe else [])
+    for index in range(2):
+        assert (
+            api.main(
+                [
+                    "--tarball",
+                    str(archive),
+                    "--work-dir",
+                    str(tmp_path / f"host-{index}"),
+                    "--out",
+                    str(tmp_path / "capture.json"),
+                ]
+                + (["--observe-loaded-use"] if observe else [])
+            )
+            == 0
         )
-        == 0
-    )
+
+    assert len(set(tokens)) == 2
 
 
 def test_observer_source_inventory_includes_runtime_package_metadata(tmp_path):
@@ -2751,7 +2910,7 @@ def test_library_selection_stops_after_primary_rpc_refusal(tmp_path, monkeypatch
     assert skill["receipt"]["ok"] is False
 
 
-@pytest.mark.parametrize("listing", ["failed", "empty", "other_revision", "saved"])
+@pytest.mark.parametrize("listing", ["failed", "empty", "other_revision", "removed", "saved"])
 def test_library_selection_requires_the_saved_revision_in_listing(tmp_path, monkeypatch, listing):
     """RM16/RM39 AC30: record selection only with a successful exact native listing."""
     api = module()
@@ -2769,11 +2928,14 @@ def test_library_selection_requires_the_saved_revision_in_listing(tmp_path, monk
                             dict(
                                 skillId=SKILL_ID,
                                 revision="b" * 64 if listing == "other_revision" else REVISION,
+                                removed=listing == "removed",
                             )
                         ]
                     ),
                 )
             )
+        if page is pages[1] or params.get("skillId") != SKILL_ID:
+            return dict(frame=dict(ok=False, error=dict(code="INVALID_REQUEST")))
         return dict(frame=dict(ok=True, payload=skill["receipt"]["payload"]))
 
     if listing == "saved":
@@ -2782,6 +2944,32 @@ def test_library_selection_requires_the_saved_revision_in_listing(tmp_path, monk
     else:
         with pytest.raises(ValueError, match="^ordinary_skill_selection_failed$"):
             extension.select_library_skill(rpc, pages, sessions, pages[0], skill)
+
+
+@pytest.mark.parametrize(
+    "admitted", ["unmapped_skill", "foreign_person", "foreign_person_own_session"]
+)
+def test_library_selection_stops_when_a_negative_is_admitted(tmp_path, monkeypatch, admitted):
+    """RM37/RM39 AC28/AC30: an admitted refusal case fails before any UI or listing step."""
+    api = module()
+    extension, skill, pages, sessions = selection_fixture(api, tmp_path, monkeypatch)
+    calls = []
+
+    def rpc(page, method, params):
+        calls.append(method)
+        if method != "relaymind.skill":
+            raise AssertionError(method)
+        index = calls.count("relaymind.skill") - 1
+        case = [None, "unmapped_skill", "foreign_person", "foreign_person_own_session"][index]
+        if case is None or case == admitted:
+            return dict(frame=dict(ok=True, payload=skill["receipt"]["payload"]))
+        return dict(frame=dict(ok=False, error=dict(code="INVALID_REQUEST")))
+
+    clicks = []
+    monkeypatch.setattr(SelectionPage, "click", lambda self: clicks.append(True))
+    with pytest.raises(ValueError, match="^ordinary_skill_selection_failed$"):
+        extension.select_library_skill(rpc, pages, sessions, pages[0], skill)
+    assert "skills.library.list" not in calls and clicks == []
 
 
 def test_library_selection_checks_foreign_person_with_their_own_session(tmp_path, monkeypatch):
@@ -2819,3 +3007,475 @@ def test_skill_evidence_requires_foreign_person_own_session_refusal():
         if item["case"] != "foreign_person_own_session"
     ]
     assert not api.ordinary_skill_pass(capture)
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        (("tools", 0, "event", "result"), None),
+        (("tools", 0, "event", "result"), {}),
+        (("tools", 0, "event", "result", "content"), None),
+        (("tools", 0, "event", "result", "content"), [{"type": "image"}]),
+        (("requests", 1, "body", "messages", 3), {"role": "tool"}),
+        (("requests", 1, "body", "messages", 2, "tool_calls", 0), {}),
+        (("requests", 1, "body", "messages", 2, "tool_calls", 0, "function"), None),
+        (("requests", 1, "body", "messages", 2, "tool_calls", 0, "function", "arguments"), "{"),
+        (("requests", 1, "body", "messages", 2, "tool_calls", 0, "function", "arguments"), []),
+        (("requests", 0, "body"), {}),
+        (("requests", 0, "body", "messages"), None),
+        (("tools", 0, "context"), []),
+    ],
+)
+def test_loaded_round_trip_rejects_malformed_wire_shapes(path, value):
+    """RM39/AC30: incomplete native evidence must fail closed during collection."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    target = case
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    assert api._loaded_round_trip(case) is False
+    assert api.loaded_use_observation(case) in {"loaded_other_bytes", "not_loaded"}
+
+
+@pytest.mark.parametrize("name", ["stale", "deleted", "reset"])
+@pytest.mark.parametrize(
+    "frame",
+    [
+        {},
+        None,
+        [],
+        {"ok": True},
+        {"ok": True, "payload": None},
+        {"ok": True, "payload": []},
+        {"ok": True, "payload": {}},
+        {"ok": True, "payload": {"entry": None}},
+        {"ok": True, "payload": {"entry": {"revision": None}}},
+    ],
+)
+def test_control_observation_rejects_malformed_receipts(name, frame):
+    """RM39/AC30: malformed native control receipts cannot crash the collector."""
+    api = module()
+    case = next(
+        c for c in loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"] if c["case"] == name
+    )
+    case["intervention"]["frame"] = frame
+    assert api._control_observed(case) is False
+
+
+@pytest.mark.parametrize("content", [None, [], [{"type": "image"}], 5])
+def test_advertised_skill_ignores_nontext_content(content):
+    """RM39/AC30: missing native advertisement is an observation, not an exception."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    case["requests"][0]["body"]["messages"][0]["content"] = content
+    assert api.advertised_skill(case["requests"], case["selected"]) is None
+
+
+@pytest.mark.parametrize("body", [{}, None, [], {"messages": None}, {"messages": [None]}])
+def test_advertised_skill_ignores_incomplete_requests(body):
+    """RM39/AC30: failed HTTP captures do not invent advertisements."""
+    assert module().advertised_skill([{"body": body}], {"skillId": SKILL_ID}) is None
+
+
+def test_advertised_skill_joins_native_text_parts():
+    """RM39/AC30: native structured text retains the exact advertisement."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    message = case["requests"][0]["body"]["messages"][0]
+    content = message["content"]
+    message["content"] = [
+        {"type": "text", "text": content[:50]},
+        {"type": "text", "text": content[50:]},
+    ]
+    assert api.advertised_skill(case["requests"], case["selected"]) == ("Hello World", REVISION)
+    assert api._loaded_round_trip(case) is True
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_model_request_capture_retains_closed_failure(tmp_path, cancelled):
+    """RM16/RM39/AC30: exceptions and cancellation leave complete, private records."""
+    import asyncio
+
+    from starlette.requests import Request
+
+    from recommendation_helpers import setup
+
+    api = module()
+    _, service, runs, _ = setup(tmp_path)
+    app, gateway, observation = api.loaded_use_gateway(tmp_path / "inference", service)
+    middleware = app.user_middleware[0].kwargs["dispatch"]
+
+    async def exercise():
+        async def receive():
+            return {"type": "http.request", "body": b'{"messages":[]}', "more_body": False}
+
+        request = Request({"type": "http", "path": "/v1/chat/completions", "headers": []}, receive)
+
+        async def fail(request):
+            raise asyncio.CancelledError("private") if cancelled else RuntimeError("private")
+
+        with pytest.raises(asyncio.CancelledError if cancelled else RuntimeError):
+            await middleware(request, fail)
+
+    try:
+        asyncio.run(exercise())
+        record = observation.requests[0]
+        assert record["status"] is None
+        assert record["run_id"] is None
+        assert record["failure_reason"] == ("request_cancelled" if cancelled else "request_failed")
+        assert "private" not in str(record)
+        capture = loaded_fixture(api)
+        capture["ordinary_skill_loaded_use"]["cases"][0]["requests"] = [record]
+        assert api.ordinary_skill_loaded_use_pass(capture) is False
+    finally:
+        gateway.store.close()
+        runs.close()
+
+
+def test_model_request_capture_passes_malformed_json_to_validation(tmp_path):
+    """RM16/RM39/AC30: malformed client input is not a model request or HTTP 500."""
+    import asyncio
+
+    import httpx
+
+    from recommendation_helpers import setup
+
+    api = module()
+    _, service, runs, _ = setup(tmp_path)
+    app, gateway, observation = api.loaded_use_gateway(tmp_path / "inference", service)
+
+    async def exercise():
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+            base_url="http://test",
+        ) as client:
+            return await client.post(
+                "/v1/chat/completions",
+                content="{",
+                headers={
+                    "Authorization": f"Bearer {app.state.application_token}",
+                    "Content-Type": "application/json",
+                },
+            )
+
+    try:
+        response = asyncio.run(exercise())
+        assert response.status_code in {400, 422}
+        record = observation.requests[0]
+        assert record["body"] is None
+        assert record["failure_reason"] == "invalid_json"
+        assert record["status"] == response.status_code
+        assert record["run_id"] is None
+        assert api.advertised_skill(observation.requests, {"skillId": SKILL_ID}) is None
+    finally:
+        gateway.store.close()
+        runs.close()
+
+
+BAD_WIRE_VALUES = [None, {}, [], "malformed", 7, True]
+
+
+@pytest.mark.parametrize("value", BAD_WIRE_VALUES)
+@pytest.mark.parametrize(
+    "method,reason",
+    [
+        ("sessions.messages.subscribe", "ordinary_skill_subscription_failed"),
+        ("chat.send", "ordinary_skill_turn_timeout"),
+        ("rmqualification.person", "ordinary_skill_scope_changed"),
+    ],
+)
+@pytest.mark.parametrize("level", ["reply", "frame", "payload"])
+def test_loaded_turn_malformed_reply_is_closed(tmp_path, monkeypatch, value, method, reason, level):
+    """RM39/AC30: review 4435312419/2424/2438, malformed replies stop at their step."""
+    api = module()
+    extension, case, rpc, page, _ = turn_fixture(api, tmp_path, monkeypatch, deliver=True)
+
+    def malformed(page, called, params):
+        reply = rpc(page, called, params)
+        if called != method:
+            return reply
+        if level == "reply":
+            return value
+        if level == "frame":
+            reply["frame"] = value
+        else:
+            reply["frame"]["payload"] = value
+        return reply
+
+    with pytest.raises(ValueError, match=f"^{reason}$"):
+        extension.loaded_use_turn(malformed, page, {}, case)
+
+
+@pytest.mark.parametrize("terminal", [None, {}, [None], [7], ["bad"], [{"state": []}]])
+def test_loaded_turn_malformed_terminal_is_closed(tmp_path, monkeypatch, terminal):
+    """RM39/AC30: malformed browser terminal records cannot escape or prove a turn."""
+    api = module()
+    extension, case, rpc, page, _ = turn_fixture(api, tmp_path, monkeypatch, deliver=True)
+    page.evaluate = lambda *args: terminal
+    with pytest.raises(ValueError, match="^ordinary_skill_(turn_timeout|terminal_ambiguous)$"):
+        extension.loaded_use_turn(rpc, page, {}, case, timeout=0.1)
+
+
+@pytest.mark.parametrize("field", ["event", "context"])
+@pytest.mark.parametrize("value", BAD_WIRE_VALUES)
+@pytest.mark.parametrize("terminal", [True, False])
+def test_loaded_turn_malformed_tool_record_is_closed(tmp_path, monkeypatch, field, value, terminal):
+    """RM39/AC30: review 4435312431, both collector branches reject malformed hooks."""
+    import json
+
+    api = module()
+    extension, case, rpc, page, _ = turn_fixture(api, tmp_path, monkeypatch, deliver=True)
+
+    def malformed(page, method, params):
+        reply = rpc(page, method, params)
+        if method == "chat.send":
+            records = [json.loads(line) for line in extension.event_file.read_text().splitlines()]
+            records[-1][field] = value
+            extension.event_file.write_text("".join(json.dumps(r) + "\n" for r in records))
+        return reply
+
+    if not terminal:
+        page.evaluate = lambda *args: []
+    with pytest.raises(ValueError, match="^ordinary_skill_native_event_invalid$"):
+        extension.loaded_use_turn(malformed, page, {}, case, timeout=0.1)
+
+
+@pytest.mark.parametrize("value", BAD_WIRE_VALUES)
+@pytest.mark.parametrize(
+    "field", ["intervention", "before", "current", "chat", "terminal", "tools"]
+)
+def test_partial_loaded_observations_are_closed(field, value):
+    """RM39/AC30: review 4435312403/2414, partial cases never raise indexing errors."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][3]
+    case[field] = value
+    assert api._reset_refused(case) is False
+    assert api.loaded_use_observation(case) in {
+        "incomplete",
+        "refused",
+        "not_loaded",
+        "loaded_other_bytes",
+        "loaded_pinned_revision",
+    }
+
+
+@pytest.mark.parametrize("value", BAD_WIRE_VALUES)
+@pytest.mark.parametrize(
+    "method,reason",
+    [
+        ("rmqualification.person", "ordinary_skill_scope_changed"),
+        ("skills.library.read", "ordinary_skill_read_failed"),
+        ("skills.library.list", "ordinary_skill_control_failed"),
+    ],
+)
+@pytest.mark.parametrize("level", ["reply", "frame", "payload"])
+def test_loaded_observe_malformed_initial_reply_is_closed(tmp_path, value, method, reason, level):
+    """RM39/AC30: review 4435312442, initial scope/read/list failures stay attributed."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][0]
+    extension = extension_fixture(api, tmp_path)
+
+    def rpc(page, called, params):
+        replies = {
+            "rmqualification.person": dict(frame=dict(ok=True, payload=case["current"])),
+            "skills.library.read": dict(frame=case["selected"]["read"]),
+            "skills.library.list": dict(
+                frame=dict(
+                    ok=True,
+                    payload=dict(
+                        session=dict(
+                            selections=[
+                                dict(skillId=SKILL_ID, revision=REVISION, name="Hello World")
+                            ]
+                        )
+                    ),
+                )
+            ),
+        }
+        reply = replies[called]
+        if called == method:
+            if level == "reply":
+                return value
+            if level == "frame":
+                reply["frame"] = value
+            else:
+                reply["frame"]["payload"] = value
+        return reply
+
+    with pytest.raises(ValueError, match=f"^{reason}$"):
+        extension.observe_loaded_use(rpc, None, {}, capture)
+
+
+def wire_mutations(value):
+    """One deleted/retyped node at a time; exercise every captured JSON boundary."""
+    import copy
+
+    yield (), None
+    yield (), []
+    yield (), "malformed"
+    if isinstance(value, (dict, list)):
+        for key, child in value.items() if isinstance(value, dict) else enumerate(value):
+            removed = copy.deepcopy(value)
+            del removed[key]
+            yield (key, "missing"), removed
+            for path, replacement in wire_mutations(child):
+                changed = copy.deepcopy(value)
+                changed[key] = replacement
+                yield (key, *path), changed
+
+
+def test_loaded_predicates_are_total_over_malformed_capture_nodes():
+    """RM16/RM39/AC30: malformed native evidence yields closed observations, never a crash."""
+    api = module()
+    capture = loaded_fixture(api)
+    for original in capture["ordinary_skill_loaded_use"]["cases"]:
+        for path, case in wire_mutations(original):
+            try:
+                assert isinstance(api._reset_refused(case), bool)
+                assert isinstance(api._control_observed(case), bool)
+                assert isinstance(api._loaded_round_trip(case), bool)
+                assert api.loaded_use_observation(case) in {
+                    "incomplete",
+                    "control_refused",
+                    "refused",
+                    "loaded_pinned_revision",
+                    "loaded_other_bytes",
+                    "not_loaded",
+                }
+            except Exception as error:
+                pytest.fail(f"{original['case']} {path}: {type(error).__name__}")
+    for path, changed in wire_mutations(capture):
+        try:
+            assert isinstance(api.ordinary_skill_loaded_use_pass(changed), bool)
+        except Exception as error:
+            pytest.fail(f"capture {path}: {type(error).__name__}")
+
+
+@pytest.mark.parametrize("selected", BAD_WIRE_VALUES + [{"skillId": SKILL_ID}])
+def test_scripted_observer_rejects_partial_selection(selected):
+    """RM39/AC30: an invalid script selection is a closed generation failure."""
+    observer = module().LoadedUseGatewayObservation()
+    with pytest.raises(ValueError, match="^ordinary_skill_generation_bound$"):
+        observer.begin(selected, "task")
+
+
+@pytest.mark.parametrize("model_request", BAD_WIRE_VALUES)
+def test_scripted_observer_rejects_malformed_request(model_request):
+    """RM39/AC30: missing normalized messages cannot leak AttributeError."""
+    api = module()
+    observer = api.LoadedUseGatewayObservation()
+    observer.begin(loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]["selected"], "task")
+    with pytest.raises(ValueError, match="^ordinary_skill_task_mismatch$"):
+        observer.generate(model_request)
+
+
+def test_redacted_vps_capture_preserves_all_three_predicates():
+    """RM16/RM39/AC30: genuine VPS2 capture remains evidence, not a synthetic substitute."""
+    import json
+
+    capture = json.loads(
+        (ROOT / "tests/fixtures/openclaw-loaded-use-observation-20261101-vps2.json").read_text()
+    )
+    api = module()
+    assert api.ordinary_pass(capture)
+    assert api.ordinary_skill_pass(capture)
+    assert api.ordinary_skill_loaded_use_pass(capture)
+
+
+@pytest.mark.parametrize("reply", BAD_WIRE_VALUES + [{"frame": None}, {"frame": []}])
+def test_control_library_save_malformed_reply_is_closed(tmp_path, reply):
+    """RM39/AC30: isolated controls share the save boundary's closed failure reason."""
+    extension = extension_fixture(module(), tmp_path)
+    with pytest.raises(ValueError, match="^ordinary_skill_save_failed$"):
+        extension.save_library_skill(lambda *args: reply, None)
+
+
+@pytest.mark.parametrize("scope", BAD_WIRE_VALUES)
+def test_control_cannot_prove_equal_malformed_scopes(scope):
+    """RM39/AC30: two absent or malformed scopes do not prove an unchanged session."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    case.update(before=scope, current=scope)
+    assert api._control_observed(case) is False
+
+
+@pytest.mark.parametrize(
+    "method",
+    [
+        "sessions.create",
+        "skills.library.save",
+        "skills.library.activate",
+        "skills.library.mutate",
+        "sessions.reset",
+    ],
+)
+@pytest.mark.parametrize("reply", BAD_WIRE_VALUES + [{"frame": None}, {"frame": []}])
+def test_loaded_control_driver_malformed_reply_is_closed(tmp_path, monkeypatch, method, reply):
+    """RM39/AC30: every control RPC is structurally closed, including replies before a turn."""
+    api = module()
+    capture = loaded_fixture(api)
+    expected = capture["ordinary_skill_loaded_use"]["cases"]
+    extension = extension_fixture(api, tmp_path)
+    current = [0]
+
+    def rpc(page, called, params):
+        if called == method:
+            return reply
+        if called == "sessions.create":
+            current[0] += 1
+        case = expected[current[0]]
+        selected = case["selected"]
+        if called == "sessions.create":
+            scope = case["before"]
+            return dict(
+                id="create",
+                socket_id="socket",
+                frame=dict(
+                    id="create",
+                    ok=True,
+                    payload=dict(
+                        key=scope["sessionKey"],
+                        sessionId=scope["sessionId"],
+                        entry=dict(lifecycleRevision=scope["lifecycleRevision"]),
+                    ),
+                ),
+            )
+        if called == "rmqualification.person":
+            return dict(frame=dict(ok=True, payload=case["before"]))
+        if called == "skills.library.read":
+            selected["read"]["payload"]["entry"]["slug"] = "fixture"
+            return dict(frame=selected["read"])
+        if called == "skills.library.save" and params["expectedRevision"] is None:
+            return dict(
+                frame=dict(ok=True, payload=dict(entry=selected["read"]["payload"]["entry"]))
+            )
+        if called == "skills.library.list":
+            return dict(
+                frame=dict(
+                    ok=True,
+                    payload=dict(
+                        session=dict(
+                            selections=[
+                                dict(
+                                    skillId=selected["skillId"],
+                                    revision=REVISION,
+                                    name=selected["name"],
+                                )
+                            ]
+                        )
+                    ),
+                )
+            )
+        if called == "skills.library.activate":
+            return dict(frame=case["selection"])
+        return dict(frame=case["intervention"]["frame"])
+
+    monkeypatch.setattr(extension, "loaded_use_turn", lambda *args: None)
+    reason = {
+        "sessions.create": "native_session_create_binding",
+        "skills.library.save": "ordinary_skill_save_failed",
+    }.get(method, "ordinary_skill_control_failed")
+    with pytest.raises(ValueError, match=f"^{reason}$"):
+        extension.observe_loaded_use(rpc, None, {}, capture)

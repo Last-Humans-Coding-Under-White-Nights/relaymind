@@ -13,7 +13,6 @@ the real gateway over model doubles, without the checkout's sources or its
 import hashlib
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -189,7 +188,12 @@ def test_the_artifact_holds_only_the_runtime_files(releases):
         for p in (PACKAGE / "src").rglob("*.ts")
         if not p.name.endswith(".d.ts")
     }
-    built |= {"dist/control-ui/control-ui.js", "dist/control-ui/recommendation-json.js"}
+    built |= {
+        "dist/control-ui/control-ui.js",
+        "dist/control-ui/recommendation-json.js",
+        "dist/control-ui/recommendation-display.js",
+        "dist/control-ui/recommendation-types.js",
+    }
     assert set(names) == RUNTIME_FILES | built
     assert names == record["files"]
     assert "dist/index.js" in names
@@ -396,32 +400,59 @@ CI_FILE = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ci
 
 @pytest.mark.parametrize("job_name", ["check", "openclaw-plugin"])
 @pytest.mark.parametrize(
-    "event_name,base_ref,expected",
+    "event_name,base_ref,api_base,expected",
     [
-        ("pull_request", "master", ["ubuntu-latest", "macos-latest", "windows-latest"]),
-        ("push", "", ["ubuntu-latest", "macos-latest", "windows-latest"]),
-        ("workflow_dispatch", "", ["ubuntu-latest", "macos-latest", "windows-latest"]),
-        ("pull_request", "feature", ["ubuntu-latest"]),
+        ("pull_request", "master", "master", ["ubuntu-latest", "macos-latest", "windows-latest"]),
+        ("push", "", None, ["ubuntu-latest", "macos-latest", "windows-latest"]),
+        ("workflow_dispatch", "", None, ["ubuntu-latest", "macos-latest", "windows-latest"]),
+        ("pull_request", "feature", "feature", ["ubuntu-latest"]),
+        # A stacked pull request: base_ref names the stack's bottom (master),
+        # while the pull request's own base is a feature branch.
+        ("pull_request", "master", "feature", ["ubuntu-latest"]),
     ],
 )
-def test_ci_platform_matrix_for_each_event(job_name, event_name, base_ref, expected):
+def test_ci_platform_matrix_for_each_event(
+    job_name, event_name, base_ref, api_base, expected, tmp_path
+):
     """RM33/AC24: stacked PRs save capacity; master PRs and pushes cover every OS."""
     import yaml
 
-    job = yaml.safe_load(CI_FILE.read_text("utf-8"))["jobs"][job_name]
-    # Parse the supported expression shape completely, including both JSON arms,
-    # then evaluate its condition with each event's actual context.
-    expression = re.fullmatch(
-        r"\$\{\{\s*fromJSON\(github\.event_name == '([^']+)'\s*"
-        r"&& github\.base_ref != '([^']+)'\s*&& '([^']+)'\s*"
-        r"\|\| '([^']+)'\)\s*\}\}",
-        job["strategy"]["matrix"]["os"],
+    workflow = yaml.safe_load(CI_FILE.read_text("utf-8"))
+    job = workflow["jobs"][job_name]
+    # Both jobs take their platforms from the plan job's output ...
+    assert job["needs"] == "plan"
+    assert job["strategy"]["matrix"]["os"] == "${{ fromJSON(needs.plan.outputs.os) }}"
+    # ... and the plan step's own script decides them for each event.
+    plan = workflow["jobs"]["plan"]
+    assert plan["permissions"] == {"pull-requests": "read"}
+    (step,) = plan["steps"]
+    assert step["env"]["BASE"] == "${{ github.base_ref }}"
+    assert step["env"]["PR"] == "${{ github.event.pull_request.number }}"
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash is required to run the plan step")
+    # A stand-in gh answers the pull request lookup with its own base branch.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_gh = bin_dir / "gh"
+    fake_gh.write_text('#!/usr/bin/env bash\necho "$FAKE_API_BASE"\n', encoding="utf-8")
+    fake_gh.chmod(0o755)
+    output = tmp_path / "github_output"
+    env = dict(
+        os.environ,
+        EVENT=event_name,
+        BASE=base_ref,
+        PR="7" if event_name == "pull_request" else "",
+        REPO="owner/repo",
+        FAKE_API_BASE=api_base or "",
+        GITHUB_OUTPUT=str(output),
+        PATH=str(bin_dir) + os.pathsep + os.environ["PATH"],
     )
-    assert expression is not None
-    event, base, if_true, if_false = expression.groups()
-    stacked, full = json.loads(if_true), json.loads(if_false)
-    actual = stacked if event_name == event and base_ref != base else full
-    assert actual == expected
+    subprocess.run([bash, "-c", step["run"]], env=env, check=True, capture_output=True)
+    (line,) = output.read_text("utf-8").splitlines()
+    key, value = line.split("=", 1)
+    assert key == "os"
+    assert json.loads(value) == expected
 
 
 def test_ci_plugin_browser_is_cached_before_install():
