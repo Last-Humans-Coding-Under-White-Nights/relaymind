@@ -180,7 +180,7 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 不共享拉丁标识的中文内存泄漏请求仍未命中英文原始目标；这些诊断不证明翻译能力、
 语义质量或独立人工标注达标。开始使用工具不要求客户提供外部数据集或人工评审组。
 生产语义模型资格验证，以及已安装宿主的 M10 执行、审批、纠正演练仍是单独的工作；
-参见[当前状态](ROADMAP.md#m10--multilingual-asset-recommendations-spec-064)。
+参见[当前状态](ROADMAP.md#m10--multilingual-asset-recommendations-spec-065)。
 
 ## 整任务试验、适配回合与平台导出
 
