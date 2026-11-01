@@ -8,6 +8,7 @@ import time
 
 import pytest
 
+from helpers import FakeClock
 from test_asset_diagnostic import development_input as development_input
 from test_asset_native_runtime import native_fixture
 
@@ -52,8 +53,12 @@ def test_local_real_worker_evidence_is_closed_and_keeps_setup_out_of_queries(tmp
         production, release, effective = native_fixture(tmp_path)
         runtime = await NativeBenchmarkRuntime.create(production, release, effective)
         try:
+            # Fixed clock: this test checks the closed evidence record, not how
+            # fast the runner builds the real index under the 500 ms budget.
             record = await runtime.prepare_local(
-                local_config(), requested_kinds=("mcp_tool", "skill")
+                local_config(),
+                requested_kinds=("mcp_tool", "skill"),
+                clock=FakeClock().monotonic,
             )
             assert record["status"] == "ready" and record["reason"] is None
             assert record["preparation_id"] is None and record["exchanges"] == []
@@ -116,18 +121,22 @@ def test_local_interruption_drains_native_work_and_preserves_known_cost(tmp_path
         runtime = await NativeBenchmarkRuntime.create(production, release, effective)
 
         preparation_task = None
-        # Slow runners can spend a whole 100 ms budget before native work starts.
-        # Hold the budget clock until then, so the deadline always lands inside
-        # native work, which is the case under test.
-        held, shift = time.monotonic(), None
+        # The budget advances by test decision, not by host scheduling. It stays
+        # fixed until native work starts, then the first read lands exactly on
+        # the 100 ms deadline, and only after that does it follow real time so
+        # the drain duration below is still a real measurement. A slow runner
+        # cannot spend the budget before native work exists or inflate the
+        # observed time after the decision.
+        held, expired_at = time.monotonic(), None
 
         def clock():
-            nonlocal shift
+            nonlocal expired_at
             if not started.is_set():
                 return held
-            if shift is None:
-                shift = time.monotonic() - held
-            return time.monotonic() - shift
+            if expired_at is None:
+                expired_at = time.monotonic()
+                return held + 0.1
+            return held + 0.1 + (time.monotonic() - expired_at)
 
         async def release_later():
             while not started.is_set():
@@ -185,6 +194,11 @@ def test_local_evidence_collection_consumes_original_deadline(tmp_path, monkeypa
     """RM03/RM40: late evidence cannot turn a completed build into ready setup."""
     from relaymind.evaluation.asset_native_runtime import NativeBenchmarkRuntime
 
+    clock = FakeClock()
+    # Start from zero: the one modeled delay below is the whole elapsed budget,
+    # with no floating-point loss from subtracting a large clock origin.
+    clock.mono = 0.0
+
     async def scenario():
         production, release, effective = native_fixture(tmp_path)
         runtime = await NativeBenchmarkRuntime.create(production, release, effective)
@@ -194,13 +208,18 @@ def test_local_evidence_collection_consumes_original_deadline(tmp_path, monkeypa
         def slow_evidence():
             if not calls:
                 calls.append(True)
-                time.sleep(0.15)
+                # Model 150 ms of evidence collection inside a 100 ms budget.
+                # The fixed clock makes that delay the only source of elapsed
+                # time, so runner speed cannot decide the outcome.
+                clock.advance(0.15)
             return stream()
 
         monkeypatch.setattr(runtime.catalog, "job_event_stream", slow_evidence)
         try:
             record = await runtime.prepare_local(
-                local_config(total_ms=100), requested_kinds=("skill", "mcp_tool")
+                local_config(total_ms=100),
+                requested_kinds=("skill", "mcp_tool"),
+                clock=clock.monotonic,
             )
             assert record["status"] == "timeout" and record["observed_ms"] >= 150
             assert record["index_revision"] is None and record["cleanup_ms"] is not None
@@ -273,7 +292,9 @@ def test_local_catalog_change_retains_old_binding_and_failed_job_cost(tmp_path):
         )
         try:
             record = await runtime.prepare_local(
-                local_config(), requested_kinds=("skill", "mcp_tool")
+                local_config(),
+                requested_kinds=("skill", "mcp_tool"),
+                clock=FakeClock().monotonic,
             )
             assert (
                 record["status"] == "stale_catalog" and record["binding"]["catalog_revision"] == 1
@@ -350,7 +371,9 @@ def test_local_partial_generation_keeps_failed_job_and_usable_prefix(tmp_path):
         runtime = await NativeBenchmarkRuntime.create(production, release, effective)
         try:
             record = await runtime.prepare_local(
-                local_config(), requested_kinds=("skill", "mcp_tool")
+                local_config(),
+                requested_kinds=("skill", "mcp_tool"),
+                clock=FakeClock().monotonic,
             )
             assert record["status"] == "ready" and len(calls) == 2
             assert record["local"]["readiness"]["semantic_coverage"] == {"ready": 1, "total": 2}
@@ -383,7 +406,9 @@ def test_published_benchmark_schemas_accept_only_closed_local_record(tmp_path, n
         runtime = await NativeBenchmarkRuntime.create(production, release, effective)
         try:
             record = await runtime.prepare_local(
-                local_config(), requested_kinds=("skill", "mcp_tool")
+                local_config(),
+                requested_kinds=("skill", "mcp_tool"),
+                clock=FakeClock().monotonic,
             )
         finally:
             await runtime.close()
@@ -447,7 +472,9 @@ def test_native_normalized_selector_and_prepared_wrapper_keep_actual_mechanism(t
         runtime = await NativeBenchmarkRuntime.create(production, release, effective)
         try:
             record = await runtime.prepare_local(
-                local_config(), requested_kinds=("mcp_tool", "skill")
+                local_config(),
+                requested_kinds=("mcp_tool", "skill"),
+                clock=FakeClock().monotonic,
             )
             wrapped = PreparedAssetSelector(runtime.service.primary, record)
             assert wrapped.mechanism == "hybrid_weighted_rrf" and wrapped.builtin
@@ -459,8 +486,31 @@ def test_native_normalized_selector_and_prepared_wrapper_keep_actual_mechanism(t
     asyncio.run(scenario())
 
 
+def _pin_runtime_clock(monkeypatch, clock):
+    """Run a whole native runtime on one clock: store, queries and preparation.
+
+    The runner tests below check ownership and evidence, not how fast this
+    machine is. The runtime otherwise reads the host monotonic clock, so a
+    parallel worker that loses the CPU can expire the 500 ms preparation or
+    recommendation deadline and turn a usable run into a timeout.
+    """
+    from relaymind.evaluation import asset_native_runtime
+    from relaymind.store.run_store import RunStore
+
+    prepare_local = asset_native_runtime.NativeBenchmarkRuntime.prepare_local
+
+    async def pinned(self, config, **options):
+        options.setdefault("clock", clock.monotonic)
+        return await prepare_local(self, config, **options)
+
+    monkeypatch.setattr(asset_native_runtime.NativeBenchmarkRuntime, "prepare_local", pinned)
+    monkeypatch.setattr(asset_native_runtime, "RunStore", lambda path: RunStore(path, clock=clock))
+
+
 @pytest.mark.parametrize("interrupted", [False, True])
-def test_formal_native_runner_uses_one_prepared_owner_and_conserves_slots(tmp_path, interrupted):
+def test_formal_native_runner_uses_one_prepared_owner_and_conserves_slots(
+    tmp_path, interrupted, monkeypatch
+):
     """RM40/RM41 AC31/AC32: actual production service, setup and query evidence."""
     from dataclasses import replace
 
@@ -469,6 +519,7 @@ def test_formal_native_runner_uses_one_prepared_owner_and_conserves_slots(tmp_pa
     from relaymind.evaluation.asset_evidence import collect_benchmark_environment
     from test_asset_selection_benchmark import fixture_config
 
+    _pin_runtime_clock(monkeypatch, FakeClock())
     production, release, effective = native_fixture(tmp_path)
     base_root = tmp_path / "benchmark"
     base_root.mkdir()
@@ -518,6 +569,7 @@ def test_source_native_runner_reuses_prepared_primary_for_every_row(
 
     fixture_root = tmp_path / "native"
     fixture_root.mkdir()
+    _pin_runtime_clock(monkeypatch, FakeClock())
     production, _, _ = native_fixture(fixture_root)
     monkeypatch.setattr(asset_diagnostic_runner, "_load_production_config", lambda path: production)
     report = asyncio.run(
@@ -595,8 +647,8 @@ def test_local_preparation_policy_requires_shared_cold_total():
     assert preparation_policy_mismatches(local_500, normalize_preparation(None)) == ()
 
 
-def test_local_offer_is_bounded_to_the_requested_kinds(tmp_path):
-    """RM40/AC31: a single-kind cohort does not fail on other catalog kinds."""
+def _check_local_offer_is_bounded(tmp_path, *, clock, slow_build=0.0):
+    """Prepare a single-kind offer and check the recorded binding and readiness."""
     from dataclasses import replace
 
     from relaymind.canonical import canonical_digest
@@ -628,9 +680,19 @@ def test_local_offer_is_bounded_to_the_requested_kinds(tmp_path):
             requested_kinds=("skill",),
         )
         runtime = await NativeBenchmarkRuntime.create(production, release, effective)
+        if slow_build:
+            rebuild = runtime.worker.rebuild
+
+            async def delayed_rebuild():
+                await asyncio.sleep(slow_build)
+                return await rebuild()
+
+            runtime.worker.rebuild = delayed_rebuild
         try:
             assert [record.asset_id for record in runtime.catalog.snapshot().assets] == ["calendar"]
-            prepared = await runtime.prepare_local(local_config(), requested_kinds=("skill",))
+            prepared = await runtime.prepare_local(
+                local_config(), requested_kinds=("skill",), clock=clock
+            )
             assert prepared["status"] == "ready"
             skill = next(
                 asset["record"]
@@ -643,6 +705,22 @@ def test_local_offer_is_bounded_to_the_requested_kinds(tmp_path):
             await runtime.close()
 
     asyncio.run(scenario())
+
+
+def test_local_offer_is_bounded_to_the_requested_kinds(tmp_path):
+    """RM40/AC31: a single-kind cohort does not fail on other catalog kinds."""
+    _check_local_offer_is_bounded(tmp_path, clock=FakeClock().monotonic)
+
+
+def test_local_offer_does_not_depend_on_runner_scheduling(tmp_path):
+    """RM40/AC31: the offered kinds, not runner speed, decide the setup outcome.
+
+    The single-kind check builds a real native index under a 500 ms preparation
+    deadline. A runner that loses the CPU for longer than that turns the build
+    into a timeout, so the binding check is never reached. The fixed clock makes
+    the outcome independent of how fast this machine is.
+    """
+    _check_local_offer_is_bounded(tmp_path, clock=FakeClock().monotonic, slow_build=0.6)
 
 
 def test_local_empty_offer_retains_actual_zero_revision_without_inference(tmp_path):
@@ -659,7 +737,9 @@ def test_local_empty_offer_retains_actual_zero_revision_without_inference(tmp_pa
         runtime = await NativeBenchmarkRuntime.create(production, release, effective)
         try:
             record = await runtime.prepare_local(
-                local_config(), requested_kinds=("mcp_tool", "skill")
+                local_config(),
+                requested_kinds=("mcp_tool", "skill"),
+                clock=FakeClock().monotonic,
             )
             assert record["status"] == "not_applicable" and record["index_revision"] is None
             assert record["binding"]["catalog_revision"] == 0
