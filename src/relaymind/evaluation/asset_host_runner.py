@@ -20,7 +20,10 @@ qualified result: a caller cannot flag a run ``qualified``.
 """
 
 import copy
+import os
+import signal
 import subprocess
+import sys
 import threading
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -48,6 +51,8 @@ EXECUTOR_REQUEST = "relaymind.host_executor_request.v1"
 REQUIRED_LANES = tuple(lane for lane in LANES if lane != "zh_hant_diagnostic")
 EXECUTOR_OUTPUT_BYTES = REPORT_BYTES
 _CHUNK = 64 * 1024
+# Seconds the reader may take to finish after the program exits.
+_DRAIN_GRACE = 0.5
 RUN_QUALIFICATIONS = ("fixture", "provisional")
 TOKEN_RELATIONSHIPS = (
     "component_disjoint",
@@ -218,16 +223,50 @@ def run_host_plan(
     return report
 
 
-def _run_program(argv: list[str], payload: bytes, timeout: float | None) -> bytes:
-    """Run one executor program; its output is bounded while it is read."""
-    try:
-        process = subprocess.Popen(  # noqa: S603 - the operator's own executor program
-            argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE
+def _start_group(argv: list[str]) -> subprocess.Popen:
+    """Start the executor as the leader of its own process group."""
+    if sys.platform == "win32":
+        group = dict(creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+    else:
+        group = dict(start_new_session=True)
+    return subprocess.Popen(  # noqa: S603 - the operator's own executor program
+        argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, **group
+    )
+
+
+def _kill_group(process: subprocess.Popen) -> None:
+    """Kill the executor and every descendant still in its process group."""
+    if sys.platform == "win32":
+        subprocess.run(  # noqa: S603, S607 - the system tool, fixed arguments
+            ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
         )
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except OSError:
+            pass  # The group is already gone.
+    process.kill()
+
+
+def _run_program(argv: list[str], payload: bytes, timeout: float | None) -> bytes:
+    """Run one executor program; its output is bounded while it is read.
+
+    The program leads its own process group. A timeout or an output flood
+    kills the whole group, and a descendant still holding standard output
+    after the program exits is killed too. The reader thread reads the raw
+    descriptor, so cleanup never waits behind it: a reader still blocked
+    after a bounded join is abandoned, and its descriptor is not closed.
+    """
+    try:
+        process = _start_group(argv)
     except OSError:
         raise ExecutorFailed("executor_start") from None
     chunks: list[bytes] = []
     flooded = threading.Event()
+    fd = process.stdout.fileno()
 
     def feed() -> None:
         try:
@@ -238,29 +277,38 @@ def _run_program(argv: list[str], payload: bytes, timeout: float | None) -> byte
 
     def drain() -> None:
         size = 0
-        while chunk := process.stdout.read(_CHUNK):
-            size += len(chunk)
-            if size > EXECUTOR_OUTPUT_BYTES:
-                flooded.set()
-                process.kill()
-                break
-            chunks.append(chunk)
+        try:
+            while chunk := os.read(fd, _CHUNK):
+                size += len(chunk)
+                if size > EXECUTOR_OUTPUT_BYTES:
+                    flooded.set()
+                    _kill_group(process)
+                    break
+                chunks.append(chunk)
+        except OSError:
+            pass  # A failed read is incomplete output; the alive check decides.
 
-    threads = [threading.Thread(target=f, daemon=True) for f in (feed, drain)]
-    for thread in threads:
-        thread.start()
+    reader = threading.Thread(target=drain, daemon=True)
+    threading.Thread(target=feed, daemon=True).start()
+    reader.start()
+    timed_out = False
     try:
         process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
-        raise ExecutorFailed("executor_timeout") from None
-    finally:
-        for thread in threads:
-            # A grandchild may keep the pipe open; the wait stays bounded.
-            thread.join(timeout)
+        timed_out = True
+    if timed_out or flooded.is_set():
+        _kill_group(process)
+    process.wait()
+    reader.join(_DRAIN_GRACE)
+    if reader.is_alive():
+        # A descendant still holds standard output: stop it, then give up.
+        _kill_group(process)
+        reader.join(_DRAIN_GRACE)
+    if not reader.is_alive():
         process.stdout.close()
-    if flooded.is_set() or any(thread.is_alive() for thread in threads):
+    if timed_out:
+        raise ExecutorFailed("executor_timeout")
+    if flooded.is_set() or reader.is_alive():
         raise ExecutorFailed("executor_output")
     if process.returncode != 0:
         raise ExecutorFailed("executor_exit")
@@ -281,8 +329,10 @@ def command_executor(
     ``timeout`` (seconds, default none) is a harness bound, not a task budget:
     a program still running when it expires is killed and the row is failed
     with unknown consumption, never recorded as a host task timeout. Set it
-    above the frozen task budgets; it never replaces or changes them. Only the
-    direct child process is killed; the program must stop its own children.
+    above the frozen task budgets; it never replaces or changes them. The
+    program leads its own process group, and the whole group is killed on a
+    timeout; a descendant left holding standard output after the program exits
+    is killed too, and that output is unusable (``executor_output``).
     Standard output is read incrementally and the program is killed as soon as
     it exceeds the report size bound (``executor_output``).
     """

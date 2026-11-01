@@ -1229,3 +1229,81 @@ it("refuses a concurrent same-key request with a different body as idempotency_c
   ]);
   expect(f.invokes()).toBe(0);
 });
+
+// Spec 0.65 7.6.2 condition 1: a malformed request fails closed as
+// invalid_request before identity resolution, never as unavailable or
+// unauthorized.
+it("refuses an explicit undefined property as invalid_request before any call", async () => {
+  const f = setup();
+  f.options.params.agentId = undefined;
+  await f.run();
+  expect(f.reply()).toEqual([
+    false,
+    undefined,
+    { code: "INVALID_REQUEST", message: "invalid_request" },
+  ]);
+  expect(f.record).toHaveLength(0);
+});
+
+it("refuses an unpaired surrogate in a session field as invalid_request before any call", async () => {
+  const f = setup();
+  f.options.sessionAccessAuthority.target.sessionKey = "native-\ud800";
+  f.options.params.sessionKey = "native-\ud800";
+  await f.run();
+  expect(f.reply()).toEqual([
+    false,
+    undefined,
+    { code: "INVALID_REQUEST", message: "invalid_request" },
+  ]);
+  expect(f.record).toHaveLength(0);
+});
+
+it("refuses non-string session fields as invalid_request, not unauthorized", async () => {
+  for (const [field, value] of [
+    ["sessionKey", 7],
+    ["expectedSessionId", null],
+    ["expectedLifecycleRevision", 1],
+    ["agentId", 3],
+  ] as const) {
+    const f = setup();
+    f.options.params[field] = value;
+    await f.run();
+    expect(f.reply()).toEqual([
+      false,
+      undefined,
+      { code: "INVALID_REQUEST", message: "invalid_request" },
+    ]);
+    expect(f.record).toHaveLength(0);
+  }
+});
+
+it("checks registration once for a concurrent same-key request waiting on the in-flight attempt", async () => {
+  const deny = (r: any) => ({
+    decision: "deny",
+    approvalId: "approval-1",
+    operationId: r.operationId,
+    argumentsDigest: r.argumentsDigest,
+  });
+  const registrations = (f: ReturnType<typeof setup>) =>
+    f.record.filter((item: any) => item[0] === "registration").length;
+  const single = setup();
+  single.setDecision(deny);
+  await single.run();
+  const baseline = registrations(single);
+  const f = setup();
+  let decide: () => void = () => {};
+  f.setDecision(
+    (r: any) =>
+      new Promise((resolve) => {
+        decide = () => resolve(deny(r));
+      }),
+  );
+  const first = f.run();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const second = f.handler(f.options);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  decide();
+  await Promise.all([first, second]);
+  expect(f.replies).toHaveLength(2);
+  expect(registrations(f)).toBe(baseline + 1);
+});
