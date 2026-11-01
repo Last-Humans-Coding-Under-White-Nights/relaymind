@@ -57,7 +57,7 @@ def fixture():
 
 
 def transport(docs, bodies, *, broken=None):
-    repo = "/repos/Last-Humans-Coding-Under-White-Nights/relaymind"
+    repo = "/repos/LHCWN/relaymind"
 
     def handle(request):
         suffix = request.url.path.removeprefix(repo)
