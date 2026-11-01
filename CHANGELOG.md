@@ -15,7 +15,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   claimed. Review fixes: the worksheet requires two distinct annotators,
   malformed worksheets, unwritable outputs and a lone `--evidence-root`
   reject with exit 2, traces with out-of-order or repeated call events reject,
-  and `run-host --executor-timeout` bounds a hung executor program.
+  and `run-host --executor-timeout` bounds a hung executor program. Second
+  review: the run journal binds the execution identity (environment,
+  artifacts, input manifest, qualification) and is owner-only; cancelled and
+  gateway-bounded calls keep their own outcome, with dispatch counted only
+  when evidenced; `--events`/`--artifacts` use the bounded strict reader;
+  executor output is capped while read; host task sets missing a required
+  lane are not acceptance-eligible.
 - Early installed-skill trial kit (#234; RM39, RM44; AC30, AC36; spec 0.65
   section 12.6.5): `scripts/asset_whole_task.py trial-preflight`,
   `trial-install`, `trial-run` and `trial`.
