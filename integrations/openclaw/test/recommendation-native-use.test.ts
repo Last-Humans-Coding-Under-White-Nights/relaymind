@@ -441,6 +441,18 @@ it.each([
     },
   ],
   [
+    // RM16: the pinned host's generic retryable library failure envelope is
+    // not evidence of a removed entry or altered bytes; nothing is released.
+    "a host UNAVAILABLE result from the exact read",
+    "unavailable",
+    (f: any) => {
+      f.deps.dispatch = async () => ({
+        ok: false,
+        error: { code: "UNAVAILABLE", message: "retry" },
+      });
+    },
+  ],
+  [
     "authority retired before this turn",
     "unauthorized",
     (f: any) => f.retire(),

@@ -124,6 +124,10 @@ def _admit(row, refs, planned, config, seen: set, evidence: Mapping) -> tuple[di
     row = validate_whole_task("HostRow", copy.deepcopy(dict(row)))
     if (row["task_id"], row["arm"]) != (planned["task_id"], planned["arm"]):
         raise WholeTaskRejected("row_plan")
+    if row["status"] == "not_run":
+        # The row was journaled as started before the executor ran; not_run
+        # means execution did not start, so it contradicts that record.
+        raise WholeTaskRejected("row_started")
     refs = [validate_whole_task("EvidenceRef", copy.deepcopy(dict(r))) for r in refs]
     ids = [r["id"] for r in refs]
     if len(set(ids)) != len(ids):
@@ -296,6 +300,12 @@ def _run_program(argv: list[str], payload: bytes, timeout: float | None) -> byte
         process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         timed_out = True
+    except BaseException:
+        # The operator stopped the runner (a second signal): never leave the
+        # executor's group running behind it.
+        _kill_group(process)
+        process.wait()
+        raise
     if timed_out or flooded.is_set():
         _kill_group(process)
     process.wait()
@@ -374,8 +384,19 @@ _GATEWAY_STOPS = {
     "time_budget": "timeout",
     "interrupted": "failed",
 }
-# The request never left the gateway: no dispatch.
-_NOT_DISPATCHED = {"provider_unreachable", "missing_credentials"}
+# The request was never sent: no dispatch.
+_NOT_DISPATCHED = {"missing_credentials"}
+# A transport error: a connection failure before the request was sent, or a
+# read/protocol error after streaming began. It alone shows no dispatch.
+_TRANSPORT = {"provider_unreachable": "failed"}
+
+
+def _received(payload: Mapping) -> bool:
+    """A received token or a known reported count: evidence of dispatch."""
+    usage = payload.get("usage") or {}
+    return payload.get("first_token_ms") is not None or any(
+        usage.get(k) is not None for k in _COUNTS
+    )
 
 
 def _outcome(finished: Mapping | None) -> tuple[str, int | None]:
@@ -390,10 +411,10 @@ def _outcome(finished: Mapping | None) -> tuple[str, int | None]:
     code = error["code"]
     if code in _NOT_DISPATCHED:
         return "failed", None
-    if code in _GATEWAY_STOPS:
+    stops = _GATEWAY_STOPS | _TRANSPORT
+    if code in stops:
         # Dispatch is evidenced only by a received token or reported usage.
-        received = payload.get("first_token_ms") is not None or payload.get("usage") is not None
-        return _GATEWAY_STOPS[code], 1 if received else None
+        return stops[code], 1 if _received(payload) else None
     if code == "provider_timeout":
         return "timeout", 1
     # A provider error or an invalid/incomplete response came from the provider.

@@ -1459,8 +1459,18 @@ surrogate) or a non-string session field, checks registration once on the
 in-flight duplicate path, and reads the loaded-use fence deadline live. The
 ledger then cuts a torn final record through a separate read-write handle,
 because a Windows append handle cannot change the file length. These
-changed bytes are re-pinned to adapter revision
-`a29cac121c5e01932b6b3ee75e9bab2214e5e9e72cbc36d8f802f62b917c7cfe`; the
+changed bytes were re-pinned to adapter revision
+`a29cac121c5e01932b6b3ee75e9bab2214e5e9e72cbc36d8f802f62b917c7cfe`. A fifth
+review made a same-key MCP request read its key history again after its
+registration check (an attempt that settled meanwhile is recovered, never
+reported as `not_dispatched`), kept a host `UNAVAILABLE` result of the exact
+skill read from blocking the conversation, digested the adapter bytes once
+per resolver, took over a stale ledger lock that names this process's own
+PID but was not created by it (PID 1 in a container), reserved the exact
+room for each binding's dispatch marker and longest receipt under the byte
+cap, and compiled each host schema pattern once per operation. These bytes are
+re-pinned to adapter revision
+`37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`; the
 evidence revision still names the earlier capture, so the evidence must be
 recaptured from CI for this new revision before the entry is qualified evidence
 for it. As before, this is Linux

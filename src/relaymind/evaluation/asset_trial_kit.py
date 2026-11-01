@@ -72,7 +72,9 @@ PREFLIGHT_CHECKS = (
 )
 QUALIFICATIONS = ("fixture", "provisional")
 HOST_TIMEOUT_SECONDS = 120
-_VERSION = re.compile(r"\b\d{4}\.\d{1,2}\.\d{1,2}\b")
+# A whole version token: a pre-release, build or fourth part stays attached, so
+# ``2026.10.7-beta.2`` or ``2026.10.7.1`` is never read as the pinned version.
+_VERSION = re.compile(r"(?<![\d.])\d{4}\.\d{1,2}\.\d{1,2}(?:[-+.\w][0-9A-Za-z.+-]*)?(?<!\.)")
 _OBSERVATION_KEYS = {"schema_version", "ordinal", "task_id", "arm", "row", "evidence"}
 _PROVENANCE = ("observed", "reported", "fixture")
 _SHA256 = re.compile(r"[0-9a-f]{64}")

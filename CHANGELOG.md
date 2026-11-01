@@ -90,7 +90,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   gateway-bounded calls keep their own outcome, with dispatch counted only
   when evidenced; `--events`/`--artifacts` use the bounded strict reader;
   executor output is capped while read; host task sets missing a required
-  lane are not acceptance-eligible.
+  lane are not acceptance-eligible. Third review: episode probes outside the
+  `held_out` split make the set ineligible (`probes_not_held_out`); the
+  episode journal also binds the corpus release lock; an executor `not_run`
+  row is invalid; a journal with only a torn header starts again; a second
+  signal stops `run-host` at once and kills the executor's group; dispatch
+  needs a received token or a known usage count, also for
+  `provider_unreachable`.
 - Early installed-skill trial kit (#234; RM39, RM44; AC30, AC36; spec 0.65
   section 12.6.5): `scripts/asset_whole_task.py trial-preflight`,
   `trial-install`, `trial-run` and `trial`.
@@ -184,8 +190,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   non-string session fields as `invalid_request`, drops a duplicate
   registration check and keeps the native deadline live, and the ledger cuts
   a torn final record through a separate read-write handle (a Windows append
-  handle cannot truncate); the entry is re-pinned to adapter revision
-  `a29cac121c5e01932b6b3ee75e9bab2214e5e9e72cbc36d8f802f62b917c7cfe`, whose
+  handle cannot truncate); the entry was re-pinned to adapter revision
+  `a29cac121c5e01932b6b3ee75e9bab2214e5e9e72cbc36d8f802f62b917c7cfe`. A fifth
+  review rereads a same-key MCP request's history after its registration
+  check (a receipt settled meanwhile is recovered, never reported as
+  `not_dispatched`), keeps a host `UNAVAILABLE` exact-read result from
+  blocking a conversation, digests the adapter bytes once per resolver, takes
+  over a stale ledger lock naming this process's PID that this process did
+  not create (PID 1 in a container), reserves exact room for each binding's
+  marker and longest receipt under the byte cap and compiles each host schema
+  pattern once per operation; the entry is re-pinned to adapter revision
+  `37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`, whose
   capture is taken from CI before merge.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native

@@ -725,7 +725,7 @@ and `grade-adaptation`, which are already the one-command final grade.
 | `label-worksheet --catalog K --cases C --judgments T1 T2 … --output W` | Checks the returned templates (unchanged binding and prompts, every case judged, exactly two distinct annotators per case) and writes the adjudicator's worksheet: both raw judgments, per-answer agreement and the recomputed agreement groups |
 | `label-freeze --catalog K --cases C --judgments T1 T2 … --worksheet W --output L` | Assembles `AssetLabelsV1` from the raw judgments and the completed adjudications. Raw judgments cannot change in the worksheet, agreement is recomputed, and the unchanged release validator checks roles, coverage and inclusion |
 | `preregister-host --tasks T --freeze F --output P` | Verifies the task set against its freeze and records the input, freeze and plan digests, task and lane counts, and acceptance eligibility (`kind_not_acceptance`, `below_minimum_tasks`, `missing_required_lanes`). AC36 pairs the whole tasks with the five required lanes, so a set without at least one task in each is not eligible; the spec states no larger per-lane host-task count |
-| `preregister-episodes --episodes E --freeze F [--lock L --evidence-root R] --output P` | The same for `AssetEpisodesV1`. With the corpus it also binds the episodes to it and counts probes outside the `held_out` split, probes with no included adjudication and correction targets missing from the pool. Reasons include `below_minimum_episodes`, `corpus_not_acceptance`, `corpus_not_frozen`, `unlabelled_probes` and, without the corpus, `corpus_unverified` |
+| `preregister-episodes --episodes E --freeze F [--lock L --evidence-root R] --output P` | The same for `AssetEpisodesV1`. With the corpus it also binds the episodes to it and counts probes outside the `held_out` split, probes with no included adjudication and correction targets missing from the pool. Section 12.6.5 requires held-out probe sets, so any probe outside `held_out` makes the set ineligible. Reasons include `below_minimum_episodes`, `corpus_not_acceptance`, `corpus_not_frozen`, `probes_not_held_out`, `unlabelled_probes` and, without the corpus, `corpus_unverified` |
 | `run-host --tasks T --freeze F --journal J --inputs M --environment E [--artifacts A] [--executor-timeout S] --qualification fixture\|provisional --output R -- PROGRAM ARGS…` | Executes the frozen plan through your host executor program and writes the `AssetHostReportV1` (see below). Exit `0` when every planned row has an outcome, `3` after an interruption |
 | `capture-costs --events V --provider P --attempt-prefix X --evidence-id I [--token-relationship R --relationship-evidence I2] [--first-ordinal N] --output O` | Turns RelayMind trace events (a JSON array of TraceEvent objects) into `HostAttempt` objects for the external model calls of the provider arms |
 
@@ -744,7 +744,7 @@ but it holds rows and reset evidence, so it is created owner-only (`0600`, in a
 new `0700` directory) and set back to `0600` on resume. Its header binds the
 preregistered input, freeze and plan digests and the digest of the run's
 execution identity: environment, artifacts, input manifest and qualification
-label. A journal cannot resume with changed inputs or under another identity
+label (for episodes, the corpus release lock instead of artifacts). A journal cannot resume with changed inputs or under another identity
 (`journal_binding`), so rows run on one machine or package are never reported
 under another; start a new journal for a new identity. Each row is recorded as
 `started` before work begins and `finished` with its outcome, flushed to disk
@@ -756,7 +756,12 @@ each time.
   null verdict. It is not rerun, because its consumption is unknown, so the
   cost coverage of that arm stays unknown and the gate blocks.
 - After SIGINT/SIGTERM, rows that never started are `not_run` (`interrupted`)
-  and a later run executes them.
+  and a later run executes them. A second signal stops at once, even inside a
+  hung executor: its process group is killed, no report is written (exit `3`),
+  and the started row is exported as `cancelled` (`interrupted_unrecorded`) on
+  the next run.
+- A journal with no complete record (a crash while its header was written)
+  holds no started row and is initialized again.
 - Only one runner can hold a journal at a time (`journal_locked`). A killed
   runner leaves `J.lock` behind. Check that no runner is still alive, then
   remove the lock.
@@ -771,7 +776,8 @@ standard input it gets
 On standard output it must write `{row,evidence}`: one `HostRow` and its
 `EvidenceRef`s. Each row is checked before it is recorded: plan identity,
 evidence closure and conflicts, report-wide attempt IDs and the row rules
-above. A row that fails these checks, or a nonzero exit or unusable output, is
+above. The row was recorded as started before the program ran, so a `not_run`
+row is invalid. A row that fails these checks, or a nonzero exit or unusable output, is
 recorded as `failed` with reason `executor_invalid_row` or `executor_error`,
 with no attempts and a null verdict. The host's output is never repaired.
 Only the host executes tools and grants approvals.
@@ -779,8 +785,10 @@ Only the host executes tools and grants approvals.
 `--executor-timeout S` is optional and off by default. It is a harness bound,
 not a task budget: a program still running after `S` seconds is killed and its
 row is `failed` (`executor_error`) with unknown consumption, never a host
-`timeout`. Set it above the frozen task budgets. Only the direct child process
-is killed, so the program must stop its own children. Standard output is read
+`timeout`. Set it above the frozen task budgets. The program leads its own
+process group, and the whole group is killed; a descendant that leaves the
+group (for example with `setsid`) is not, and a descendant still holding
+standard output after the program exits makes the output unusable. Standard output is read
 in bounded chunks; a program that writes more than the 256 MiB report bound is
 killed and its row fails with `executor_error`.
 
@@ -796,9 +804,11 @@ one attempt per call:
   `provider_timeout` are `timeout`; other errors are `failed`.
 - `calls` is `1` only when dispatch is evidenced: a successful call, a
   provider error or response, or `provider_timeout`. A gateway-side stop
-  (`cancelled`, `deadline_exceeded`, `time_budget`, `interrupted`) counts only
-  if a token or usage arrived. An unfinished call, or one that never left the
-  gateway (`provider_unreachable`, `missing_credentials`), has null calls.
+  (`cancelled`, `deadline_exceeded`, `time_budget`, `interrupted`) or a
+  transport error (`provider_unreachable`, which also covers a read error after
+  streaming began) counts only if a token or at least one known usage count
+  arrived. An unfinished call, or one never sent (`missing_credentials`), has
+  null calls.
 - `--events` and `--artifacts` are read with the same bounded strict reader as
   every other input: a symlink, an oversized file, duplicate keys or
   non-finite numbers reject.
@@ -1169,7 +1179,8 @@ result.
   reports `Darwin`, `arm64`, CPU `Apple M1` and exactly 8 GiB of memory;
 - `environment_lock`: every value in the manifest's `environment_lock` matches;
 - `host_version`: `openclaw --version` names only `2026.10.7` (the plugin's
-  `PINNED_OPENCLAW`), which the freeze's host and SDK versions also name;
+  `PINNED_OPENCLAW`), which the freeze's host and SDK versions also name; a
+  suffixed version such as `2026.10.7-beta.2` or `2026.10.7.1` is another version;
 - `release_checksum`: the tarball's SHA-256 is the one in `SHA256SUMS` and
   `release.json` beside it (`npm run pack:release`), and `release.json` pins
   that host;
@@ -1331,12 +1342,15 @@ the harness reason. Earlier steps with screenshots are `not_verified`, and
 later ones are `not_run`. A screenshot alone never makes a step recorded. If a
 language's child fails or times out (15 minutes), the recorder still writes
 `manifest.json`. Each child runs in its own process session: on a timeout or
-an interruption the recorder sends SIGTERM to the whole process group (so the
+an interruption, and also when the child exits on its own (a crash included),
+the recorder sends SIGTERM to whatever is left in the process group (so the
 harness can stop its gateway and proxy), waits up to 15 seconds, then sends
 SIGKILL, so no process left in that group keeps running. The manifest has
 `complete: false`. It sets the language `reason` to
 `child_failed` or `child_timeout`, and every outcome-dependent step to
 `not_run` with `capture_missing`, or `capture_invalid` for a torn capture.
+A repeated `--languages` value is refused before anything is created
+(`languages_repeated`, exit `2`, no manifest).
 Any partial files are still listed by digest, including every
 `screens/*.png` that `screens.json` does not name (a killed child never saves
 it). Such a screenshot belongs to no step. A torn `screens.json`, a listed file
