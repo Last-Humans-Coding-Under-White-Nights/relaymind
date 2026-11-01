@@ -45,7 +45,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Platform runs on GitHub-hosted runners (#241, #235; RM38, RM39, RM44; AC29,
   AC37): a separate `Platform runs` workflow on `macos-latest`,
   `windows-latest` and `ubuntu-latest`.
-  - `scripts/asset_operations_run.py operations` runs the AC29 run: ten clean
+  - `scripts/asset_operations_run.py operations` runs the lexical portion of
+    the AC29 protocol as a fixture (it does not close AC29): ten clean
     startups, a recommendations-disabled memory baseline, and the 60-second
     2 req/s workload with four 25-record metadata-import batches and a derived
     rebuild. The workload goes through the existing `run_workload` and
@@ -69,6 +70,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `asset_platform_run.py` exits 2 with a reason on input errors and on an
     ordinary-step timeout. The gateway control child answers every command
     even when its job store fails, and its reader ignores a closed loop.
+  - Second review fixes: a startup launch that fails before readiness is a
+    harness error (`startup_<n>_<reason>`, exit 2) in `operations` and
+    `startup`; `verify` fails an operations report with harness errors, and a
+    platform report without its bundle or a bundle without its report. The
+    control child binds the job the request awaited (`job_id`), never the
+    newest listed job, and reports an unbindable job as a harness error. The
+    bundle registers `platform-runner-files`, the digests of the driver
+    scripts, workflow, ordinary harness and test helpers the run executes,
+    and `verify` checks them against the checkout. The workflow's path filter
+    covers the run's dependency closure, and every step has a time limit that
+    fits inside the job's. A non-object environment lock exits 2, and a
+    reused `--work` starts from the requested catalog and new stores. The
+    docs call the run the lexical AC29 fixture portion and no longer quote
+    uncommitted local numbers.
 - Episode and host-task run kit (#236, #237; RM40–RM44; AC31–AC36): blind
   label templates, adjudication worksheet and `AssetLabelsV1` freeze;
   `preregister-host`/`preregister-episodes` checks; a resumable, crash-safe
@@ -173,7 +188,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   removing a live owner's lock) and made each ledger record complete across
   short writes before it is acknowledged; the shipped entry is re-pinned to
   adapter revision `b49d94d8267076516430fb2e4fb64d41fad2961fc8009c84e60921cf43e9e98e`,
-  whose evidence must be recaptured from CI.
+  whose evidence revision names its fresh capture (CI run 41322540111, SHA-256
+  `6b8947df711e…`). A fourth review rejects malformed request text and
+  non-string session fields as `invalid_request`, drops a duplicate
+  registration check and keeps the native deadline live, and the ledger cuts
+  a torn final record through a separate read-write handle (a Windows append
+  handle cannot truncate); the entry is re-pinned to adapter revision
+  `a29cac121c5e01932b6b3ee75e9bab2214e5e9e72cbc36d8f802f62b917c7cfe`, whose
+  capture is taken from CI before merge.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,
