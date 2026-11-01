@@ -1,10 +1,12 @@
 // RM39; AC30/AC35 (spec 0.65 7.6.1, 7.6.2 conditions 1 and 6): the durable use
 // ledger survives a restart and fails closed when its history is unreadable.
 import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
 import {
   appendFileSync,
   existsSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   statSync,
   writeFileSync,
@@ -12,7 +14,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { createFileUseLedger } from "../src/recommendation-native-ledger.js";
+import {
+  createFileUseLedger,
+  type LedgerIo,
+  type NativeUseLedger,
+  nodeLedgerIo,
+} from "../src/recommendation-native-ledger.js";
 
 const base = {
   operationId: "operation-1",
@@ -207,5 +214,193 @@ it("refuses managed use once no further block could be recorded", () => {
   expect(ledger.isBlocked("a")).toBe(false);
   ledger.block("a");
   expect(() => ledger.isBlocked("b")).toThrow("ledger_full");
+  ledger.close();
+});
+
+/**
+ * A filesystem and process double over the real filesystem: it runs as the
+ * given process identity, can run a hook before its n-th operation (to
+ * interleave a second owner at a controlled point) and can cap the bytes one
+ * write accepts (a short write).
+ */
+function double(
+  pid: number,
+  live: ReadonlySet<number>,
+  options: {
+    before?: (step: number, name: string) => void;
+    writeCap?: number;
+  } = {},
+): LedgerIo & { steps: number } {
+  const io = { ...nodeLedgerIo, pid, alive: (p: number) => live.has(p) };
+  let steps = 0;
+  const wrapped = { steps: 0 } as LedgerIo & { steps: number };
+  for (const [name, value] of Object.entries(io)) {
+    if (typeof value !== "function" || name === "alive") {
+      Object.assign(wrapped, { [name]: value });
+      continue;
+    }
+    Object.assign(wrapped, {
+      [name]: (...args: unknown[]) => {
+        options.before?.(steps, name);
+        steps += 1;
+        wrapped.steps = steps;
+        if (name === "writeSync" && options.writeCap !== undefined) {
+          const [fd, data, offset, length] = args as [
+            number,
+            string | Buffer,
+            number | undefined,
+            number | undefined,
+          ];
+          const buffer = typeof data === "string" ? Buffer.from(data) : data;
+          const start = typeof data === "string" ? 0 : (offset ?? 0);
+          const size =
+            typeof data === "string"
+              ? buffer.length
+              : (length ?? buffer.length - start);
+          return fs.writeSync(
+            fd,
+            buffer,
+            start,
+            Math.min(size, options.writeCap),
+          );
+        }
+        return (value as (...a: unknown[]) => unknown)(...args);
+      },
+    });
+  }
+  wrapped.alive = io.alive;
+  return wrapped;
+}
+function usable(ledger: NativeUseLedger): boolean {
+  try {
+    ledger.lookup("probe");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Review (stale-lock takeover): two restarting processes both find the lock
+ * of an owner that no longer exists. Whatever the interleaving, at most one
+ * may own the ledger, or the same key and the same approval could be
+ * consumed twice; once both close, the path is free again.
+ */
+it.each([
+  ["the fixed lock name of an earlier revision", ".lock", "1000\n"],
+  ["a per-owner lock", ".lock.1000.0b6a1c1e-stale", ""],
+])(
+  "admits one owner when two processes take over %s left by an exited owner",
+  (_, suffix, content) => {
+    const live = new Set([1001, 1002, 1003]);
+    // The number of operations one uncontended open performs.
+    const probe = path();
+    writeFileSync(probe + suffix, content);
+    const counter = double(1001, live);
+    createFileUseLedger(probe, {}, counter).close();
+    const total = counter.steps;
+    expect(total).toBeGreaterThan(3);
+    let interleaved = 0;
+    for (let step = 0; step < total; step++) {
+      const file = path();
+      writeFileSync(file + suffix, content);
+      let second: NativeUseLedger | undefined;
+      const first = createFileUseLedger(
+        file,
+        {},
+        double(1001, live, {
+          before: (n) => {
+            if (n === step && !second)
+              second = createFileUseLedger(file, {}, double(1002, live));
+          },
+        }),
+      );
+      // Past the end of this interleaving's shorter path.
+      if (!second) {
+        first.close();
+        continue;
+      }
+      interleaved += 1;
+      const owners = [first, second].filter(usable);
+      expect(owners.length, `interleaving at step ${step}`).toBe(1);
+      // The one owner consumes an approval exactly once.
+      expect(owners[0]!.consumeApproval("approval")).toBe(true);
+      first.close();
+      second.close();
+      const third = createFileUseLedger(file, {}, double(1003, live));
+      expect(usable(third), `released after step ${step}`).toBe(true);
+      expect(third.consumeApproval("approval")).toBe(false);
+      third.close();
+      expect(existsSync(file + suffix)).toBe(false);
+    }
+    expect(interleaved).toBeGreaterThan(total - 3);
+  },
+);
+
+it("never removes a lock it did not inspect as stale", () => {
+  const live = new Set([1001, 1002]);
+  const file = path();
+  const owner = createFileUseLedger(file, {}, double(1001, live));
+  expect(usable(owner)).toBe(true);
+  const intruder = createFileUseLedger(file, {}, double(1002, live));
+  expect(usable(intruder)).toBe(false);
+  intruder.close();
+  // The refused opener released nothing of the live owner's.
+  const later = createFileUseLedger(file, {}, double(1002, live));
+  expect(usable(later)).toBe(false);
+  later.close();
+  owner.close();
+  expect(
+    readdirSync(join(file, "..")).filter((n) => n.includes(".lock")),
+  ).toEqual([]);
+});
+
+/**
+ * Review (short writes): writeSync may accept fewer bytes than asked. A
+ * record is acknowledged only once all of it is written and synced, so
+ * recovery keeps every acknowledged dispatch marker and block.
+ */
+it("writes a dispatch marker completely across short writes", () => {
+  const file = path();
+  const ledger = createFileUseLedger(
+    file,
+    {},
+    double(process.pid, new Set([process.pid]), { writeCap: 5 }),
+  );
+  ledger.claim("k1", D, base);
+  ledger.markDispatched("k1");
+  ledger.close();
+  const reopened = createFileUseLedger(file);
+  expect(reopened.lookup("k1")).toMatchObject({ dispatched: true });
+  expect(() => reopened.markDispatched("k1")).toThrow("ledger_dispatched");
+  reopened.close();
+});
+
+it("writes a conversation block completely across short writes", () => {
+  const file = path();
+  const ledger = createFileUseLedger(
+    file,
+    {},
+    double(process.pid, new Set([process.pid]), { writeCap: 3 }),
+  );
+  ledger.block("incarnation");
+  expect(ledger.isBlocked("incarnation")).toBe(true);
+  ledger.close();
+  const reopened = createFileUseLedger(file);
+  expect(reopened.isBlocked("incarnation")).toBe(true);
+  reopened.close();
+});
+
+it("refuses and acknowledges nothing when a write makes no progress", () => {
+  const file = path();
+  const ledger = createFileUseLedger(
+    file,
+    {},
+    double(process.pid, new Set([process.pid]), { writeCap: 0 }),
+  );
+  expect(() => ledger.block("incarnation")).toThrow("ledger_write_stalled");
+  // The ledger can no longer prove its history: every operation refuses.
+  expect(() => ledger.isBlocked("incarnation")).toThrow("ledger_unavailable");
+  expect(() => ledger.consumeApproval("a")).toThrow("ledger_unavailable");
   ledger.close();
 });
