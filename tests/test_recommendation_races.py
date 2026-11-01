@@ -7,6 +7,7 @@ import pytest
 
 from recommendation_helpers import BODY, SCOPE, claim, client_for, setup
 from relaymind.recommendations.service import CancellationSignal
+from relaymind.store import TraceClock
 from test_chat_disconnect_cancel import Client, response_of
 
 
@@ -320,7 +321,7 @@ def test_stalled_body_receive_uses_original_deadline_without_acceptance(tmp_path
         settings = RecommendationSettings(
             enabled=True, user_id="u", workspace_id="w", total_ms=30, primary_ms=30
         )
-        app, service, runs, _ = setup(tmp_path, settings=settings)
+        app, service, runs, _ = setup(tmp_path, settings=settings, clock=TraceClock())
         await service.refresh_catalog()
         client = raw_client(app)
         blocked, cancelled = asyncio.Event(), asyncio.Event()
@@ -379,7 +380,7 @@ def test_total_timeout_persists_dispatched_primary_measurement_once(tmp_path):
         settings = RecommendationSettings(
             enabled=True, user_id="u", workspace_id="w", total_ms=30, primary_ms=30, fallback=False
         )
-        app, service, runs, _ = setup(tmp_path, settings=settings, primary=gate)
+        app, service, runs, _ = setup(tmp_path, settings=settings, primary=gate, clock=TraceClock())
         await service.refresh_catalog()
         async with await client_for(app) as client:
             first = await client.post("/relay/v1/recommendations", json=BODY)
@@ -470,7 +471,7 @@ def test_terminal_accepted_timeout_replays_without_recomputation(tmp_path):
         settings = RecommendationSettings(
             enabled=True, user_id="u", workspace_id="w", total_ms=30, primary_ms=30, fallback=False
         )
-        app, service, runs, _ = setup(tmp_path, settings=settings, primary=gate)
+        app, service, runs, _ = setup(tmp_path, settings=settings, primary=gate, clock=TraceClock())
         await service.refresh_catalog()
         async with await client_for(app) as c:
             first = await c.post("/relay/v1/recommendations", json=BODY)
