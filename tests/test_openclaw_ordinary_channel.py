@@ -1282,6 +1282,9 @@ def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(
         )
         case["requests"][1].pop("status")
         case["requests"][1].pop("run_id")
+        # The provider records no gateway run for these attempts either.
+        for attempt in case["provider_attempts"]:
+            attempt["runId"] = "unavailable"
     archive = tmp_path / "release.tgz"
     archive.write_bytes(b"fixture")
     extension = api.OrdinaryComposition(
@@ -1297,9 +1300,7 @@ def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(
     extension.event_file = tmp_path / "events.jsonl"
     extension.event_file.write_text("")
     extension.provider_attempt_file = tmp_path / "attempts.jsonl"
-    extension.provider_attempt_file.write_text(
-        "".join(json.dumps(a) + "\n" for a in case["provider_attempts"])
-    )
+    extension.provider_attempt_file.write_text("")
     records = []
     extension.observation = SimpleNamespace(requests=records, begin=lambda selected, task: None)
     terminal = {}
@@ -1321,6 +1322,9 @@ def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(
                 json.dumps(dict(kind="native_skill_tool", **tool)) + "\n"
             )
             records.extend(copy.deepcopy(case["requests"]))
+            extension.provider_attempt_file.write_text(
+                "".join(json.dumps(a) + "\n" for a in case["provider_attempts"])
+            )
             terminal.update(case["terminal"], runId=run_id)
             return dict(socket_id="socket", frame=dict(ok=True, payload=dict(runId=run_id)))
         assert method == "rmqualification.person"
@@ -1451,6 +1455,8 @@ def test_timeout_retains_received_gateway_attempts(tmp_path):
     )
     extension.event_file = tmp_path / "events.jsonl"
     extension.event_file.write_text("")
+    extension.provider_attempt_file = tmp_path / "attempts.jsonl"
+    extension.provider_attempt_file.write_text("")
     requests = []
     extension.observation = SimpleNamespace(requests=requests, begin=lambda *args: None)
     case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
@@ -2244,7 +2250,7 @@ def test_missing_async_hook_stays_incomplete_and_preserves_requests(tmp_path, mo
     """RM39/AC30 F6: a missing hook is not a truthful not_loaded control."""
     api = module()
     extension, case, rpc, page, _ = turn_fixture(api, tmp_path, monkeypatch, deliver=False)
-    with pytest.raises(ValueError, match="^ordinary_skill_turn_timeout$"):
+    with pytest.raises(ValueError, match="^ordinary_skill_tool_unresolved$"):
         extension.loaded_use_turn(rpc, page, {}, case)
     assert case["observed"] == "incomplete"
     assert len(case["requests"]) == 2
@@ -3646,3 +3652,233 @@ def test_loaded_control_driver_malformed_reply_is_closed(tmp_path, monkeypatch, 
     }.get(method, "ordinary_skill_control_failed")
     with pytest.raises(ValueError, match=f"^{reason}$"):
         extension.observe_loaded_use(rpc, None, {}, capture)
+
+
+def pre_http_failure(key="relaymind-openclaw-v1-unreached"):
+    """The provider record of an attempt whose HTTP request never reached the gateway."""
+    return dict(
+        event="relaymind.inference_attempt",
+        turn="turn-0000000000000000",
+        attempt=1,
+        idempotencyKey=key,
+        runId="unavailable",
+        runIdSource=None,
+        outcome="failed",
+        status=None,
+        code=None,
+        reasonCode=None,
+        replayed=False,
+        retried=False,
+        nativeRunUrl=None,
+        uiUrl=None,
+        usage="unknown",
+    )
+
+
+def drained_turn(api, tmp_path, case, *, frame_ok=True, on_send=None, on_wait=None):
+    """Drive loaded_use_turn over files the test writes; returns the extension."""
+    import json
+    from types import SimpleNamespace
+
+    extension = extension_fixture(api, tmp_path)
+    extension.turn_drain_seconds = 0.3
+    extension.turn_settle_seconds = 0.05
+    extension.event_file = tmp_path / "events.jsonl"
+    extension.event_file.write_text("")
+    extension.provider_attempt_file = tmp_path / "attempts.jsonl"
+    # A record of an earlier turn precedes this turn's window.
+    extension.provider_attempt_file.write_text(json.dumps(pre_http_failure("earlier")) + "\n")
+    requests = []
+    extension.observation = SimpleNamespace(requests=requests, begin=lambda *args: None)
+    terminal = {}
+    run = {}
+
+    def write(kind, value):
+        path = extension.provider_attempt_file if kind == "provider" else extension.event_file
+        with path.open("a") as output:
+            output.write(json.dumps(value) + "\n")
+
+    def rpc(page, method, params):
+        if method == "sessions.messages.subscribe":
+            return dict(
+                socket_id="socket",
+                frame=dict(ok=True, payload=dict(subscribed=True, key=params["key"])),
+            )
+        if method == "chat.send":
+            run["id"] = params["idempotencyKey"]
+            if on_send:
+                on_send(write, requests, run["id"], terminal)
+            if not frame_ok:
+                return dict(socket_id="socket", frame=dict(ok=False, error=dict(code="DENIED")))
+            return dict(socket_id="socket", frame=dict(ok=True, payload=dict(runId=run["id"])))
+        return dict(frame=dict(ok=True, payload=case["current"]))
+
+    waits = [0]
+
+    def wait(ms):
+        waits[0] += 1
+        if on_wait:
+            on_wait(waits[0], write, run["id"])
+
+    page = SimpleNamespace(
+        evaluate=lambda *args: [terminal] if terminal else [], wait_for_timeout=wait
+    )
+    extension.loaded_use_turn(rpc, page, {}, case)
+    return extension
+
+
+def error_terminal(case, run_id):
+    return dict(
+        socket_id="socket",
+        runId=run_id,
+        sessionKey=case["current"]["sessionKey"],
+        state="error",
+    )
+
+
+def test_provider_failure_before_http_is_retained_not_filtered(tmp_path):
+    """RM16/RM39/AC30 (#247 review): a failure before HTTP stays in the turn evidence."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][1]
+    failure = pre_http_failure()
+
+    def send(write, requests, run_id, terminal):
+        write("provider", failure)
+        terminal.update(error_terminal(case, run_id))
+
+    drained_turn(api, tmp_path, case, on_send=send)
+    assert case["provider_attempts"] == [failure]
+    assert case["requests"] == [] and case["tools"] == []
+    assert case["observed"] == "refused"
+
+
+def test_unexplained_provider_record_makes_the_turn_incomplete(tmp_path):
+    """RM16/RM39/AC30: a provider record no received request explains is not filtered away."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][1]
+    stray = dict(pre_http_failure(), outcome="answer", runId="run_unexplained", status=200)
+
+    def send(write, requests, run_id, terminal):
+        write("provider", stray)
+        terminal.update(error_terminal(case, run_id))
+
+    with pytest.raises(ValueError, match="^ordinary_skill_provider_unexplained$"):
+        drained_turn(api, tmp_path, case, on_send=send)
+    assert case["provider_attempts"] == [stray]
+    assert case["observed"] == "incomplete"
+
+
+@pytest.mark.parametrize("stray", ["answer", "reached_gateway", "unmatched_run"])
+def test_predicate_accepts_only_explained_pre_http_provider_failures(stray):
+    """RM16/RM39/AC30: retained pre-HTTP failures pass; any other unmatched record fails."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][1]
+    case.update(tools=[], requests=[], provider_attempts=[pre_http_failure()], observed="refused")
+    case["terminal"]["state"] = "error"
+    assert api.ordinary_skill_loaded_use_pass(capture)
+    if stray == "answer":
+        case["provider_attempts"][0]["outcome"] = "answer"
+    elif stray == "reached_gateway":
+        case["provider_attempts"][0]["status"] = 502
+    else:
+        case["provider_attempts"][0]["runId"] = "run_elsewhere"
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+def tool_call_turn(case, *, error_hook):
+    """One gateway tool-call attempt, then a native error terminal with no receiving request."""
+    import copy
+
+    request = copy.deepcopy(case["requests"][0])
+    provider = dict(
+        pre_http_failure(request["idempotency_key"]),
+        runId=request["run_id"],
+        runIdSource="header",
+        outcome="tool_call",
+        status=200,
+    )
+    hook = copy.deepcopy(case["tools"][0])
+    hook["event"].pop("result")
+    hook["event"]["error"] = "skill read failed" if error_hook else "cancelled"
+
+    def send(write, requests, run_id, terminal):
+        requests.append(request)
+        write("provider", provider)
+        terminal.update(error_terminal(case, run_id))
+
+    def native_hook(run_id):
+        value = copy.deepcopy(hook)
+        value["context"]["runId"] = value["event"]["runId"] = run_id
+        return dict(kind="native_skill_tool", **value)
+
+    return send, native_hook
+
+
+@pytest.mark.parametrize("error_hook", [True, False])
+def test_delayed_failed_tool_hook_after_terminal_is_collected(tmp_path, error_hook):
+    """RM16/RM39/AC30 (#247 review): an outstanding tool call waits for its native hook."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][1]
+    send, native_hook = tool_call_turn(case, error_hook=error_hook)
+
+    def late(count, write, run_id):
+        if count == 3:
+            write("event", native_hook(run_id))
+
+    drained_turn(api, tmp_path, case, on_send=send, on_wait=late)
+    assert len(case["tools"]) == 1 and case["tools"][0]["event"]["error"]
+    assert case["observed"] == "refused"
+
+
+def test_unresolved_tool_call_is_incomplete_not_closed(tmp_path):
+    """RM16/RM39/AC30: a tool call without its native hook stays incomplete."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][1]
+    send, _ = tool_call_turn(case, error_hook=True)
+    with pytest.raises(ValueError, match="^ordinary_skill_tool_unresolved$"):
+        drained_turn(api, tmp_path, case, on_send=send)
+    assert case["tools"] == [] and len(case["provider_attempts"]) == 1
+    assert case["observed"] == "incomplete"
+
+
+def test_predicate_rejects_a_tool_call_without_its_native_hook():
+    """RM16/RM39/AC30: an attempt that returned a tool call needs a retained native hook."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][1]
+    case["requests"] = case["requests"][:1]
+    case["provider_attempts"] = case["provider_attempts"][:1]
+    case["provider_attempts"][0]["outcome"] = "tool_call"
+    case["tools"] = []
+    case["terminal"]["state"] = "error"
+    case["observed"] = "refused"
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+@pytest.mark.parametrize("late", ["hook", "provider"])
+def test_refused_send_drains_before_accepting_the_refusal(tmp_path, late):
+    """RM16/RM39/AC30 (#247 review): late activity behind a refused send contradicts it."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][1]
+    _, native_hook = tool_call_turn(case, error_hook=True)
+
+    def arrive(count, write, run_id):
+        if count == 2:
+            if late == "hook":
+                write("event", native_hook(run_id))
+            else:
+                write("provider", pre_http_failure())
+
+    with pytest.raises(ValueError, match="^ordinary_skill_refusal_contradicted$"):
+        drained_turn(api, tmp_path, case, frame_ok=False, on_wait=arrive)
+    assert case["tools"] or case["provider_attempts"]
+
+
+def test_refused_send_without_activity_is_refused_after_the_drain(tmp_path):
+    """RM16/RM39/AC30: a quiet refusal is still recorded as refused."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][1]
+    drained_turn(api, tmp_path, case, frame_ok=False)
+    assert case["observed"] == "refused"
+    assert case["provider_attempts"] == [] and case["tools"] == []
