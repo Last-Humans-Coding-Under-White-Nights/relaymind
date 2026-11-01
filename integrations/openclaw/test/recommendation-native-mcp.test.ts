@@ -821,6 +821,7 @@ it("fails closed as indeterminate after a restart lost a dispatched key's outcom
   await new Promise((resolve) => setTimeout(resolve, 10));
   expect(first.invokes()).toBe(1);
   // The process restarts: new handler, new ledger instance, same file.
+  first.deps.ledger.close();
   const restarted = setup({ ledger: path });
   await restarted.run();
   expect(restarted.reply()).toEqual([
@@ -835,6 +836,7 @@ it("recovers a completed receipt after a restart without dispatching again", asy
   const path = ledgerPath();
   const first = setup({ ledger: path });
   await first.run();
+  first.deps.ledger.close();
   const restarted = setup({ ledger: path });
   await restarted.run();
   expect(restarted.reply()).toEqual(first.reply());
@@ -843,7 +845,9 @@ it("recovers a completed receipt after a restart without dispatching again", asy
 
 it("keeps an allow-once approval consumed across a restart", async () => {
   const path = ledgerPath();
-  await setup({ ledger: path }).run();
+  const first = setup({ ledger: path });
+  await first.run();
+  first.deps.ledger.close();
   const restarted = setup({ ledger: path });
   restarted.options.params.idempotencyKey = "explicit-use-2";
   await restarted.run();
@@ -866,10 +870,25 @@ it("refuses without a durable use ledger before any call", async () => {
   expect(f.record).toHaveLength(0);
 });
 
-it("refuses dispatch when the ledger cannot durably claim the key", async () => {
+it("refuses before preparation when the ledger cannot bind the key", async () => {
   const f = setup();
   f.deps.ledger.claim = () => {
     throw Error("ledger_full");
+  };
+  await f.run();
+  expect(f.reply()).toEqual([
+    false,
+    undefined,
+    { code: "INVALID_REQUEST", message: "unavailable" },
+  ]);
+  expect(f.record.filter((item: any) => item[0] === "bind")).toHaveLength(0);
+  expect(f.invokes()).toBe(0);
+});
+
+it("does not dispatch when the dispatch marker cannot be written", async () => {
+  const f = setup();
+  f.deps.ledger.markDispatched = () => {
+    throw Error("ledger_unavailable");
   };
   await f.run();
   expect(f.reply()).toEqual([
@@ -880,21 +899,78 @@ it("refuses dispatch when the ledger cannot durably claim the key", async () => 
   expect(f.invokes()).toBe(0);
 });
 
-// A pre-dispatch refusal proves no dispatch, so it does not consume the key.
-it("lets the same key retry after a pre-dispatch refusal", async () => {
+/**
+ * Second review. Spec 0.65 section 7.6.2 condition 1: "Reusing a key with a
+ * different canonical request in the same registered scope/session
+ * incarnation is idempotency_conflict; the same key may only recover its
+ * historical receipt after current authorization checks, never dispatch
+ * again." Version 0.65 has no pre-dispatch-refusal exception, so an admitted
+ * key is bound to its request durably at admission and its pre-dispatch
+ * refusal is its historical receipt.
+ */
+it("binds an admitted key: a pre-dispatch refusal is its historical receipt", async () => {
+  const f = setup();
+  f.setDecision((r: any) => ({
+    decision: "deny",
+    approvalId: "approval-1",
+    operationId: r.operationId,
+    argumentsDigest: r.argumentsDigest,
+  }));
+  await f.run();
+  expect(f.reply()?.[1]).toEqual(receipt("not_dispatched", "approval_denied"));
+  // Same request, fresh allow-once decision: the historical receipt stands.
+  f.setDecision((r: any) => ({
+    decision: "allow-once",
+    approvalId: "approval-2",
+    operationId: r.operationId,
+    argumentsDigest: r.argumentsDigest,
+  }));
+  await f.run();
+  expect(f.reply()?.[1]).toEqual(receipt("not_dispatched", "approval_denied"));
+  // A different request under the same key is a conflict, never a dispatch.
+  f.options.params.arguments = { text: "DIFFERENT mutation" };
+  await f.run();
+  expect(f.reply()?.[1]).toEqual(
+    receipt("not_dispatched", "idempotency_conflict"),
+  );
+  expect(f.invokes()).toBe(0);
+});
+
+it("keeps a transient pre-dispatch refusal as the key's receipt", async () => {
   const f = setup();
   const working = f.deps.actionClient;
+  let reads = 0;
   f.deps.actionClient = async () => ({
     listFeedback: async () => {
-      throw new RecommendationClientError("deadline_exceeded");
+      if (++reads === 2)
+        throw new RecommendationClientError("deadline_exceeded");
+      return working().then((client: any) => client.listFeedback());
     },
   });
   await f.run();
   expect(f.reply()?.[1]).toEqual(receipt("not_dispatched", "timeout"));
   f.deps.actionClient = working;
   await f.run();
-  expect(f.reply()?.[1]).toMatchObject({ outcome: "completed", code: "ok" });
-  expect(f.invokes()).toBe(1);
+  expect(f.reply()?.[1]).toEqual(receipt("not_dispatched", "timeout"));
+  expect(f.invokes()).toBe(0);
+});
+
+it("recovers a key bound before a restart that never reached dispatch as not dispatched", async () => {
+  const path = ledgerPath();
+  const first = setup({ ledger: path });
+  first.setDecision(() => new Promise(() => {}));
+  void first.run();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  first.deps.ledger.close();
+  const restarted = setup({ ledger: path });
+  await restarted.run();
+  expect(restarted.reply()).toEqual([
+    true,
+    receipt("not_dispatched", "unavailable"),
+    undefined,
+  ]);
+  expect(restarted.invokes()).toBe(0);
+  expect(first.invokes()).toBe(0);
 });
 
 it.each(["serverId", "toolName", "exposedName", "schemaHash", "sessionKey"])(
@@ -1086,6 +1162,7 @@ it("settles a completed outcome once even when sending the response fails", asyn
   expect(f.invokes()).toBe(1);
   // The completed outcome is never re-reported as indeterminate.
   expect(f.replies).toHaveLength(0);
+  f.deps.ledger.close();
   const restarted = setup({ ledger: path });
   await restarted.run();
   expect(restarted.reply()).toEqual([

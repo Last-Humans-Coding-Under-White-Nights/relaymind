@@ -94,15 +94,19 @@ function incarnation(use: {
  */
 export function createSkillLoadedUseFence(dependencies: Dependencies) {
   // A restart must not lift a block, so blocks live in the durable ledger.
+  // An unpersisted stop still holds in this process; a failed write also
+  // leaves the ledger refusing every later use.
+  const unpersisted = new Set<string>();
   const block = (use: ManagedSkillUse) => {
     try {
       dependencies.ledger?.block(incarnation(use));
     } catch {
-      /* An unwritable ledger refuses every later use through isBlocked. */
+      unpersisted.add(incarnation(use));
     }
   };
   const isBlocked = (use: ManagedSkillUse): boolean => {
     if (!dependencies.ledger) refuse("unavailable");
+    if (unpersisted.has(incarnation(use))) return true;
     try {
       return dependencies.ledger.isBlocked(incarnation(use));
     } catch {
@@ -163,67 +167,74 @@ export function createSkillLoadedUseFence(dependencies: Dependencies) {
         refuse("unauthorized");
       attributed = true;
       const read: ReadOptions = { signal, deadlineMs, assertCurrent: current };
-      try {
-        const actions = await dependencies.actionClient(binding, read);
+      // Registration, retained unexpired choice, eligible asset and the live
+      // operator association: checked before the native read and again after
+      // it, at the final boundary before content is released for delivery.
+      const state = async () => {
+        try {
+          const actions = await dependencies.actionClient(binding, read);
+          current();
+          await actions.listFeedback({ limit: 1 }, read);
+        } catch (error) {
+          gatewayFailed(error, false);
+        }
         current();
-        await actions.listFeedback({ limit: 1 }, read);
-      } catch (error) {
-        gatewayFailed(error, false);
-      }
-      current();
-      let view: Awaited<ReturnType<RecommendationClient["get"]>>;
-      try {
-        const client = await dependencies.recommendationClient(binding, read);
+        let view: Awaited<ReturnType<RecommendationClient["get"]>>;
+        try {
+          const client = await dependencies.recommendationClient(binding, read);
+          current();
+          view = await client.get(use.recommendationId, read);
+        } catch (error) {
+          gatewayFailed(error, true);
+        }
         current();
-        view = await client.get(use.recommendationId, read);
-      } catch (error) {
-        gatewayFailed(error, true);
-      }
-      current();
-      const action = view.selected_action;
-      const expires = Date.parse(view.choice_expires_at ?? "");
-      const unexpired = () => {
-        if (!Number.isFinite(expires) || dependencies.wallNow() >= expires)
+        const action = view.selected_action;
+        const expires = Date.parse(view.choice_expires_at ?? "");
+        const unexpired = () => {
+          if (!Number.isFinite(expires) || dependencies.wallNow() >= expires)
+            refuse("choice_unavailable");
+        };
+        if (
+          view.recommendation_id !== use.recommendationId ||
+          view.state !== "chosen" ||
+          !action ||
+          action.recommendation_id !== use.recommendationId ||
+          action.task_id !== view.task_id ||
+          action.scope.user_id !== binding.userId ||
+          action.scope.workspace_id !== binding.workspaceId ||
+          action.choice.kind !== "asset" ||
+          action.choice.asset_id !== use.assetId ||
+          action.choice.content_hash !== use.contentHash
+        )
           refuse("choice_unavailable");
+        unexpired();
+        const offered = view.displayed_candidates.find(
+          (item) => item.asset.asset_id === use.assetId,
+        )?.asset;
+        if (
+          !offered ||
+          offered.kind !== "skill" ||
+          offered.content_hash !== use.contentHash ||
+          offered.stale
+        )
+          refuse("choice_unavailable");
+        const mapped = dependencies
+          .skills()
+          .filter(
+            (item) =>
+              item.assetId === use.assetId &&
+              item.contentHash === use.contentHash &&
+              item.sourceVersion === offered.source_version,
+          );
+        if (
+          mapped.length !== 1 ||
+          mapped[0]!.skillId !== use.skillId ||
+          mapped[0]!.revision !== use.revision
+        )
+          refuse("binding_changed");
+        return unexpired;
       };
-      if (
-        view.recommendation_id !== use.recommendationId ||
-        view.state !== "chosen" ||
-        !action ||
-        action.recommendation_id !== use.recommendationId ||
-        action.task_id !== view.task_id ||
-        action.scope.user_id !== binding.userId ||
-        action.scope.workspace_id !== binding.workspaceId ||
-        action.choice.kind !== "asset" ||
-        action.choice.asset_id !== use.assetId ||
-        action.choice.content_hash !== use.contentHash
-      )
-        refuse("choice_unavailable");
-      unexpired();
-      const offered = view.displayed_candidates.find(
-        (item) => item.asset.asset_id === use.assetId,
-      )?.asset;
-      if (
-        !offered ||
-        offered.kind !== "skill" ||
-        offered.content_hash !== use.contentHash ||
-        offered.stale
-      )
-        refuse("choice_unavailable");
-      const mapped = dependencies
-        .skills()
-        .filter(
-          (item) =>
-            item.assetId === use.assetId &&
-            item.contentHash === use.contentHash &&
-            item.sourceVersion === offered.source_version,
-        );
-      if (
-        mapped.length !== 1 ||
-        mapped[0]!.skillId !== use.skillId ||
-        mapped[0]!.revision !== use.revision
-      )
-        refuse("binding_changed");
+      const unexpired = await state();
       const dispatch =
         dependencies.dispatch ??
         (await import("openclaw/plugin-sdk/gateway-method-runtime"))
@@ -268,6 +279,10 @@ export function createSkillLoadedUseFence(dependencies: Dependencies) {
           use.contentHash
       )
         refuse("binding_changed");
+      // HTTP observations are not a transaction with the native read: record
+      // the post-read state at this boundary, then release the bytes.
+      (await state())();
+      current();
       return loaded.content;
     } catch (error) {
       const refusal =
