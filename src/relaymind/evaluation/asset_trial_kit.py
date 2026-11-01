@@ -75,6 +75,20 @@ def observed_environment() -> dict:
     return collect_benchmark_environment()
 
 
+def preflight_environment(record: Mapping) -> dict:
+    """The Environment a preflight record observed on the target machine."""
+    from relaymind.evaluation.asset_evidence import validate_definition
+
+    observed = record.get("observed") if isinstance(record, Mapping) else None
+    environment = observed.get("environment") if isinstance(observed, Mapping) else None
+    if not isinstance(environment, Mapping):
+        raise WholeTaskRejected("preflight_environment")
+    try:
+        return dict(validate_definition("Environment", dict(environment)))
+    except (ValueError, AssetCorpusError):
+        raise WholeTaskRejected("preflight_environment") from None
+
+
 def observation_name(ordinal: int) -> str:
     """The file the operator saves for one planned row, named by plan ordinal."""
     return f"row-{ordinal:04d}.json"
@@ -87,21 +101,25 @@ def _sha256(payload: bytes) -> str:
 # --- preflight ------------------------------------------------------------------
 
 
-def _run(argv: Sequence[str], timeout: float = HOST_TIMEOUT_SECONDS) -> tuple[int | None, bytes]:
+def _run(
+    argv: Sequence[str], timeout: float = HOST_TIMEOUT_SECONDS
+) -> tuple[int | None, bytes, bytes]:
+    """Exit code, standard output and standard error, kept separate."""
     try:
         done = subprocess.run(
             list(argv), capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL
         )
     except subprocess.TimeoutExpired as error:
-        return None, (error.stdout or b"") + (error.stderr or b"")
+        return None, error.stdout or b"", error.stderr or b""
     except OSError:
-        return None, b""
-    return done.returncode, done.stdout + done.stderr
+        return None, b"", b""
+    return done.returncode, done.stdout, done.stderr
 
 
 def host_version(host_command: Sequence[str]) -> tuple[str | None, str]:
     """``<openclaw> --version``: the pinned version only when it is the only one named."""
-    code, output = _run([*host_command, "--version"], timeout=60)
+    code, stdout, stderr = _run([*host_command, "--version"], timeout=60)
+    output = stdout + stderr
     found = set(_VERSION.findall(output.decode("utf-8", "replace")))
     version = PINNED_OPENCLAW if code == 0 and found == {PINNED_OPENCLAW} else None
     return version, _sha256(output)
@@ -110,16 +128,21 @@ def host_version(host_command: Sequence[str]) -> tuple[str | None, str]:
 def release_identity(tarball: Path) -> dict:
     """The tarball against the ``SHA256SUMS`` and ``release.json`` beside it."""
     tarball = Path(tarball)
-    payload = tarball.read_bytes()
-    digest = _sha256(payload)
     identity = dict(
         filename=tarball.name,
-        sha256=digest,
-        bytes=len(payload),
+        sha256=None,
+        bytes=None,
         package=None,
         version=None,
         checksum_ok=False,
     )
+    try:
+        payload = tarball.read_bytes()
+    except OSError:
+        # A missing or unreadable release fails its checks; it is not a crash.
+        return identity
+    digest = _sha256(payload)
+    identity.update(sha256=digest, bytes=len(payload))
     try:
         listed = [
             line.split("  ", 1)
@@ -166,7 +189,8 @@ def preflight(
     packages = [
         p
         for p in freeze["packages"]
-        if (p["sha256"], p["bytes"]) == (identity["sha256"], identity["bytes"])
+        if identity["sha256"] is not None
+        and (p["sha256"], p["bytes"]) == (identity["sha256"], identity["bytes"])
     ]
     host = freeze["host"]
     checks = [
@@ -257,10 +281,11 @@ def install_plugin(host_command: Sequence[str], tarball: Path, work: Path) -> di
         if failed:
             steps.append(dict(name=name, argv=shown, status="not_run", exit_code=None))
             continue
-        code, output = _run([*host_command, *args])
-        log = work / (name + ".log")
-        log.write_bytes(output)
-        log.chmod(0o600)
+        code, output, errors = _run([*host_command, *args])
+        log, error_log = work / (name + ".log"), work / (name + ".stderr.log")
+        for path, payload in ((log, output), (error_log, errors)):
+            path.write_bytes(payload)
+            path.chmod(0o600)
         step = dict(
             name=name,
             argv=shown,
@@ -268,9 +293,13 @@ def install_plugin(host_command: Sequence[str], tarball: Path, work: Path) -> di
             log=log.name,
             output_sha256=_sha256(output),
             output_bytes=len(output),
+            stderr_log=error_log.name,
+            stderr_sha256=_sha256(errors),
+            stderr_bytes=len(errors),
         )
         passed = code == 0
         if name == "inspect":
+            # Only standard output carries the JSON; host warnings stay in stderr.
             step["inspect"] = _inspect(output, identity["version"])
             passed = passed and step["inspect"]["passed"]
         step["status"] = "passed" if passed else "failed"
@@ -297,7 +326,8 @@ def load_frozen(inputs: Path) -> dict:
 
     def document(kind: str) -> dict:
         found = [d for d in manifest["documents"] if d["kind"] == kind]
-        if len(found) != 1:
+        # A null path needs an explicit resolver, which the kit does not read.
+        if len(found) != 1 or found[0]["path"] is None:
             raise WholeTaskBlocked("input_unresolved")
         value, _ = read_json_path(inputs.parent / relative_path(found[0]["path"]), DOCUMENT_BYTES)
         if canonical_digest(value) != found[0]["digest"]:
@@ -325,7 +355,8 @@ class _Bundle:
         self.registry = {e["id"]: e for e in self.manifest["evidence"]}
         self.refs: dict[str, dict] = {}
         source = frozen["root"]
-        paths = [d["path"] for d in self.manifest["documents"]]
+        # Null paths are resolver-only originals: kept in the manifest, not copied.
+        paths = [d["path"] for d in self.manifest["documents"] if d.get("path")]
         paths += [e["path"] for e in self.manifest["evidence"] if e.get("path")]
         for path in dict.fromkeys(paths):
             self.write(path, read_local(source, path, DOCUMENT_BYTES))
@@ -410,16 +441,22 @@ def _executor(
     qualification: str,
     ask: Callable[[str], str] | None,
 ):
+    prompting = [ask is not None]
+
     def execute(task: Mapping, arm: str, config: Mapping) -> tuple[dict, list[dict]]:
         ordinal = ordinals[(task["id"], arm)]
         name = observation_name(ordinal)
-        if not (observations / name).exists() and ask is not None:
-            answer = ask(
-                f"Row {ordinal}: task {task['id']} ({task['lane']}, prompt case "
-                f"{task['prompt_case_id']}), arm {arm}, host configuration "
-                f"{config['host_config_digest']}. Run it on the host, save {name} in "
-                f"{observations}, then press Enter (or type skip): "
-            )
+        if not (observations / name).exists() and prompting[0]:
+            try:
+                answer = ask(
+                    f"Row {ordinal}: task {task['id']} ({task['lane']}, prompt case "
+                    f"{task['prompt_case_id']}), arm {arm}, host configuration "
+                    f"{config['host_config_digest']}. Run it on the host, save {name} in "
+                    f"{observations}, then press Enter (or type skip): "
+                )
+            except EOFError:
+                # Closed input: stop asking; this and later rows are read as saved.
+                prompting[0], answer = False, ""
             if answer.strip().lower() == "skip":
                 return _not_run(task["id"], arm, "operator_skipped"), []
         if not (observations / name).exists():

@@ -147,9 +147,8 @@ def _trial_preflight(args, environment: dict) -> dict:
 def _trial(args) -> int:
     """#234: the early-trial kit commands (spec 0.65 section 12.6.5)."""
     try:
-        environment = asset_trial_kit.observed_environment()
         if args.command == "trial-preflight":
-            record = _trial_preflight(args, environment)
+            record = _trial_preflight(args, asset_trial_kit.observed_environment())
             atomic_bytes(args.output, json_bytes(record))
             print(json.dumps(dict(passed=record["passed"], checks=record["checks"])))
             return 0 if record["passed"] else 3
@@ -161,6 +160,7 @@ def _trial(args) -> int:
         if args.command == "trial":
             work = args.work.absolute()
             work.mkdir(mode=0o700, parents=True, exist_ok=False)
+            environment = asset_trial_kit.observed_environment()
             preflight = _trial_preflight(args, environment)
             atomic_bytes(work / "preflight.json", json_bytes(preflight))
             install = None
@@ -172,6 +172,9 @@ def _trial(args) -> int:
             tarball = args.tarball
         else:
             preflight, _ = read_json_path(args.preflight)
+            # Offline bundling may run elsewhere: the report keeps the target
+            # machine's environment as the preflight recorded it.
+            environment = asset_trial_kit.preflight_environment(preflight)
             install = read_json_path(args.install)[0] if args.install else None
             tarball = args.tarball
     except (WholeTaskBlocked, WholeTaskRejected, AssetCorpusError, OSError, ValueError) as exc:
