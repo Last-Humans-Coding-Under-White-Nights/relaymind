@@ -60,12 +60,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - #261 MacBook and Ubuntu VPS platform evidence (RM38, RM39, RM40, RM44; AC29,
   AC31, AC37; spec 0.66 sections 12.6.5, 12.6.6) in
   `docs/evidence/m10/owner-platform-runs-2026-11-01/`, with two pending
-  platform records. MacBook: 0/10 startups within 1,000 ms, 120/120 useful
-  slots, 3/4 timely batches; the packaged lifecycle passed. The kit samples the
-  gateway's own PID on macOS. VPS: the ordinary actions harness passed. The 100
-  genuine MCP tools are captured from locally running open-source servers and
-  frozen by digest in `evaluation/assets/acceptance-mcp-v1/`; the full
-  300-asset acceptance catalog is still missing. All reports remain `fixture`.
+  platform records in `docs/evidence/m10/owner-platform-run-*.json`. MacBook:
+  0/10 startups within 1,000 ms, 120/120 useful slots, 3/4 timely batches; the
+  packaged lifecycle passed. The kit samples the gateway's own PID on macOS.
+  VPS: the ordinary actions harness passed. The 100 genuine MCP tools are
+  captured from locally running open-source servers and frozen by digest in
+  `evaluation/assets/acceptance-mcp-v1/`; the full 300-asset acceptance catalog
+  is still missing. All reports remain `fixture`. Review fixes: the records
+  live where section 12.6.6 puts them; the README's verify procedure runs the
+  run commit's own grader on copies (the commit is kept reachable by a merge)
+  and a test runs it; `asset_platform_run.py verify` no longer writes into the
+  evidence it grades; a test recomputes the MCP capture's lock, digests and
+  selection; the README states that the report's `memory.complete` does not
+  mean complete coverage and which private harness address remains in the VPS
+  capture.
 - #274 native Windows platform evidence (RM38; AC29, AC37), with a pending
   qualification draft in `docs/evidence/m10/windows-platform-run-2026-11-01/`.
   The packaged lifecycle passes; fixture qualification and unobserved host

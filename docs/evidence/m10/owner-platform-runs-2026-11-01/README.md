@@ -2,8 +2,9 @@
 
 Issue #261 (the Windows PC part is #274); RM38, RM39, RM44; AC29, AC37;
 specification 0.66 sections 12.6.5 and 12.6.6. Run commit
-`2f4ddecc3da0efd632df89ed0d63f3cc1d72c00f`. The owner ran both machines as the
-operator. Every report keeps its `fixture` label and its `not_applicable`
+`2f4ddecc3da0efd632df89ed0d63f3cc1d72c00f`, a parent of a merge on this
+branch, so a clone of the branch contains it. The owner ran both machines as
+the operator. Every report keeps its `fixture` label and its `not_applicable`
 platform gate: the catalog and companion inputs are generated fixtures, so
 nothing here is a measured acceptance result.
 
@@ -34,6 +35,12 @@ applications stayed open.
   peak 80,789,504 bytes, increment 8,372,224 bytes. The grader keeps the
   memory increment unknown (only the gateway is covered). The startup memory
   samples are unknown because each launch ended at its deadline before a sample.
+  The report's `memory` still lists `startup` in `phases` and says
+  `complete: true`: in the run commit's kit, `complete` meant only that the
+  workload sampler finished. Memory coverage is not complete. The kit on this
+  branch writes `complete: false` and leaves `startup` out when a startup
+  sample is unknown. The graded summary is unaffected; its memory increment
+  stays unknown.
   On macOS, RSS does not count compressed pages, so it can understate memory on
   an 8 GiB machine.
 - No harness errors. `verify` recomputes the same summary.
@@ -88,21 +95,41 @@ directory and removed afterwards. The VPS has no GitHub credentials.
 ## Verify
 
 `verify.txt` in each directory is the output of
-`python scripts/asset_platform_run.py verify <dir>` on that machine. Both
-directories were verified again from these committed copies, with the same
-output. The companion bundle's `originals/` (a copy of the commit's sources) is
-left out. To verify again, restore it from the run commit:
+`python scripts/asset_platform_run.py verify <dir>` on that machine, at the run
+commit. The grader accepts a platform report only when the report's source
+inventory equals the running `src/relaymind` package
+(`verify_whole_task_inventory`), so a later commit rejects these reports with
+`unsupported_generator` by design. Verify them with the run commit's own code.
+The companion bundle's `originals/` (a copy of the commit's sources) is not
+committed; the procedure restores it from the run commit. The run commit's
+`verify` writes `platform/platform-grade.json` into the directory it grades, so
+it runs on copies, and the committed files stay unchanged.
+
+From the repository root, with `GEN` and `WORK` set to two new empty
+directories and a `python` that has the development dependencies:
 
 ```bash
+run=2f4ddecc3da0efd632df89ed0d63f3cc1d72c00f
+evidence=docs/evidence/m10/owner-platform-runs-2026-11-01
+gen="${GEN:?an empty directory for the run commit}"
+work="${WORK:?an empty directory for copies of the evidence}"
+git cat-file -e "$run^{commit}" 2>/dev/null || git fetch origin "$run"
+mkdir -p "$gen" "$work"
+git archive "$run" | tar -x -C "$gen"
 for m in macbook vps; do
-  d=docs/evidence/m10/owner-platform-runs-2026-11-01/$m/platform/bundle/originals
-  mkdir -p "$d"
-  git archive 2f4ddecc3da0efd632df89ed0d63f3cc1d72c00f src/relaymind pyproject.toml \
-    scripts/asset_whole_task.py docs/SPECIFICATION.md | tar -x -C "$d"
+  cp -R "$evidence/$m" "$work/$m"
+  mkdir -p "$work/$m/platform/bundle/originals"
+  git archive "$run" src/relaymind pyproject.toml scripts/asset_whole_task.py \
+    docs/SPECIFICATION.md | tar -x -C "$work/$m/platform/bundle/originals"
+  python "$gen/scripts/asset_platform_run.py" verify "$work/$m" |
+    cmp - "$evidence/$m/verify.txt"
 done
-python scripts/asset_platform_run.py verify docs/evidence/m10/owner-platform-runs-2026-11-01/macbook
-python scripts/asset_platform_run.py verify docs/evidence/m10/owner-platform-runs-2026-11-01/vps
 ```
+
+Each `cmp` passes: the output is byte for byte the committed `verify.txt`.
+`tests/test_m10_platform_records.py` runs this block and checks that no
+committed byte changes. It skips when the run commit is not in the clone (a
+shallow checkout).
 
 ## Redaction
 
@@ -111,12 +138,24 @@ Before any digest was computed, the work-directory paths in `operations.json`
 host model name leaking from the pinned host's system prompt
 (`default_model=…`) in both `install-check.json` files was replaced by
 `default_model=<redacted>`. The platform reports and bundles were built from the
-redacted files. No home path, user name or hostname remains.
+redacted files. No home path, user name, hostname or public address remains.
+
+One private-range address remains. `vps/ordinary.json` and its bundle copy
+(`vps/platform/bundle/evidence/1fa8b780…`) record `10.213.47.1` as the proxy
+listener, the bind address and the peer of the authenticated requests. It is
+the private dummy interface (`rm0`, 10.213.47.1/24) that the owner added on
+the VPS for the person-ingress harness (`../host-use-settlement-20261101.md`),
+not the VPS's public address. The harness requires and checks a private,
+non-loopback address (`network.bind_ip`, `peer_ip`, `gateway_private_refused`,
+`proxy_loopback_refused`), and the capture is bound by SHA-256 in the platform
+report's companion bundle, so it is kept as captured. The other addresses are
+loopback (`127.0.0.1`).
 
 ## Qualification records
 
-`owner-platform-run-macbook-2026-11-01.json` and
-`owner-platform-run-vps-2026-11-01.json` are pending `QualificationRecordV1`
+`../owner-platform-run-macbook-2026-11-01.json` and
+`../owner-platform-run-vps-2026-11-01.json` (in `docs/evidence/m10/`, where
+section 12.6.6 keeps records) are pending `QualificationRecordV1`
 drafts (scope `platform`, profile `owner_run`, labelling `not_applicable`). Each
 binds its machine's `platform/platform.json` as the report, `machine.json`, and
 every other committed file of that machine plus this README, by SHA-256. The

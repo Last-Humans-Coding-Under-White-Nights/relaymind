@@ -1656,18 +1656,21 @@ bundle to a SHA-256-bound release attachment. The earlier memory figure is
 invalid and superseded. The compact repository record retains the gate misses.
 The initial proxy-related operations failure is retained alongside the rerun.
 
-#261 MacBook and VPS runs (RM38, RM39, RM40, RM44; AC29, AC31, AC37; spec
-0.66; `docs/evidence/m10/owner-platform-runs-2026-11-01/`, two pending
-platform records). On the target Apple M1 8 GiB MacBook, over the generated
-300-skill catalog: 0/10 startups within 1,000 ms (a diagnostic shows about
-1.2–1.3 s to ready), 120/120 useful slots (service p95 46.6 ms), 3/4 batches
-visible within 1,000 ms, and a gateway-only memory increment of 8,372,224 bytes.
-The kit's sampled PID is the gateway process on macOS. The packaged lifecycle
-passed with the same release bytes as on Windows. On the Ubuntu VPS
-(`linux_host`), the ordinary actions harness passed: recommend, choose,
-feedback, delete and reset. All reports stay `fixture` / `not_applicable`. The
-100 genuine MCP tools of section 12.6.6 are frozen from locally running
-open-source servers in `evaluation/assets/acceptance-mcp-v1/`. Still open: the
-full 300-asset acceptance catalog (100 original Chinese and 100 original
-English skills, pairs, rights review), non-fixture AC29 reports within the
-bounds, restart and a real interactive allow/deny, and review of both records.
+#261 MacBook and VPS runs (RM38, RM39, RM40, RM44; AC29, AC31, AC37; spec 0.66;
+`docs/evidence/m10/owner-platform-runs-2026-11-01/`, two pending platform
+records `docs/evidence/m10/owner-platform-run-*.json`). On the target Apple M1
+8 GiB MacBook, over the generated 300-skill catalog: 0/10 startups within 1,000
+ms (a diagnostic shows about 1.2–1.3 s to ready), 120/120 useful slots (service
+p95 46.6 ms), 3/4 batches visible within 1,000 ms, and a gateway-only memory
+increment of 8,372,224 bytes. The kit's sampled PID is the gateway process on
+macOS. The packaged lifecycle passed with the same release bytes as on Windows.
+On the Ubuntu VPS (`linux_host`), the ordinary actions harness passed:
+recommend, choose, feedback, delete and reset. All reports stay `fixture` /
+`not_applicable`. The 100 genuine MCP tools of section 12.6.6 are frozen from
+locally running open-source servers in `evaluation/assets/acceptance-mcp-v1/`.
+Still open: the full 300-asset acceptance catalog (100 original Chinese and 100
+original English skills, pairs, rights review), non-fixture AC29 reports within
+the bounds, restart and a real interactive allow/deny, and review of both
+records. The reports verify only with the run commit's own grader (its
+inventory check compares the running package); the evidence README gives that
+procedure and a test runs it.
