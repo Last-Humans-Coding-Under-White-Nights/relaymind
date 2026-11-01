@@ -715,8 +715,9 @@ def workload_plan(
     """Receive writes a batch as an incremental metadata import; rescan asks the gateway.
 
     A refused rescan or rebuild is a product outcome and fails its batch or
-    rebuild in the driver. A control call that never gets a reply is a harness
-    error, recorded in ``channel_errors``.
+    rebuild in the driver. A control call that never gets a reply, or whose
+    reply is ``job_evidence_unavailable``, is a harness error, recorded in
+    ``channel_errors``; jobs already collected stay.
     """
     imports = Path(imports)
     batch_job_ids: dict[str, str] = {}
@@ -731,6 +732,11 @@ def workload_plan(
             channel_errors.append(f"{op}_{type(error).__name__}")
             raise
         if not reply.get("ok"):
+            if reply.get("error") == "job_evidence_unavailable":
+                # The child could not read its job store: missing evidence is a
+                # harness error, never a refused rescan or rebuild.
+                channel_errors.append(f"{op}_job_evidence_unavailable")
+                raise RuntimeError(f"{op}_job_evidence_unavailable")
             raise RuntimeError(f"{op}_refused")
         jobs.extend(reply.get("jobs") or ())
         return reply
