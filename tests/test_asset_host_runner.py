@@ -599,3 +599,42 @@ def test_a_flooding_executor_is_stopped_at_the_output_cap(tmp_path, monkeypatch)
     execute = command_executor(argv, tasks, timeout=30)
     with pytest.raises(ExecutorFailed, match="executor_output"):
         execute(tasks["tasks"][0], "native", freeze["configurations"][0])
+
+
+_DESCENDANT = """
+import subprocess, sys, time
+subprocess.Popen([sys.executable, "-c", "import time; time.sleep(20)"])
+time.sleep({parent})
+"""
+
+
+def test_a_descendant_holding_stdout_cannot_block_a_timed_out_executor(tmp_path):
+    """Review of PR #263: a timeout kills the executor's whole process group.
+
+    The descendant inherits standard output and outlives the direct child; the
+    call must still return in bounded time and the row must be recorded.
+    """
+    import time
+
+    freeze, tasks = setup(1)
+    argv = write_executor(tmp_path, _DESCENDANT.format(parent=30))
+    started = time.monotonic()
+    report = run(tasks, freeze, command_executor(argv, tasks, timeout=0.2), tmp_path / "j.jsonl")
+    elapsed = time.monotonic() - started
+    assert elapsed < 0.2 * len(report["rows"]) + 2.0
+    assert {r["status"] for r in report["rows"]} == {"failed"}
+    assert {r["reason"] for r in report["rows"]} == {"executor_error"}
+
+
+def test_a_descendant_holding_stdout_after_the_executor_exits_is_bounded(tmp_path):
+    """Review of PR #263: an exited executor whose descendant keeps standard
+    output open is unusable output, reported in bounded time."""
+    import time
+
+    freeze, tasks = setup(1)
+    argv = write_executor(tmp_path, _DESCENDANT.format(parent=0))
+    execute = command_executor(argv, tasks, timeout=0.5)
+    started = time.monotonic()
+    with pytest.raises(ExecutorFailed, match="executor_output"):
+        execute(tasks["tasks"][0], "native", freeze["configurations"][0])
+    assert time.monotonic() - started < 0.5 + 2.0
