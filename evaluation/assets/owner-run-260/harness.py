@@ -253,9 +253,7 @@ def chat(
     while (log_dir / f"{name}.response.json").exists():
         attempt += 1
         name = f"{base}.attempt{attempt}"
-    (log_dir / f"{name}.request.json").write_bytes(
-        json.dumps(body, ensure_ascii=False, indent=1).encode("utf-8")
-    )
+    (log_dir / f"{name}.request.json").write_bytes(payload)
     (log_dir / f"{name}.response.json").write_bytes(raw)
     return answer
 
@@ -537,7 +535,10 @@ def cmd_cases(args) -> None:
     )
     (args.root / "drafting-log.json").write_bytes(drafting_log)
     catalog["evidence"].append(
-        evidence_entry(authorship_id, "authorship", "drafting-log.json", drafting_log)
+        dict(
+            evidence_entry(authorship_id, "authorship", "drafting-log.json", drafting_log),
+            access="restricted",
+        )
     )
     protocol = (args.root / "PROTOCOL.md").read_bytes()
     catalog["evidence"].append(
@@ -555,11 +556,20 @@ def cmd_cases(args) -> None:
 
 def _classes(row: dict, names: dict) -> dict:
     back = {v: k for k, v in names.items()}
+    # Accept omitted zero padding only for an existing numeric catalog handle.
+    # The original spelling remains in the response bytes; no asset is guessed.
+    for handle, asset_id in list(back.items()):
+        if re.fullmatch(r"A[0-9]+", handle):
+            back.setdefault(f"A{int(handle[1:])}", asset_id)
     label = row.get("class")
     if label not in ("positive", "negative", "ambiguous"):
         raise ValueError("class")
-    given = row.get("acceptable") or []
+    given = row.get("acceptable")
+    if not isinstance(given, list):
+        raise ValueError("acceptable")
     if label == "negative":
+        if given:
+            raise ValueError("acceptable")
         chosen = []
     elif (
         not isinstance(given, list)
@@ -571,12 +581,18 @@ def _classes(row: dict, names: dict) -> dict:
         raise ValueError("acceptable")
     else:
         chosen = sorted({back[h] for h in given})
+    for field in ("language_valid", "independent_case"):
+        if not isinstance(row.get(field), bool):
+            raise ValueError(field)
+    notes = row.get("notes", "")
+    if not isinstance(notes, str):
+        raise ValueError("notes")
     return dict(
         cls=label,
         acceptable=chosen,
-        language_valid=bool(row.get("language_valid", True)),
-        independent_case=bool(row.get("independent_case", True)),
-        notes=str(row.get("notes", ""))[:2000],
+        language_valid=row["language_valid"],
+        independent_case=row["independent_case"],
+        notes=notes,
     )
 
 
@@ -760,10 +776,11 @@ def cmd_lock(args) -> None:
 
 
 def cmd_log(args) -> None:
-    """A call log: each request's digest and each original response, by template.
+    """Private drafting evidence holding original request and response bytes.
 
-    Requests hold catalog excerpts of unknown redistribution rights, so only
-    their SHA-256 and length are kept; responses are copied to ``--copy-to``.
+    UTF-8 strings preserve the exact JSON body bytes, alongside their hashes.
+    Requests contain restricted catalog excerpts: keep this log private. The
+    corpus registers it as restricted evidence for the offline resolver.
     """
     template = (PROMPTS / args.template).read_bytes()
     calls = []
@@ -782,8 +799,10 @@ def cmd_log(args) -> None:
                 name=name,
                 request_sha256=sha256(sent),
                 request_bytes=len(sent),
+                request_utf8=sent.decode("utf-8"),
                 response_sha256=sha256(payload),
                 response_bytes=len(payload),
+                response_utf8=payload.decode("utf-8"),
                 served_model=served,
                 served_on=created,
             )
@@ -800,7 +819,11 @@ def cmd_log(args) -> None:
             served_models=sorted({c["served_model"] for c in calls}),
             dates=sorted({c["served_on"] for c in calls}),
             calls=calls,
-            rejected=args.rejected or [],
+            rejected=[
+                dict(zip(("item", "reason", "response"), entry.split(":"), strict=True))
+                for argument in args.rejected or []
+                for entry in argument.split()
+            ],
         ),
     )
     print(json.dumps(dict(calls=len(calls))))

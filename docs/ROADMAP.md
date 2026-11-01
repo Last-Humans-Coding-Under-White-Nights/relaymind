@@ -1074,23 +1074,6 @@ skill/MCP use, 11 of 14 provider_only rows failed (`host_failed`; the cause
 is not in the surviving evidence), and the run's private evidence was lost,
 so it is not graded. A full two-arm host run needs about 13M external tokens. See
 `docs/evidence/m10/owner-run-260/README.md`. No gate has passed.
-#255 has committed two **pending** negative `host_operation` records for the
-pinned 2026.10.7 host: `m10-negative-skill-loaded-use-openclaw-2026.10.7`
-(`stop_point_absent`) and `m10-negative-mcp-use-openclaw-2026.10.7`
-(`exact_route_absent`). Both operations stay disabled. See
-`docs/evidence/m10/host-use-settlement-20261101.md`. The host has hooks, tool-result
-middleware and the provider stream that can stop a read or a request, but none
-can re-verify fresh person authority, the session incarnation and the pinned
-bytes, so none can fence the next model request as 7.6.1 requires. The only
-delegation candidate, `GatewaySessionAccessAuthority.retain()`, has no defined
-qualification. No supported route invokes an independent, non-App MCP tool by
-its exact native identity: `tools.invoke` is name-only, the harness runtimes
-are documented private, and the App-scoped `mcp.app.callTool` does not count. The records lift nothing until a
-pull request review by an org member other than the owner is written into
-them, which will make these host limitations. The first VPS run could not
-start a person tier (no private interface, missing Chromium libraries), so the
-first substantive captures came from CI run 41286397320. A second VPS run at
-62c4dcd, after the owner's setup, also binds its captures. Person ingress
 #255 has committed one **pending** negative `host_operation` record for the
 pinned 2026.10.7 host: `m10-negative-mcp-use-openclaw-2026.10.7`
 (`exact_route_absent`). No supported route invokes an independent, non-App MCP
