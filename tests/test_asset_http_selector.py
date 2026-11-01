@@ -72,6 +72,17 @@ def test_success_and_exact_full_offer_http_payload(monkeypatch, media):
     assert stream.closed and len(seen) == 1
 
 
+# mtime=0 keeps the gzip header, and so the collected test, identical across
+# parallel workers that import this module in different seconds.
+_OVERSIZED_GZIP = gzip.compress(b"x" * (1024 * 1024 + 1), mtime=0)
+
+
+def test_oversized_gzip_fixture_is_deterministic():
+    """CI (#253): every xdist worker must collect the same parameters."""
+    assert _OVERSIZED_GZIP[4:8] == b"\x00\x00\x00\x00"
+    assert _OVERSIZED_GZIP == gzip.compress(b"x" * (1024 * 1024 + 1), mtime=0)
+
+
 @pytest.mark.parametrize(
     "headers,body,status,outcome,reason",
     [
@@ -141,12 +152,13 @@ def test_success_and_exact_full_offer_http_payload(monkeypatch, media):
             "invalid",
             "response_too_large",
         ),
-        (
+        pytest.param(
             {"Content-Type": "application/json", "Content-Encoding": "gzip"},
-            gzip.compress(b"x" * (1024 * 1024 + 1)),
+            _OVERSIZED_GZIP,
             200,
             "invalid",
             "response_too_large",
+            id="gzip-response-too-large",
         ),
     ],
 )
