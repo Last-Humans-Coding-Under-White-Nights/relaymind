@@ -191,6 +191,8 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.66 with the #266 record input, scope and identity rules.
+            ("f4f70b0640207baf78442bd8c7596f23461c9319920adfd37effa29e1148ed51", 622923),
             # Reviewed 0.66 with the LHCWN repository rename.
             ("b5c3327b138e5bfedc3e9a5c3b5c1453509643a562f5ec6f324288672b9ca70d", 622172),
             # Reviewed 0.66 owner-run acceptance profile and qualification record

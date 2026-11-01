@@ -22,10 +22,17 @@ from relaymind.canonical import canonical_json
 from relaymind.evaluation.asset_corpus_io import AssetCorpusError, parse_json
 
 RECORD_BYTES = 256 * 1024 * 1024
+JOURNAL_FORMAT = "relaymind.s3_run_journal.v1"
+_BOUND = ("input_digest", "freeze_digest", "plan_digest")
 
 
 class JournalError(ValueError):
     """A fixed safe journal failure reason."""
+
+
+def bound_header(kind: str, record: Mapping) -> dict:
+    """The journal header binding a run to its preregistered digests."""
+    return dict(format=JOURNAL_FORMAT, kind=kind, **{k: record[k] for k in _BOUND})
 
 
 def _fsync_directory(path: Path) -> None:
@@ -119,9 +126,10 @@ class RunJournal:
     def finish(self, key: str, value: Mapping) -> None:
         if key not in self.started:
             raise JournalError("journal_order")
-        self._append(dict(type="finished", key=key, value=dict(value)))
+        value = dict(value)
+        self._append(dict(type="finished", key=key, value=value))
         self.started.discard(key)
-        self.finished[key] = dict(value)
+        self.finished[key] = value
 
     def close(self) -> None:
         file = getattr(self, "_file", None)

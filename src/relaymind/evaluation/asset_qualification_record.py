@@ -24,17 +24,18 @@ names, and the git history and pull request review are its audit trail.
 import hashlib
 from collections import Counter
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from relaymind.canonical import canonical_digest
 from relaymind.evaluation.asset_benchmark_io import (
     REPORT_BYTES,
     read_json_path,
     validate_closed_document,
 )
-from relaymind.evaluation.asset_corpus_io import DOCUMENT_BYTES, read_local
+from relaymind.evaluation.asset_corpus_io import DOCUMENT_BYTES, parse_json, read_local
 from relaymind.evaluation.asset_judgments import METHODS
 from relaymind.evaluation.asset_qualification import CustodianReview
 from relaymind.evaluation.asset_whole_task import WholeTaskRejected
@@ -62,6 +63,9 @@ _PREREGISTERED = ("host_acceptance", "adaptation")
 _MACHINE_SCOPES = ("platform", "walkthrough", "host_operation")
 _NEGATIVE_FINDINGS = {"skill_loaded_use": "stop_point_absent", "mcp_use": "exact_route_absent"}
 _KAPPA_TOLERANCE = 1e-9
+# JSON input documents whose canonical digest must equal the resolved input.
+_INPUT_ROLES = ("freeze", "tasks", "episodes", "labels")
+_HOST_SCOPES = {"early_trial": "host_trial", "acceptance": "host_acceptance"}
 
 
 def _time(value: str) -> datetime:
@@ -96,7 +100,10 @@ def _check_rules(record: Mapping) -> None:
     paths = [subject["path"] for subject in record["subjects"]]
     if len(set(paths)) != len(paths) or paths != sorted(paths, key=str.encode):
         _reject("record_subjects")
-    if any(roles[role] < 1 for role in _REQUIRED_SUBJECTS[scope]) or roles["report"] > 1:
+    if any(roles[role] < 1 for role in _REQUIRED_SUBJECTS[scope]):
+        _reject("record_subjects")
+    # One unambiguous subject per bound input document.
+    if any(roles[role] > 1 for role in ("report", *_INPUT_ROLES)):
         _reject("record_subjects")
     # Labelling: owner_machine names both annotators and the raw agreement.
     annotators, agreement = record["annotators"], record["agreement"]
@@ -160,6 +167,8 @@ class QualificationRecord:
 
     document: Mapping[str, Any]
     path: Path
+    # Canonical digest of each JSON input subject, by role.
+    canonical: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def record_id(self) -> str:
@@ -207,21 +216,53 @@ class QualificationRecord:
             },
         )
 
-    def check_labels(self, labels: Mapping) -> None:
-        """The record's labelling and agreement must match the frozen labels."""
+    def check_inputs(self, kind: str, inputs) -> None:
+        """Spec 12.6.6: the bound freeze/tasks/episodes are the resolved inputs.
+
+        The host scope must also match the task document's kind, so a trial
+        record cannot review an acceptance report without preregistration.
+        """
+        root = inputs.root
+        if kind == "host":
+            if _HOST_SCOPES.get(root.get("kind")) != self.scope:
+                _reject("qualification_record_scope")
+            bound = {"tasks": root, "freeze": inputs.freeze}
+        elif kind == "adaptation":
+            bound = {"episodes": root, "freeze": inputs.freeze}
+        else:
+            return
+        for role, document in bound.items():
+            if self.canonical.get(role) != canonical_digest(document):
+                _reject("record_input_mismatch")
+
+    def check_labels(self, labels: Mapping, people: Mapping) -> None:
+        """The record's labelling, people and agreement must match the frozen labels.
+
+        ``people`` maps catalog Person IDs to their entries. Under
+        ``owner_machine`` the named machine holds the annotator role only and
+        the named owner adjudicates every case.
+        """
         method = labels["agreement"]["method"]
         if self.labelling == "not_applicable":
             return
         if method != METHODS[self.labelling]:
             _reject("labelling_mismatch")
+        if "labels" in self.canonical and self.canonical["labels"] != canonical_digest(labels):
+            _reject("record_input_mismatch")
+        if self.labelling == "owner_machine":
+            annotators = self.document["annotators"]
+            owner, machine = annotators["owner_annotator_id"], annotators["machine"]["annotator_id"]
+            if {row["annotator_id"] for row in labels["judgments"]} != {owner, machine}:
+                _reject("labelling_mismatch")
+            if (
+                machine not in people
+                or list(people[machine]["roles"]) != ["annotator"]
+                or any(row["adjudicator_id"] != owner for row in labels["adjudications"])
+            ):
+                _reject("labelling_roles")
         agreement = self.document["agreement"]
         if agreement is None:
             return
-        if self.labelling == "owner_machine":
-            annotators = self.document["annotators"]
-            expected = {annotators["owner_annotator_id"], annotators["machine"]["annotator_id"]}
-            if {row["annotator_id"] for row in labels["judgments"]} != expected:
-                _reject("labelling_mismatch")
         group = next((g for g in labels["agreement"]["groups"] if g["lane"] == "all"), None)
         kappa = class_kappa(labels)
         stored = agreement["cohen_kappa"]
@@ -246,6 +287,7 @@ def load_record(path: Path) -> QualificationRecord:
             raise
         raise WholeTaskRejected("invalid_qualification_record") from exc
     _check_rules(record)
+    canonical = {}
     for subject in record["subjects"]:
         try:
             payload = read_local(path.parent, subject["path"], REPORT_BYTES)
@@ -256,7 +298,12 @@ def load_record(path: Path) -> QualificationRecord:
             or len(payload) != subject["bytes"]
         ):
             _reject("record_digest_mismatch")
-    return QualificationRecord(record, path)
+        if subject["role"] in _INPUT_ROLES:
+            try:
+                canonical[subject["role"]] = canonical_digest(parse_json(payload))
+            except ValueError as exc:
+                raise WholeTaskRejected("record_input_mismatch") from exc
+    return QualificationRecord(record, path, canonical)
 
 
 def class_kappa(labels: Mapping) -> float | None:

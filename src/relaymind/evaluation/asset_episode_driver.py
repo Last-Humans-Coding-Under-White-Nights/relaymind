@@ -37,13 +37,12 @@ from relaymind.evaluation.asset_episode_export import (
     reset_preimage_digest,
 )
 from relaymind.evaluation.asset_metrics import grade_asset_result
-from relaymind.evaluation.asset_run_journal import RunJournal
+from relaymind.evaluation.asset_run_journal import RunJournal, bound_header
 from relaymind.evaluation.asset_whole_task import WholeTaskRejected
 from relaymind.evaluation.asset_whole_task_corpus import release_labels
 
 _ADAPTER = "relaymind-evaluation-episodes"
 _CONTRACT = "relaymind-evaluation-episodes.v1"
-JOURNAL_FORMAT = "relaymind.s3_run_journal.v1"
 
 
 @dataclass
@@ -441,20 +440,11 @@ async def run_adaptation_episodes(
     labels = release_labels(release)
     evidence: dict[str, dict] = {}
     results = []
-    with contextlib.ExitStack() as stack:
-        book = None
-        if journal is not None:
-            record = episode_preregistration(episodes, freeze)
-            book = stack.enter_context(
-                RunJournal(
-                    journal,
-                    dict(
-                        format=JOURNAL_FORMAT,
-                        kind="adaptation",
-                        **{k: record[k] for k in ("input_digest", "freeze_digest", "plan_digest")},
-                    ),
-                )
-            )
+    bound = contextlib.nullcontext()
+    if journal is not None:
+        header = bound_header("adaptation", episode_preregistration(episodes, freeze))
+        bound = RunJournal(journal, header)
+    with bound as book:
         for episode in episodes["episodes"]:
             key, fresh = episode["id"], False
             if book is not None and key in book.finished:

@@ -408,3 +408,73 @@ def test_record_passes_the_font_dir_to_every_language(rec, tmp_path, monkeypatch
     assert len(commands) == 2
     for command in commands:
         assert command[command.index("--font-dir") + 1] == str(fonts.absolute())
+
+
+# --- review follow-ups (PR #262) ----------------------------------------------
+
+
+def test_regex_names_translate_only_when_they_name_one_plugin_label(rec):
+    import re
+
+    pattern = re.compile("Delete feedback", re.IGNORECASE)
+    assert rec.translate(pattern, "en-US") is pattern
+    translated = rec.translate(pattern, "zh-CN")
+    assert translated.fullmatch("删除反馈") and translated.flags & re.IGNORECASE
+    with pytest.raises(ValueError, match="walkthrough_label_unknown"):
+        rec.translate(re.compile(".*feedback"), "zh-CN")
+    with pytest.raises(ValueError, match="walkthrough_label_unknown"):
+        rec.translate(7, "zh-CN")
+
+
+def test_a_child_without_any_output_is_recorded_incomplete(rec, tmp_path):
+    (tmp_path / "out" / "en-US").mkdir(parents=True)
+    manifest = rec.build_manifest(
+        tmp_path / "out", {"en-US": dict(exit_code=1, reason="child_failed")}
+    )
+    entry = manifest["languages"][0]
+    assert entry["capture"] is None and entry["screens"] is None and entry["videos"] == []
+    assert entry["reason"] == "child_failed"
+    assert {s["status"] for s in entry["steps"] if s["name"] not in rec.BLOCKED} == {"not_run"}
+    assert {s["reason"] for s in entry["steps"] if s["name"] not in rec.BLOCKED} == {
+        "capture_missing"
+    }
+    assert manifest["complete"] is False and manifest["evidence"] == []
+
+
+def test_a_torn_capture_is_not_trusted(rec, tmp_path):
+    base = tmp_path / "out" / "zh-CN"
+    base.mkdir(parents=True)
+    (base / "capture.json").write_bytes(b'{"status": "pass')
+    manifest = rec.build_manifest(tmp_path / "out", {"zh-CN": dict(exit_code=None)})
+    entry = manifest["languages"][0]
+    assert {s["reason"] for s in entry["steps"] if s["name"] not in rec.BLOCKED} == {
+        "capture_invalid"
+    }
+    # The torn original is still referenced by digest for review.
+    assert entry["capture"] == "zh-CN/capture"
+
+
+@pytest.mark.parametrize(
+    ("outcome", "reason"), [("timeout", "child_timeout"), ("failed", "child_failed")]
+)
+def test_record_writes_an_incomplete_manifest_when_a_child_fails(
+    rec, tmp_path, monkeypatch, outcome, reason
+):
+    import subprocess
+
+    def fake_run(command, timeout):
+        if outcome == "timeout":
+            raise subprocess.TimeoutExpired(command, timeout)
+        return subprocess.CompletedProcess(command, 2)
+
+    monkeypatch.setattr(rec.subprocess, "run", fake_run)
+    tarball = tmp_path / "plugin.tgz"
+    tarball.write_bytes(b"tgz")
+    argv = ["record", "--tarball", str(tarball), "--work-root", str(tmp_path / "work")]
+    argv += ["--out-dir", str(tmp_path / "out")]
+    assert rec.main(argv) == 2
+    manifest = json.loads((tmp_path / "out" / "manifest.json").read_bytes())
+    assert manifest["complete"] is False
+    assert [e["language"] for e in manifest["languages"]] == list(rec.LANGUAGES)
+    assert {e["reason"] for e in manifest["languages"]} == {reason}
+    assert {e["exit_code"] for e in manifest["languages"]} == {None if outcome == "timeout" else 2}

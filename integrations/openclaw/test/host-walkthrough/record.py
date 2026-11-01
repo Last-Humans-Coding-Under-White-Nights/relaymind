@@ -101,12 +101,31 @@ _ENGLISH, _CHINESE = control_ui_labels()
 _NUMBERED = {"choose": re.compile(r"Choose (\d+)"), "correction": re.compile(r"Correct to (\d+)")}
 
 
-def translate(name: str, language: str) -> str:
-    """An English role name of the ordinary harness in the walkthrough language."""
+def _translate_pattern(name: re.Pattern, language: str) -> re.Pattern:
+    """A regex name translates only when it matches exactly one plugin label."""
+    if not isinstance(name.pattern, str):
+        raise ValueError("walkthrough_label_unknown")
+    labels = {NAVIGATION["en-US"], *_ENGLISH.values()}
+    matches = [label for label in labels if name.fullmatch(label)]
+    if len(matches) != 1:
+        raise ValueError("walkthrough_label_unknown")
+    return re.compile(re.escape(translate(matches[0], language)), name.flags)
+
+
+def translate(name, language: str):
+    """An English role name of the ordinary harness in the walkthrough language.
+
+    Playwright also accepts a compiled pattern; it is kept in English and, in
+    Chinese, replaced by the exact translation of the one label it names.
+    """
+    if language not in LANGUAGES:
+        raise ValueError("walkthrough_language")
+    if isinstance(name, re.Pattern):
+        return name if language == "en-US" else _translate_pattern(name, language)
+    if not isinstance(name, str):
+        raise ValueError("walkthrough_label_unknown")
     if language == "en-US":
         return name
-    if language != "zh-CN":
-        raise ValueError("walkthrough_language")
     if name == NAVIGATION["en-US"]:
         return NAVIGATION["zh-CN"]
     for key, value in _ENGLISH.items():
@@ -192,7 +211,8 @@ class LocalizedPage:
         self._page, self._language, self._shooter = page, language, shooter
 
     def _wrap(self, locator, label):
-        return LocalizedLocator(locator, self._page, self._shooter, label)
+        text = label.pattern if isinstance(label, re.Pattern) else str(label)
+        return LocalizedLocator(locator, self._page, self._shooter, text)
 
     def get_by_role(self, role, name=None, **kwargs):
         label = translate(name, self._language) if name is not None else None
@@ -341,6 +361,20 @@ def _steps(capture: dict, shots: dict, passed: dict) -> list:
     return steps
 
 
+def _present(base: Path, relative: str) -> bool:
+    target = base / relative
+    return target.is_symlink() or target.exists()
+
+
+def _missing_steps(reason: str) -> list:
+    return [
+        dict(name=name, status="blocked", reason=BLOCKED[name]["reason"], evidence_ids=[])
+        if name in BLOCKED
+        else dict(name=name, status="not_run", reason=reason, evidence_ids=[])
+        for name in STEP_NAMES
+    ]
+
+
 def _digest(evidence: dict, out: Path, evidence_id: str, path: Path) -> str:
     payload = path.read_bytes()
     evidence[evidence_id] = dict(
@@ -364,36 +398,58 @@ def build_manifest(
         if language not in outcomes:
             continue
         base = out / language
-        capture_path = _media(base, "capture.json")
-        capture = json.loads(capture_path.read_bytes())
-        capture_id = _digest(evidence, out, language + "/capture", capture_path)
-        screens_id = _digest(evidence, out, language + "/screens", _media(base, "screens.json"))
-        shots = {}
-        for shot in json.loads((base / "screens.json").read_bytes()):
-            path = _media(base, shot["file"])
-            shots.setdefault(shot["step"], []).append(
-                _digest(evidence, out, language + "/" + shot["file"], path)
-            )
+        # A failed or timed-out child may leave no, or torn, outputs: record
+        # what exists by digest and leave every step unrecorded.
+        capture, capture_id, problem = None, None, "capture_missing"
+        if _present(base, "capture.json"):
+            capture_path = _media(base, "capture.json")
+            capture_id = _digest(evidence, out, language + "/capture", capture_path)
+            try:
+                capture = json.loads(capture_path.read_bytes())
+            except ValueError:
+                capture = None
+            problem = None if isinstance(capture, dict) else "capture_invalid"
+            capture = capture if isinstance(capture, dict) else None
+        screens_id, shots = None, {}
+        if _present(base, "screens.json"):
+            screens_path = _media(base, "screens.json")
+            screens_id = _digest(evidence, out, language + "/screens", screens_path)
+            try:
+                listed = json.loads(screens_path.read_bytes())
+            except ValueError:
+                listed = []
+            for shot in listed if isinstance(listed, list) else []:
+                path = _media(base, shot["file"])
+                shots.setdefault(shot["step"], []).append(
+                    _digest(evidence, out, language + "/" + shot["file"], path)
+                )
         videos = [
             _digest(
                 evidence, out, f"{language}/video/{path.name}", _media(base, "video/" + path.name)
             )
             for path in sorted((base / "video").glob("*.webm"))
         ]
-        passed = {name: check(capture) for name, check in predicates.items()}
+        if capture is None:
+            passed = {name: False for name in predicates}
+            steps = _missing_steps(problem)
+        else:
+            passed = {name: check(capture) for name, check in predicates.items()}
+            steps = _steps(capture, shots, passed)
+        capture = capture or {}
         environment = capture.get("environment") or {}
         installation = (capture.get("ordinary_actions") or {}).get("installation") or {}
         languages.append(
             dict(
                 language=language,
                 exit_code=outcomes[language]["exit_code"],
+                reason=outcomes[language].get("reason"),
                 host_version=environment.get("observed_host_version"),
                 archive_sha256=installation.get("archive_sha256"),
                 checks=passed,
                 capture=capture_id,
                 screens=screens_id,
                 videos=videos,
-                steps=_steps(capture, shots, passed),
+                steps=steps,
             )
         )
     complete = [entry["language"] for entry in languages] == list(LANGUAGES) and all(
@@ -472,9 +528,10 @@ def record(args) -> int:
             command += ["--font-dir", str(args.font_dir)]
         try:
             code = subprocess.run(command, timeout=CHILD_SECONDS).returncode
+            reason = None if code == 0 else "child_failed"
         except subprocess.TimeoutExpired:
-            code = None
-        outcomes[language] = dict(exit_code=code)
+            code, reason = None, "child_timeout"
+        outcomes[language] = dict(exit_code=code, reason=reason)
     manifest = build_manifest(out, outcomes, fonts=fonts)
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", "utf-8")
     print(json.dumps(dict(complete=manifest["complete"], manifest=str(out / "manifest.json"))))

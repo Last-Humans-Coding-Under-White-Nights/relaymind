@@ -18,6 +18,14 @@ from pathlib import Path
 from relaymind.canonical import canonical_digest
 from relaymind.evaluation.asset_benchmark_io import atomic_bytes, json_bytes, read_json_path
 from relaymind.evaluation.asset_corpus_io import DOCUMENT_BYTES, AssetCorpusError
+from relaymind.evaluation.asset_host_runner import (
+    RUN_QUALIFICATIONS,
+    TOKEN_RELATIONSHIPS,
+    attempts_from_trace,
+    command_executor,
+    host_preregistration,
+    run_host_plan,
+)
 
 COMMANDS = (
     "label-template",
@@ -71,8 +79,13 @@ def add_commands(sub) -> None:
     run.add_argument("--inputs", type=Path, required=True, help="companion input manifest")
     run.add_argument("--environment", type=Path, required=True)
     run.add_argument("--artifacts", type=Path, help="JSON array of ArtifactIdentity")
-    run.add_argument("--qualification", choices=("fixture", "provisional"), required=True)
+    run.add_argument("--qualification", choices=RUN_QUALIFICATIONS, required=True)
     run.add_argument("--output", type=Path, required=True)
+    run.add_argument(
+        "--executor-timeout",
+        type=float,
+        help="seconds before a hung executor program is killed (harness bound, not a budget)",
+    )
     run.add_argument("executor", nargs=argparse.REMAINDER)
 
     costs = sub.add_parser("capture-costs", help="HostAttempts from RelayMind trace events")
@@ -82,7 +95,7 @@ def add_commands(sub) -> None:
     costs.add_argument("--evidence-id", required=True, help="registry ID of the events export")
     costs.add_argument(
         "--token-relationship",
-        choices=("component_disjoint", "cached_within_input_reasoning_within_output", "unknown"),
+        choices=TOKEN_RELATIONSHIPS,
         default="unknown",
     )
     costs.add_argument("--relationship-evidence", help="registry ID evidencing the relationship")
@@ -118,6 +131,8 @@ def _episodes(args) -> dict:
     from relaymind.evaluation.asset_episode_export import episode_preregistration
 
     release = None
+    if args.evidence_root is not None and args.lock is None:
+        raise ValueError("lock")
     if args.lock is not None:
         if args.evidence_root is None:
             raise ValueError("evidence_root")
@@ -128,15 +143,13 @@ def _episodes(args) -> dict:
 
 
 def _run_host(args) -> tuple[dict, int]:
-    from relaymind.evaluation.asset_host_runner import command_executor, run_host_plan
-
     executor = list(args.executor)
     if executor[:1] == ["--"]:
         executor = executor[1:]
     if not executor:
         raise ValueError("executor")
     tasks, freeze = _read(args.tasks), _read(args.freeze)
-    manifest, payload = read_json_path(args.inputs.absolute())
+    manifest, payload = read_json_path(args.inputs)
     artifacts = json.loads(args.artifacts.read_text(encoding="utf-8")) if args.artifacts else []
     if not isinstance(artifacts, list):
         raise ValueError("artifacts")
@@ -148,14 +161,12 @@ def _run_host(args) -> tuple[dict, int]:
 
     prior = {}
     try:
-        for name in ("SIGINT", "SIGTERM"):
-            sig = getattr(signal, name, None)
-            if sig is not None:
-                prior[sig] = signal.signal(sig, interrupt)
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            prior[sig] = signal.signal(sig, interrupt)
         report = run_host_plan(
             tasks,
             freeze,
-            command_executor(executor, tasks),
+            command_executor(executor, tasks, timeout=args.executor_timeout),
             args.journal,
             environment=_read(args.environment),
             artifacts=artifacts,
@@ -168,15 +179,13 @@ def _run_host(args) -> tuple[dict, int]:
     finally:
         for sig, handler in prior.items():
             signal.signal(sig, handler)
-    incomplete = sum(
+    incomplete = any(
         r["status"] == "not_run" and r["reason"] == "interrupted" for r in report["rows"]
     )
     return report, 3 if incomplete else 0
 
 
 def _costs(args) -> dict:
-    from relaymind.evaluation.asset_host_runner import attempts_from_trace
-
     events = json.loads(args.events.read_text(encoding="utf-8"))
     if not isinstance(events, list):
         raise ValueError("events")
@@ -203,8 +212,6 @@ def run(args) -> int:
         if args.command.startswith("label-"):
             result = _labels(args)
         elif args.command == "preregister-host":
-            from relaymind.evaluation.asset_host_runner import host_preregistration
-
             result = host_preregistration(_read(args.tasks), _read(args.freeze))
         elif args.command == "preregister-episodes":
             result = _episodes(args)
@@ -212,6 +219,7 @@ def run(args) -> int:
             result, code = _run_host(args)
         else:
             result = _costs(args)
+        atomic_bytes(args.output, json_bytes(result))
     except WholeTaskBlocked as exc:
         print(json.dumps(dict(status="blocked", reason=exc.reason)), file=sys.stderr)
         return 3
@@ -227,6 +235,5 @@ def run(args) -> int:
         reason = str(exc) if str(exc).isidentifier() else "invalid_input"
         print(json.dumps(dict(status="rejected", reason=reason)), file=sys.stderr)
         return 2
-    atomic_bytes(args.output, json_bytes(result))
     print(json.dumps(dict(status="incomplete" if code else "written", output=str(args.output))))
     return code
