@@ -33,6 +33,7 @@ never written.
 """
 
 import argparse
+import functools
 import hashlib
 import json
 import os
@@ -59,6 +60,7 @@ SECRETS = ("RELAYMIND_EXTERNAL_API_KEY", "RELAYMIND_EXTERNAL_BASE_URL")
 RELATIONSHIP_ID = "usage-relationship"
 
 
+@functools.cache
 def _machine_names() -> list[bytes]:
     """This Mac's computer, local host and host names: never published (spec 12.6.6)."""
     import socket
@@ -305,17 +307,16 @@ def observe(args) -> int:
     if status == "completed" and (code != 0 or not isinstance(envelope, dict)):
         status, reason = "failed", "host_exit_nonzero" if code else "host_output_unusable"
     evidence = []
-    # Keep the host's own output before anything else can fail.
-    (evidence_dir / "host-envelope.json").write_bytes(redact(stdout or b""))
 
     def keep(evidence_id: str, name: str, payload: bytes) -> None:
         (evidence_dir / name).write_bytes(redact(payload))
         file = f"evidence/{number}/{name}"
         evidence.append(dict(id=evidence_id, file=file, provenance="observed"))
 
+    # Keep the host's own output before anything else can fail.
+    keep(f"host-envelope:{number}", "host-envelope.json", stdout or b"")
     keep(f"host-dispatch:{number}", "host-dispatch.json", dispatch)
     session_id = envelope.get("sessionId") if isinstance(envelope, dict) else None
-    keep(f"host-envelope:{number}", "host-envelope.json", stdout or b"")
     transcript = _transcript(run_dir / "state", session_id) if session_id else []
     keep(
         f"host-transcript:{number}",
