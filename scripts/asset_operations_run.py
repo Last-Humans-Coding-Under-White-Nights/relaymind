@@ -76,16 +76,21 @@ def startup_report(
         samples=[dataclasses.asdict(sample) for sample in samples],
         memory_bytes=list(memory),
         useful_startups=useful,
-        # Complete means every startup was useful and every memory sample known.
-        complete=len(samples) == 10 and useful == 10 and None not in memory,
+        # Complete means all ten startups were useful and all ten memory samples known.
+        complete=len(samples) == 10
+        and useful == 10
+        and len(memory) == len(samples) == 10
+        and None not in memory,
     )
 
 
 def _startup(args) -> dict:
+    base = Path(args.base_config).absolute()
+    if not base.is_file():
+        raise ValueError(f"base_config_not_found: {base}")
     work = Path(args.work).absolute()
     catalog = work / "catalog"
     generate_catalog(catalog, args.assets)
-    base = Path(args.base_config).absolute()
     samples: list[StartupSample] = []
     memory: list[int | None] = []
     counter = iter(range(1000))
@@ -146,6 +151,8 @@ def _platform(args) -> dict:
     inputs = Path(args.inputs).absolute()
     manifest, payload, input_digest, registry, environment = _manifest_inputs(inputs)
     platform = json.loads(Path(args.platform).read_text(encoding="utf-8"))
+    if not isinstance(platform, dict):
+        raise ValueError("platform_invalid")
     # The grader binds the observed platform to the frozen environment lock.
     if any(v is not None and v != platform.get(k) for k, v in environment.items()):
         raise ValueError("environment_binding")
@@ -188,10 +195,12 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     try:
         report = _startup(args) if args.command == "startup" else _platform(args)
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
     except (OSError, ValueError, KeyError, TypeError, WholeTaskRejected) as error:
         print(f"asset_operations_run: {error}", file=sys.stderr)
         return 2
-    Path(args.output).write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
     return 0
 
 
