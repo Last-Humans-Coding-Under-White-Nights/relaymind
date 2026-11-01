@@ -140,6 +140,20 @@ beyond this cap.
   `machine_passes.py`: evidence helpers for this trial. They only arrange
   files and calls for the existing kit and checker.
 
+**`machine_passes.py` after the run.** The success judging ran with the script
+as committed in `b5ef7a9` (the record's `repository_commit`; the script is not
+in `bundle/SHA256SUMS` or the record subjects, and `harness_sha256` binds
+`build_trial_inputs.py`). A later review of #276 hardened `judge`: each judge
+must give exactly one verdict per blind ID with a JSON boolean `success`, every
+disagreement needs exactly one adjudication with a nonempty reason, and the
+opened blind map must cover the judged IDs; otherwise it stops with a closed
+error before any row is written. The earlier script would have taken judge A's
+verdict for an omitted adjudication and read the string `"false"` as true. The
+committed `machine/success-verdicts.json` passes the stricter check unchanged
+(both judges agreed on both rows with boolean verdicts, no adjudication), so
+no committed output or bundle file changed
+(`tests/test_m1_trial_machine_passes.py`).
+
 ## What remains
 
 1. Owner approval: a pull request review by one org member other than the

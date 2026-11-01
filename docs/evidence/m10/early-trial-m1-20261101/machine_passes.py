@@ -16,7 +16,11 @@ Commands:
 ``blind``         anonymize the observed rows; write the blind map privately and
                   its digest publicly (commit the digest before judging)
 ``judge``         judges A and B, then the adjudicator on disagreements, set
-                  ``success`` in each observed row
+                  ``success`` in each observed row. Both judges must give one
+                  JSON-boolean verdict per blind ID; every disagreement needs one
+                  adjudication with a nonempty reason. Anything else is a closed
+                  error (``success_verdicts`` or ``success_adjudication``) and no
+                  row is written.
 """
 
 import argparse
@@ -280,41 +284,84 @@ def blind(args) -> None:
     print(json.dumps(dict(transcripts=len(order), blind_map_digest=canonical_digest(mapping))))
 
 
+def _verdict_map(verdicts, expected: list[str], error: str, *, reasoned: bool) -> dict:
+    """Exactly one verdict per expected blind ID, ``success`` a JSON boolean."""
+    if not isinstance(verdicts, list):
+        raise SystemExit(error)
+    out = {}
+    for verdict in verdicts:
+        if (
+            not isinstance(verdict, dict)
+            or not isinstance(verdict.get("blind_id"), str)
+            or verdict["blind_id"] in out
+            or type(verdict.get("success")) is not bool
+            or not isinstance(verdict.get("reason"), str)
+            or (reasoned and not verdict["reason"].strip())
+        ):
+            raise SystemExit(error)
+        out[verdict["blind_id"]] = verdict
+    if set(out) != set(expected):
+        raise SystemExit(error)
+    return out
+
+
+def check_judges(blind_ids: list[str], judge_a, judge_b) -> tuple[dict, list[str]]:
+    """Both blind judges cover every blind ID once with a boolean (spec 12.6.6).
+
+    Returns the agreed finals and the sorted disagreeing blind IDs; a closed
+    ``success_verdicts`` error otherwise.
+    """
+    if len(set(blind_ids)) != len(blind_ids):
+        raise SystemExit("success_verdicts")
+    a = _verdict_map(judge_a, blind_ids, "success_verdicts", reasoned=False)
+    b = _verdict_map(judge_b, blind_ids, "success_verdicts", reasoned=False)
+    disagree = sorted(i for i in blind_ids if a[i]["success"] != b[i]["success"])
+    return {i: a[i] for i in blind_ids if i not in disagree}, disagree
+
+
+def adjudicated(finals: dict, disagree: list[str], verdicts) -> dict:
+    """Every disagreement, and only those, adjudicated once with a nonempty reason.
+
+    Spec 12.6.6: a disagreement is never settled by either judge's verdict; an
+    omitted, repeated, non-boolean or unexplained adjudication is a closed
+    ``success_adjudication`` error and nothing is written.
+    """
+    chosen = _verdict_map(verdicts, disagree, "success_adjudication", reasoned=True)
+    return dict(finals, **chosen)
+
+
 def judge(args) -> None:
     packet = json.loads((args.private / "blind-packet.json").read_text())
     rubric = args.rubric.read_text(encoding="utf-8")
     payload = dict(rubric=rubric, request_date=args.request_date, **packet)
-    raw = {}
+    blind_ids = [t["blind_id"] for t in packet["transcripts"]]
+    answers = {}
     for role in ("judge_a", "judge_b"):
         result = call(role, "success-" + role, payload)
-        raw[role] = {v["blind_id"]: v for v in result["value"]["verdicts"]}
-    finals = {}
-    disagree = [
-        b
-        for b in raw["judge_a"]
-        if raw["judge_a"][b]["success"] != raw["judge_b"].get(b, {}).get("success")
-    ]
+        answers[role] = result["value"].get("verdicts")
+    finals, disagree = check_judges(blind_ids, answers["judge_a"], answers["judge_b"])
+    raw = {role: {v["blind_id"]: v for v in answers[role]} for role in answers}
     if disagree:
         result = call(
             "success_adjudicator",
             "success-adjudication",
-            dict(payload, raw={b: [raw["judge_a"][b], raw["judge_b"].get(b)] for b in disagree}),
+            dict(payload, raw={b: [raw["judge_a"][b], raw["judge_b"][b]] for b in disagree}),
         )
-        finals.update({v["blind_id"]: v for v in result["value"]["verdicts"]})
-    for b, verdict in raw["judge_a"].items():
-        finals.setdefault(b, verdict)
+        finals = adjudicated(finals, disagree, result["value"].get("verdicts"))
     # Only now is the blind map opened.
     mapping = json.loads((args.private / "blind-map.json").read_text())
     recorded = json.loads((MACHINE / "blind-map.digest.json").read_text())
     if canonical_digest(mapping) != recorded["blind_map_sha256"]:
         raise SystemExit("the blind map changed after its digest was committed")
+    if sorted(e["blind_id"] for e in mapping["entries"]) != sorted(finals):
+        raise SystemExit("success_verdicts")
     (MACHINE / "blind-map.json").write_bytes(_json(mapping))
     verdicts = []
     for entry in mapping["entries"]:
-        final = finals.get(entry["blind_id"])
+        final = finals[entry["blind_id"]]
         path = args.observations / f"row-{entry['ordinal']:04d}.json"
         observation = json.loads(path.read_text())
-        observation["row"]["success"] = None if final is None else bool(final["success"])
+        observation["row"]["success"] = final["success"]
         path.write_bytes(_json(observation))
         verdicts.append(
             dict(
