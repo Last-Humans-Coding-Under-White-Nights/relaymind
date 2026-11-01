@@ -10,6 +10,7 @@ import asyncio
 import importlib.util
 import json
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -112,7 +113,9 @@ def test_a_relative_work_directory_and_pythonpath_still_start(tmp_path, monkeypa
     generate_catalog(tmp_path / "catalog", 2)
     base = _base(tmp_path, monkeypatch)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("PYTHONPATH", os.path.relpath(ROOT / "src", tmp_path))
+    # Keep the relative import root on the temp drive even when checkout is elsewhere.
+    shutil.copytree(ROOT / "src", tmp_path / "src", ignore=shutil.ignore_patterns("__pycache__"))
+    monkeypatch.setenv("PYTHONPATH", "src")
 
     async def go():
         async with serve(Path("rel-work"), Path("catalog"), base_config=base):
@@ -399,8 +402,16 @@ def test_startup_command_records_ten_real_startups(tmp_path, monkeypatch):
     report = json.loads(out.read_text())
     assert code == 0 and report["qualification"] == "fixture"
     assert len(report["samples"]) == 10 and len(report["memory_bytes"]) == 10
-    assert all(s["pid"] for s in report["samples"])
-    useful = sum(s["first_useful_at"] is not None for s in report["samples"])
+    # RM38/AC29: CI verifies honest records, not the acceptance machine's timing.
+    assert [s["ordinal"] for s in report["samples"]] == list(range(10))
+    for sample in report["samples"]:
+        assert sample["outcome"] in {"useful", "failed"}
+        if sample["outcome"] == "useful":
+            assert sample["pid"] and sample["error"] is None
+            assert 0 <= sample["first_useful_at"] - sample["process_started_at"] <= 1
+        else:
+            assert sample["error"]
+    useful = sum(s["outcome"] == "useful" for s in report["samples"])
     assert report["useful_startups"] == useful
     assert report["complete"] == (useful == 10 and None not in report["memory_bytes"])
 
@@ -412,3 +423,228 @@ def test_startup_report_is_incomplete_without_useful_startups():
     samples = [StartupSample(i, 0.0, None, 100 + i, (), "timeout", "timeout") for i in range(10)]
     report = module.startup_report(samples, [1] * 10, assets=300, base_digest="d", counter="x")
     assert report["useful_startups"] == 0 and report["complete"] is False
+
+
+@pytest.mark.parametrize("first_useful_at", [None, 1.5])
+def test_deadline_failures_never_count_as_useful_startups(first_useful_at):
+    """RM38/AC29: a late useful response still fails the startup deadline."""
+    from relaymind.evaluation.asset_operations import StartupSample
+
+    samples = [
+        StartupSample(i, 0.0, first_useful_at, 100 + i, (), "failed", "deadline_exceeded")
+        for i in range(10)
+    ]
+    report = _script().startup_report(samples, [1] * 10, assets=300, base_digest="d", counter="x")
+    assert report["useful_startups"] == 0
+    assert report["complete"] is False
+
+
+def test_startup_memory_stays_with_its_launch_and_work_can_be_reused(tmp_path, monkeypatch):
+    """RM38/AC29: missing process samples keep their ordinal across repeated runs."""
+    from contextlib import asynccontextmanager
+
+    import httpx
+
+    module = _script()
+    base = tmp_path / "base.toml"
+    base.write_text("")
+
+    @asynccontextmanager
+    async def launch(work, catalog, *, base_config):
+        ordinal = int(work.name.removeprefix("run-"))
+        if ordinal in (0, 4):
+            raise OSError("launch failed")
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda request: httpx.Response(503)),
+            base_url="http://test",
+        ) as client:
+            yield 100 + ordinal, client
+
+    monkeypatch.setattr(module, "serve", launch)
+    monkeypatch.setattr(module, "rss_bytes", lambda pid: pid * 1024)
+    for _ in range(2):
+        out = tmp_path / "startup.json"
+        assert (
+            module.main(
+                [
+                    "startup",
+                    "--base-config",
+                    str(base),
+                    "--work",
+                    str(tmp_path / "work"),
+                    "--assets",
+                    "5",
+                    "--output",
+                    str(out),
+                ]
+            )
+            == 0
+        )
+        report = json.loads(out.read_text())
+        assert [s["pid"] for s in report["samples"]] == [
+            None,
+            101,
+            102,
+            103,
+            None,
+            105,
+            106,
+            107,
+            108,
+            109,
+        ]
+        assert report["memory_bytes"] == [
+            None,
+            103424,
+            104448,
+            105472,
+            None,
+            107520,
+            108544,
+            109568,
+            110592,
+            111616,
+        ]
+
+
+def test_generated_catalog_can_be_regenerated(tmp_path):
+    """RM38/AC29: reusing a work directory recreates the same catalog."""
+    first = generate_catalog(tmp_path, 3)
+    contents = [path.read_bytes() for path in first]
+    assert generate_catalog(tmp_path, 3) == first
+    assert [path.read_bytes() for path in first] == contents
+
+
+@pytest.mark.parametrize("memory", ["12,345 K", "12.345 KB", "12\u00a0345 Ko", "12 345 КБ"])
+@pytest.mark.parametrize("image", ['"python.exe"', '"python, worker.exe"', "python.exe"])
+def test_windows_memory_parses_csv_and_localized_units(monkeypatch, memory, image):
+    """RM38/AC29: working-set samples survive CSV quoting and localized units."""
+    from types import SimpleNamespace
+
+    import relaymind.evaluation.asset_operations_run as kit
+
+    monkeypatch.setattr(kit.sys, "platform", "win32")
+    monkeypatch.setattr(
+        kit.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0, stdout=f'{image},"123","Console","1","{memory}"\n'
+        ),
+    )
+    assert rss_bytes(123) == 12641280
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "INFO: no tasks",
+        '"python","124","Console","1","123 K"',
+        '"python","123","Console","1","N/A"',
+    ],
+)
+def test_windows_missing_memory_stays_unknown(monkeypatch, row):
+    """RM38/AC29: absent counters and other processes supply no measurement."""
+    from types import SimpleNamespace
+
+    import relaymind.evaluation.asset_operations_run as kit
+
+    monkeypatch.setattr(kit.sys, "platform", "win32")
+    monkeypatch.setattr(
+        kit.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=row,
+        ),
+    )
+    assert rss_bytes(123) is None
+
+
+def test_base_config_preserves_root_dotted_keys_and_non_path_values(tmp_path):
+    """RM38/AC29: relocation preserves TOML meaning and opaque provider options."""
+    import tomllib
+
+    from relaymind.evaluation.asset_operations_run import _config
+
+    base = tmp_path / "base.toml"
+    base.write_text(
+        f"store.path = {json.dumps(str(tmp_path / 'runs.sqlite'))}\n"
+        '[external_model]\nmodel = "versioned-3.5"\n'
+        '[external_model.request_options.headers]\nContent-Type = "application/json"\n'
+    )
+    parsed = tomllib.loads(_config(tmp_path, base, tmp_path, 1234).read_text())
+    assert parsed["store"]["path"] == str(tmp_path / "runs.sqlite")
+    assert parsed["server"] == {"host": "127.0.0.1", "port": 1234}
+    assert parsed["external_model"]["model"] == "versioned-3.5"
+    assert (
+        parsed["external_model"]["request_options"]["headers"]["Content-Type"] == "application/json"
+    )
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "store.path",
+        "sandbox.seed",
+        "sandbox.work_dir",
+        "skills.roots",
+        "local_model.manifest",
+        "local_model.artifact",
+        "user_actions.registrations_path",
+        "asset_hybrid.manifest",
+        "asset_hybrid.config",
+        "asset_adaptation.config",
+    ],
+)
+@pytest.mark.parametrize("value", ["plain", "../relative/file"])
+def test_known_config_paths_must_be_absolute(tmp_path, key, value):
+    """RM38/AC29: relocating even extensionless paths must never change their meaning."""
+    from relaymind.evaluation.asset_operations_run import _config
+
+    base = tmp_path / "base.toml"
+    encoded = json.dumps([value] if key == "skills.roots" else value)
+    base.write_text(f"{key} = {encoded}\n")
+    with pytest.raises(ValueError, match="base_config_relative_path: " + key):
+        _config(tmp_path, base, tmp_path, 1234)
+
+
+@pytest.mark.parametrize("token", [False, True])
+def test_stdout_before_token_is_preserved_even_if_startup_fails(tmp_path, monkeypatch, token):
+    """RM38/AC29: startup diagnostics survive token handover without leaking its secret."""
+    import relaymind.evaluation.asset_operations_run as kit
+
+    body = "print('startup diagnostic', flush=True)\n"
+    if token:
+        body += "print('Application token: secret-value', flush=True)\n"
+    _patch_child(monkeypatch, _fake_python(tmp_path, body))
+
+    async def ready(client, deadline):
+        return None
+
+    monkeypatch.setattr(kit, "_wait_ready", ready)
+    base = tmp_path / "base.toml"
+    base.write_text("")
+
+    async def go():
+        async with serve(tmp_path / "w", tmp_path, base_config=base, timeout=10):
+            pass
+
+    if token:
+        asyncio.run(go())
+    else:
+        with pytest.raises(TimeoutError, match="gateway_token_unavailable"):
+            asyncio.run(go())
+    assert (tmp_path / "w" / "stdout.log").read_text() == "startup diagnostic\n"
+
+
+def test_base_config_root_dotted_keys_keep_their_table(tmp_path):
+    """RM38/AC29: prepending a server table must not capture root dotted keys."""
+    import tomllib
+
+    from relaymind.evaluation.asset_operations_run import _config
+
+    base = tmp_path / "base.toml"
+    base.write_text(f"store.path = {json.dumps(str(tmp_path / 'runs.sqlite'))}\n")
+    parsed = tomllib.loads(_config(tmp_path, base, tmp_path, 1234).read_text())
+    assert parsed["store"]["path"] == str(tmp_path / "runs.sqlite")
+    assert parsed["server"] == {"host": "127.0.0.1", "port": 1234}
