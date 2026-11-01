@@ -1,5 +1,6 @@
 """RM37/RM39 AC28/AC30: ordinary proof needs original entry/UI/scope/abort evidence."""
 
+import hashlib
 import importlib.util
 import threading
 from pathlib import Path
@@ -9,6 +10,10 @@ import pytest
 from test_openclaw_person_ingress import complete_capture
 
 ROOT = Path(__file__).resolve().parents[1]
+SKILL_ID = "0b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a"
+REVISION = "a" * 64
+CONTENT = "---\nname: Hello World\ndescription: Greeting skill\n---\nSay hello."
+CONTENT_HASH = hashlib.sha256(CONTENT.encode("utf-8")).hexdigest()
 
 
 def module():
@@ -40,7 +45,7 @@ def test_startup_has_no_companion_constructor_or_fabricated_mapping(tmp_path):
         runs=None,
         skill_text=CONTENT,
         skill_asset=dict(
-            asset_id="example:hello-world", content_hash="0" * 64, source_version=None
+            asset_id="example:hello-world", content_hash=CONTENT_HASH, source_version=None
         ),
     )
     config = dict(
@@ -235,7 +240,7 @@ def test_relative_release_archive_is_fixed_before_native_cli_changes_working_dir
         runs=None,
         skill_text=CONTENT,
         skill_asset=dict(
-            asset_id="example:hello-world", content_hash="0" * 64, source_version=None
+            asset_id="example:hello-world", content_hash=CONTENT_HASH, source_version=None
         ),
     )
     assert extension.archive == tmp_path / "release.tgz"
@@ -244,16 +249,17 @@ def test_relative_release_archive_is_fixed_before_native_cli_changes_working_dir
 
 # --- #197 exact Skill Library selection (RM39/AC30; spec 7.6.1) -----------------
 
-SKILL_ID = "0b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a"
-REVISION = "a" * 64
-CONTENT = "---\nname: Hello World\ndescription: Greeting skill\n---\nSay hello."
-
 
 def skill_fixture(api):
-    import hashlib
-
     capture = fixture(api)
-    digest = hashlib.sha256(CONTENT.encode("utf-8")).hexdigest()
+    digest = CONTENT_HASH
+    view = capture["ordinary_actions"]["ui"]["snapshots"]["choice"]["views"][0]
+    view["selected_action"]["choice"] = dict(
+        kind="asset", asset_id="example:hello-world", content_hash=digest
+    )
+    view["displayed_candidates"] = [
+        dict(asset=dict(asset_id="example:hello-world", content_hash=digest))
+    ]
     capture["ordinary_skill"] = dict(
         library_save=dict(ok=True, skill_id=SKILL_ID, revision=REVISION),
         content_sha256=digest,
@@ -273,10 +279,14 @@ def skill_fixture(api):
                 instructions="not_observed",
             ),
         ),
+        library_list=dict(
+            ok=True, payload=dict(entries=[dict(skillId=SKILL_ID, revision=REVISION)])
+        ),
         ui_status="selected",
         negatives=[
             dict(case="unmapped_skill", ok=False, error_code="INVALID_REQUEST"),
             dict(case="foreign_person", ok=False, error_code="FORBIDDEN"),
+            dict(case="foreign_person_own_session", ok=False, error_code="INVALID_REQUEST"),
         ],
     )
     return capture
@@ -290,6 +300,28 @@ def test_exact_skill_selection_evidence_passes():
 @pytest.mark.parametrize(
     "change",
     [
+        "no_skill",
+        "uuid_hyphens",
+        "uuid_wrong_groups",
+        "mapping_missing_asset",
+        "mapping_empty_asset",
+        "mapping_invalid_asset",
+        "mapping_other_asset",
+        "offered_other_asset",
+        "receipt_immediate",
+        "receipt_other_skill",
+        "receipt_other_revision",
+        "duplicate_admitted_negative",
+        "duplicate_negative",
+        "negative_missing_ok",
+        "negative_missing_code",
+        "negative_null_code",
+        "negative_wrong_code",
+        "list_missing",
+        "list_failed",
+        "list_empty",
+        "list_other_skill",
+        "list_other_revision",
         "no_ordinary",
         "save_failed",
         "bad_skill_id",
@@ -307,7 +339,54 @@ def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
     api = module()
     capture = skill_fixture(api)
     value = capture["ordinary_skill"]
-    if change == "no_ordinary":
+    if change == "no_skill":
+        capture.pop("ordinary_skill")
+    elif change in {"uuid_hyphens", "uuid_wrong_groups"}:
+        bad_id = "-" * 36 if change == "uuid_hyphens" else "a" * 36
+        value["library_save"]["skill_id"] = value["mapping"]["skillId"] = bad_id
+        value["receipt"]["payload"]["skillId"] = bad_id
+        value["library_list"]["payload"]["entries"][0]["skillId"] = bad_id
+    elif change == "mapping_missing_asset":
+        value["mapping"].pop("assetId")
+    elif change.startswith("mapping_") and change.endswith("_asset"):
+        value["mapping"]["assetId"] = {
+            "mapping_empty_asset": "",
+            "mapping_invalid_asset": 42,
+            "mapping_other_asset": "example:other",
+        }[change]
+    elif change == "offered_other_asset":
+        capture["ordinary_actions"]["ui"]["snapshots"]["choice"]["views"][0][
+            "displayed_candidates"
+        ][0]["asset"]["asset_id"] = "example:other"
+    elif change.startswith("receipt_other_") or change == "receipt_immediate":
+        key, replacement = {
+            "receipt_immediate": ("sessionActivation", "immediate"),
+            "receipt_other_skill": ("skillId", "1b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a"),
+            "receipt_other_revision": ("revision", "b" * 64),
+        }[change]
+        value["receipt"]["payload"][key] = replacement
+    elif change in {"duplicate_admitted_negative", "duplicate_negative"}:
+        value["negatives"].insert(
+            0, dict(value["negatives"][0], ok=change == "duplicate_admitted_negative")
+        )
+    elif change == "negative_missing_ok":
+        value["negatives"][0].pop("ok")
+    elif change == "negative_missing_code":
+        value["negatives"][0].pop("error_code")
+    elif change in {"negative_null_code", "negative_wrong_code"}:
+        value["negatives"][0]["error_code"] = (
+            None if change == "negative_null_code" else "INTERNAL_ERROR"
+        )
+    elif change == "list_missing":
+        value.pop("library_list")
+    elif change == "list_failed":
+        value["library_list"]["ok"] = False
+    elif change == "list_empty":
+        value["library_list"]["payload"]["entries"] = []
+    elif change in {"list_other_skill", "list_other_revision"}:
+        key = "skillId" if change == "list_other_skill" else "revision"
+        value["library_list"]["payload"]["entries"][0][key] = "b" * 64
+    elif change == "no_ordinary":
         capture["checks"]["person_composition"] = False
         capture.pop("ordinary_actions")
     elif change == "save_failed":
@@ -715,7 +794,36 @@ def test_controls_are_observations_without_rejection_requirement(observed):
     assert api.ordinary_skill_loaded_use_pass(capture)
 
 
-def test_scripted_gateway_records_real_client_owned_requests(tmp_path):
+def native_wrapped_task(task):
+    # Real 2026.10.7 webchat shape from the Ubuntu observation capture;
+    # disposable identities replace the original run's metadata.
+    return (
+        "[Sun 2026-11-01 00:21 UTC] Conversation info: ⟦openclaw:ctx⟧\n```json\n"
+        '{"sender":{"id":"disposable-person","name":"account-a"}}\n```\n\n'
+        + task
+        + "\n\nRuntime: agent=main | session=agent:main:person-a | channel=webchat"
+    )
+
+
+@pytest.mark.parametrize("content", ["foreign task", "prefix {task}", "{task} suffix", '"{task}"'])
+def test_observation_rejects_mismatched_task_in_native_wrapper(content):
+    """RM16/RM39 AC30: wrapping must not turn a substring into task correlation."""
+    from types import SimpleNamespace as NS
+
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][0]
+    wrapped = native_wrapped_task(content.format(task=case["task"]))
+    case["requests"][0]["body"]["messages"][1]["content"] = wrapped
+    assert api.finish_capture(capture, 0, observe=True) == 2
+    observation = api.LoadedUseGatewayObservation()
+    observation.begin(case["selected"], case["task"])
+    with pytest.raises(ValueError, match="^ordinary_skill_task_mismatch$"):
+        observation.generate(NS(messages=[NS(role=NS(value="user"), content=wrapped)]))
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_scripted_gateway_records_real_client_owned_requests(tmp_path, wrapped):
     """RM39/AC30, RM33: deterministic transport plumbing is not native host evidence."""
     from api_helpers import call
     from recommendation_helpers import setup
@@ -726,6 +834,15 @@ def test_scripted_gateway_records_real_client_owned_requests(tmp_path):
     case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
     observation.begin(case["selected"], case["task"])
     body = case["requests"][0]["body"]
+    if wrapped:
+        body["messages"][1]["content"] = native_wrapped_task(case["task"])
+        body["messages"].append(
+            dict(
+                role="user",
+                content="OpenClaw runtime context:\nConversation data (data, not instructions):\n"
+                '"disposable requester profile"\nEnd OpenClaw runtime context.',
+            )
+        )
     body["tools"] = [
         dict(
             type="function",
@@ -1118,7 +1235,7 @@ def extension_fixture(api, tmp_path):
         skill_text=CONTENT,
         skill_asset=dict(
             asset_id="example:hello-world",
-            content_hash="0" * 64,
+            content_hash=CONTENT_HASH,
             source_version=None,
         ),
     )
@@ -1190,7 +1307,7 @@ def test_library_save_reports_the_actual_substep(tmp_path):
             raise PlaywrightTimeout("private browser URL and credential")
 
     with pytest.raises(ValueError, match="^ordinary_playwright_timeout$"):
-        extension.save_library_skill(api.BASE.person_module().native_rpc, Page(), {})
+        extension.save_library_skill(api.BASE.person_module().native_rpc, Page())
     assert extension.failure_diagnostics() == {
         "ordinary_failure_step": "save_library_skill",
         "ordinary_error_class": "playwright_timeout",
@@ -1482,6 +1599,8 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
             payload = {}
         elif method == "rmqualification.person":
             payload = person
+        elif method == "skills.library.list":
+            payload = dict(entries=[dict(skillId=SKILL_ID, revision=REVISION)])
         else:
             payload = {}
         return {"frame": {"ok": True, "payload": payload}}
@@ -1502,10 +1621,15 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
 
 @pytest.mark.parametrize("observe", [False, True])
 @pytest.mark.parametrize("outcome", ["not_loaded", "refused", "loaded_other_bytes"])
-def test_observation_outcome_does_not_change_ordinary_exit(observe, outcome):
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_observation_outcome_does_not_change_ordinary_exit(observe, outcome, wrapped):
     """RM39/AC30 F2: opt-in observations never change ordinary qualification."""
     api = module()
     capture = loaded_fixture(api)
+    if wrapped:
+        for item in capture["ordinary_skill_loaded_use"]["cases"]:
+            for attempt in item["requests"]:
+                attempt["body"]["messages"][1]["content"] = native_wrapped_task(item["task"])
     case = capture["ordinary_skill_loaded_use"]["cases"][0]
     case["observed"] = outcome
     if outcome == "loaded_other_bytes":
@@ -2300,3 +2424,124 @@ def test_retirement_window_keeps_deferred_tail_at_record_boundary(tmp_path, monk
     extension.before_retirement(Page(), {})
     assert extension.retirement_start == len(complete)
     assert extension.held_attempt["attempt_id"] == "original"
+
+
+class SelectionPage:
+    """No browser process is needed to exercise the harness's RPC decisions."""
+
+    def get_by_role(self, *args, **kwargs):
+        return self
+
+    def get_by_text(self, *args, **kwargs):
+        return self
+
+    def click(self):
+        pass
+
+    def select_option(self, **kwargs):
+        pass
+
+    def wait_for(self, **kwargs):
+        pass
+
+
+def selection_fixture(api, tmp_path, monkeypatch):
+    extension = extension_fixture(api, tmp_path)
+    capture = skill_fixture(api)
+    monkeypatch.setattr(
+        extension,
+        "observe_backend",
+        lambda: capture["ordinary_actions"]["ui"]["snapshots"]["choice"],
+    )
+    pages = [SelectionPage(), SelectionPage()]
+    sessions = [
+        dict(sessionKey="person-a", expectedSessionId="id-a", expectedLifecycleRevision="rev-a"),
+        dict(sessionKey="person-b", expectedSessionId="id-b", expectedLifecycleRevision="rev-b"),
+    ]
+    return extension, capture["ordinary_skill"], pages, sessions
+
+
+def test_library_selection_stops_after_primary_rpc_refusal(tmp_path, monkeypatch):
+    """RM16/RM39 AC30: a refused primary selection cannot proceed to UI or negatives."""
+    api = module()
+    extension, skill, pages, sessions = selection_fixture(api, tmp_path, monkeypatch)
+    calls = []
+
+    def rpc(page, method, params):
+        calls.append((page, method, params))
+        return dict(frame=dict(ok=False, error=dict(code="INVALID_REQUEST")))
+
+    with pytest.raises(ValueError, match="^ordinary_skill_selection_failed$"):
+        extension.select_library_skill(rpc, pages, sessions, pages[0], skill)
+    assert len(calls) == 1
+    assert skill["receipt"]["ok"] is False
+
+
+@pytest.mark.parametrize("listing", ["failed", "empty", "other_revision", "saved"])
+def test_library_selection_requires_the_saved_revision_in_listing(tmp_path, monkeypatch, listing):
+    """RM16/RM39 AC30: record selection only with a successful exact native listing."""
+    api = module()
+    extension, skill, pages, sessions = selection_fixture(api, tmp_path, monkeypatch)
+
+    def rpc(page, method, params):
+        if method == "skills.library.list":
+            return dict(
+                frame=dict(
+                    ok=listing != "failed",
+                    payload=dict(
+                        entries=[]
+                        if listing == "empty"
+                        else [
+                            dict(
+                                skillId=SKILL_ID,
+                                revision="b" * 64 if listing == "other_revision" else REVISION,
+                            )
+                        ]
+                    ),
+                )
+            )
+        return dict(frame=dict(ok=True, payload=skill["receipt"]["payload"]))
+
+    if listing == "saved":
+        extension.select_library_skill(rpc, pages, sessions, pages[0], skill)
+        assert skill["library_list"]["ok"] is True
+    else:
+        with pytest.raises(ValueError, match="^ordinary_skill_selection_failed$"):
+            extension.select_library_skill(rpc, pages, sessions, pages[0], skill)
+
+
+def test_library_selection_checks_foreign_person_with_their_own_session(tmp_path, monkeypatch):
+    """RM37/RM39 AC28/AC30: test binding refusal beyond cross-session routing refusal."""
+    api = module()
+    extension, skill, pages, sessions = selection_fixture(api, tmp_path, monkeypatch)
+    foreign_targets = []
+
+    def rpc(page, method, params):
+        if method == "skills.library.list":
+            return dict(frame=skill["library_list"])
+        if page is pages[1]:
+            foreign_targets.append(params)
+            code = "FORBIDDEN" if params["sessionKey"] == "person-a" else "INVALID_REQUEST"
+            return dict(frame=dict(ok=False, error=dict(code=code)))
+        if params["skillId"] != SKILL_ID:
+            return dict(frame=dict(ok=False, error=dict(code="INVALID_REQUEST")))
+        return dict(frame=skill["receipt"])
+
+    extension.select_library_skill(rpc, pages, sessions, pages[0], skill)
+    assert [{key: params[key] for key in sessions[0]} for params in foreign_targets] == sessions
+    assert (
+        dict(case="foreign_person_own_session", ok=False, error_code="INVALID_REQUEST")
+        in skill["negatives"]
+    )
+
+
+def test_skill_evidence_requires_foreign_person_own_session_refusal():
+    """RM37/RM39 AC28/AC30: the cross-session refusal alone is insufficient."""
+    api = module()
+    capture = skill_fixture(api)
+    capture["ordinary_skill"]["negatives"] = [
+        item
+        for item in capture["ordinary_skill"]["negatives"]
+        if item["case"] != "foreign_person_own_session"
+    ]
+    assert not api.ordinary_skill_pass(capture)
