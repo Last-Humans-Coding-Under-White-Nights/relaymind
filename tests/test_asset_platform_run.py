@@ -710,6 +710,50 @@ def test_an_ordinary_timeout_is_a_closed_harness_error(tmp_path, monkeypatch, ca
     assert "ordinary_timeout" in capsys.readouterr().out
 
 
+def _ordinary_argv(tmp_path, out):
+    return [
+        "ordinary", "--tarball", "t.tgz", "--work-dir", str(tmp_path / "w"),
+        "--out", str(out), "--timeout", "5",
+    ]  # fmt: skip
+
+
+def test_a_rerun_never_reads_a_stale_ordinary_capture(tmp_path, monkeypatch, capsys):
+    """Review 264: a setup failure before any write is a harness error (exit 2),
+    even when an earlier attempt left a product-failure capture at --out."""
+    import subprocess
+
+    module = _script()
+    out = tmp_path / "ordinary.json"
+    out.write_text(json.dumps(_PRODUCT_FAILURE), encoding="utf-8")
+
+    def setup_failure(argv, timeout):
+        return subprocess.CompletedProcess(argv, 2)  # exits before writing a capture
+
+    monkeypatch.setattr(module.subprocess, "run", setup_failure)
+    assert module.main(_ordinary_argv(tmp_path, out)) == 2
+    assert "capture_missing" in capsys.readouterr().out
+    # The stale capture is gone, so the platform step cannot pick it up.
+    assert not out.exists()
+
+
+def test_the_current_attempt_capture_is_graded(tmp_path, monkeypatch):
+    import subprocess
+
+    module = _script()
+    out = tmp_path / "ordinary.json"
+    out.write_text(json.dumps({"reason": "stale"}), encoding="utf-8")
+
+    def product_failure(argv, timeout):
+        Path(argv[argv.index("--out") + 1]).write_text(json.dumps(_PRODUCT_FAILURE))
+        return subprocess.CompletedProcess(argv, 2)
+
+    monkeypatch.setattr(module.subprocess, "run", product_failure)
+    monkeypatch.setattr(module.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(module.platform, "machine", lambda: "x86_64")
+    assert module.main(_ordinary_argv(tmp_path, out)) == 0
+    assert json.loads(out.read_text()) == _PRODUCT_FAILURE
+
+
 def test_describe_operations_tolerates_null_memory_samples(tmp_path):
     """Review 4435649829."""
     out = _bundle_dir(tmp_path)
@@ -772,7 +816,12 @@ def test_the_child_answers_even_when_the_job_store_fails(fail_after):
     reply = asyncio.run(
         handle(_app(_Store(fail_after)), {"id": 7, "op": "rescan", "source_id": "s"})
     )
-    assert reply == {"id": 7, "ok": False, "error": "OSError", "reason": None}
+    assert reply == {
+        "id": 7,
+        "ok": False,
+        "error": "job_evidence_unavailable",
+        "evidence_error": "OSError",
+    }
 
 
 def test_the_stdin_reader_never_calls_a_closed_loop():
