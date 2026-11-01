@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 import pytest
@@ -43,6 +44,42 @@ def test_owner_run_records_live_where_section_12_6_6_says(machine):
     assert "owner-platform-runs-2026-11-01/README.md" in paths
     assert f"owner-platform-runs-2026-11-01/{machine}/platform/platform.json" in paths
     assert not list(OWNER_RUNS.glob("owner-platform-run-*.json"))
+
+
+def test_owner_run_subjects_keep_their_bytes_on_every_checkout():
+    """Every bound subject is checked out byte for byte (RM38; AC29; spec 0.66 12.6.6).
+
+    The records bind each subject by SHA-256, including extensionless evidence,
+    ``verify.txt``, ``SHA256SUMS`` and ``.toml`` files. A file whose ``text``
+    attribute is unspecified gets CRLF line endings on a Windows checkout with
+    ``core.autocrlf=true``, and its digest no longer matches.
+    """
+    if shutil.which("git") is None or _git("rev-parse", "--git-dir").returncode != 0:
+        pytest.skip("needs a git checkout")
+    paths = [
+        f"docs/evidence/m10/{subject['path']}"
+        for record in EVIDENCE.glob("owner-platform-run-*.json")
+        for subject in json.loads(record.read_bytes())["subjects"]
+    ]
+    assert paths
+    result = subprocess.run(
+        ["git", "check-attr", "--stdin", "-z", "text", "eol"],
+        cwd=ROOT,
+        input="\0".join(paths) + "\0",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    fields = result.stdout.split("\0")[:-1]
+    attrs: dict[str, dict[str, str]] = {}
+    for path, name, value in zip(fields[0::3], fields[1::3], fields[2::3], strict=True):
+        attrs.setdefault(path, {})[name] = value
+    converted = sorted(
+        path
+        for path, values in attrs.items()
+        if values["text"] != "unset" and values["eol"] != "lf"
+    )
+    assert converted == []
 
 
 def _verify_block() -> str:
@@ -88,8 +125,17 @@ def test_the_documented_verify_procedure_reproduces_verify_txt(tmp_path):
         pytest.skip(f"run commit {run} is not in this clone (shallow checkout)")
     if shutil.which("bash") is None or shutil.which("tar") is None:
         pytest.skip("the documented procedure needs bash and tar")
-    # The run commit is reachable from this branch, not only a loose object.
-    assert _git("merge-base", "--is-ancestor", run, "HEAD").returncode == 0
+    # The procedure needs only the commit object, not its ancestry: after a
+    # squash merge the run commit is no longer an ancestor of HEAD.
+    for machine in ("macbook", "vps"):
+        lock = OWNER_RUNS / machine / "platform" / "bundle" / "release" / "lock.json"
+        recorded = json.loads(lock.read_bytes())["unicode_version"]
+        if recorded != unicodedata.unidata_version:
+            # The grader refuses a different Unicode database by design.
+            pytest.skip(
+                f"{machine} was graded with Unicode {recorded}; this Python has "
+                f"{unicodedata.unidata_version}"
+            )
     shim = tmp_path / "bin"
     shim.mkdir()
     # A wrapper, not a symlink: a venv interpreter finds its packages by its path.

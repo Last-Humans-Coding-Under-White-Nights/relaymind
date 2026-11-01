@@ -18,6 +18,7 @@ silent substitution. These checks recompute, from the committed bytes:
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -123,6 +124,22 @@ def test_the_capture_holds_exactly_100_selected_genuine_tools():
     assert len(document["selection"]["selected"]) == QUOTA
     assert len(document["tools"]) == QUOTA + len(document["selection"]["excluded"])
     assert {t["origin"] for t in document["tools"]} == {"genuine_mcp"}
+
+
+def test_the_committed_launch_arguments_hold_no_local_paths():
+    """Launch arguments keep only placeholders, never a local path (#261; AC31; 12.6.6).
+
+    The freeze rewrites only known path shapes, so this checks what was frozen:
+    no absolute path, home directory or user name reaches ``capture.v1.json``.
+    """
+    document = json.loads((CAPTURE / "capture.v1.json").read_bytes())
+    leaked = [
+        (server["id"], arg)
+        for server in document["servers"]
+        for arg in server["launch"]
+        if re.search(r"(^|[=:\s])(/|~|[A-Za-z]:[\\/])", arg) or "/home/" in arg or "/Users/" in arg
+    ]
+    assert leaked == []
 
 
 @pytest.fixture
