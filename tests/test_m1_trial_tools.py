@@ -294,3 +294,102 @@ def test_untracked_maintained_harness_is_not_a_committed_revision(builder, tmp_p
     monkeypatch.setattr(builder, "REPO", tmp_path)
     with pytest.raises(SystemExit, match="harness_uncommitted"):
         builder._check_committed()
+
+
+def test_indented_base_url_is_omitted(builder):
+    """RM16/AC36: the confidential base URL is omitted however it is indented."""
+    text = (
+        "[external_model]\n"
+        '  base_url = "https://private.invalid/v1"\n'
+        '\tbase_url="https://tab.invalid/v1"\n'
+        'base_url_note = "kept: a different key"\n'
+        '  model = "fixture"\n'
+    )
+    kept = builder._omit_base_url(text)
+    assert "private.invalid" not in kept
+    assert "tab.invalid" not in kept
+    assert 'base_url_note = "kept: a different key"' in kept
+    assert '  model = "fixture"' in kept
+
+
+def test_git_runs_in_the_repository_from_an_outside_directory(builder, tmp_path, monkeypatch):
+    """RM16/AC36: an operator working in the external trial directory still
+    reads the repository's commit, never the working directory's."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    monkeypatch.chdir(outside)
+    head = builder._head_commit()
+    expected = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert head == expected
+    assert builder._preregistration(head)["commit"] == expected
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--trial-dir", "T", "draft", "--root", "R"],
+        ["draft", "--trial-dir", "T", "--root", "R"],
+        ["draft", "--root", "R", "--trial-dir", "T"],
+    ],
+)
+def test_trial_dir_before_or_after_the_subcommand(builder, argv):
+    """RM16/AC36: --trial-dir is accepted on either side of the subcommand."""
+    args = builder.parse_args(argv)
+    assert args.command == "draft"
+    assert args.trial_dir == Path("T")
+    assert args.root == Path("R")
+
+
+def test_trial_dir_is_required(builder, capsys):
+    with pytest.raises(SystemExit):
+        builder.parse_args(["draft", "--root", "R"])
+    assert "--trial-dir" in capsys.readouterr().err
+
+
+def _documented(text, script):
+    """Every ``python scripts/<script> ...`` code span, placeholders filled."""
+    import re
+    import shlex
+
+    found = []
+    for match in re.finditer(rf"`python scripts/{re.escape(script)}([^`]*)`", text):
+        words = re.sub(r"<[^>]+>", "1", match.group(1))
+        found.append(shlex.split(words))
+    return found
+
+
+def test_readme_commands_match_the_parsers(builder):
+    """RM16/AC36: the documented commands parse, so docs and parsers cannot drift."""
+    readme = (REPO / "scripts/README.md").read_text(encoding="utf-8")
+    inputs = _documented(readme, "m1_trial_inputs.py")
+    commands = {builder.parse_args(argv).command for argv in inputs}
+    assert commands == {"draft", "freeze", "record"}
+    assert all("--trial-dir" in argv for argv in inputs)
+    maintained = module(REPO / "scripts/m1_trial_observe.py")
+    observers = _documented(readme, "m1_trial_observe.py")
+    assert observers
+    for argv in observers:
+        assert "--trial-dir" in argv
+        maintained.build_parser().parse_args(argv)
+
+
+def test_docstring_examples_match_the_parser(builder):
+    """RM16/AC36: the module docstring examples carry --trial-dir and parse."""
+    import re
+    import shlex
+
+    examples = re.findall(r"^``(--trial-dir [^`]*)``$", builder.__doc__, re.MULTILINE)
+    parsed = [builder.parse_args(shlex.split(re.sub(r"[\[\]]", "", line))) for line in examples]
+    assert {args.command for args in parsed} == {"draft", "freeze", "record"}
+
+
+def test_observer_trial_dir_is_required():
+    maintained = module(REPO / "scripts/m1_trial_observe.py")
+    row = ["--root", "R", "--inputs", "I", "--plan", "P", "--ordinal", "1"]
+    row += ["--observations", "O"]
+    with pytest.raises(SystemExit):
+        maintained.build_parser().parse_args(row)
+    args = maintained.build_parser().parse_args([*row, "--trial-dir", "T"])
+    assert args.trial_dir == Path("T")
