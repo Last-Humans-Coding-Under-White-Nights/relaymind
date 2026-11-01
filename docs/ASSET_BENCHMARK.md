@@ -995,8 +995,10 @@ so ordinary pull requests stay fast. Each platform runs:
    existing graders. Each operations summary is recomputed by
    `summarize_operations` from the stored samples. Each platform report is
    graded by `grade-platform` (it must be `not_applicable`), and its steps are
-   derived again from the registered originals. The result also goes to the
-   job summary.
+   derived again from the registered originals. The grade is written to a
+   temporary file, never into the run directory, so verifying committed
+   evidence changes none of its bound bytes. The result also goes to the job
+   summary.
 
 The job fails only on a harness error; it never uses `continue-on-error`. A
 slow runner, a late batch or a failed lifecycle step stays visible in the
