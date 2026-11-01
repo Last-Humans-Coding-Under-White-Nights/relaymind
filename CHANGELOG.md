@@ -33,6 +33,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   deadline remain failures through skill selection.
 
 - CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
+- CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation or native-preparation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
 - CI: both `check` and `openclaw-plugin` run stacked PRs on Linux only to
   conserve CI capacity, with no base-branch filter. Every PR must target
   `master` and pass the full Linux/macOS/Windows matrix before merge; pushes
@@ -77,7 +78,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Reconciles registration with the existing qualified direct-action exception,
   places the 512 KiB native request cap in section 14.5, and bounds approval
   waiting separately from the 60-second preparation/dispatch deadline without
-  changing existing budgets.
+  changing existing budgets. Clarifies pre-dispatch timeout/cancellation
+  receipts, the native RPC error envelope for pre-admission refusals, and
+  that the outer native request cap applies before the inner create-body cap;
+  both bounds hold. Repairs roadmap links and aligns the bilingual validation
+  notices and historical qualification notes with these unreleased rules.
   Requires source-bound pinned native host configuration validation with
   the captured native regex dialect and explicit provider/sampling/budget
   schema binding.
