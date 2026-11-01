@@ -188,6 +188,11 @@ No external customer dataset or human panel is needed to start using the tooling
 Production semantic qualification and installed M10 host execution/approval/
 correction walkthroughs are separate pending work; see [status](ROADMAP.md#m10--multilingual-asset-recommendations-spec-066).
 
+Spec 0.65 (#240) requires the pinned native validation evidence and applicable
+schema/extraction evidence specified in section 12.6.5 to be supplied and
+verified. Until then, host, provider, sampling and budget configuration
+documents remain unverified and cannot establish formal acceptance.
+
 ## Early trial and walkthroughs on the installed host
 
 - **Early installed-skill trial (#234, #259).** The owner, as operator, runs
