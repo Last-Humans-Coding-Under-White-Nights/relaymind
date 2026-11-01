@@ -1217,6 +1217,7 @@ class OrdinaryComposition(BASE.ActionComposition):
             "ordinary_skill_save_failed",
             "ordinary_skill_selection_failed",
             "ordinary_skill_turn_timeout",
+            "ordinary_skill_refusal_contradicted",
             "ordinary_skill_subscription_failed",
             "ordinary_skill_terminal_ambiguous",
             "ordinary_skill_scope_changed",
@@ -1544,6 +1545,18 @@ class OrdinaryComposition(BASE.ActionComposition):
         ):
             raise ValueError("ordinary_skill_selection_failed")
 
+    def collect_turn_activity(self, case, start):
+        """Gateway requests since start, their provider records, and native hooks of the turn."""
+        events = read_observer_events(self.event_file)
+        case["tools"] = native_tools(events, case["chat"]["params"]["idempotencyKey"])
+        case["requests"] = self.observation.requests[start:]
+        keys = {attempt["idempotency_key"] for attempt in case["requests"]}
+        case["provider_attempts"] = [
+            record
+            for record in read_observer_events(self.provider_attempt_file)
+            if record.get("idempotencyKey") in keys
+        ]
+
     @closed_native_data("ordinary_skill_turn_timeout")
     def loaded_use_turn(self, rpc, page, session, case, *, timeout=60):
         """Collect a bounded native browser turn; hooks only observe, never dispatch."""
@@ -1588,6 +1601,12 @@ class OrdinaryComposition(BASE.ActionComposition):
             observed="incomplete",
         )
         if frame.get("ok") is False:
+            # A refusal can follow partial dispatch: retain the same window and
+            # correlations as a completed turn, and never accept activity as a
+            # refusal without it.
+            self.collect_turn_activity(case, start)
+            if case["requests"] or case["tools"] or case["provider_attempts"]:
+                raise ValueError("ordinary_skill_refusal_contradicted")
             case["observed"] = "refused"
             return
         payload = native_payload(sent, "ordinary_skill_turn_timeout")
@@ -1618,19 +1637,12 @@ class OrdinaryComposition(BASE.ActionComposition):
         # after the terminal event before reading the passive capture file.
         deadline = time.monotonic() + 3
         while True:
-            events = read_observer_events(self.event_file)
-            case["tools"] = native_tools(events, params["idempotencyKey"])
-            case["requests"] = self.observation.requests[start:]
+            self.collect_turn_activity(case, start)
             has_result = any(
                 message.get("role") == "tool"
                 for attempt in case["requests"]
                 for message in _request_messages(attempt)
             )
-            case["provider_attempts"] = [
-                record
-                for record in read_observer_events(self.provider_attempt_file)
-                if record.get("idempotencyKey") in {a["idempotency_key"] for a in case["requests"]}
-            ]
             advertisement = advertised_skill(case["requests"], case["selected"])
             case["advertised_revision"] = advertisement[1] if advertisement else None
             if (case["tools"] or not has_result) and len(case["provider_attempts"]) == len(

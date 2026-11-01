@@ -2200,6 +2200,88 @@ def test_late_foreign_hook_does_not_poison_next_case(tmp_path, monkeypatch):
     assert case["observed"] == "loaded_pinned_revision"
 
 
+def refusing_turn(rpc, activity):
+    """A chat.send refusal after the host may already have dispatched part of the turn."""
+
+    def send(page, method, params):
+        if method != "chat.send" or activity:
+            reply = rpc(page, method, params)
+        if method != "chat.send":
+            return reply
+        return dict(
+            socket_id="socket",
+            frame=dict(ok=False, error=dict(code="UNAVAILABLE", message="refused")),
+        )
+
+    return send
+
+
+@pytest.mark.parametrize("activity", ["request", "tool", "all"])
+def test_refused_send_retains_and_rejects_partial_dispatch(tmp_path, monkeypatch, activity):
+    """RM16/RM39/AC30: a refused chat.send never discards activity the host already began.
+
+    Requests in the window, provider records correlated by request keys and
+    native hooks of the submitted idempotency key are retained; any of them
+    contradicts the refusal, so the case fails closed and the observation
+    capture exits non-zero.
+    """
+    import json
+
+    api = module()
+    extension, case, rpc, page, expected = turn_fixture(api, tmp_path, monkeypatch, deliver=True)
+
+    def dispatched(page, method, params):
+        reply = rpc(page, method, params)
+        if method == "chat.send" and activity == "request":
+            extension.event_file.write_text("")
+            extension.provider_attempt_file.write_text("")
+            del extension.observation.requests[1:]
+        elif method == "chat.send" and activity == "tool":
+            extension.provider_attempt_file.write_text("")
+            extension.observation.requests.clear()
+        return reply
+
+    with pytest.raises(ValueError, match="^ordinary_skill_refusal_contradicted$"):
+        extension.loaded_use_turn(refusing_turn(dispatched, True), page, {}, case)
+    assert case["observed"] == "incomplete"
+    if activity == "request":
+        assert case["requests"] == expected["requests"][:1]
+        assert case["tools"] == []
+        assert case["provider_attempts"] == []
+    elif activity == "tool":
+        assert case["requests"] == []
+        assert case["tools"] == expected["tools"]
+    else:
+        assert case["requests"] == expected["requests"]
+        assert case["tools"] == expected["tools"]
+        assert case["provider_attempts"] == expected["provider_attempts"]
+    assert "ordinary_skill_refusal_contradicted" in extension.failure_reasons()
+    # The step failure is recorded as observe_loaded_use records it.
+    case["failure_reason"] = "ordinary_skill_refusal_contradicted"
+    capture = loaded_fixture(api)
+    capture["ordinary_skill_loaded_use"]["cases"][0] = json.loads(json.dumps(case))
+    assert api.finish_capture(capture, 0, observe=True) == 2
+    assert capture["checks"]["ordinary_skill_observation_complete"] is False
+    # Even without the step failure, retained activity contradicts a refusal.
+    capture["ordinary_skill_loaded_use"]["cases"][0].update(failure_reason=None, observed="refused")
+    assert api.finish_capture(capture, 0, observe=True) == 2
+
+
+def test_activity_free_refused_send_remains_a_complete_observation(tmp_path, monkeypatch):
+    """RM16/RM39/AC30: a genuine refusal with no dispatched activity stays observed."""
+    api = module()
+    extension, case, rpc, page, _ = turn_fixture(api, tmp_path, monkeypatch, deliver=True)
+    extension.loaded_use_turn(refusing_turn(rpc, False), page, {}, case)
+    assert case["observed"] == "refused"
+    assert case["requests"] == case["tools"] == case["provider_attempts"] == []
+    assert case["terminal"] == {}
+    capture = loaded_fixture(api)
+    capture["ordinary_skill_loaded_use"]["cases"][0] = case
+    assert api.finish_capture(capture, 0, observe=True) == 0
+    assert capture["checks"]["ordinary_skill_observation_complete"] is True
+    assert capture["checks"]["ordinary_skill_loaded_use_observation"] is False
+
+
 def test_one_turn_request_overflow_does_not_starve_later_controls(tmp_path):
     """RM39/AC30 F9: each turn gets a fresh bounded HTTP window."""
     from api_helpers import call

@@ -18,6 +18,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   pin names, advertised revisions, socket receipts and independent provider/run
   records are checked, and incomplete hooks cannot label a turn `not_loaded`.
   Request and content retention limits preserve later control windows.
+  A refused `chat.send` retains its request window, correlated provider records
+  and native hooks; any such activity fails the case closed
+  (`ordinary_skill_refusal_contradicted`) instead of an activity-free refusal.
 
 - Operations and platform run kit (#242, toward #241, #235, #234; RM38, RM39, RM44; AC29, AC37):
   - `scripts/asset_operations_run.py startup` measures ten real `relaymind serve` startups over a generated 300-skill bilingual catalog, using the existing AC29 driver. It waits for recommendations to be ready and samples memory on POSIX and Windows.
