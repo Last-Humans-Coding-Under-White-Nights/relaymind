@@ -28,9 +28,12 @@ def served_panel(root: Path):
         def log_message(self, *_args):
             pass
 
-    server = http.server.ThreadingHTTPServer(
-        ("127.0.0.1", 0), functools.partial(Handler, directory=str(root))
-    )
+    class Server(http.server.ThreadingHTTPServer):
+        # The browser fetches the whole ES module graph at once; the default
+        # listen backlog of 5 overflows on macOS and resets a module request.
+        request_queue_size = 128
+
+    server = Server(("127.0.0.1", 0), functools.partial(Handler, directory=str(root)))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
