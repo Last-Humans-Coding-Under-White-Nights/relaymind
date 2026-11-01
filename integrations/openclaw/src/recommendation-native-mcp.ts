@@ -22,6 +22,10 @@ import type {
   NativeScopeDependencies,
 } from "./recommendation-native-authority.ts";
 import type { QualificationResolver } from "./recommendation-native-registry.ts";
+import type {
+  NativeUseLedger,
+  UseBase,
+} from "./recommendation-native-ledger.ts";
 
 /** The 60-second adapter deadline for preparation and dispatch (approval wait excluded). */
 export const MCP_OPERATION_MS = 60000;
@@ -65,11 +69,17 @@ export interface NativeMcpBinding {
   /** Releases the handle through its supported owner. */
   release(): void;
 }
+/** The native approval echoes the exact operation, arguments, target and authority it was given. */
 export interface NativeApprovalDecision {
   readonly decision: string;
   readonly approvalId: string;
   readonly operationId: string;
   readonly argumentsDigest: string;
+  readonly serverId: string;
+  readonly toolName: string;
+  readonly exposedName: string;
+  readonly schemaHash: string;
+  readonly sessionKey: string;
 }
 export interface NativeMcpInvocation {
   readonly ok: boolean;
@@ -99,6 +109,11 @@ export interface NativeMcpRoute {
       operationId: string;
       arguments: Record<string, unknown>;
       argumentsDigest: string;
+      serverId: string;
+      toolName: string;
+      exposedName: string;
+      schemaHash: string;
+      sessionKey: string;
     },
     control: { signal: AbortSignal; timeoutMs: number },
   ): Promise<NativeApprovalDecision>;
@@ -125,6 +140,8 @@ interface Dependencies extends NativeScopeDependencies {
   ) => Promise<UserActionClient>;
   wallNow: () => number;
   operationId?: () => string;
+  /** Durable key/approval history; without it no use is dispatched. */
+  ledger?: NativeUseLedger;
 }
 
 class McpRefusal extends Error {
@@ -138,7 +155,6 @@ function refuse(code: McpCode): never {
   throw new McpRefusal(code);
 }
 const MAX_DEPTH = 64;
-const MAX_HISTORY = 4096;
 const HEX64 = /^[a-f0-9]{64}$/;
 function nativeIdentity(value: unknown): value is string {
   return (
@@ -295,13 +311,94 @@ function checkSchema(schema: unknown, depth = 0): void {
     )
       throw new UnsupportedSchema();
   if (schema.pattern !== undefined) {
-    if (typeof schema.pattern !== "string") throw new UnsupportedSchema();
+    if (typeof schema.pattern !== "string" || !boundedPattern(schema.pattern))
+      throw new UnsupportedSchema();
     try {
       new RegExp(schema.pattern, "u");
     } catch {
       throw new UnsupportedSchema();
     }
   }
+}
+/** Longest string tested against a host pattern (code points). */
+export const MAX_PATTERN_INPUT = 8192;
+const MAX_PATTERN_LENGTH = 256;
+const MAX_BOUNDED_PRODUCT = 256;
+/**
+ * Host schema patterns run synchronously inside the 60-second operation, so
+ * only a subset whose backtracking is provably bounded is admitted: anchored
+ * with ^ and $, a flat sequence of atoms (literals, simple escapes, classes,
+ * dot) with no groups, alternation, lookaround, backreference or Unicode
+ * property escape; at most one unbounded quantifier, and the product of the
+ * bounded quantifier ranges at most 256. Matching then costs at most about
+ * 256 × the bounded input length. Anything else is unavailable.
+ */
+function boundedPattern(pattern: string): boolean {
+  if (
+    pattern.length > MAX_PATTERN_LENGTH ||
+    !pattern.startsWith("^") ||
+    !pattern.endsWith("$") ||
+    pattern.endsWith("\\$")
+  )
+    return false;
+  const body = pattern.slice(1, -1);
+  let unbounded = 0;
+  let product = 1;
+  let atom = false;
+  for (let i = 0; i < body.length;) {
+    const ch = body[i]!;
+    if (ch === "\\") {
+      const next = body[i + 1];
+      if (next === undefined || !/[dDwWsS.\-\\/^$*+?()[\]{}|tnr]/.test(next))
+        return false;
+      i += 2;
+      atom = true;
+      continue;
+    }
+    if (ch === "[") {
+      let j = i + 1;
+      if (body[j] === "^") j++;
+      if (body[j] === "]") return false;
+      for (; j < body.length && body[j] !== "]"; j++) {
+        if (body[j] === "\\") {
+          const next = body[j + 1];
+          if (next === undefined || !/[dDwWsS.\-\\/^$\[\]tnr]/.test(next))
+            return false;
+          j++;
+        } else if (body[j] === "[") return false;
+      }
+      if (j >= body.length) return false;
+      i = j + 1;
+      atom = true;
+      continue;
+    }
+    if ("*+?{".includes(ch)) {
+      if (!atom) return false;
+      let low: number, high: number;
+      if (ch === "{") {
+        const match = /^\{(\d{1,4})(?:(,)(\d{1,4})?)?\}/.exec(body.slice(i));
+        if (!match) return false;
+        low = Number(match[1]);
+        high = match[2] ? (match[3] ? Number(match[3]) : Infinity) : low;
+        if (high < low) return false;
+        i += match[0].length;
+      } else {
+        low = ch === "+" ? 1 : 0;
+        high = ch === "?" ? 1 : Infinity;
+        i++;
+      }
+      if (body[i] === "?") i++;
+      if (high === Infinity) unbounded++;
+      else product *= high - low + 1;
+      if (unbounded > 1 || product > MAX_BOUNDED_PRODUCT) return false;
+      atom = false;
+      continue;
+    }
+    if ("()|^$]}".includes(ch)) return false;
+    i++;
+    atom = true;
+  }
+  return true;
 }
 /**
  * Validates arguments against the exact exposed schema. An object field that
@@ -357,11 +454,10 @@ function conforms(value: unknown, schema: Record<string, any>): boolean {
       return false;
     if (schema.maxLength !== undefined && length > schema.maxLength)
       return false;
-    if (
-      schema.pattern !== undefined &&
-      !new RegExp(schema.pattern, "u").test(value)
-    )
-      return false;
+    if (schema.pattern !== undefined) {
+      if (length > MAX_PATTERN_INPUT) refuse("unavailable");
+      if (!new RegExp(schema.pattern, "u").test(value)) return false;
+    }
   }
   if (Array.isArray(value)) {
     if (schema.minItems !== undefined && value.length < schema.minItems)
@@ -423,23 +519,27 @@ function aborted(signal: AbortSignal): Promise<typeof ABORTED> {
   });
 }
 
-interface History {
-  readonly digest: string;
-  readonly base: Pick<
-    McpUseReceipt,
-    "operationId" | "recommendationId" | "assetId" | "contentHash"
-  >;
-  receipt: McpUseReceipt | undefined;
+/** A lost settle leaves the durable claim unresolved, which replays as indeterminate. */
+function settle(
+  ledger: NativeUseLedger | undefined,
+  key: string | undefined,
+  receipt: McpUseReceipt,
+): void {
+  try {
+    if (ledger && key !== undefined) ledger.settle(key, receipt);
+  } catch {
+    /* Fail closed on recovery: the claim stays unresolved. */
+  }
 }
 export function createNativeMcpHandler(dependencies: Dependencies) {
-  // Same registered scope and session incarnation only; in-process history.
-  const history = new Map<string, History>();
-  const consumedApprovals = new Set<string>();
+  // Same-key requests still in preparation in this process (not yet claimed).
+  const inFlight = new Map<string, { digest: string; base: UseBase }>();
   return async (options: NativeActionOptions): Promise<void> => {
     let authority: ReturnType<typeof prepareNativeAuthority> | undefined;
     let native: NativeMcpBinding | undefined;
-    let entry: History | undefined;
-    let base: History["base"] | undefined;
+    let base: UseBase | undefined;
+    let ownedKey: string | undefined;
+    let ledger: NativeUseLedger | undefined;
     let dispatched = false;
     let nativeRunId: string | null = null;
     let nativeCallId: string | null = null;
@@ -499,6 +599,11 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
       )
         return closed("unqualified");
       const maxApprovalWaitMs = qualified.mcp.maxApprovalWaitMs;
+      // Spec 0.65 7.6.2 condition 1: lost dispatch history must fail closed,
+      // so no use is possible without durable history.
+      ledger = dependencies.ledger;
+      if (!ledger) return closed("unavailable");
+      const history = ledger;
       // 2. Ingress and scope: the original authenticated request authority.
       try {
         authority = prepareNativeAuthority(
@@ -546,12 +651,18 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         key,
       ]);
       const digest = sha256(canonicalText(params, false)!);
-      const previous = history.get(scopeKey);
-      if (previous) {
+      let previous: ReturnType<NativeUseLedger["lookup"]>;
+      try {
+        previous = history.lookup(scopeKey);
+      } catch {
+        return closed("unavailable");
+      }
+      const pending = previous ?? inFlight.get(scopeKey);
+      if (pending) {
         // Recover only the historical receipt, after current authorization;
         // never dispatch again. An unresolved history fails closed.
         await registered();
-        if (previous.digest !== digest)
+        if (pending.digest !== digest)
           return options.respond(
             true,
             {
@@ -568,8 +679,8 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
           );
         return options.respond(
           true,
-          previous.receipt ?? {
-            ...previous.base,
+          previous?.receipt ?? {
+            ...pending.base,
             outcome: "indeterminate",
             code: "transport_unknown",
             nativeRunId: null,
@@ -578,15 +689,16 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
           undefined,
         );
       }
-      if (history.size >= MAX_HISTORY) return closed("unavailable");
       base = {
         operationId: dependencies.operationId?.() ?? randomUUID(),
         recommendationId: params.recommendationId,
         assetId: params.assetId,
         contentHash: params.contentHash,
       };
-      entry = { digest, base, receipt: undefined };
-      history.set(scopeKey, entry);
+      // A pre-dispatch refusal proves no dispatch and does not consume the
+      // key; the durable claim is written only once dispatch may begin.
+      inFlight.set(scopeKey, { digest, base });
+      ownedKey = scopeKey;
       const operationId = base.operationId;
       // 7. The retained explicit choice and exact still-eligible offered asset.
       let chosen: Offered | undefined;
@@ -671,16 +783,21 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
           refuse("binding_changed");
         }
       };
-      const schemaHash = canonicalSchemaHash(bound.inputSchema);
       if (
         bound.serverId !== identity.server_id ||
         bound.toolName !== identity.tool_name ||
         bound.exposedName !== identity.exposed_name ||
-        schemaHash === undefined ||
-        schemaHash !== identity.schema_hash ||
-        canonicalSchemaHash(identity.input_schema) !== identity.schema_hash
+        canonicalText(bound.inputSchema, false) === undefined ||
+        canonicalText(bound.inputSchema, false) !==
+          canonicalText(identity.input_schema, false)
       )
         refuse("binding_changed");
+      // The same schema whose gateway hash cannot be recomputed here (for
+      // example an integral float such as 0.0, which a JSON value in this
+      // process cannot distinguish from 0) is unavailable, not a change.
+      const schemaHash = canonicalSchemaHash(bound.inputSchema);
+      if (schemaHash === undefined || schemaHash !== identity.schema_hash)
+        refuse("unavailable");
       nativeCurrent();
       if (!validArguments(args, bound.inputSchema)) refuse("invalid_request");
       const argumentsDigest = sha256(canonicalText(args, false)!);
@@ -710,7 +827,16 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         decision = await Promise.race([
           route.requestApproval(
             bound,
-            { operationId, arguments: args, argumentsDigest },
+            {
+              operationId,
+              arguments: args,
+              argumentsDigest,
+              serverId: bound.serverId,
+              toolName: bound.toolName,
+              exposedName: bound.exposedName,
+              schemaHash,
+              sessionKey: target.sessionKey,
+            },
             { signal: approvalSignal, timeoutMs: waitMs },
           ),
           new Promise<typeof TIMEOUT>((resolve) => {
@@ -739,11 +865,21 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         !nativeIdentity(decision.approvalId) ||
         decision.operationId !== operationId ||
         decision.argumentsDigest !== argumentsDigest ||
-        consumedApprovals.has(decision.approvalId)
+        decision.serverId !== bound.serverId ||
+        decision.toolName !== bound.toolName ||
+        decision.exposedName !== bound.exposedName ||
+        decision.schemaHash !== schemaHash ||
+        decision.sessionKey !== target.sessionKey
       )
         refuse("approval_denied");
-      // Allow-once is consumed at most once, even when later fences refuse.
-      consumedApprovals.add(decision.approvalId);
+      // Allow-once is consumed at most once, durably, even when later fences refuse.
+      let fresh: boolean;
+      try {
+        fresh = history.consumeApproval(decision.approvalId);
+      } catch {
+        refuse("unavailable");
+      }
+      if (!fresh) refuse("approval_denied");
       // 6. Fence after approval and immediately before native server I/O.
       current();
       await choice();
@@ -752,6 +888,11 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
       if (!validArguments(args, bound.inputSchema)) refuse("invalid_request");
       if (sha256(canonicalText(args, false)!) !== argumentsDigest)
         refuse("binding_changed");
+      try {
+        history.claim(scopeKey, digest, base);
+      } catch {
+        refuse("unavailable");
+      }
       dispatched = true;
       const invocation = await Promise.race([
         route.invoke(
@@ -780,10 +921,10 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         nativeRunId,
         nativeCallId,
       };
-      entry.receipt = receipt;
+      settle(ledger, ownedKey, receipt);
       options.respond(true, receipt, undefined);
     } catch (error) {
-      if (!base || !entry)
+      if (!base)
         return closed(error instanceof McpRefusal ? error.code : "unavailable");
       let code: McpCode;
       if (dispatched)
@@ -808,9 +949,10 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         nativeRunId: dispatched ? nativeRunId : null,
         nativeCallId: dispatched ? nativeCallId : null,
       };
-      entry.receipt = receipt;
+      if (dispatched) settle(ledger, ownedKey, receipt);
       options.respond(true, receipt, undefined);
     } finally {
+      if (ownedKey !== undefined) inFlight.delete(ownedKey);
       try {
         native?.release();
       } finally {

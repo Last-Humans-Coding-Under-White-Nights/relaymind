@@ -1,7 +1,11 @@
 // RM16/RM37/RM39; AC28/AC30 (spec 0.65 section 7.6.1): the loaded-use fence and
 // immutable pins. Controlled host-shaped doubles only; never qualification evidence.
 import { createHash } from "node:crypto";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, it } from "vitest";
+import { createFileUseLedger } from "../src/recommendation-native-ledger.js";
 import { fixture } from "./recommendation-native-fixture.js";
 import {
   createSkillLoadedUseFence,
@@ -15,7 +19,10 @@ const R0 = "b".repeat(64);
 const R1 = "c".repeat(64);
 const QUALIFIED = { adapterRevision: "a".repeat(64) } as any;
 
-function setup(qualified = true) {
+function ledgerPath(): string {
+  return join(mkdtempSync(join(tmpdir(), "relaymind-ledger-")), "use.jsonl");
+}
+function setup(qualified = true, ledger: string | null = ledgerPath()) {
   const f = fixture();
   const view: any = {
     recommendation_id: skillId,
@@ -82,6 +89,7 @@ function setup(qualified = true) {
         };
       },
     }),
+    ledger: ledger === null ? undefined : createFileUseLedger(ledger),
     dispatch: async (method: string, params: unknown) => {
       calls.push([method, params]);
       return { ok: true, payload: library };
@@ -320,4 +328,31 @@ it("blocks a choice that expires while the native read is awaited", async () => 
   expect(await refused(f.fence.load(f.options, f.use))).toBe(
     "choice_unavailable",
   );
+});
+
+/**
+ * Spec 0.65 7.6.1: "If unload is unavailable, stop further RelayMind-managed
+ * use in that conversation and require a fresh session with fresh
+ * authority/choice before resuming." A restart does not lift that stop.
+ */
+it("keeps a blocked conversation blocked across a restart", async () => {
+  const path = ledgerPath();
+  const f = setup(true, path);
+  await f.fence.load(f.options, f.use);
+  f.setSkills([]);
+  expect(await refused(f.fence.deliver(f.options, f.use, content))).toBe(
+    "binding_changed",
+  );
+  const restarted = setup(true, path);
+  expect(
+    await refused(restarted.fence.load(restarted.options, restarted.use)),
+  ).toBe("binding_changed");
+  expect(restarted.calls).toHaveLength(0);
+});
+
+it("refuses managed use without a durable ledger before any call", async () => {
+  const f = setup(true, null);
+  expect(await refused(f.fence.load(f.options, f.use))).toBe("unavailable");
+  expect(f.calls).toHaveLength(0);
+  expect(f.gateway).toHaveLength(0);
 });
