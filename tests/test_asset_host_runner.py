@@ -808,3 +808,85 @@ def test_a_journal_key_must_be_a_string(tmp_path, key):
         assert journal.read_bytes() == after_start != before
     with RunJournal(journal, header) as j:
         assert j.started == {"1"}
+
+
+@pytest.mark.parametrize("ref", [None, 123, "ev", ["id", "x"]])
+def test_a_non_object_journaled_evidence_ref_rejects_with_a_fixed_reason(tmp_path, ref):
+    """Review 4437319307: a scalar evidence ref is executor_output, never a TypeError."""
+    from relaymind.canonical import canonical_json
+
+    freeze, tasks = setup(1)
+    journal = tmp_path / "run.jsonl"
+    run(tasks, freeze, lambda t, a, c: captured(row(t["id"], a)), journal)
+    records = [json.loads(line) for line in journal.read_bytes().rstrip(b"\n").split(b"\n")]
+    finished_record = next(r for r in records if r["type"] == "finished")
+    finished_record["value"]["evidence"].append(ref)
+    journal.write_bytes(b"".join((canonical_json(r) + "\n").encode() for r in records))
+    with pytest.raises(WholeTaskRejected, match="executor_output"):
+        run(tasks, freeze, lambda t, a, c: captured(row(t["id"], a)), journal)
+
+
+def test_a_broken_pipe_on_the_executor_input_still_closes_it(tmp_path, monkeypatch):
+    """Review 4437319309: stdin is closed even when writing the request fails."""
+    import time
+
+    from relaymind.evaluation import asset_host_runner
+
+    class BrokenStdin:
+        closed = False
+
+        def write(self, data):
+            raise BrokenPipeError("reader gone")
+
+        def close(self):
+            self.closed = True
+
+    stdin = BrokenStdin()
+    real = asset_host_runner._start_group
+
+    def start(argv):
+        process = real(argv)
+        process.stdin.close()
+        process.stdin = stdin
+        return process
+
+    monkeypatch.setattr(asset_host_runner, "_start_group", start)
+    argv = write_executor(tmp_path, "pass")
+    assert asset_host_runner._run_program(argv, b"{}", 10) == b""
+    deadline = time.monotonic() + 5
+    while not stdin.closed and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert stdin.closed
+
+
+@pytest.mark.parametrize("error", ["boom", dict(message="no code"), [1]])
+def test_a_malformed_model_error_is_an_invalid_trace(error):
+    """Review 4437319313: a malformed model.finished error rejects with a fixed reason."""
+    from relaymind.evaluation.asset_host_runner import _outcome
+
+    end = finished(2, "c1", None, error=dict(code="provider_error", message="x"))
+    end["payload"]["error"] = error
+    with pytest.raises(ValueError, match="trace_error"):
+        _outcome(end)
+
+
+def test_a_failed_lock_write_leaves_no_stale_lock(tmp_path, monkeypatch):
+    """Review 4437319316: a failed PID write removes the lock so a later run can open."""
+    from relaymind.evaluation import asset_run_journal
+
+    real = asset_run_journal.os.fdopen
+
+    def failing(fd, *args, **kwargs):
+        os_file = real(fd, *args, **kwargs)
+        os_file.close()
+        raise OSError("no space")
+
+    monkeypatch.setattr(asset_run_journal.os, "fdopen", failing)
+    journal = tmp_path / "run.jsonl"
+    header = dict(type="header", kind="host", input_digest=H)
+    with pytest.raises(OSError, match="no space"):
+        RunJournal(journal, header)
+    monkeypatch.undo()
+    assert not (tmp_path / "run.jsonl.lock").exists()
+    with RunJournal(journal, header):
+        pass
