@@ -289,3 +289,54 @@ def test_generic_refusal_requires_actual_same_request_retirement_and_held_read(c
     elif change == "generic_without_retirement":
         value["retirement"].pop(1)
     assert not api.composed_pass(report)
+
+
+def ordinary_module():
+    path = ROOT / "integrations/openclaw/test/host-ordinary-qualification/qualify.py"
+    spec = importlib.util.spec_from_file_location("ordinary_backend_clock", path)
+    loaded = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(loaded)
+    return loaded
+
+
+def test_the_fixture_backend_offers_choices_on_the_host_wall_clock(tmp_path):
+    """RM36/RM39 AC27/AC30: the installed adapter refuses `relaymind.skill` once
+    ``choice_expires_at`` is past its own real ``Date.now()``. The disposable
+    backend both host harnesses start must therefore stamp views with the real
+    wall clock, never the store tests' fixed FakeClock (T0 2026-10-20), whose
+    ten-minute choice window is already over for any real host."""
+    import asyncio
+    from datetime import UTC, datetime, timedelta
+
+    from recommendation_helpers import BODY, client_for
+
+    async def go():
+        backend = tmp_path / "gateway"
+        backend.mkdir()
+        app, service, runs, _ = module().fixture_backend(backend)
+        try:
+            await service.refresh_catalog()
+            before = datetime.now(UTC)
+            async with await client_for(app) as client:
+                response = await client.post("/relay/v1/recommendations", json=BODY)
+        finally:
+            await service.stop()
+            runs.close()
+        assert response.status_code == 200, response.text
+        return before, response.json()
+
+    before, view = asyncio.run(go())
+    stamp = lambda text: datetime.fromisoformat(text.replace("Z", "+00:00"))  # noqa: E731
+    assert view["state"] == "ready"
+    assert before - timedelta(seconds=5) <= stamp(view["created_at"]) <= datetime.now(UTC)
+    assert stamp(view["choice_expires_at"]) > datetime.now(UTC)
+
+
+@pytest.mark.parametrize("harness", [module, ordinary_module])
+def test_each_host_harness_starts_the_wall_clock_fixture_backend(harness):
+    """RM36/RM39: neither harness may build its backend from the store test default clock."""
+    import inspect
+
+    source = inspect.getsource(harness().main)
+    assert "fixture_backend(backend)" in source
+    assert "import setup" not in source

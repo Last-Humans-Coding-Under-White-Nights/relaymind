@@ -2061,7 +2061,6 @@ def main(argv=None):
     import argparse
 
     from api_helpers import RunningServer
-    from recommendation_helpers import setup
     from relaymind.recommendations.registrations import (
         ActionRegistrations,
         Registration,
@@ -2077,7 +2076,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     backend = args.work_dir.parent / (args.work_dir.name + "-gateway")
     backend.mkdir(mode=0o700)
-    app, service, runs, _ = setup(backend)
+    app, service, runs, _ = BASE.fixture_backend(backend)
     gateway, observation = None, None
     if args.observe_loaded_use:
         # create_app issues its own fresh random application token and checks
