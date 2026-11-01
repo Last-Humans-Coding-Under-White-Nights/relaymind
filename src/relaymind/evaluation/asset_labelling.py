@@ -22,7 +22,7 @@ process obligations that no file format proves.
 """
 
 import copy
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 
 from relaymind.canonical import canonical_digest
@@ -172,9 +172,7 @@ def raw_judgments(
             judgments.append(row)
     judgments.sort(key=lambda j: (j["case_id"].encode(), j["annotator_id"].encode()))
     check_object_order(judgments, ("case_id", "annotator_id"))
-    counts = defaultdict(int)
-    for row in judgments:
-        counts[row["case_id"]] += 1
+    counts = Counter(row["case_id"] for row in judgments)
     if any(counts[case_id] != 2 for case_id in case_map):
         raise AssetCorpusError("raw_judgment_coverage")
     if owner_machine:
@@ -205,7 +203,10 @@ def adjudication_worksheet(
     """The adjudicator's view: both raw judgments, their agreement, one final per case."""
     _, case_map = _documents(catalog, cases)
     rows = _by_case(judgments)
-    if set(rows) != set(case_map) or any(len(r) != 2 for r in rows.values()):
+    # Two distinct annotators per case, exactly as the release validator requires.
+    if set(rows) != set(case_map) or any(
+        len(r) != 2 or r[0]["annotator_id"] == r[1]["annotator_id"] for r in rows.values()
+    ):
         raise AssetCorpusError("raw_judgment_coverage")
     items = []
     for case_id in case_map:
@@ -250,6 +251,7 @@ def freeze_labels(
         or worksheet.get("format") != WORKSHEET_FORMAT
         or any(worksheet.get(k) != v for k, v in binding.items())
         or not isinstance(worksheet.get("items"), list)
+        or not all(isinstance(item, Mapping) for item in worksheet["items"])
     ):
         raise AssetCorpusError("worksheet_binding")
     rows = _by_case(judgments)

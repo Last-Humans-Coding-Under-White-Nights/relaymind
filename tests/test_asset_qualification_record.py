@@ -283,7 +283,6 @@ def _assess(record=None, report_sha256=None, **overrides):
     values = dict(
         kind="host",
         claimed="qualified",
-        corpus_purpose="acceptance",
         corpus_status="qualified",
         evidence=[{"provenance": "observed"}],
         artifacts=[{"provenance": "observed"}],
@@ -340,7 +339,7 @@ def test_a_negative_record_never_qualifies_a_report(tmp_path):
 
 def test_a_fixture_input_stays_fixture_even_with_a_record(tmp_path):
     record = load_record(save(tmp_path, host_record(tmp_path)))
-    assert _assess(record, REPORT_SHA, corpus_purpose="fixture").assessed == "fixture"
+    assert _assess(record, REPORT_SHA, corpus_status="fixture").assessed == "fixture"
 
 
 def _platform(tmp_path, machine, environment):

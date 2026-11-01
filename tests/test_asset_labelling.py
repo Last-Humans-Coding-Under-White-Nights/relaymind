@@ -286,3 +286,29 @@ def test_an_owner_machine_disagreement_needs_an_adjudication_reason(tmp_path):
     explained = _owner_adjudicated(worksheet, labels, reason="")
     explained["items"][0]["adjudication"]["reason"] = "owner: language is valid"
     freeze_labels(catalog, cases, judgments, explained, labelling="owner_machine")
+
+
+def test_the_worksheet_needs_two_distinct_annotators_per_case(tmp_path):
+    """Review 4435556020: self-agreement of one annotator is not double annotation."""
+    catalog, cases, labels = corpus(tmp_path)
+    templates = [
+        filled(label_template(catalog, cases, a), labels, a) for a in ("judge-a", "judge-b")
+    ]
+    judgments = raw_judgments(catalog, cases, templates)
+    doubled = [dict(j, annotator_id="judge-a") for j in judgments]
+    with pytest.raises(AssetCorpusError, match="raw_judgment_coverage"):
+        adjudication_worksheet(catalog, cases, doubled)
+
+
+@pytest.mark.parametrize("item", [None, 3, "case-00", []])
+def test_a_non_object_worksheet_item_is_a_binding_error(tmp_path, item):
+    """Review 4435556027: a malformed worksheet rejects with a fixed reason."""
+    catalog, cases, labels = corpus(tmp_path)
+    templates = [
+        filled(label_template(catalog, cases, a), labels, a) for a in ("judge-a", "judge-b")
+    ]
+    judgments = raw_judgments(catalog, cases, templates)
+    worksheet = adjudicated(adjudication_worksheet(catalog, cases, judgments), labels)
+    worksheet["items"][0] = item
+    with pytest.raises(AssetCorpusError, match="worksheet_binding"):
+        freeze_labels(catalog, cases, judgments, worksheet)

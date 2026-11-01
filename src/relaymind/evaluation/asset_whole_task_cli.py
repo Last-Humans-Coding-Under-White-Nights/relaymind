@@ -73,13 +73,15 @@ def _grade(args) -> tuple[str, dict]:
     # Check the report's own shape before following any of its references.
     validate_whole_task(_REPORTS[args.command], report)
     resolver = OfflineResolver(args.resolver) if args.resolver else None
-    kind = "adaptation" if args.command == "grade-adaptation" else "host"
-    inputs = resolve_whole_task_inputs(kind, report, args.inputs, resolver=resolver)
+    kind = args.command.removeprefix("grade-")
+    inputs = resolve_whole_task_inputs(
+        "adaptation" if kind == "adaptation" else "host", report, args.inputs, resolver=resolver
+    )
     # Qualification is assessed from the inputs, never taken from the label
     # (#240): a known fixture contradiction rejects before grading.
     record = load_record(args.qualification_record) if args.qualification_record else None
     assessment = assess_inputs(
-        "platform" if args.command == "grade-platform" else kind,
+        kind,
         report,
         inputs,
         record=record,
@@ -88,7 +90,7 @@ def _grade(args) -> tuple[str, dict]:
     check_claim(assessment)
     unverified = [item for item in inputs.unverified if item in assessment.reasons]
     extra = dict(unverified=unverified, qualification=assessment.as_output())
-    if args.command == "grade-adaptation":
+    if kind == "adaptation":
         summary = grade_adaptation_report(
             report,
             inputs.root,
@@ -104,21 +106,31 @@ def _grade(args) -> tuple[str, dict]:
                 ),
             ),
         )
-        return enforce_qualification(assessment, summary["gate"]), dict(summary=summary, **extra)
-    if args.command == "grade-host":
+    elif kind == "host":
         summary = grade_host_report(report, inputs.root, inputs.freeze, registry=inputs.registry)
-        return enforce_qualification(assessment, summary["gate"]), dict(summary=summary, **extra)
-    gate = grade_platform_report(report, inputs.root, inputs.freeze, registry=inputs.registry)
-    return enforce_qualification(assessment, gate), extra
+    else:
+        gate = grade_platform_report(report, inputs.root, inputs.freeze, registry=inputs.registry)
+        return enforce_qualification(assessment, gate), extra
+    return enforce_qualification(assessment, summary["gate"]), dict(summary=summary, **extra)
+
+
+def _plan_host(args) -> dict:
+    """The preregistered task commitments and the deterministic three-arm plan."""
+    tasks, _ = read_json_path(args.tasks, DOCUMENT_BYTES)
+    freeze, _ = read_json_path(args.freeze, DOCUMENT_BYTES)
+    return dict(
+        input_digest=verify_host_tasks(tasks, freeze),
+        freeze_digest=tasks["freeze_digest"],
+        planned=plan_host_trial(tasks),
+    )
 
 
 def _plan_episodes(args) -> dict:
     """The preregistered episode commitments and per-episode probe plan."""
     episodes, _ = read_json_path(args.episodes, DOCUMENT_BYTES)
     freeze, _ = read_json_path(args.freeze, DOCUMENT_BYTES)
-    input_digest = verify_episodes(episodes, freeze)
     return dict(
-        input_digest=input_digest,
+        input_digest=verify_episodes(episodes, freeze),
         config_digest=episodes["config_digest"],
         episodes=[
             dict(
@@ -158,9 +170,8 @@ def _trial_preflight(args, environment: dict) -> dict:
 def _trial(args) -> int:
     """#234: the early-trial kit commands (spec 0.65 section 12.6.5)."""
     try:
-        environment = asset_trial_kit.observed_environment()
         if args.command == "trial-preflight":
-            record = _trial_preflight(args, environment)
+            record = _trial_preflight(args, asset_trial_kit.observed_environment())
             atomic_bytes(args.output, json_bytes(record))
             print(json.dumps(dict(passed=record["passed"], checks=record["checks"])))
             return 0 if record["passed"] else 3
@@ -172,6 +183,7 @@ def _trial(args) -> int:
         if args.command == "trial":
             work = args.work.absolute()
             work.mkdir(mode=0o700, parents=True, exist_ok=False)
+            environment = asset_trial_kit.observed_environment()
             preflight = _trial_preflight(args, environment)
             atomic_bytes(work / "preflight.json", json_bytes(preflight))
             install = None
@@ -183,6 +195,9 @@ def _trial(args) -> int:
             tarball = args.tarball
         else:
             preflight, _ = read_json_path(args.preflight)
+            # Offline bundling may run elsewhere: the report keeps the target
+            # machine's environment as the preflight recorded it.
+            environment = asset_trial_kit.preflight_environment(preflight)
             install = read_json_path(args.install)[0] if args.install else None
             tarball = args.tarball
     except (WholeTaskBlocked, WholeTaskRejected, AssetCorpusError, OSError, ValueError) as exc:
@@ -249,6 +264,9 @@ def _trial_parsers(sub) -> None:
     host(trial)
 
 
+_PLANS = {"plan-host": _plan_host, "plan-episodes": _plan_episodes}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
@@ -294,19 +312,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command in RUN_KIT_COMMANDS:
         return run_kit(args)
     try:
-        if args.command == "plan-host":
-            tasks, _ = read_json_path(args.tasks, DOCUMENT_BYTES)
-            freeze, _ = read_json_path(args.freeze, DOCUMENT_BYTES)
-            input_digest = verify_host_tasks(tasks, freeze)
-            plan = dict(
-                input_digest=input_digest,
-                freeze_digest=tasks["freeze_digest"],
-                planned=plan_host_trial(tasks),
-            )
-            atomic_bytes(args.output, json_bytes(plan))
-            return 0
-        if args.command == "plan-episodes":
-            atomic_bytes(args.output, json_bytes(_plan_episodes(args)))
+        if args.command in _PLANS:
+            atomic_bytes(args.output, json_bytes(_PLANS[args.command](args)))
             return 0
         gate, extra = _grade(args)
         result = dict(status="graded", gate=gate, reason=None, **extra)
@@ -315,7 +322,7 @@ def main(argv: list[str] | None = None) -> int:
         result, code = dict(status="blocked", gate="blocked", reason=exc.reason), 3
     except (WholeTaskRejected, AssetCorpusError, ValueError, KeyError, TypeError) as exc:
         reason = str(exc) if str(exc).isidentifier() else "invalid_input"
-        if args.command in ("plan-host", "plan-episodes"):
+        if args.command in _PLANS:
             print(json.dumps(dict(status="rejected", reason=reason)), file=sys.stderr)
             return 2
         result, code = dict(status="rejected", gate=None, reason=reason), 2
