@@ -2,6 +2,7 @@
 
 import asyncio
 import copy
+import time
 from importlib import resources
 
 import pytest
@@ -78,11 +79,23 @@ def test_standalone_action_evidence_rejects_unpublished_or_invalid_fields(change
         validator.validate(action)
 
 
-@pytest.mark.parametrize("kind", ["asset", "none", "cancel"])
-def test_actual_action_view_and_event_share_the_offline_contract(tmp_path, kind):
+def _check_actual_action_contract(tmp_path, kind):
+    """Create a real recommendation and check its published action evidence."""
+    from helpers import FakeClock
+
     async def go():
         _, validator = action_validator()
-        async with action_client(tmp_path) as (client, app, service, runs, catalog, registry):
+        # This test checks the action evidence contract, not the recommendation
+        # deadline: a frozen clock makes a busy runner unable to turn the
+        # selection into a 504 before the action is ever recorded.
+        async with action_client(tmp_path, clock=FakeClock()) as (
+            client,
+            app,
+            service,
+            runs,
+            catalog,
+            registry,
+        ):
             parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
             rid = parent["recommendation_id"]
             choice = dict(kind=kind)
@@ -114,6 +127,33 @@ def test_actual_action_view_and_event_share_the_offline_contract(tmp_path, kind)
                 validate_event(changed_event)
 
     asyncio.run(go())
+
+
+@pytest.mark.parametrize("kind", ["asset", "none", "cancel"])
+def test_actual_action_view_and_event_share_the_offline_contract(tmp_path, kind):
+    _check_actual_action_contract(tmp_path, kind)
+
+
+def test_actual_action_contract_does_not_depend_on_runner_scheduling(tmp_path, monkeypatch):
+    """RM37/AC28: a busy runner must not turn the action contract into a 504.
+
+    The fixture runs a real lexical selection under the recommendation deadline.
+    When the fixture reads the host's monotonic clock, a runner descheduled for
+    longer than the 500 ms budget answers 504 with no recommendation_id, so the
+    action evidence is never exercised. The clock must not be the host clock.
+    """
+    from relaymind.store.run_store import TraceClock
+
+    ticks = {"count": 0}
+
+    def starved(self):
+        # Every read is one second later than the previous one: a runner that
+        # keeps losing the CPU between two deadline checks.
+        ticks["count"] += 1
+        return time.monotonic() + ticks["count"]
+
+    monkeypatch.setattr(TraceClock, "monotonic", starved)
+    _check_actual_action_contract(tmp_path, "none")
 
 
 def test_gateway_cancellation_keeps_its_distinct_null_action():
