@@ -890,3 +890,28 @@ def test_growth_during_reading_keeps_the_prior_generation(tmp_path, monkeypatch)
             await service.stop()
 
         asyncio.run(run())
+
+
+def test_a_published_markup_body_reads_back_from_the_catalog(tmp_path):
+    """RM34/AC25 (#268, spec 0.66 section 4.6): an admitted body stays readable.
+
+    The instruction body keeps only the NFC, encoding, control and size rules,
+    so a body with markup and repeated lines that capture admits must also
+    pass the stored-row check when the committed catalog is read back.
+    """
+    root = tmp_path / "source"
+    body = "Use <session> here.\n" + "```\n" * 4 + "Run `tmux attach -t <name>`.\n"
+    skill(root / "markup", body=body)
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(root), catalog)
+
+        async def run():
+            await service.tick()
+            await service.stop()
+
+        asyncio.run(run())
+        assert catalog.job_outcomes()[0]["state"] == "succeeded"
+        snapshot = catalog.snapshot()
+        assert [a.description for a in snapshot.assets] == ["Greeting skill"]
+        assert snapshot.sources[0]["complete"]

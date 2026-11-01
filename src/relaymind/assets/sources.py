@@ -666,11 +666,11 @@ def _local_candidate(
     """Stage and project one candidate; CandidateRejected names only its own bytes.
 
     Path safety of SKILL.md and the optional manifest is a scan-level check
-    (spec 0.66 section 4.6.1). It runs for both paths before any content
-    admission, so a malformed SKILL.md can never hide an unsafe manifest.
+    (spec 0.66 section 4.6.1). The manifest's runs before any content
+    admission, so a malformed SKILL.md can never hide an unsafe manifest;
+    ``stage.read`` refuses a symlink or non-regular SKILL.md at scan level.
     """
     manifest = "skill.manifest.json" if package == "." else f"{package}/skill.manifest.json"
-    _check_regular(stage.info(relative))
     has_manifest = stage.exists(manifest)
     if has_manifest:
         _check_regular(stage.info(manifest))
