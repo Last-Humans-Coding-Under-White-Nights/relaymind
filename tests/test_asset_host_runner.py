@@ -243,7 +243,6 @@ def test_a_caller_cannot_flag_a_run_qualified(tmp_path):
 
 
 def test_a_second_runner_cannot_share_the_journal(tmp_path):
-    freeze, tasks = setup()
     journal = tmp_path / "run.jsonl"
     header = dict(type="header", kind="host", input_digest=H)
     with RunJournal(journal, header):

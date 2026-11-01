@@ -12,7 +12,7 @@ import pytest
 
 from relaymind.canonical import canonical_digest
 from relaymind.evaluation.asset_whole_task_cli import main
-from test_asset_host_runner import captured, setup
+from test_asset_host_runner import captured, setup, write_executor
 from whole_task_helpers import ENVIRONMENT, expanded_release, row
 
 
@@ -86,7 +86,9 @@ def test_preregister_host_writes_the_bound_digests(tmp_path):
 
 
 def executor_script(tmp_path):
-    body = f"""
+    return write_executor(
+        tmp_path,
+        f"""
 import json, sys
 sys.path[:0] = {sys.path!r}
 from test_asset_host_runner import captured
@@ -94,10 +96,8 @@ from whole_task_helpers import row
 request = json.load(sys.stdin)
 r, refs = captured(row(request["task"]["id"], request["arm"]))
 json.dump(dict(row=r, evidence=refs), sys.stdout)
-"""
-    script = tmp_path / "executor.py"
-    script.write_text(body, encoding="utf-8")
-    return [sys.executable, str(script)]
+""",
+    )
 
 
 def test_run_host_writes_a_fixture_report_that_resumes(tmp_path):

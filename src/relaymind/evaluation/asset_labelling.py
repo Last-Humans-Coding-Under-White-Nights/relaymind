@@ -22,7 +22,7 @@ process obligations that no file format proves.
 """
 
 import copy
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 
 from relaymind.canonical import canonical_digest
@@ -150,9 +150,7 @@ def raw_judgments(catalog: Mapping, cases: Mapping, templates: Sequence[Mapping]
             judgments.append(row)
     judgments.sort(key=lambda j: (j["case_id"].encode(), j["annotator_id"].encode()))
     check_object_order(judgments, ("case_id", "annotator_id"))
-    counts = defaultdict(int)
-    for row in judgments:
-        counts[row["case_id"]] += 1
+    counts = Counter(row["case_id"] for row in judgments)
     if any(counts[case_id] != 2 for case_id in case_map):
         raise AssetCorpusError("raw_judgment_coverage")
     return judgments
