@@ -13,7 +13,7 @@ one-task, one-sample result says nothing general about the arms.
 | Host | pinned OpenClaw 2026.10.7 (`npm ci` of `integrations/openclaw/package-lock.json`), isolated home under the operator root `/private/var/tmp/relaymind-trial-259` |
 | Plugin | `relaymind-openclaw-provider-0.1.0.tgz`, SHA-256 `b066ae27…f35d` (`release/`, and in the bundle) |
 | External model | the owner's OpenAI-compatible endpoint (base URL and key never written), `glm-5.3-flash` for all three arms |
-| Frozen inputs | `frozen/inputs.json`, committed in `21e93e3` before the first row (09:41:39Z; first dispatch 09:46:02Z) |
+| Frozen inputs | `frozen/inputs.json`, committed in `21e93e3` before the first row (09:41:39Z). The record's `runs_started_at` 09:46:02.976Z is the end of the native row's first model turn, the earliest recorded attempt time: the host transcript has no dispatch time, so it is an upper bound on the first dispatch. The native row began no earlier than 09:45:21.5Z (its last turn ended 09:46:38.717Z after 77.2 s elapsed), still after the commit |
 | Bundle | `bundle/` (`report.json`, `grade.json`, `inputs.json`, `SHA256SUMS`); regrade with `grade-host --inputs bundle/inputs.json` and a resolver of the inventory preimages |
 | Record | `../m10-early-trial-m1-openclaw-2026.10.7-20261101.json`, scope `host_trial`, pending (no review yet) |
 
@@ -54,6 +54,12 @@ one-task, one-sample result says nothing general about the arms.
 | 1 | native | completed | true | 2 | 19,246 | 77.2 s |
 | 2 | provider_only | failed (`host_exit_nonzero`) | false | 7 | unknown (26,006 over the 3 finished calls) | 207.1 s |
 | 3 | recommendations | not_run (`person_ingress_unavailable_macos`) | null | 0 | none | none |
+
+Each row's `peak_bytes` is `ru_maxrss` of `RUSAGE_CHILDREN` read in that row's
+`observe_row.py` process: the peak RSS of its largest finished child. On the
+RelayMind arms that includes the earlier `openclaw models auth paste-api-key`
+child, and it never includes the separately started RelayMind gateway. It is
+not a per-turn or whole-arm memory figure and is not comparable across arms.
 
 Grade (`bundle/grade.json`): `blocked`, assessed `provisional`
 (`configuration_semantics`, `corpus_unqualified`, `qualified_evidence_review`).
@@ -153,6 +159,20 @@ committed `machine/success-verdicts.json` passes the stricter check unchanged
 (both judges agreed on both rows with boolean verdicts, no adjudication), so
 no committed output or bundle file changed
 (`tests/test_m1_trial_machine_passes.py`).
+
+The same review made two more changes for later passes, with no committed
+output changed. `machine_passes.py` keeps an earlier call's bytes as
+`<name>.superseded-<n>.*` instead of overwriting them (spec 12.6.6: a rejected
+draft stays in the drafting evidence), and `draft-cases` sets each case's
+`language_tags` and `code_switched` from its lane (the one `en_to_en` case is
+unchanged). `build_trial_inputs.py record` was brought up to the current
+checker: the record machine carries `os_version` (added to the committed record
+by hand in `025c813` when spec 0.66 began to require it), the post-write check
+passes the catalog people to `check_labels`, and attempt times are ordered as
+times. The record's `harness_sha256` (`533273ac…d6b3`) binds the script bytes
+committed in `2b4e439` (unchanged through `d14ba19`), which wrote the committed
+record before `os_version` was added; the current script has other bytes and
+wrote nothing committed.
 
 ## What remains
 

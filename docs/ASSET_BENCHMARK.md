@@ -666,7 +666,9 @@ every disagreement needs a nonempty reason). `--labelling machine_dual_owner_app
 (`machine_dual.v1`) is for two machine annotators and a distinct machine
 adjudicator (each holds only its one role); the owner approves the frozen labels
 by PR review. Cases may then use `machine_drafted_owner_approved` authorship, and
-the record names the drafter. The output reports the record's
+the record names the drafter. Every case of such a release is drafted, and the
+drafted cases count in the cohort only when the record declares that prompt
+authorship. The output reports the record's
 `prompt_authorship`. A `negative` record with scope `host_operation` closes the
 `skill_loaded_use` or `mcp_use` gate with the operation disabled
 (`known_host_limitations`). The module is

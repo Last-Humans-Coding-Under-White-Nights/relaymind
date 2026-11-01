@@ -619,6 +619,22 @@ def test_record_prompt_authorship_must_match_the_frozen_cases(tmp_path):
         original.check_cases(_cases("machine_drafted_owner_approved"))
 
 
+@pytest.mark.parametrize("authorship", ["translated", "generated"])
+def test_an_original_record_allows_translated_or_generated_validation_cases(tmp_path, authorship):
+    """Spec 12.6.1/12.6.6 (RM40/AC31; review of #276): translated or generated cases may
+    exercise validation and never count, so they do not contradict ``original``; a
+    drafted release, by contrast, is drafted throughout."""
+    original = load_record(save(tmp_path, host_record(tmp_path), "original.json"))
+    cases = _cases("original", "author")
+    cases["cases"].append(dict(id="case-01", authorship=authorship, author_ids=["author"]))
+    original.check_cases(cases)
+    drafted = load_record(save(tmp_path, dual_record(tmp_path)))
+    mixed = _cases("machine_drafted_owner_approved")
+    mixed["cases"].append(dict(id="case-01", authorship=authorship, author_ids=["author"]))
+    with pytest.raises(WholeTaskRejected, match="prompt_authorship_mismatch"):
+        drafted.check_cases(mixed)
+
+
 # --- the record's input subjects are the report's resolved inputs (12.6.6) --------
 
 

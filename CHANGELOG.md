@@ -27,7 +27,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   label commands, the `machine_drafted_owner_approved` case authorship counted
   without the author competence rule, and the record's checks against the
   frozen labels and cases. Graded output reports `prompt_authorship`.
-  Fixture-tested only.
+  Fixture-tested only. Review of #276: drafted cases count only when an owner-run
+  record declares `machine_drafted_owner_approved` (without one they fill no
+  lane); a drafted release is drafted throughout (`drafted_authorship_mixed`);
+  an `original` record rejects drafted cases but allows translated or generated
+  validation cases. The trial's `record` step now matches the current checker,
+  and a repeated machine pass keeps the earlier call bytes.
 - #274 native Windows platform evidence (RM38; AC29, AC37), with a pending
   qualification draft in `docs/evidence/m10/windows-platform-run-2026-11-01/`.
   The packaged lifecycle passes; fixture qualification and unobserved host

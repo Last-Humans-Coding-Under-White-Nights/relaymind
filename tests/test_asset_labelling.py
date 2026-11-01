@@ -379,6 +379,17 @@ def test_machine_drafted_cases_name_exactly_one_drafter(tmp_path):
         _dual_round_trip(catalog, cases, labels)
 
 
+def test_a_drafted_release_is_drafted_throughout(tmp_path):
+    """Spec 12.6.6 (RM40/AC31; review of #276): the drafter writes every prompt of the
+    release, so a release never mixes drafted cases with other authorship."""
+    catalog, cases, labels = _drafted(tmp_path)
+    original = next(p for p in catalog["people"] if "author" in p["roles"] and p["competencies"])
+    cases["cases"][0].update(authorship="original", author_ids=[original["id"]])
+    labels["cases_digest"] = canonical_digest(cases)
+    with pytest.raises(AssetCorpusError, match="drafted_authorship_mixed"):
+        _dual_round_trip(catalog, cases, labels)
+
+
 def _owner_labels(tmp_path, *, disagree=False):
     catalog, cases, labels = _owner_machine(tmp_path)
     templates = _owner_templates(catalog, cases, labels)

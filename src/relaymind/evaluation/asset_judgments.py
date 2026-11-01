@@ -87,15 +87,18 @@ DRAFTED = "machine_drafted_owner_approved"
 
 
 def check_drafted_cases(cases, people: Mapping) -> None:
-    """Spec 12.6.6: one recorded drafter writes every drafted prompt of the release.
+    """Spec 12.6.6: one recorded drafter writes every prompt of a drafted release.
 
     The drafter is a Person with role ``author`` only and empty competencies,
     never an annotator, adjudicator or tuner; each drafted case names it alone.
     """
+    cases = list(cases)
+    drafted = [case for case in cases if case["authorship"] == DRAFTED]
+    if drafted and len(drafted) != len(cases):
+        # The drafter writes every prompt of the release, or none.
+        raise AssetCorpusError("drafted_authorship_mixed")
     drafters = set()
-    for case in cases:
-        if case["authorship"] != DRAFTED:
-            continue
+    for case in drafted:
         if len(case["author_ids"]) != 1:
             raise AssetCorpusError("drafter_role")
         drafters.update(case["author_ids"])

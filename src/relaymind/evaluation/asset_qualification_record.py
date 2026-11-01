@@ -36,8 +36,8 @@ from relaymind.evaluation.asset_benchmark_io import (
     validate_closed_document,
 )
 from relaymind.evaluation.asset_corpus_io import DOCUMENT_BYTES, parse_json, read_local
-from relaymind.evaluation.asset_judgments import METHODS
-from relaymind.evaluation.asset_qualification import DRAFTED, CustodianReview
+from relaymind.evaluation.asset_judgments import DRAFTED, METHODS
+from relaymind.evaluation.asset_qualification import CustodianReview
 from relaymind.evaluation.asset_whole_task import WholeTaskRejected
 from relaymind.schema_util import load_packaged_schema
 
@@ -341,15 +341,22 @@ class QualificationRecord:
             _reject("record_agreement_mismatch")
 
     def check_cases(self, cases: Mapping) -> None:
-        """Every frozen case has the record's prompt authorship; drafted ones its drafter."""
+        """The frozen cases agree with the record's prompt authorship (spec 12.6.6).
+
+        A drafted record: the drafter writes every prompt of the release, so
+        every case is drafted and names the drafter alone. An original record:
+        no case is drafted; translated or generated validation cases may occur
+        and never count (section 12.6.1).
+        """
         authorship = self.prompt_authorship
         if authorship == "not_applicable":
             return
         drafter = self.document["drafter"]
         for case in cases["cases"]:
-            if case["authorship"] != authorship or (
-                drafter is not None and case["author_ids"] != [drafter["author_id"]]
-            ):
+            if authorship == DRAFTED:
+                if case["authorship"] != DRAFTED or case["author_ids"] != [drafter["author_id"]]:
+                    _reject("prompt_authorship_mismatch")
+            elif case["authorship"] == DRAFTED:
                 _reject("prompt_authorship_mismatch")
 
 

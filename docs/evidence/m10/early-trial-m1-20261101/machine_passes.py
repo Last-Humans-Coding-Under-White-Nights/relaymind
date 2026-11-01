@@ -5,7 +5,9 @@ Spec 0.66 section 12.6.6 (`machine_drafted_owner_approved` prompts,
 AC36). Operator evidence tooling, not product code. Every model call runs at
 temperature 0 against the owner's OpenAI-compatible endpoint with a recorded
 template; the exact request and response bytes are kept under ``machine/calls/``
-and the provider-reported usage is appended to a private ledger. The endpoint
+(a repeated pass never overwrites them: the earlier pair is kept as
+``<name>.superseded-<n>.*``, so a rejected draft stays in the drafting
+evidence) and the provider-reported usage is appended to a private ledger. The endpoint
 URL and the key come from the environment and are never written.
 
 Commands:
@@ -70,6 +72,25 @@ def _ledger() -> Path:
     return Path(os.environ["TRIAL_ROOT"]) / "labelling" / "usage.jsonl"
 
 
+def keep_call(name: str, request: bytes, body: bytes) -> None:
+    """Write one call's exact bytes; an earlier pair of that name is kept, never replaced.
+
+    Spec 12.6.6: a rejected draft is counted in the drafting evidence, never
+    silently replaced. The newest pass keeps the plain name the other steps read.
+    """
+    CALLS.mkdir(parents=True, exist_ok=True)
+    current = [CALLS / f"{name}.request.json", CALLS / f"{name}.response.json"]
+    if any(path.exists() for path in current):
+        n = 1
+        while any(CALLS.glob(f"{name}.superseded-{n}.*")):
+            n += 1
+        for path, part in zip(current, ("request", "response"), strict=True):
+            if path.exists():
+                path.rename(CALLS / f"{name}.superseded-{n}.{part}.json")
+    current[0].write_bytes(request)
+    current[1].write_bytes(body)
+
+
 def call(role: str, name: str, payload: dict) -> dict:
     """One recorded temperature-0 call; returns the parsed JSON answer."""
     _, model, template = ROLES[role]
@@ -95,9 +116,7 @@ def call(role: str, name: str, payload: dict) -> dict:
     )
     with urllib.request.urlopen(http, timeout=300) as response:
         body = response.read()
-    CALLS.mkdir(parents=True, exist_ok=True)
-    (CALLS / f"{name}.request.json").write_bytes(request)
-    (CALLS / f"{name}.response.json").write_bytes(body)
+    keep_call(name, request, body)
     answer = json.loads(body)
     usage = answer.get("usage") or {}
     _ledger().parent.mkdir(parents=True, exist_ok=True)
@@ -128,6 +147,27 @@ def _projections(catalog: dict) -> list[dict]:
     ]
 
 
+# Spec 12.6.6: each prompt is written in its lane's query language or mix.
+_LANE_LANGUAGE = {
+    "en_to_en": (["en"], False),
+    "en_to_zh_hans": (["en"], False),
+    "zh_hans_to_zh_hans": (["zh-Hans"], False),
+    "zh_hans_to_en": (["zh-Hans"], False),
+    "code_switch": (["en", "zh-Hans"], True),
+}
+
+
+def lane_language(lane: str) -> tuple[list[str], bool]:
+    """The case's query ``language_tags`` and ``code_switched`` for a planned lane.
+
+    Drafted prompts never fill the zh-Hant diagnostic lane.
+    """
+    if lane not in _LANE_LANGUAGE:
+        raise SystemExit(f"no drafted prompts for lane {lane}")
+    tags, mixed = _LANE_LANGUAGE[lane]
+    return list(tags), mixed
+
+
 def draft_cases(args) -> None:
     catalog = json.loads((HERE / "inputs/catalog.json").read_text())
     plan = json.loads(args.plan.read_text())
@@ -137,18 +177,19 @@ def draft_cases(args) -> None:
         raise SystemExit("the drafter did not answer every planned case")
     cases = []
     for p in plan:
+        language_tags, code_switched = lane_language(p["lane"])
         cases.append(
             dict(
                 id=p["case_id"],
-                split="held_out",
+                split=p.get("split", "held_out"),
                 task_family_ids=p["task_family_ids"],
                 target_asset_family_ids=p["target_asset_family_ids"],
                 lane=p["lane"],
                 task_text=drafted[p["case_id"]],
                 conversation=[],
                 requested_kinds=p["requested_kinds"],
-                language_tags=["en"],
-                code_switched=False,
+                language_tags=language_tags,
+                code_switched=code_switched,
                 author_ids=[ROLES["drafter"][0]],
                 authorship="machine_drafted_owner_approved",
                 authorship_evidence_ids=["drafting-request", "drafting-response"],

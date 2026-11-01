@@ -1,10 +1,13 @@
-"""Success-verdict checks of the #259 early-trial machine passes (review of #276).
+"""Checks of the #259 early-trial evidence tooling (review of #276).
 
 Spec 0.66 section 12.6.6 (RM40, RM44; AC31, AC36): both blind judges record a
 verdict for every transcript, and every disagreement is adjudicated with a
-recorded reason. ``machine_passes.py`` is operator evidence tooling under
-``docs/evidence``; these tests drive its pure verdict check with synthetic
-verdicts and re-check the committed M1 verdicts. No model is called.
+recorded reason; a repeated machine pass never replaces earlier call bytes;
+drafted prompts take their lane's language; the record step writes a record
+the current checker loads. ``machine_passes.py`` and ``build_trial_inputs.py``
+are operator evidence tooling under ``docs/evidence``; these tests drive their
+pure parts with synthetic inputs and re-check the committed M1 evidence. No
+model is called.
 """
 
 import importlib.util
@@ -179,3 +182,99 @@ def test_a_blind_map_for_other_transcripts_writes_no_observation(passes, tmp_pat
         passes.judge(args)
     assert list(observations.iterdir()) == []
     assert [p.name for p in machine.iterdir()] == ["blind-map.digest.json"]
+
+
+# --- repeated passes keep earlier call bytes (spec 12.6.6) -------------------------
+
+
+def test_a_repeated_pass_keeps_the_earlier_call_bytes(passes, tmp_path, monkeypatch):
+    """A rejected draft is counted in the drafting evidence, never silently replaced."""
+    monkeypatch.setattr(passes, "CALLS", tmp_path / "calls")
+    passes.keep_call("drafting", b"req-1", b"resp-1")
+    passes.keep_call("drafting", b"req-2", b"resp-2")
+    passes.keep_call("drafting", b"req-3", b"resp-3")
+    calls = tmp_path / "calls"
+    assert {p.name: p.read_bytes() for p in calls.iterdir()} == {
+        "drafting.request.json": b"req-3",
+        "drafting.response.json": b"resp-3",
+        "drafting.superseded-1.request.json": b"req-1",
+        "drafting.superseded-1.response.json": b"resp-1",
+        "drafting.superseded-2.request.json": b"req-2",
+        "drafting.superseded-2.response.json": b"resp-2",
+    }
+
+
+@pytest.mark.parametrize(
+    "lane,tags,mixed",
+    [
+        ("en_to_en", ["en"], False),
+        ("en_to_zh_hans", ["en"], False),
+        ("zh_hans_to_zh_hans", ["zh-Hans"], False),
+        ("zh_hans_to_en", ["zh-Hans"], False),
+        ("code_switch", ["en", "zh-Hans"], True),
+    ],
+)
+def test_a_drafted_case_takes_its_lane_language(passes, lane, tags, mixed):
+    """Spec 12.6.6: each prompt is written in its lane's language or mix."""
+    assert passes.lane_language(lane) == (tags, mixed)
+
+
+def test_drafted_prompts_never_fill_the_diagnostic_lane(passes):
+    with pytest.raises(SystemExit):
+        passes.lane_language("zh_hant_diagnostic")
+
+
+# --- the record step of build_trial_inputs.py (spec 12.6.6) ------------------------
+
+
+RECORD = TRIAL.parent / "m10-early-trial-m1-openclaw-2026.10.7-20261101.json"
+
+
+@pytest.fixture(scope="module")
+def builder():
+    spec = importlib.util.spec_from_file_location(
+        "m1_build_trial_inputs", TRIAL / "build_trial_inputs.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _bundle_doc(kind):
+    manifest = json.loads((TRIAL / "bundle/inputs.json").read_text())
+    path = next(d["path"] for d in manifest["documents"] if d["kind"] == kind)
+    return json.loads((TRIAL / "bundle" / path).read_text())
+
+
+def test_the_record_step_checks_the_committed_record_with_the_current_checker(builder):
+    """The post-write check passes the catalog people to check_labels and loads."""
+    checked = builder.check_written(
+        RECORD, _bundle_doc("labels"), _bundle_doc("catalog"), _bundle_doc("cases")
+    )
+    assert checked.prompt_authorship == "machine_drafted_owner_approved"
+
+
+def test_the_record_machine_carries_os_version(builder):
+    """Spec 12.6.6 Machine: os_version is the Environment string, os_build the fuller build."""
+    committed = json.loads(RECORD.read_text())["machine"]
+    machine = builder._record_machine(_bundle_doc("environment_lock"), "26A434", "host")
+    assert machine["hostname_sha256"] == builder._sha(b"host")
+    assert {k: v for k, v in machine.items() if k != "hostname_sha256"} == {
+        k: v for k, v in committed.items() if k != "hostname_sha256"
+    }
+
+
+def test_the_first_dispatch_orders_attempt_times_as_times(builder):
+    def report(*times):
+        return dict(rows=[dict(attempts=[dict(started_at=t, ended_at=None) for t in times])])
+
+    # As text, "...02.500000Z" sorts before "...02Z"; as times it is later.
+    assert (
+        builder._first_dispatch(report("2026-11-01T09:46:02.500000Z", "2026-11-01T09:46:02Z"))
+        == "2026-11-01T09:46:02Z"
+    )
+    assert builder._first_dispatch(dict(rows=[dict(attempts=[])])) is None
+    committed = json.loads(RECORD.read_text())["runs_started_at"]
+    assert builder._first_dispatch(json.loads((TRIAL / "bundle/report.json").read_text())) == (
+        committed
+    )

@@ -182,13 +182,18 @@ def assess_inputs(
     the frozen labels.
     """
     release = inputs.release
+    prompt_authorship = None
     if record is not None:
         record.check_inputs(kind, inputs)
         record.check_labels(release.labels, {p["id"]: p for p in release.catalog["people"]})
         record.check_cases(release.cases)
+        prompt_authorship = record.prompt_authorship
         if custodian_review is None:
             custodian_review = record.custodian_review()
-    status = assess_asset_release(release, custodian_review=custodian_review).status
+    # Spec 12.6.6: drafted cases count only under the record that declares them.
+    status = assess_asset_release(
+        release, custodian_review=custodian_review, prompt_authorship=prompt_authorship
+    ).status
     return assess_qualification(
         kind=kind,
         claimed=report["qualification"],
