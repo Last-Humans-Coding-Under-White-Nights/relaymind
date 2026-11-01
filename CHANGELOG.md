@@ -8,18 +8,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- #259 early-trial preparation on the owner's Apple M1 8 GiB MacBook (RM16,
-  RM39, RM40, RM44; AC30, AC36; spec 0.66 sections 12.6.5, 12.6.6) in
-  `docs/evidence/m10/early-trial-m1-20261101/`: the passed `trial-install` and
-  `trial-preflight` records, the native validation and inventory captures of
-  the three arm configurations, a draft 8-skill catalog of the admissible
-  OpenClaw 2026.10.7 bundled skills, an example case, blind label templates, a
-  draft rubric, and the `build_trial_inputs.py` / `observe_row.py` evidence
-  helpers. Findings: the kit's install fails on a fresh host until the plugin
-  is configured and enabled; only 8 of 49 bundled skills pass RelayMind's
-  projection; the host's session record is the native usage source. The trial
-  itself is not run: it waits for owner-authored prompts, labels and the
-  signed-in recommendation choice. No row, cost or gate is claimed.
+- #259 early installed-skill trial on the owner's Apple M1 8 GiB MacBook (RM16,
+  RM39, RM40, RM44; AC30, AC31, AC36; spec 0.66 sections 12.6.5, 12.6.6) in
+  `docs/evidence/m10/early-trial-m1-20261101/`: frozen inputs (one
+  `machine_drafted_owner_approved` task, `machine_dual_owner_approved` labels,
+  8-skill catalog), the provisional bundle graded `blocked`, and the pending
+  record `m10-early-trial-m1-openclaw-2026.10.7-20261101`. Native completed and
+  was judged a success blind. provider_only failed when the default 30 s
+  `external_seconds` budget cut off four generations. recommendations is
+  `not_run`: no person sign-in on macOS. The evidence helpers
+  (`build_trial_inputs.py`, `observe_row.py`, `machine_passes.py`) only drive the
+  existing kit and checker. One task gives no general result; no gate is claimed.
 
 - Verifier support for the 0.66 machine-drafted prompts and `machine_dual`
   labels (#260; RM40, RM42, RM44; AC31, AC33, AC36): `machine_dual.v1` in

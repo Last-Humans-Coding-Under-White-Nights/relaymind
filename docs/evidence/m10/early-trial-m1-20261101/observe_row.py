@@ -53,6 +53,25 @@ SECRETS = ("RELAYMIND_EXTERNAL_API_KEY", "RELAYMIND_EXTERNAL_BASE_URL")
 RELATIONSHIP_ID = "usage-relationship"
 
 
+def _machine_names() -> list[bytes]:
+    """This Mac's computer, local host and host names: never published (spec 12.6.6)."""
+    import socket
+
+    names = {socket.gethostname(), socket.gethostname().split(".")[0]}
+    for key in ("ComputerName", "LocalHostName", "HostName"):
+        done = subprocess.run(["scutil", "--get", key], capture_output=True, text=True)
+        if done.returncode == 0 and done.stdout.strip():
+            names.add(done.stdout.strip())
+    return sorted((n.encode("utf-8") for n in names if len(n) >= 3), key=len, reverse=True)
+
+
+def redact(payload: bytes) -> bytes:
+    """Replace the machine names in captured evidence with a fixed placeholder."""
+    for name in _machine_names():
+        payload = payload.replace(name, b"<machine-name>")
+    return payload
+
+
 def _utc(seconds: float) -> str:
     return datetime.fromtimestamp(seconds, UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
@@ -167,6 +186,40 @@ def observe(args) -> int:
     (entry,) = [p for p in entries if p["ordinal"] == args.ordinal]
     task = next(t for t in host_tasks["tasks"] if t["id"] == entry["task_id"])
     arm = entry["arm"]
+    if args.not_run is not None:
+        # Execution never started for this row: no attempts, no session, no timings.
+        row = dict(
+            task_id=task["id"],
+            arm=arm,
+            status="not_run",
+            success=None,
+            attempts=[],
+            elapsed_ms=None,
+            active_ms=None,
+            human_wait_ms=None,
+            interactions=None,
+            local_turns=None,
+            cpu_ms=None,
+            peak_bytes=None,
+            recommendation_ids=[],
+            host_session_id=None,
+            evidence_ids=[],
+            reason=args.not_run,
+        )
+        observation = dict(
+            schema_version=1,
+            ordinal=args.ordinal,
+            task_id=task["id"],
+            arm=arm,
+            row=row,
+            evidence=[],
+        )
+        observations.mkdir(parents=True, exist_ok=True)
+        (observations / f"row-{args.ordinal:04d}.json").write_bytes(_json(observation))
+        print(
+            json.dumps(dict(ordinal=args.ordinal, arm=arm, status="not_run", reason=args.not_run))
+        )
+        return 0
     config_path = root / "host" / f"arm-{arm}.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
     frozen_config = next(c for c in freeze["configurations"] if c["arm"] == arm)
@@ -242,10 +295,10 @@ def observe(args) -> int:
         status, reason = "failed", "host_exit_nonzero" if code else "host_output_unusable"
     evidence = []
     # Keep the host's own output before anything else can fail.
-    (evidence_dir / "host-envelope.json").write_bytes(stdout or b"")
+    (evidence_dir / "host-envelope.json").write_bytes(redact(stdout or b""))
 
     def keep(evidence_id: str, name: str, payload: bytes) -> None:
-        (evidence_dir / name).write_bytes(payload)
+        (evidence_dir / name).write_bytes(redact(payload))
         file = f"evidence/{number}/{name}"
         evidence.append(dict(id=evidence_id, file=file, provenance="observed"))
 
@@ -333,6 +386,7 @@ def main(argv=None) -> int:
     parser.add_argument("--recommendation-receipt", type=Path)
     parser.add_argument("--interactions", type=int, default=0)
     parser.add_argument("--human-wait-ms", type=float, default=0.0)
+    parser.add_argument("--not-run", metavar="REASON", help="record the row not_run, run nothing")
     return observe(parser.parse_args(argv))
 
 

@@ -564,7 +564,20 @@ def _machine(annotator_id: str, call: str, template: str) -> dict:
     )
 
 
-def record(bundle: Path, record_id: str) -> None:
+def _preregistration(commit: str | None) -> dict | None:
+    """The freeze commit and its UTC committer time (spec 12.6.6)."""
+    import subprocess
+
+    if commit is None:
+        return None
+    sha, epoch = subprocess.run(
+        ["git", "show", "-s", "--format=%H %ct", commit], capture_output=True, text=True, check=True
+    ).stdout.split()
+    when = datetime.fromtimestamp(int(epoch), UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dict(commit=sha, committed_at=when)
+
+
+def record(bundle: Path, record_id: str, preregistration: str | None) -> None:
     import socket
     import subprocess
 
@@ -630,7 +643,7 @@ def record(bundle: Path, record_id: str) -> None:
             cohen_kappa=class_kappa(labels),
         ),
         corpus_review=None,
-        preregistration=None,
+        preregistration=_preregistration(preregistration),
         runs_started_at=started[0] if started else None,
         machine=dict(
             role="target_macos_m1_8gib",
@@ -672,13 +685,14 @@ def main(argv=None) -> int:
     r = sub.add_parser("record")
     r.add_argument("--bundle", type=Path, required=True)
     r.add_argument("--record-id", required=True)
+    r.add_argument("--preregistration", help="the commit that froze the inputs")
     args = parser.parse_args(argv)
     if args.command == "draft":
         draft(args.root.absolute())
     elif args.command == "freeze":
         freeze(args.root.absolute(), args.cases.absolute(), args.labels.absolute())
     else:
-        record(args.bundle.absolute(), args.record_id)
+        record(args.bundle.absolute(), args.record_id, args.preregistration)
     return 0
 
 

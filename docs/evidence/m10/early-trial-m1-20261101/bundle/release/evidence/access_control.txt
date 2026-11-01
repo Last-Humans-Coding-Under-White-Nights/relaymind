@@ -1,0 +1,3 @@
+The operator tooling keeps the labels outside the gateway and host runtime
+directories until the trial inputs are frozen and committed. The owner is the
+approver (role reviewer); no person authored, annotated or adjudicated.

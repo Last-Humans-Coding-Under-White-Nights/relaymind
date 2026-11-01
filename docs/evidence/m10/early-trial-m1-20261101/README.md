@@ -1,185 +1,152 @@
-# #259 owner-run early installed-skill trial on the Apple M1 8 GiB MacBook: preparation
+# #259 owner-run early installed-skill trial on the Apple M1 8 GiB MacBook
 
-**Status: inputs prepared, trial not run.** The frozen trial needs inputs only
-the owner can supply. This directory has the operator setup, the drafts and the
-host captures from the owner's MacBook. It has **no trial bundle, no trial row
-and no qualification record yet**. It claims no gate, cost result or task
-success (spec 0.66 sections 12.6, 12.6.5, 12.6.6; RM16, RM39, RM40, RM44;
-AC30, AC36).
+**Status: provisional early-trial bundle, graded `blocked`; record pending
+approval.** One frozen task, three planned rows, run on the owner's MacBook on
+1 November 2026 by the operator tooling on the owner's instruction, with no
+person in the loop. Spec 0.66 sections 12.6, 12.6.5, 12.6.6; RM16, RM39, RM40,
+RM44; AC30, AC31, AC36. An early trial never asserts the final gate, and this
+one-task, one-sample result says nothing general about the arms.
 
-Machine: `target_macos_m1_8gib` (Darwin arm64, `Apple M1`, 8589934592 bytes,
-macOS 27.0.1). Host: pinned OpenClaw 2026.10.7 (`npm ci` from
-`integrations/openclaw/package-lock.json`). Plugin: `npm run pack:release`,
-`relaymind-openclaw-provider-0.1.0.tgz`, SHA-256
-`b066ae273c00ec4caa09dbe92a0f1eae020e5c4c51e2603c7f3a201e1b39f35d`
-(`release/`). External model: the owner's OpenAI-compatible endpoint, model
-`glm-5.3-flash`. The base URL and the key are never written here: the gateway
-TOML preimages omit `base_url`, and the native host configuration reads both
-from the environment (`${RELAYMIND_EXTERNAL_BASE_URL}`, env SecretRef
-`RELAYMIND_EXTERNAL_API_KEY`).
-
-## What ran on this machine (1 November 2026)
-
-| Step | Result |
+| Item | Value |
 | --- | --- |
-| `npm ci` (pinned host), `npm run pack:release` | done; `release/SHA256SUMS`, `release/release.json` |
-| `trial-install` on a fresh host | **failed** (`install-unconfigured.json`): the pinned host installs the plugin disabled ("requires configuration first"), so `plugins inspect` reports `disabled`, not `loaded` |
-| configure `plugins.entries.relaymind.config`, `plugins enable relaymind`, then `trial-install` | **passed** (`install.json`): loaded, version 0.1.0, no diagnostics |
-| native `openclaw config validate --json` of the three arm configurations | valid (`inputs/captures/config-validate-*.json`); `check_host_config` also `valid` with validator SHA-256 `a79aac9f…6889` (`inputs/captures/host-config-check.json`) |
-| `openclaw skills list --json` (native inventory) | identical for all three arms; of the eight catalog skills only `weather` is eligible (the other seven need binaries this Mac lacks) |
-| `trial-preflight` | **all seven checks passed** (`preflight.json`); see the note below |
-| two smoke turns and a three-row rehearsal | see "Rehearsal" below; none of it is trial evidence |
+| Machine | `target_macos_m1_8gib`: Darwin arm64, `Apple M1`, 8589934592 bytes, macOS 27.0.1 (26A434); hostname only as SHA-256 in the record |
+| Host | pinned OpenClaw 2026.10.7 (`npm ci` of `integrations/openclaw/package-lock.json`), isolated home under the operator root `/private/var/tmp/relaymind-trial-259` |
+| Plugin | `relaymind-openclaw-provider-0.1.0.tgz`, SHA-256 `b066ae27…f35d` (`release/`, and in the bundle) |
+| External model | the owner's OpenAI-compatible endpoint (base URL and key never written), `glm-5.3-flash` for all three arms |
+| Frozen inputs | `frozen/inputs.json`, committed in `21e93e3` before the first row (09:41:39Z; first dispatch 09:46:02Z) |
+| Bundle | `bundle/` (`report.json`, `grade.json`, `inputs.json`, `SHA256SUMS`); regrade with `grade-host --inputs bundle/inputs.json` and a resolver of the inventory preimages |
+| Record | `../m10-early-trial-m1-openclaw-2026.10.7-20261101.json`, scope `host_trial`, pending (no review yet) |
 
-`preflight.json` was produced by `trial-preflight` over the rehearsal's frozen
-manifest. Its checks (machine, environment lock, `openclaw --version`, release
-checksums, frozen package) do not depend on the corpus; the real `trial`
-command runs the preflight again over the owner's frozen inputs.
+## Profile (spec 0.66 section 12.6.6)
 
-## Findings for the owner
+- **Prompt:** `machine_drafted_owner_approved`. One case (`trial-en-001`,
+  `en_to_en`, held_out) drafted by `machine-drafter` (`glm-5.3-flash`,
+  temperature 0, `machine/drafter.md`) from the offered catalog projections and
+  the case plan (`machine/case-plan.json`) only. The request and response bytes
+  are the authorship evidence (`inputs/evidence/drafting.*.json`). The draft was
+  kept as written: "We're planning a road trip to the coast this Saturday and I
+  need to decide whether to leave in the morning or afternoon. Can you check the
+  forecast and tell me if rain is expected before noon?" It names no place, and
+  Saturday is six days after the run date.
+- **Labels:** `machine_dual_owner_approved`, `same_family` (the provider lists
+  only the `glm` family, `owned_by: z-ai`). Annotator A `glm-5.3-flash`
+  (`machine/annotator-a.md`), annotator B `glm-4.7` (`machine/annotator-b.md`,
+  written independently), adjudicator `glm-5.3` (`machine/adjudicator.md`).
+  Both annotators judged the case positive with the `weather` skill; the
+  adjudicator included it. Agreement 1/1, Cohen's kappa null (chance agreement 1).
+- **Model pinning:** the provider publishes no dated IDs. Each model is pinned
+  by the exact ID its response returned (`machine/calls/*.response.json`), the
+  date of use (2026-11-01) and the provider listing `machine/models-listing.json`
+  (SHA-256 `2c3b6fe54616a7e666f2bbbeaea2358e9dcecd6980fdda89f8c0b82225719c3c`).
+- **Owner:** recorded as `reviewer` only (approver), not author or annotator.
+  The owner approves the cases, labels, rubric and success judgments in the
+  pull request; until then the record is pending and lifts nothing.
+- **Success judging:** both machine annotators judged the anonymized transcripts
+  blind (arm markers replaced, order by SHA-256 of `{seed,task_id,blind_id}`);
+  the blind-map digest was committed in `b5ef7a9` before judging and the map
+  (`machine/blind-map.json`) opened afterwards. They agreed on both rows, so no
+  adjudication call was made (`machine/success-verdicts.json`).
 
-1. **Kit install order.** `trial-install` (and the `install` step of `trial`)
-   fails on a fresh host: OpenClaw 2026.10.7 installs this plugin disabled
-   until it is configured. Configure the plugin entry and run
-   `openclaw plugins enable relaymind` first; the forced reinstall then keeps it
-   enabled and `inspect` reports `loaded`. The kit is unchanged; this is an
-   operator-guide gap.
-2. **RelayMind admits 8 of the 49 OpenClaw bundled skills.** The
-   `local_directory` source rejects 32 originals with `invalid_markup` (a `<`
-   followed by a letter, for example `<path>` placeholders) and 9 with
-   `repeated_line`; one rejected skill fails the whole source scan
-   (`inputs/captures/projection-exclusions.json`). The trial catalog is the 8
-   admitted skills; the native host is restricted to the same 8 with
-   `skills.allowBundled`. The 41 exclusions are listed in `inputs/catalog.json`.
-3. **Native usage is in the host's session record.** The pinned host persists
-   every assistant message with provider usage in
-   `agents/main/agent/openclaw-agent.sqlite` (`transcript_events`; large events
-   are zstd-compressed in `event_zstd`): `input` (prompt minus cached),
-   `cacheRead`, `output`, `reasoningTokens`, `totalTokens` and
-   `contextUsage.promptTokens`. That is the spec 12.6.6 native capture source;
-   `observe_row.py` reads it. For RelayMind-provider turns the same host
-   record shows **zero usage** (the plugin stream reports none), so RelayMind
-   arms must use the gateway TraceEvent usage, as the spec says.
-4. **Prompt overhead of the relay is nil on the first call.** Both arms sent a
-   first request of 7,732 prompt tokens for the same prompt.
-5. **The recommendations arm needs the person UI.** Headless `agent exec`
-   cannot ask for a recommendation or record a choice. The explicit
-   recommend/choose step goes through the native Control UI page (signed-in
-   person, HTTPS or trusted loopback, `recommendations` bindings, application
-   and action tokens, `[user_actions]` registration; see
-   `integrations/openclaw/README.md`, "Native recommendations and explicit
-   actions"). Exact skill loaded use stays disabled
-   (`m10-negative-skill-loaded-use-openclaw-2026.10.7`, pending review): the
-   host loads the skill itself.
+## Rows (frozen plan, seed 259)
 
-## Rehearsal (scratch only, not committed, not evidence)
+| Ordinal | Arm | Status | Success | Calls | External tokens | Elapsed |
+| ---: | --- | --- | --- | ---: | ---: | ---: |
+| 1 | native | completed | true | 2 | 19,246 | 77.2 s |
+| 2 | provider_only | failed (`host_exit_nonzero`) | false | 7 | unknown (26,006 over the 3 finished calls) | 207.1 s |
+| 3 | recommendations | not_run (`person_ingress_unavailable_macos`) | null | 0 | none | none |
 
-To check the whole chain before the owner's inputs exist, the inputs were
-frozen in a scratch copy with **synthetic stand-in labels** (both "judgments"
-and the adjudication were written by the operator tooling, marked
-`REHEARSAL STAND-IN`). On that copy: `freeze`, `trial-preflight`, `plan-host`,
-three live rows with `observe_row.py`, `trial` (preflight, install, run,
-bundle, grade) and `record` with `load_record` all ran, and `grade-host
---qualification-record` accepted the pending record. The rehearsal grade was
-`provisional` (`configuration_semantics`, `corpus_unqualified`,
-`qualified_evidence_review`), success `blocked` (verdicts `null`), cost
-coverage complete (no unknown-cost row), and the cost gate `fail` from one
-sample: native 34,281 tokens / 4 calls, provider_only 48,045 / 5,
-recommendations 57,124 / 5. The recommendations row had no explicit
-recommendation or choice (finding 5), so it measured only the provider path.
-One sample of one example prompt says nothing about the arms; an earlier run of
-the same three rows (lost to a helper bug, since fixed) used 51,193, 45,812 and
-43,625 tokens. Two fixes came out of the rehearsal: `source_revision` must
-equal the record's `source_version` (null here), and `observe_row.py` now
-decompresses `event_zstd` and saves the host output before parsing.
+Grade (`bundle/grade.json`): `blocked`, assessed `provisional`
+(`configuration_semantics`, `corpus_unqualified`, `qualified_evidence_review`).
+The success gate is blocked by the not-run row. The cost gate is blocked by
+unknown usage. Gains 0, losses 0.
 
-## External usage on this machine
+- **Row 1, native:** the host read the `weather` skill, asked which coast is
+  meant and said its forecast source does not reach Saturday. Both judges: success.
+- **Row 2, provider_only:** three external calls finished. The next four were
+  each cut off after 30.0 s by RelayMind's default per-generation budget
+  (`external_seconds` 30.0, recorded in every run; `model.finished` error
+  `time_budget`). The host retried, then ended with "LLM request timed out" and
+  no answer. Their usage is unknown, so the arm's token total is null. This is a
+  real outcome, kept as it is. It also shows that the arms' per-generation
+  limits were not equal: the native provider entry had no 30 s cap.
+- **Row 3, recommendations:** not started. The explicit recommend-and-choose
+  step needs a host-verified person signed in to the native Control UI (spec
+  7.6.1). The only sign-in harness (`host-person-qualification`, AuthCrunch 1.5.0
+  Linux x86-64) refuses this machine (`linux_runner_required`). A shared token or
+  owner pairing is not a person (spec 12.6.5).
 
-Provider-reported prompt (including cached) plus output tokens, all
-`glm-5.3-flash`:
+## Findings
 
-| Run | Tokens |
+1. **Kit install order.** On a fresh host, `trial-install` fails because the
+   pinned host installs the plugin disabled until it is configured
+   (`install-unconfigured.json`). Configure the plugin entry and run
+   `plugins enable relaymind` first; the trial's own install then passes.
+2. **8 of 49 bundled skills admitted.** RelayMind's `local_directory`
+   projection rejects 32 OpenClaw originals with `invalid_markup` and 9 with
+   `repeated_line`, and one rejection fails the whole scan
+   (`inputs/captures/projection-exclusions.json`). The catalog is the 8 admitted
+   skills; the native host is restricted to the same 8 (`skills.allowBundled`).
+3. **Native usage source.** The host persists provider usage for each assistant
+   message in `agents/main/agent/openclaw-agent.sqlite` (`transcript_events`,
+   large events zstd-compressed). For RelayMind-provider turns that record shows
+   zero, so RelayMind arms use TraceEvent usage (`usage-relationship.md`).
+4. **Default 30 s external budget.** It ended the provider_only row (above). A
+   fuller run needs one equal per-generation limit on every arm in a new freeze.
+   The gateway does not raise a budget silently (RM03).
+5. **Gateway working directory.** Without `[sandbox]`, the gateway resolves its
+   default sandbox seed relative to its working directory. Start it from the
+   checkout root, or name `[sandbox]` in the config.
+6. **Machine name in captures.** The host's system prompt, forwarded to the
+   gateway and kept in its trace, contains the Mac's computer name.
+   `observe_row.py` replaces the computer, local host and host names with
+   `<machine-name>` in every kept evidence file. The row 2 trace was redacted
+   this way before bundling.
+7. **`source_revision`.** The corpus verifier requires it to equal the record's
+   `source_version` (null for these skills), which `label-freeze` does not check.
+
+## External usage (provider-reported prompt plus output tokens)
+
+| Step | Tokens |
 | --- | ---: |
-| smoke, provider_only (5 calls) | 46,108 |
-| smoke, native (5 messages) | 53,127 |
-| rehearsal round 1, three rows (helper crashed after the turns) | 140,630 |
-| rehearsal round 2, three rows | 139,450 |
-| **total** | **379,315** |
+| preparation: two smoke turns and two rehearsal rounds (scratch, not evidence) | 379,315 |
+| drafting, two annotators, adjudicator | 6,499 |
+| trial rows 1 and 2 (finished calls) | 45,252 |
+| blind success judging (two judges) | 15,080 |
+| **known total** | **446,146** |
 
-The gateway stores agree (provider_only 93,857 and recommendations 100,749
-over both rehearsal rounds).
+Four timed-out row 2 calls have unknown usage. If each used a full prompt,
+that is about 40,000 more. The owner's cap was about 1,000,000.
 
-The owner's cap is about 1,000,000 tokens. One frozen task (three rows) costs
-roughly 140,000 tokens on this prompt. About 620,000 tokens remain under the
-cap: four more tasks (twelve rows) at most, plus the machine annotator's
-labelling and success judging.
+**A fuller early trial would need**, per task: about 50,000 to 60,000 tokens for
+native plus provider_only, about the same again for a recommendations row,
+and about 15,000 for judging. It would also need an equal per-generation limit
+on all arms (finding 4), a person sign-in for the recommendations arm (the Linux
+person-ingress harness, or a qualified macOS path), and several tasks per lane.
+The acceptance cohort (at least 100 paired tasks, at least 20 per lane) is far
+beyond this cap.
 
 ## Files
 
-- `inputs/catalog.json`: draft AssetCatalogSetV1 (purpose `development`), the
-  8 originals under `inputs/originals/`, the MIT `LICENSE` as license and
-  notice, and the statements under `inputs/evidence/` (those marked DRAFT need
-  the owner's confirmation).
-- `inputs/cases.DRAFT.json`: one **example** case (`en_to_en`), drafted in the
-  agent session, `authorship: generated`. Not owner-authored.
-- `inputs/label-template-owner.DRAFT.json`,
-  `inputs/label-template-machine-annotator.DRAFT.json`: blind templates from
-  `label-template --labelling owner_machine` over the draft case.
-- `inputs/rubric-trial-en-001.md`, `inputs/setup.md`: DRAFT rubric and row setup.
-- `inputs/configs/`: the three arm host configurations (exact preimages, no
-  secret) and the two gateway TOMLs (`base_url` omitted).
-- `inputs/captures/`: native validation, inventories, distribution identity,
-  projection exclusions.
-- `machine-annotator-prompt.DRAFT.md`: the machine annotator's prompt template.
-- `usage-relationship.md`: the token relationship evidence for the attempts.
-- `build_trial_inputs.py` (`draft`, `freeze`, `record`) and `observe_row.py`:
-  evidence helpers for this trial; they only arrange files for the existing kit
-  and checker.
+- `frozen/`: the frozen companion manifest and every document and evidence file.
+- `bundle/`: the kit's bundle, with the trial's own `preflight.json` (all seven
+  checks passed) and `install.json` (passed).
+- `inputs/`: the catalog with its 8 MIT originals and statements, `cases.json`,
+  `labels.json`, the label templates, judged templates and worksheet
+  (`inputs/labelling/`), the rubric, the row setup, the arm configurations and
+  the host captures.
+- `machine/`: every prompt template, every recorded model request and response,
+  the model listing, the blind-map digest and map, and the success verdicts.
+- `build_trial_inputs.py` (`draft`, `freeze`, `record`), `observe_row.py`,
+  `machine_passes.py`: evidence helpers for this trial. They only arrange
+  files and calls for the existing kit and checker.
 
-## What the owner must do next
+## What remains
 
-1. **Write the prompt(s).** Replace the example in `inputs/cases.DRAFT.json`
-   with your own prompt(s): set `authorship: original`, `author_ids: ["owner"]`,
-   and save as `inputs/cases.json`. Check `people` in `inputs/catalog.json`
-   (your roles and competencies; add `native_zh` only if it is true, and only
-   then add a Chinese lane case). Confirm or edit every statement marked DRAFT
-   in `inputs/evidence/`, the rubric and `inputs/setup.md`. If anything in
-   `inputs/` changes, rerun `label-template` for both annotators.
-2. **Label.** Fill your own template blind. Run the machine annotator with
-   `machine-annotator-prompt.DRAFT.md` on its own template at temperature 0
-   with a **pinned, dated** model ID (`glm-5.3-flash` is an alias-like ID with
-   no date: pick a dated one or record why it is pinned). Then run
-   `label-worksheet`, adjudicate every case in the worksheet (reason on every
-   disagreement) and `label-freeze --labelling owner_machine` to `labels.json`.
-3. **Set up the recommendations arm** (finding 5): add the `recommendations`
-   object to `inputs/configs/host-recommendations.json` and to
-   `<root>/host/arm-recommendations.json` with your real signed-in profile
-   facts, and validate it natively again.
-4. **Freeze.** `python docs/evidence/m10/early-trial-m1-20261101/build_trial_inputs.py
-   freeze --root /private/var/tmp/relaymind-trial-259 --cases inputs/cases.json
-   --labels labels.json` writes `frozen/inputs.json` and the private resolver.
-   Commit `frozen/` before the first row runs.
-5. **Run the rows.** Start both gateways from `<root>/gateway-*/relaymind.toml`
-   with the credentials sourced only in their shells; `plan-host` on the frozen
-   tasks and freeze; for each ordinal run `observe_row.py` (source the
-   credentials only for the native rows). For each recommendations row first
-   recommend and choose in the Control UI, save the choice receipt and pass it
-   with `--recommendation-receipt`, `--interactions` and `--human-wait-ms`.
-6. **Judge success blind.** Anonymize the transcripts, judge each row against
-   the rubric yourself and with the machine annotator, adjudicate, and set
-   `success` in each `row-NNNN.json`. Unknown stays `null`.
-7. **Bundle and grade.** `scripts/asset_whole_task.py trial --inputs
-   frozen/inputs.json --tarball <root>/release/relaymind-openclaw-provider-0.1.0.tgz
-   --observations <obs> --bundle bundle --work <new private dir>
-   --resolver <root>/resolver/resolver.json --qualification provisional --
-   <root>/cli/node_modules/.bin/openclaw`, with `OPENCLAW_CONFIG_PATH` set to
-   `<root>/host/openclaw.json` so the reinstall leaves the arm files alone. The
-   early trial grades `blocked` at best (exit 3).
-8. **Record.** `build_trial_inputs.py record --bundle bundle --record-id
-   m10-early-trial-m1-<date> --machine-model <dated id> --machine-prompt
-   machine-annotator-prompt.DRAFT.md` writes the pending QualificationRecordV1
-   in `docs/evidence/m10/` and checks it with `load_record`. Grep every new file
-   for the key and the base URL host before committing. Open the pull request;
-   one org member other than you approves it; afterwards fill `pull_request`,
-   `reviewer_logins` and `approved_at`.
-9. **Walkthroughs** (#238 recorder) need the Linux person-ingress harness
-   (the VPS lacks `libgbm`/`libasound` and a private interface): still pending.
+1. Owner approval: a pull request review by one org member other than the
+   owner approves the cases, labels, rubric, success judgments and the record.
+   Afterwards fill `pull_request`, `reviewer_logins` and `approved_at` in the
+   record.
+2. The recommendations arm, which needs a person sign-in (above).
+3. Walkthroughs (#238 recorder), which need the Linux person-ingress harness;
+   the VPS lacks `libgbm`/`libasound` and a private interface.
+4. Native configuration semantics (#240) keep the report below `qualified`.
