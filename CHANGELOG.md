@@ -89,9 +89,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   operation is in the shipped registry, no production MCP route exists, and
   `relaymind.mcp` is not registered; the tests use injected fixture resolvers
   and routes only. The shipped direct-action/exact-selection entry is re-pinned
-  to the new adapter revision `653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`; its evidence revision still names the
-  capture of the earlier bytes, and the fresh ordinary installed-host capture of
-  this revision is the open pre-merge gate. A release-artifact test now fails
+  to the new adapter revision `653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f`; its evidence revision names the
+  fresh ordinary installed-host capture of this revision (CI run 41286397320,
+  SHA-256 `933fb4e7c8b3…`). A release-artifact test now fails
   when the registry and the built adapter digest drift.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
@@ -128,6 +128,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   refusals with their exact error codes. Browser failures and the overall
   deadline remain failures through skill selection.
 
+- CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
+- CI: both `check` and `openclaw-plugin` run stacked PRs on Linux only to
+  conserve CI capacity, with no base-branch filter. Every PR must target
+  `master` and pass the full Linux/macOS/Windows matrix before merge; pushes
+  also run all three platforms. `openclaw-plugin` now shares the Chromium
+  shell cache keyed by OS and Playwright version; its test tiers remain serial.
 - Stabilize installed OpenClaw qualification on loaded runners (RM16/RM39;
   AC30): use bounded ten-second host-event waits, keep fixture holds alive
   through retirement observation, and capture only fixed ordinary substeps and

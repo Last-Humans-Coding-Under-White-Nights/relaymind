@@ -683,3 +683,12 @@ def test_a_non_sequence_reset_preimage_pair_rejects(pair):
         grade_adaptation_report(
             report, episodes, episode_freeze(), labels, reset_preimages={"e1": pair}
         )
+
+
+@pytest.mark.parametrize("item", [None, {}, {"payload": 123}, {"payload": "text"}, 7])
+def test_a_malformed_reset_evidence_entry_rejects(item):
+    """RM42/AC33 (spec 0.64): every malformed reset entry rejects, never crashes."""
+    from relaymind.evaluation.asset_episode_export import reset_preimages
+
+    with pytest.raises(WholeTaskRejected, match="reset_evidence"):
+        reset_preimages({"reset:e1": item})
