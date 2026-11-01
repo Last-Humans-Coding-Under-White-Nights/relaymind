@@ -1333,9 +1333,10 @@ Section 7.6.2 defines a separate explicit direct-use request and ten qualificati
 conditions. Section 14.5 caps native RPC requests at 512 KiB; the 60-second
 preparation/dispatch deadline excludes the separately bounded native approval
 wait, without changing any existing budget. The mcp_use registry operation is
-separate from the platform-report lifecycle step of the same name. Neither
-name-only tools.invoke nor the narrower MCP App view route proves a generic independent-tool bridge. Exact native identity/lifetime,
-post-approval and final-I/O currentness, actual server effects and negative
+separate from the platform-report lifecycle step of the same name.
+Neither name-only tools.invoke nor the narrower MCP App view route proves a
+generic independent-tool bridge. Exact native identity/lifetime, post-approval
+and final-I/O currentness, actual server effects and negative
 controls must pass for the exact pinned operation/route/transport. Automated
 native UI allow/deny is functional evidence only; genuine human approval,
 actual Apple M1/macOS and native Windows, and whole-task gates remain open.
