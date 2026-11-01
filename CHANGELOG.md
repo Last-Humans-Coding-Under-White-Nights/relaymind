@@ -59,7 +59,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   key bound before a restart that never dispatched recovers as
   `not_dispatched`; reserved block capacity, with managed use refused once no
   further block could be recorded; and a fence recheck of registration,
-  choice and operator association after the exact native read.
+  choice and operator association after the exact native read. A third
+  review made the stale-lock takeover race-safe (per-owner lock files, never
+  removing a live owner's lock) and made each ledger record complete across
+  short writes before it is acknowledged; the shipped entry is re-pinned to
+  adapter revision `b49d94d8267076516430fb2e4fb64d41fad2961fc8009c84e60921cf43e9e98e`,
+  whose evidence must be recaptured from CI.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,

@@ -1398,9 +1398,15 @@ spec 0.65 names no qualified native boundary that can stop the next model
 request. HOST-EXACT-SKILL-USE (#239) and MCP use with real approvals (#204)
 remain open. The changed adapter bytes have a new exact revision, and the
 shipped `direct_actions`/`exact_skill_selection` entry is re-pinned to it
-(`943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`), as for the spec 0.63 scope fix. Its evidence revision names
-the fresh capture of this revision (CI run 41318389858,
-`openclaw-native-actions-20261101-adapter.json`, SHA-256 `35436e519245…`). `tests/test_openclaw_install.py` fails when the registry and
+(`b49d94d8267076516430fb2e4fb64d41fad2961fc8009c84e60921cf43e9e98e`), as for the spec 0.63 scope fix. After review, the
+ledger takes over a stale owner lock without ever removing a live owner's
+lock (per-owner lock files; one owner under any interleaving) and writes each
+record completely across short writes before acknowledging it; these changed
+bytes are that new revision. Its evidence revision still names the capture of
+the previous revision `943e1f0e…` (CI run 41318389858,
+`openclaw-native-actions-20261101-adapter.json`, SHA-256 `35436e519245…`), so
+the evidence must be recaptured from CI for the new adapter revision before
+merge. `tests/test_openclaw_install.py` fails when the registry and
 the built adapter digest of the release artifact drift.
 
 #240 host_config evidence must validate with the pinned host's own validator
