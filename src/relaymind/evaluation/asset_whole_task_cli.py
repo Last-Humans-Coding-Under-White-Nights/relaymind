@@ -168,25 +168,29 @@ def _trial_preflight(args, environment: dict) -> dict:
 
 
 def _trial(args) -> int:
-    """#234: the early-trial kit commands (spec 0.65 section 12.6.5)."""
+    """#234: the early-trial kit commands (spec 0.65 section 12.6.5).
+
+    Output paths are resolved once (macOS ``/tmp`` is a symlink), so the
+    no-follow write fence applies to the real directories.
+    """
     try:
         # Checked before any host command or file; a refused value is never echoed.
         if hasattr(args, "base_url"):
             args.base_url = asset_trial_kit.check_base_url(args.base_url)
         if args.command == "trial-preflight":
             record = _trial_preflight(args, asset_trial_kit.observed_environment())
-            atomic_bytes(args.output, json_bytes(record))
+            atomic_bytes(asset_trial_kit.real_path(args.output), json_bytes(record))
             print(json.dumps(dict(passed=record["passed"], checks=record["checks"])))
             return 0 if record["passed"] else 3
         if args.command == "trial-install":
             record = asset_trial_kit.install_plugin(
                 _host(args), args.tarball, args.work, base_url=args.base_url
             )
-            atomic_bytes(args.output, json_bytes(record))
+            atomic_bytes(asset_trial_kit.real_path(args.output), json_bytes(record))
             print(json.dumps(dict(passed=record["passed"])))
             return 0 if record["passed"] else 3
         if args.command == "trial":
-            work = args.work.absolute()
+            work = asset_trial_kit.real_path(args.work)
             work.mkdir(mode=0o700, parents=True, exist_ok=False)
             environment = asset_trial_kit.observed_environment()
             preflight = _trial_preflight(args, environment)
