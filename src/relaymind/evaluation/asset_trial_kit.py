@@ -367,12 +367,22 @@ def install_plugin(host_command: Sequence[str], tarball: Path, work: Path) -> di
     The same command the operator guide and the ordinary installed-host
     qualification use. Host output stays in private logs under ``work``; the
     record keeps only placeholders, exit codes and SHA-256 digests.
+
+    The install replaces the plugin in the operator's real host, so before any
+    mutating host command (and before ``work`` is created) the release must
+    match its ``SHA256SUMS`` and ``release.json`` (else rejected,
+    ``release_checksum``) and the host must name only the pinned version (else
+    blocked, ``host_version``).
     """
     tarball = Path(tarball).absolute()
+    identity = release_identity(tarball)
+    if not identity["checksum_ok"]:
+        raise WholeTaskRejected("release_checksum")
+    if host_version(host_command)[0] != PINNED_OPENCLAW:
+        raise WholeTaskBlocked("host_version")
     work = real_path(work)
     work.mkdir(mode=0o700, parents=True, exist_ok=False)
     work.chmod(0o700)
-    identity = release_identity(tarball)
     steps, failed = [], False
     for name, shown_args in _INSTALL_PLAN:
         shown = ["<openclaw>", *shown_args]

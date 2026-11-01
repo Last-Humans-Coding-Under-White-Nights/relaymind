@@ -888,7 +888,11 @@ result.
   size, and its version is the release version.
 
 **Install.** The install changes the operator's actual host (the same command
-as the operator guide). Host standard output and standard error stay in
+as the operator guide), so it checks first and runs no host command that
+changes anything when a check fails: a release that fails `release_checksum`
+is rejected (`release_checksum`, exit `2`), and a host whose `--version` does
+not name only the pinned version is blocked (`host_version`, exit `3`). Then
+neither the work directory nor the record is written. Host standard output and standard error stay in
 separate private logs (`install.log`, `install.stderr.log`, `inspect.log`,
 `inspect.stderr.log`, each `0600`) under the work directory. The record keeps
 only placeholders (`<openclaw>`, `<artifact>`), exit codes, SHA-256 digests
@@ -1037,7 +1041,11 @@ If the predicate fails, the step named by the harness failure is `failed` with
 the harness reason. Earlier steps with screenshots are `not_verified`, and
 later ones are `not_run`. A screenshot alone never makes a step recorded. If a
 language's child fails or times out (15 minutes), the recorder still writes
-`manifest.json` with `complete: false`. It sets the language `reason` to
+`manifest.json`. Each child runs in its own process session: on a timeout or
+an interruption the recorder sends SIGTERM to the whole process group (so the
+harness can stop its gateway and proxy), waits up to 15 seconds, then sends
+SIGKILL, so no process left in that group keeps running. The manifest has
+`complete: false`. It sets the language `reason` to
 `child_failed` or `child_timeout`, and every outcome-dependent step to
 `not_run` with `capture_missing`, or `capture_invalid` for a torn capture.
 Any partial files are still listed by digest, including every

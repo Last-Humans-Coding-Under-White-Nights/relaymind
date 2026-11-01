@@ -234,7 +234,9 @@ def test_install_uses_the_pinned_cli_and_records_digests(tmp_path):
     names = [s["name"] for s in record["steps"]]
     assert names == ["install", "inspect"]
     log = (tmp_path / "fake_openclaw.py.log").read_text().splitlines()
-    assert json.loads(log[0]) == [
+    # The pinned host version is checked before the host is changed.
+    assert json.loads(log[0]) == ["--version"]
+    assert json.loads(log[1]) == [
         "plugins",
         "install",
         "npm-pack:" + str(tarball),
@@ -254,6 +256,63 @@ def test_failed_install_is_recorded_and_not_passed(tmp_path):
     record = kit.install_plugin(fake_host(tmp_path, "install-fails"), tarball, tmp_path / "i")
     assert record["passed"] is False
     assert [s["status"] for s in record["steps"]] == ["failed", "not_run"]
+
+
+# --- install preflight (PR #262 adversarial review) ---------------------------
+
+
+def host_calls(tmp_path: Path) -> list[list[str]]:
+    log = tmp_path / "fake_openclaw.py.log"
+    return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+
+def mutating(calls: list[list[str]]) -> list[list[str]]:
+    return [call for call in calls if call != ["--version"]]
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        dict(sums="0" * 64),
+        dict(record=dict(sha256="0" * 64)),
+        dict(record=dict(openclaw=dict(peer="2026.9.1", pluginApi="2026.9.1"))),
+        dict(missing=True),
+    ],
+)
+def test_install_refuses_a_release_whose_checksums_do_not_match(tmp_path, broken):
+    """RM39, AC30, AC36: no host mutation for an unverified package."""
+    tarball = release(tmp_path, sums=broken.get("sums"))
+    if "record" in broken:
+        path = tarball.parent / "release.json"
+        record = json.loads(path.read_bytes())
+        record.update(broken["record"])
+        path.write_text(json.dumps(record), encoding="utf-8")
+    if broken.get("missing"):
+        tarball.unlink()
+    with pytest.raises(kit.WholeTaskRejected, match="^release_checksum$"):
+        kit.install_plugin(fake_host(tmp_path), tarball, tmp_path / "i")
+    assert mutating(host_calls(tmp_path)) == []
+    assert not (tmp_path / "i").exists()
+
+
+def test_install_refuses_a_host_that_is_not_the_pinned_version(tmp_path):
+    tarball = release(tmp_path)
+    with pytest.raises(kit.WholeTaskBlocked) as error:
+        kit.install_plugin(fake_host(tmp_path, "old"), tarball, tmp_path / "i")
+    assert error.value.reason == "host_version"
+    assert host_calls(tmp_path) == [["--version"]]
+    assert not (tmp_path / "i").exists()
+
+
+@pytest.mark.parametrize(("mode", "sums", "code"), [("ok", "0" * 64, 2), ("old", None, 3)])
+def test_trial_install_command_refuses_before_any_host_mutation(tmp_path, mode, sums, code):
+    tarball = release(tmp_path, sums=sums)
+    output = tmp_path / "install.json"
+    argv = ["trial-install", "--tarball", str(tarball), "--work", str(tmp_path / "work")]
+    argv += ["--output", str(output), "--", *fake_host(tmp_path, mode)]
+    assert main(argv) == code
+    assert mutating(host_calls(tmp_path)) == []
+    assert not output.exists() and not (tmp_path / "work").exists()
 
 
 # --- run, bundle and grade ----------------------------------------------------
