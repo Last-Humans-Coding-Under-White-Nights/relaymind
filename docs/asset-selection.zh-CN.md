@@ -241,3 +241,34 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 **当前限制。** 尚无经过评审的资格证据校验器，因此资格验收报告只会评为阻塞，不会通过；
 实测平台报告在绑定工作负载评分器并在真实 Apple Silicon macOS 与原生 Windows 上评审前同样阻塞。
 真实回合、成对宿主任务和平台运行需要真实独立语料、宿主与硬件；夹具运行不构成任何测量结果。
+
+## 已安装宿主上的早期试验与双语演示
+
+**早期已安装技能试验（#234）。** 在客户的 Apple M1 8 GiB 机器上运行
+`python scripts/asset_whole_task.py trial ... -- openclaw`。它依次完成以下步骤：
+
+1. 预检：macOS arm64、Apple M1、8 GiB 内存、环境锁、固定版本 OpenClaw 2026.10.7，
+   以及发布包的 `SHA256SUMS`/`release.json` 与冻结包字节；
+2. 用固定版本宿主命令安装打包插件（`plugins install`、`plugins inspect`）；
+3. 用现有保守驱动在你于宿主上采集的逐行观测（`row-NNNN.json`）上运行冻结的三组计划；
+4. 把所有文件连同 SHA-256 摘要、配套输入清单和 `SHA256SUMS` 打包；
+5. 用现有 `grade-host` 离线评分。
+
+没有观测的行导出为 `not_run`（`observation_missing`）。`--interactive` 会先询问，输入 `skip` 得到
+`operator_skipped`。`provisional` 需要预检和安装都通过；工具从不产生 `qualified`。早期试验至多评为阻塞，
+不能通过验收；`grade.json` 中各组的令牌与调用合计只是临时（provisional）基线成本。
+客户机器与会话、冻结的试验输入，以及从原生宿主记录得到的真实观测仍待提供。完整说明见英文版
+[试验工具](ASSET_BENCHMARK.md#early-installed-skill-trial-kit-234)。
+
+**双语演示录制（#238）。** `integrations/openclaw/test/host-walkthrough/record.py record`
+不加修改地复用普通已安装宿主资格测试，分别以 `en-US` 和 `zh-CN` 运行：
+
+- 浏览器上下文使用该语言并录制视频；
+- 点击插件 `src/control-ui.ts` 中该语言的标签，找不到标签时失败，不会退回英文；
+- 每个步骤录制截图，并写出带 SHA-256 摘要与证据引用的 `manifest.json`。
+
+只有测试脚本自身的判定接受捕获、且该步骤有截图时，步骤才记为 `recorded`。录制的步骤包括推荐、选择、
+准确技能选择、纠正、查看、删除和清除。加载后的技能使用（#239）、MCP 使用和宿主 MCP 审批（#204）始终记为
+`blocked` 并给出固定原因，从不执行。级别为 `functional_fixture`：确定性网关与一次性夹具账号，
+不是客户或真人演示。截图与视频在评审前须保持私有。完整说明见英文版
+[录制工具](ASSET_BENCHMARK.md#bilingual-packaged-walkthrough-recorder-238)。

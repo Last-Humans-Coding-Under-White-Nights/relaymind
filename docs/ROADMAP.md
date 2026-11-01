@@ -1050,6 +1050,13 @@ workflows, explicit stdout-only choice receipts, and a focused
 M10 skill/MCP, real approval and correction walkthrough still requires the final
 qualified host contract/artifact and actual installed-host exercises. These
 repository guides do not claim that remaining walkthrough or close #207.
+The #238 recorder (`integrations/openclaw/test/host-walkthrough/record.py`)
+now drives the unchanged ordinary installed-host qualification in `en-US` and
+`zh-CN` through the plugin's own labels, with screenshots, video and a digest
+manifest. Loaded skill use, MCP use and host MCP approval are recorded as
+`blocked`. No walkthrough has been recorded with it yet, and its
+`functional_fixture` tier does not satisfy the qualified-host walkthrough of
+#238.
 
 The #192 implementation supplies independent catalog discovery: closed records
 and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
@@ -1443,12 +1450,16 @@ room for each binding's dispatch marker and longest receipt under the byte
 cap, and compiled each host schema pattern once per operation. These bytes are
 re-pinned to adapter revision
 `37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`. The
-ordinary installed-host run of these exact bytes (CI run 41335800361, pinned
-OpenClaw 2026.10.7, Ubuntu runner, commit c791c0f, PR merge checkout
-44d4f9f) passed the ordinary-pass and ordinary-skill-pass predicates with all
-15 harness sources matching; its unmodified capture replaces
+host qualification harnesses then built their backend on the real wall clock
+(the test default `FakeClock` stamped every view in the past, so the
+installed adapter refused the first selection), which changed the harness
+sources but not the adapter bytes. The ordinary installed-host run of these
+exact adapter bytes with that harness (CI run 41351781170, pinned OpenClaw
+2026.10.7, Ubuntu runner, commit 293d73e, PR merge checkout 503adf0) passed
+the ordinary-pass and ordinary-skill-pass predicates with all 15 harness
+sources matching; its unmodified capture replaces
 `openclaw-native-actions-20261101-adapter.json` (SHA-256
-`1212d0e28080b08999f936b70416a70c6cef14802eef35d4553a45682a65b093`), which
+`58c6df0ba6dc32f454ef2c131b5e498f971876877108427d29755fbd230fefe4`), which
 the registry's evidence revision names. As before, this is Linux
 functional evidence with disposable accounts. `tests/test_openclaw_install.py` fails when the registry and
 the built adapter digest of the release artifact drift.
@@ -1500,6 +1511,16 @@ enable runtime snapshots or further host operations. The separate spec0.62
 direct-action profile above is qualified; exact selected skill/MCP use and
 post-approval currentness still require their own qualification. Missing genuine
 inputs do not block tooling implementation or explicitly unqualified fixture runs.
+
+#234 early-trial kit: the `trial-*` commands of `scripts/asset_whole_task.py`
+(`asset_trial_kit.py`) add the Apple M1 8 GiB / pinned host / release-checksum
+preflight, the pinned-CLI plugin install, and the frozen plan run through the
+existing driver over operator-captured row observations, bundled with
+SHA-256 digests and graded offline. The bundle is private, the install record
+keeps no host free text, and the provisional gate binds closed preflight/install
+records to the frozen package. They are verified over fixture bundles and a
+host double only. The customer trial itself, its frozen inputs and genuine
+native row observations remain open; no provisional cost has been recorded.
 
 #201 native benchmark contract checkpoint (spec 0.61): explicit local-cold
 preparation records actual gateway worker jobs/readiness, setup and owned cleanup

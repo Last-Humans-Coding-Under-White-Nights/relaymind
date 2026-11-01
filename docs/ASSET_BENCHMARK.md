@@ -854,3 +854,220 @@ turn. No `continue-on-error` is used. The separate
 `ordinary_skill_observation_complete` check validates the evidence without
 requiring a positive loaded-byte outcome; `ordinary_skill_loaded_use_observation`
 still requires the positive byte round trip. Neither check qualifies loaded use.
+
+## Early installed-skill trial kit (#234)
+
+The `trial-*` commands of `scripts/asset_whole_task.py` prepare the early
+installed-skill customer trial on the customer's Apple M1 8 GiB machine with
+the packaged plugin (RM39, RM44; AC30, AC36; spec 0.65 section 12.6.5). They
+wrap the existing frozen plan, conserving driver (`run_host_trial`) and
+offline grader (`grade-host`) above; they add no other calculation. The
+implementation is `relaymind.evaluation.asset_trial_kit`, so the runner
+inventory already covers it. The trial itself still needs the customer's
+machine, session and frozen inputs; nothing here performs it or records a
+result.
+
+| Command | What it does |
+| --- | --- |
+| `trial-preflight --inputs M --tarball T --output P -- openclaw` | Checks the machine and the release, writes the record, and exits `0` only when every check passed, otherwise `3` |
+| `trial-install --tarball T --work W --output I -- openclaw` | `plugins install npm-pack:T --force --accept-capabilities`, then `plugins inspect relaymind --runtime --json` |
+| `trial-run --inputs M --observations O --bundle B --preflight P [--install I] [--tarball T] [--resolver X] --qualification fixture\|provisional [--interactive]` | Runs the frozen plan over row observations, bundles every file and grades the bundle |
+| `trial --inputs M --tarball T --observations O --bundle B --work W [--resolver X] --qualification fixture\|provisional [--interactive] -- openclaw` | All of the above, in order |
+
+**Preflight.** Seven checks, each `passed` or `failed`; an unknown value fails:
+
+- `macos_arm64`, `apple_m1` and `memory_8gib`: the shared environment collector
+  reports `Darwin`, `arm64`, CPU `Apple M1` and exactly 8 GiB of memory;
+- `environment_lock`: every value in the manifest's `environment_lock` matches;
+- `host_version`: `openclaw --version` names only `2026.10.7` (the plugin's
+  `PINNED_OPENCLAW`), which the freeze's host and SDK versions also name; a
+  suffixed version such as `2026.10.7-beta.2` or `2026.10.7.1` is another version;
+- `release_checksum`: the tarball's SHA-256 is the one in `SHA256SUMS` and
+  `release.json` beside it (`npm run pack:release`), and `release.json` pins
+  that host;
+- `frozen_package`: exactly one frozen package has the tarball's SHA-256 and
+  size, and its version is the release version.
+
+**Install.** The install changes the operator's actual host (the same command
+as the operator guide), so it checks first and runs no host command that
+changes anything when a check fails: a release that fails `release_checksum`
+is rejected (`release_checksum`, exit `2`), and a host whose `--version` does
+not name only the pinned version is blocked (`host_version`, exit `3`). Then
+neither the work directory nor the record is written. Host standard output and standard error stay in
+separate private logs (`install.log`, `install.stderr.log`, `inspect.log`,
+`inspect.stderr.log`, each `0600`) under the work directory. The record keeps
+only placeholders (`<openclaw>`, `<artifact>`), exit codes, SHA-256 digests
+and closed inspect codes: `status` and `version` only when they are a plain
+code or release version (otherwise `null`), `enabled`, and
+`diagnostics_count`. Diagnostic text can carry paths, user names or tokens, so
+it stays only in the private log, bound by `output_sha256`. Inspect passes
+when the JSON on standard output (warnings on standard error are ignored)
+shows the plugin `loaded` at the release version with no diagnostics. A missing or unreadable tarball fails `release_checksum` and
+`frozen_package` in the preflight record; it does not stop the preflight.
+Configuring each arm's frozen host configuration is the operator's step;
+see the operator guide in `integrations/openclaw/README.md`.
+
+**Row observations.** The kit writes `plan.json` to the bundle first. For each
+planned ordinal it gives the task (`task_id`, `lane`, `prompt_case_id`), the
+`arm`, the arm's `host_config_digest` and the observation file name
+`row-NNNN.json`. The
+operator runs that row on the host and saves
+`{schema_version:1,ordinal,task_id,arm,row,evidence:[{id,file,provenance}]}`.
+`row` is the section 12.6.5 `HostRow`, and each `file` is relative to the
+observations directory. The rules:
+
+- Every row is validated, and the bytes of every evidence file are hashed.
+  The stated identity is not trusted.
+- A file path that leaves the directory, an observation for another
+  row/arm, or changed bytes under an already registered ID rejects (exit `2`).
+- Evidence files keep the 10 MiB original-byte limit of the companion
+  registry: a larger file rejects (`observation_evidence_too_large`), an absent
+  one `observation_evidence_missing`.
+- A row without an observation is exported `not_run` with reason
+  `observation_missing`. With `--interactive` the kit asks first, and `skip`
+  gives `operator_skipped`. If standard input closes, the kit stops asking:
+  that row and every later row without a saved observation stay
+  `observation_missing`. Ctrl-C (then Enter, at a prompt) exports the
+  remaining rows `not_run` (`interrupted`).
+- A provisional run refuses `fixture` evidence. Producing these observations
+  from native session/run records is the operator's evidence obligation; the
+  kit never infers a row from a gateway trace or a selection receipt.
+
+**Bundle.** The bundle is a new directory, private to the operator
+(directories `0700`, files `0600` on POSIX), because the frozen evidence is
+`access: restricted`. It is built in a hidden staging directory beside it and
+renamed into place only when complete; a rejected or blocked run leaves no
+bundle. Output paths (`--bundle`, `--work`, `--output`) are resolved once, so
+a path under a symlinked parent such as macOS `/tmp` is written to its real
+directory. The bundle holds:
+
+- copies of every document and evidence original in the frozen manifest, at
+  the same relative paths;
+- the collected evidence under `trial-evidence/<sha256>`;
+- `preflight.json` and `install.json`, registered as `trial-preflight` and
+  `trial-install`, and the tarball under its frozen package evidence ID;
+- `plan.json`, `report.json` (an `AssetHostReportV1`), and a new companion
+  `inputs.json` holding the frozen documents and the merged evidence registry;
+- `grade.json`, from the unchanged `grade-host`;
+- `SHA256SUMS` over every file, which `shasum -a 256 -c SHA256SUMS` can check.
+
+The bundle grades again on its own with `grade-host --inputs B/inputs.json`.
+`trial-run` may run on another machine: the report's environment is the one
+recorded in `--preflight` (a preflight without one is rejected), never the
+machine running the command. Manifest documents and evidence with a null path
+are resolver-only: they stay in `inputs.json` as they are and are not copied.
+A root document (tasks, freeze or environment lock) with a null path blocks
+(`input_unresolved`).
+
+**Qualification.** `--qualification provisional` checks the preflight and
+install records before any bundle file is written. A `passed` label alone is
+not accepted:
+
+- each record must have exactly the closed shape the kit writes, otherwise it
+  rejects (`preflight_record`, `install_record`; exit `2`);
+- a well-formed failed preflight or install, or no install record, blocks
+  (`preflight_failed`, `install_failed`; exit `3`);
+- the target machine checks are recomputed from the recorded environment and
+  the frozen lock, and the recorded host version must be the pinned one
+  (`preflight_contradiction`); a passed install must agree with its own steps
+  and inspection (`install_contradiction`);
+- the recorded environment must be the report environment, the release must
+  be exactly one frozen package with its evidence ID, the install archive must
+  be that release, and `--tarball`, when given, those bytes
+  (`preflight_binding`, `install_binding`, `package_binding`).
+
+These checks bind the records to the frozen inputs; they cannot prove the
+records were observed. The one-command `trial` keeps `preflight.json` and the
+install logs in its private work directory even when the run is then blocked.
+`fixture` runs anywhere. `qualified` is never produced. The tasks must have
+kind `early_trial`; an acceptance task set is refused
+(`early_trial_required`). An early trial grades `blocked` at best (exit `3`);
+a provisional label over fixture inputs is a qualification contradiction and
+rejects (exit `2`, #240). The provisional per-arm token and call totals in
+`grade.json` are the baseline three-arm costs #234 asks for, as provisional
+evidence only.
+
+```bash
+python scripts/asset_whole_task.py trial --inputs /abs/frozen/inputs.json \
+  --tarball /abs/release/openclaw/relaymind-openclaw-provider-0.1.0.tgz \
+  --observations /abs/trial/observations --bundle /abs/trial/bundle \
+  --work /abs/trial/private-work --resolver /abs/frozen/resolver.json \
+  --qualification provisional --interactive -- openclaw
+```
+
+**Still open in #234:** the customer machine and session, the frozen trial
+inputs (tasks, freeze, corpus, configurations and inventories), and genuine
+row observations from native host records. Spec 0.65 defines no capture of
+OpenClaw 2026.10.7 session usage, so the kit takes observations as operator
+evidence. Native host configuration validation (#240) and a qualified-evidence
+verifier remain open as well.
+
+## Bilingual packaged walkthrough recorder (#238)
+
+`integrations/openclaw/test/host-walkthrough/record.py` records the English and
+Simplified Chinese walkthroughs on the installed host (RM39; AC30, AC35). It
+reuses the ordinary installed-host qualification
+(`host-ordinary-qualification/qualify.py` on the person-ingress harness)
+without changing it: the same disposable Linux x86-64 host, the same packaged
+tarball installed with the pinned CLI, the same signed-in person and the same
+pass predicates. For each language it:
+
+- opens every browser context with that locale (`en-US`, `zh-CN`) and records
+  video;
+- clicks the plugin's own Control UI labels for the language, read from
+  `src/control-ui.ts`. An unknown label fails; it never falls back to English;
+- takes a screenshot after every UI action and once each step has settled.
+
+```bash
+playwright install --with-deps --only-shell chromium
+python integrations/openclaw/test/host-walkthrough/record.py record \
+  --tarball /abs/relaymind-openclaw-provider-0.1.0.tgz \
+  --work-root /abs/new-private-work --out-dir /abs/new-walkthrough
+```
+
+The output directory holds, per language, `capture.json` (the harness's
+sanitized capture), `screens/`, `screens.json` and `video/`. `manifest.json`
+lists every file as an evidence reference `{id,path,sha256,bytes,provenance}`,
+the steps in order, the harness and recorder source digests, and `complete`.
+
+| Step | Status rule |
+| --- | --- |
+| `open`, `recommend`, `choose`, `correct`, `inspect`, `delete`, `reset` | `recorded` when the harness's `ordinary_pass` accepts the capture and the step has a screenshot |
+| `select_skill` (exact Skill Library revision for the next turn) | `recorded` when `ordinary_skill_pass` accepts the capture and the step has a screenshot |
+| `skill_use` | always `blocked`: `skill_loaded_use_unqualified` (spec 7.6.1; #239) |
+| `mcp_use` | always `blocked`: `mcp_use_unqualified` (spec 7.6.2; #204) |
+| `mcp_approval` | always `blocked`: `host_mcp_approval_unqualified` (spec 7.6.2; AC35) |
+
+If the predicate fails, the step named by the harness failure is `failed` with
+the harness reason. Earlier steps with screenshots are `not_verified`, and
+later ones are `not_run`. A screenshot alone never makes a step recorded. If a
+language's child fails or times out (15 minutes), the recorder still writes
+`manifest.json`. Each child runs in its own process session: on a timeout or
+an interruption, and also when the child exits on its own (a crash included),
+the recorder sends SIGTERM to whatever is left in the process group (so the
+harness can stop its gateway and proxy), waits up to 15 seconds, then sends
+SIGKILL, so no process left in that group keeps running. The manifest has
+`complete: false`. It sets the language `reason` to
+`child_failed` or `child_timeout`, and every outcome-dependent step to
+`not_run` with `capture_missing`, or `capture_invalid` for a torn capture.
+A repeated `--languages` value is refused before anything is created
+(`languages_repeated`, exit `2`, no manifest).
+Any partial files are still listed by digest, including every
+`screens/*.png` that `screens.json` does not name (a killed child never saves
+it). Such a screenshot belongs to no step. A torn `screens.json`, a listed file
+that is missing or outside the language directory, and an unlisted
+screenshot are named in the language's `media_problems` (`screens_invalid`,
+`screenshot_missing`, `screenshot_path`, `screenshot_unlisted`, and
+`capture_path`, `video_path` for unsafe capture or video files); any of them
+makes the manifest incomplete. The command exits `0` only when
+both languages are complete.
+
+The tier is `functional_fixture`, with a deterministic gateway and disposable
+fixture accounts. It is not a customer, human or live-model walkthrough and
+not platform acceptance. Blocked steps are never attempted. Screenshots and
+video can show fixture account names; keep them private until reviewed, and
+never publish the work directory. Whether the pinned host's Control UI
+follows the browser locale has not been observed yet; if it does not, the
+Chinese run fails on its first label rather than recording English screens.
+The recorder is not part of CI. Its fixture tests
+(`tests/test_openclaw_walkthrough.py`) run in the default `pytest`.

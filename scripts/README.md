@@ -10,7 +10,10 @@
 - `asset_whole_task.py` — plan and grade the spec 0.60 section 12.6.5 host trial,
   adaptation episode and platform exports (`plan-host`, `grade-host`,
   `grade-adaptation`, `grade-platform`); offline only, see
-  `docs/ASSET_BENCHMARK.md`.
+  `docs/ASSET_BENCHMARK.md`. The `trial-preflight`, `trial-install`,
+  `trial-run` and `trial` commands are the #234 early-trial kit (Apple M1
+  8 GiB preflight, pinned-CLI plugin install, the frozen plan over
+  operator-captured row observations, a digest bundle and offline grading).
 - `asset_selection_benchmark.py` — formal locked-profile run, explicit optional
   preparation and offline JSON/Markdown comparison (RM35/RM40/RM44). The
   [formal guide](../docs/ASSET_BENCHMARK.md) covers resolver/privacy commitments,

@@ -6,6 +6,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Early installed-skill trial kit (#234; RM39, RM44; AC30, AC36; spec 0.65
+  section 12.6.5): `scripts/asset_whole_task.py trial-preflight`,
+  `trial-install`, `trial-run` and `trial`.
+  - Preflight checks macOS arm64, Apple M1, 8 GiB, the environment lock, the
+    pinned OpenClaw 2026.10.7 host and the plugin release checksum against the
+    frozen package.
+  - The plugin is installed with the pinned host CLI.
+  - The frozen plan runs through the existing driver over operator-captured row
+    observations. Missing rows stay `not_run`.
+  - Every original is bundled with `SHA256SUMS` and a companion manifest and
+    graded offline with the unchanged grader.
+  - Output is fixture or provisional only; no trial has been run.
+  - Review follow-ups: the bundle and copied originals are private (`0700`/`0600`)
+    and appear only when complete; the install record keeps closed inspect codes
+    and a diagnostics count, never host text; the provisional gate checks the
+    closed record shapes, recomputes the machine checks and binds the records to
+    the frozen package; output paths under a symlinked parent (macOS `/tmp`)
+    work; evidence keeps the 10 MiB original limit; `plan.json` names the lane
+    and prompt case.
+- Bilingual packaged walkthrough recorder (#238; RM39; AC30, AC35):
+  `integrations/openclaw/test/host-walkthrough/record.py` runs the unchanged
+  ordinary installed-host qualification in `en-US` and `zh-CN`.
+  - It uses the plugin's own labels, with screenshots, video and a digest
+    manifest.
+  - A step is recorded only when the harness predicate accepts the capture.
+    Loaded skill use, MCP use and host MCP approval are always `blocked`.
+  - The tier is `functional_fixture`, it is not in CI, and no walkthrough has
+    been recorded yet.
+  - Every partial screenshot is listed by digest, and a torn or unsafe media
+    set still writes an incomplete manifest with fixed `media_problems`.
 - Qualification assessment for the section 12.6.5 exports (#240; RM16, RM40,
   RM42, RM44; AC31, AC33, AC36, AC37): graded host, platform and adaptation
   results record the claimed label, the tier assessed from the resolved inputs
@@ -81,7 +111,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   pattern once per operation; the entry is re-pinned to adapter revision
   `37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`, whose
   evidence revision names its fresh capture (CI run 41335800361, SHA-256
-  `1212d0e28080…`).
+  `1212d0e28080…`). The host qualification harnesses then built their backend
+  on the real wall clock instead of the test default `FakeClock`, so the
+  capture was recaptured with them at the same adapter revision (CI run
+  41351781170, SHA-256 `58c6df0ba6dc…`; unmodified, no runner hostname in it).
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,

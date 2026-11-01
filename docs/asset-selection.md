@@ -192,3 +192,21 @@ Spec 0.65 (#240) requires the pinned native validation evidence and applicable
 schema/extraction evidence specified in section 12.6.5 to be supplied and
 verified. Until then, host, provider, sampling and budget configuration
 documents remain unverified and cannot establish formal acceptance.
+
+## Early trial and walkthroughs on the installed host
+
+- **Early installed-skill trial (#234).** On the Apple M1 8 GiB machine,
+  `python scripts/asset_whole_task.py trial ... -- openclaw` does these steps
+  in order: it checks the machine, the pinned OpenClaw 2026.10.7 host and the
+  release checksum; installs the packaged plugin; runs the frozen three-arm
+  plan over the row observations you capture on the host; bundles every file
+  with SHA-256 digests; and grades the bundle offline. An early trial is
+  `provisional` at most and never passes acceptance. See the
+  [trial kit](ASSET_BENCHMARK.md#early-installed-skill-trial-kit-234).
+- **Bilingual walkthrough recorder (#238).**
+  `integrations/openclaw/test/host-walkthrough/record.py record` records
+  English and Chinese screenshots, video and a digest manifest of recommend,
+  choose, exact skill selection, correction, inspect, delete and reset on the
+  disposable installed host. Loaded skill use, MCP use and host MCP approval
+  are recorded as `blocked`, never performed. See the
+  [recorder](ASSET_BENCHMARK.md#bilingual-packaged-walkthrough-recorder-238).
