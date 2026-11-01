@@ -12,7 +12,6 @@ import json
 import sys
 from pathlib import Path
 
-from relaymind.canonical import canonical_digest
 from relaymind.evaluation.asset_benchmark_io import (
     REPORT_BYTES,
     atomic_bytes,
@@ -20,7 +19,7 @@ from relaymind.evaluation.asset_benchmark_io import (
     read_json_path,
 )
 from relaymind.evaluation.asset_corpus_io import DOCUMENT_BYTES, AssetCorpusError
-from relaymind.evaluation.asset_episode_export import grade_adaptation_report
+from relaymind.evaluation.asset_episode_export import grade_adaptation_report, reset_preimages
 from relaymind.evaluation.asset_evidence import OfflineResolver
 from relaymind.evaluation.asset_platform_export import grade_platform_report
 from relaymind.evaluation.asset_whole_task import (
@@ -30,8 +29,8 @@ from relaymind.evaluation.asset_whole_task import (
     validate_whole_task,
     verify_host_tasks,
 )
+from relaymind.evaluation.asset_whole_task_corpus import corpus_offers
 from relaymind.evaluation.asset_whole_task_inputs import (
-    UNVERIFIED,
     WholeTaskBlocked,
     resolve_whole_task_inputs,
 )
@@ -44,26 +43,6 @@ _REPORTS = {
 }
 
 
-def _labels(lock: Path, evidence_root: Path, digest: str) -> dict:
-    from relaymind.evaluation.asset_corpus import load_asset_release
-
-    try:
-        release = load_asset_release(lock, evidence_root=evidence_root, related_roots={})
-    except FileNotFoundError:
-        raise WholeTaskBlocked("corpus_unresolved") from None
-    except AssetCorpusError as exc:
-        if str(exc) in ("missing_file", "input_unresolved"):
-            raise WholeTaskBlocked("corpus_unresolved") from None
-        raise
-    if canonical_digest(release.lock) != digest:
-        raise WholeTaskRejected("dataset_lock_binding")
-    return {
-        label["case_id"]: label
-        for label in release.labels["adjudications"]
-        if label["disposition"] == "include"
-    }
-
-
 def _grade(args) -> tuple[str, dict]:
     report, _ = read_json_path(args.report, REPORT_BYTES)
     # Check the report's own shape before following any of its references.
@@ -71,17 +50,28 @@ def _grade(args) -> tuple[str, dict]:
     resolver = OfflineResolver(args.resolver) if args.resolver else None
     if args.command == "grade-adaptation":
         inputs = resolve_whole_task_inputs("adaptation", report, args.inputs, resolver=resolver)
-        labels = _labels(args.lock, args.evidence_root, inputs.root["dataset_lock_digest"])
         summary = grade_adaptation_report(
-            report, inputs.root, inputs.freeze, labels, registry=inputs.registry
+            report,
+            inputs.root,
+            inputs.freeze,
+            inputs.labels,
+            reset_preimages=reset_preimages(inputs.evidence),
+            registry=inputs.registry,
+            offers=corpus_offers(
+                inputs.release,
+                dict(
+                    off=inputs.configs[inputs.freeze["off_config_digest"]],
+                    on=inputs.configs[inputs.freeze["on_config_digest"]],
+                ),
+            ),
         )
-        return summary["gate"], dict(summary=summary)
+        return summary["gate"], dict(summary=summary, unverified=list(inputs.unverified))
     inputs = resolve_whole_task_inputs("host", report, args.inputs, resolver=resolver)
     if args.command == "grade-host":
         summary = grade_host_report(report, inputs.root, inputs.freeze, registry=inputs.registry)
-        return summary["gate"], dict(summary=summary)
+        return summary["gate"], dict(summary=summary, unverified=list(inputs.unverified))
     gate = grade_platform_report(report, inputs.root, inputs.freeze, registry=inputs.registry)
-    return gate, {}
+    return gate, dict(unverified=list(inputs.unverified))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -110,9 +100,6 @@ def main(argv: list[str] | None = None) -> int:
             ),
         )
         grade.add_argument("--output", type=Path, required=True)
-        if name == "grade-adaptation":
-            grade.add_argument("--lock", type=Path, required=True, help="verified corpus lock")
-            grade.add_argument("--evidence-root", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "plan-host":
@@ -122,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
             atomic_bytes(args.output, json_bytes(dict(planned=plan_host_trial(tasks))))
             return 0
         gate, extra = _grade(args)
-        result = dict(status="graded", gate=gate, reason=None, unverified=list(UNVERIFIED), **extra)
+        result = dict(status="graded", gate=gate, reason=None, **extra)
         code = _EXIT[gate]
     except WholeTaskBlocked as exc:
         result, code = dict(status="blocked", gate="blocked", reason=exc.reason), 3

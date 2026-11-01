@@ -180,4 +180,56 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 不共享拉丁标识的中文内存泄漏请求仍未命中英文原始目标；这些诊断不证明翻译能力、
 语义质量或独立人工标注达标。开始使用工具不要求客户提供外部数据集或人工评审组。
 生产语义模型资格验证，以及已安装宿主的 M10 执行、审批、纠正演练仍是单独的工作；
-参见[当前状态](ROADMAP.md#m10--multilingual-asset-recommendations-spec-063)。
+参见[当前状态](ROADMAP.md#m10--multilingual-asset-recommendations-spec-064)。
+
+## 整任务试验、适配回合与平台导出
+
+规范 0.60/0.64 第 12.6.5 节的离线工具服务于 #198（早期已安装技能试验）、#202（适配回合）、
+#204（宿主 MCP 使用行）、#205（成对整任务）和 #206（平台生命周期）。它们校验冻结输入、
+确定性地规划执行、通过真实推荐生命周期驱动适配回合，并重新评分导出的报告。工具不运行宿主、
+不授予审批，也不执行任何工具：宿主试验的执行器由调用方提供，只有宿主执行工具。
+本节是摘要；各项检查的规范性完整说明以英文版 [ASSET_BENCHMARK.md](ASSET_BENCHMARK.md#whole-host-trials-adaptation-episodes-and-platform-exports-spec-060064-section-1265) 为准。
+所有汇总都从经过验证的行重新计算，存储的汇总与之不符时报告被拒绝。`plan-host` 先依据 `HostFreezeV1` 校验
+`AssetHostTasksV1`，并按 `{seed,task_id,arm}` 的 SHA-256 排列各组；评分命令的输出文件总是记录 `status`、`gate`
+和固定的安全 `reason`，`plan-host` 只写出计划，被拒绝时不写文件并把原因输出到标准错误。引用的配置为严格 JSON 或 TOML
+（不超过 4 MiB）；尚不支持关联锁（related locks），遇到时阻塞。重置证据必须是规范化（canonical）JSON 原始字节，
+非规范字节或重复键会被拒绝。
+
+| 命令 | 作用 |
+| --- | --- |
+| `python scripts/asset_whole_task.py plan-host --tasks T --freeze F --output P` | 按冻结的任务顺序写出三组（native、provider_only、recommendations）执行计划 |
+| `python scripts/asset_whole_task.py grade-host --report R --inputs M [--resolver X] --output O` | 解析配套输入清单，校验并重新评分宿主报告 |
+| `python scripts/asset_whole_task.py grade-platform --report R --inputs M [--resolver X] --output O` | 校验平台报告的十一个生命周期步骤 |
+| `python scripts/asset_whole_task.py grade-adaptation --report R --inputs M [--resolver X] --output O` | 校验并重新评分适配报告；探测标签来自清单中经过验证的语料 |
+
+退出码：`0` 通过或不适用于验收（夹具平台报告、未达资格的适配报告）；`1` 已知门槛失败；
+`2` 报告或输入被拒绝（摘要、身份、顺序、绑定或算术矛盾）；`3` 阻塞（缺少必需的文档、配置、
+语料文档、运行器/协议清单中文件的原文（由 `--resolver` 提供）或证据）。阻塞永远不会被报告为通过。评分结果还会列出 `unverified`：
+宿主与平台报告为 `configuration_semantics` 和 `qualified_evidence_review`；适配报告为
+`qualified_evidence_review`，若两个对照组未引用冻结的 14.5.2 适配配置，还包括 `adaptation_config_semantics`
+（被引用时会与其余引用闭包一同解析和验证）。关闭组与开启组的有效配置除适配开关外必须完全一致
+（含选择器类型、名称、版本与地址），语料原文必须全部可用。
+
+**输入。** 清单必须包含唯一的 `environment_lock`、`runner_inventory`、`protocol_inventory`，
+报告指向的根输入及其冻结文档，冻结文档列出的每个配置（`referenced_config:<摘要>`），
+以及冻结语料的 `lock:`、`catalog:`、`cases:`、`labels:` 文档和证据。语料只在私有临时目录中
+重建，并由现有发布校验器验证。宿主任务绑定到用例的车道、任务族和目录资产的确切字节；
+适配回合绑定到已存在的用例，目录中存在的纠正目标必须字节一致，不在池中的目标被保留而不会被替换。
+
+**重置证据（规范 0.64）。** 证据登记项 `reset:<回合 ID>` 保存封闭的 JSON 文档
+`{schema_version:1,episode_id,baseline,after}`。缺少该文档的重置声明不会被计入通过，
+在没有更早的结构矛盾或已知门槛失败时，评分结果为阻塞。
+
+**适配回合驱动。** `relaymind.evaluation.asset_episode_driver` 在进程内对真实推荐服务运行每个冻结回合：
+每个对照组使用一次性存储，关闭组运行禁用基线；开启组记录重置基线，通过产品反馈存储依次提交三次纠正，
+运行成对探测，经真实生命周期重置反馈后重复重置探测，并导出报告和重置证据。每次调用使用独立的幂等声明；
+重置原像只来自就绪结果，重置探测失败时重置结果为未知。纠正被拒或异常只结束当前回合：已完成的工作被保留，
+其余条目以固定原因标为 `not_run`，后续回合继续运行。中断（调用方的中断检查或任务被取消）
+在每次探测和纠正之前检查，并结束整个运行：当前回合记为 `cancelled`，之后计划的每个回合都以原因
+`interrupted` 标为 `not_run`。评分器根据经验证的语料和
+对照组配置重新计算每个探测的请求与候选目录摘要。驱动使用的评估专用操作登记不是个人或宿主证据，
+因此不能产生 `qualified` 报告。
+
+**当前限制。** 尚无经过评审的资格证据校验器，因此资格验收报告只会评为阻塞，不会通过；
+实测平台报告在绑定工作负载评分器并在真实 Apple Silicon macOS 与原生 Windows 上评审前同样阻塞。
+真实回合、成对宿主任务和平台运行需要真实独立语料、宿主与硬件；夹具运行不构成任何测量结果。

@@ -189,6 +189,8 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.64 reset evidence document for section 12.6.5.
+            ("c97a1d103c4bcdb97ac8c27b4d756bee1567d90f47ad1a68514fc9f5294440c7", 584053),
             # Reviewed 0.63 expected-scope, native role and skill expiry rules.
             ("30d16d2b0dca2eb03834406f4a343359fa4be20ef690ebba404ec32a5e955a64", 583450),
             # Reviewed native0.62 direct-action contract with the inherited

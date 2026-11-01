@@ -197,3 +197,116 @@ def report_for(freeze, tasks, rows, *, qualification="fixture") -> dict:
 
 def ordered_rows(tasks, make) -> list:
     return [make(p["task_id"], p["arm"]) for p in plan_host_trial(tasks)]
+
+
+def expanded_release(root, case_count=8):
+    """The fixture release with ``case_count`` copies of its one case (fixture only)."""
+    import json
+    import shutil
+    import unicodedata
+    from collections import defaultdict
+    from pathlib import Path
+
+    from relaymind.evaluation.asset_judgments import agreement
+
+    source = Path(__file__).resolve().parent / "fixtures" / "asset-benchmark"
+    root = Path(root)
+    shutil.copytree(source, root)
+
+    def read(name):
+        return json.loads((root / (name + ".json")).read_text(encoding="utf-8"))
+
+    def write(name, value):
+        (root / (name + ".json")).write_text(
+            json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+
+    cases, labels, lock = read("cases"), read("labels"), read("lock")
+    base = cases["cases"][0]
+    ids = [base["id"]] + [f"case-{i:02d}" for i in range(1, case_count)]
+    # Distinct prompts, so an episode phase can never replay another's request.
+    cases["cases"] = sorted(
+        (
+            dict(copy.deepcopy(base), id=i, task_text=f"{base['task_text']} {n:02d}")
+            for n, i in enumerate(ids)
+        ),
+        key=lambda c: c["id"].encode(),
+    )
+    labels["judgments"] = sorted(
+        (
+            dict(copy.deepcopy(j), case_id=i)
+            for i in ids
+            for j in labels["judgments"]
+            if j["case_id"] == base["id"]
+        ),
+        key=lambda j: (j["case_id"].encode(), j["annotator_id"].encode()),
+    )
+    labels["adjudications"] = sorted(
+        (
+            dict(copy.deepcopy(a), case_id=i)
+            for i in ids
+            for a in labels["adjudications"]
+            if a["case_id"] == base["id"]
+        ),
+        key=lambda a: a["case_id"].encode(),
+    )
+    rows = defaultdict(list)
+    for judgment in labels["judgments"]:
+        rows[judgment["case_id"]].append(judgment)
+    actual = agreement({c["id"]: c for c in cases["cases"]}, rows)
+    recorded = {g["lane"]: g for g in labels["agreement"]["groups"]}
+    labels["agreement"]["groups"] = [
+        {**recorded.get(lane, {}), **actual[lane], "lane": lane}
+        for lane in sorted(actual, key=lambda lane: (lane != "all", lane.encode()))
+    ]
+    write("cases", cases)
+    labels["cases_digest"] = canonical_digest(cases)
+    write("labels", labels)
+    lock["unicode_version"] = unicodedata.unidata_version
+    for name in ("catalog", "cases", "labels"):
+        lock[name]["digest"] = canonical_digest(read(name))
+    lock.pop("digest")
+    lock["digest"] = canonical_digest(lock)
+    write("lock", lock)
+    return root
+
+
+def effective_pair(adaptation_digest: str, release=None) -> tuple[dict, dict]:
+    """Off/on EffectiveConfigV1 from the fixture production config (fixture only)."""
+    import tomllib
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from relaymind import launcher
+    from relaymind.evaluation import asset_evidence
+
+    path = (
+        Path(__file__).resolve().parent / "fixtures" / "asset-benchmark" / "builtin-production.toml"
+    )
+    production = launcher.parse_launcher_config(
+        tomllib.loads(path.read_text(encoding="utf-8")), config_dir=path.parent
+    )
+    off = asset_evidence.effective_asset_config(
+        production,
+        release if release is not None else SimpleNamespace(catalog={"assets": []}),
+        runner_digest="a" * 64,
+        protocol_digest="b" * 64,
+    )
+    on = copy.deepcopy(off)
+    on["adaptation"] = dict(enabled=True, config_digest=adaptation_digest)
+    return off, on
+
+
+def fixture_production():
+    """The fixture production launcher configuration (no model is started)."""
+    import tomllib
+    from pathlib import Path
+
+    from relaymind import launcher
+
+    path = (
+        Path(__file__).resolve().parent / "fixtures" / "asset-benchmark" / "builtin-production.toml"
+    )
+    return launcher.parse_launcher_config(
+        tomllib.loads(path.read_text(encoding="utf-8")), config_dir=path.parent
+    )
