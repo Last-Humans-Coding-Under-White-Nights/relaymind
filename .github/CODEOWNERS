@@ -1,5 +1,7 @@
 # Code owners for RelayMind.
 # GitHub requests a review from the owners below on every pull request.
-# The master ruleset requires one approving review from a code owner
-# before a merge; authors cannot approve their own pull requests.
+# The master ruleset requires one approving review from any member of the
+# Last-Humans-Coding-Under-White-Nights organization before a merge; a code
+# owner approval is not required. Authors cannot approve their own pull
+# requests.
 * @devnullexile @ArcsinX @Sanek1710
