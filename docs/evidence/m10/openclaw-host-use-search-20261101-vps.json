@@ -9,7 +9,7 @@
   "AC35"
  ],
  "spec": "0.66 sections 7.6.1, 7.6.2, 12.6.6",
- "method": "Source inspection of the installed pinned host package (npm ci from integrations/openclaw/package-lock.json) plus the CI and VPS captures listed in the record. File digests were computed on the linux_host VPS and matched a second npm ci on the owner's MacBook byte for byte. Hook and middleware behaviour below is read from the shipped code and documentation; none of the candidate gates was exercised on a running host by this search.",
+ "method": "Source inspection of the installed pinned host package (npm ci from integrations/openclaw/package-lock.json) plus the CI and VPS captures listed in attempted_routes. File digests were computed on the linux_host VPS and matched a second npm ci on the owner's MacBook byte for byte. Hook, middleware, provider and delegation behaviour below is read from the shipped code and documentation. The host calls and controls that the captures actually attempted are listed in attempted_routes; no stop point, middleware or retained borrow was exercised as a fence on a running host, and the routes named in attempted_routes.not_attempted were not called.",
  "host": {
   "package": "openclaw",
   "version": "2026.10.7",
@@ -56,6 +56,10 @@
    "sha256": "fa254a637d0e13bbbf7f5d19130249253dd8abf9eeebc3afb91deb8c7dd275c5"
   },
   {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/operator-run-authority-6xa3ksBw.mjs",
+   "sha256": "d74debfa0f3bcefd78abd71f028d5a280138a57425587712fa3d8ee54f9041fd"
+  },
+  {
    "path": "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/agent-harness-tool-runtime.js",
    "sha256": "608f8f1f70f3279fc14a4c56f744ac84fb4e3edeb6f6fcf0806e73bdba37bf6e"
   },
@@ -74,6 +78,10 @@
   {
    "path": "integrations/openclaw/node_modules/openclaw/dist/plugin-sdk/plugin-runtime.d.ts",
    "sha256": "91487091273ea2d307c089cbb75914687004a37e24e63060fe4a7c18779066ca"
+  },
+  {
+   "path": "integrations/openclaw/node_modules/openclaw/dist/request-authorization-DsdcZTZi.mjs",
+   "sha256": "c2fcb84fd7646a54542259ad83e8f4706bb0a06fbecd93fb91b4444fb012d8d5"
   },
   {
    "path": "integrations/openclaw/node_modules/openclaw/dist/session-method-policy-B7o-3I76.mjs",
@@ -186,8 +194,8 @@
     ],
     "can_stop": "the next model request before HTTP dispatch",
     "context": "ProviderWrapStreamFnContext: agentId, auth facts, model, extraParams, thinkingLevel, streamFn; per call: context.messages, options.sessionId",
-    "authority": "none: no sessionKey, lifecycleRevision or person authority",
-    "verdict": "stop without fence"
+    "authority": "none by itself: no sessionKey, lifecycleRevision or person authority in its context; it sees the outgoing context.messages (so it can compare the delivered instruction bytes with the pinned contentHash) and options.sessionId. Combined with a retained session access borrow (GatewaySessionAccessAuthority.retain() below) it is the final boundary of a fence candidate",
+    "verdict": "stop without fence on its own; the stop of the retain() fence candidate"
    },
    {
     "name": "before_agent_run",
@@ -206,6 +214,32 @@
     "context": "prompt, messages, system prompt",
     "authority": "none",
     "verdict": "does not reach the post-read model request of the same run"
+   },
+   {
+    "name": "before_prompt_build (requiresToolAuthority, ctx.toolAuthority)",
+    "kind": "modify (prompt context, tool narrowing); with requiresToolAuthority a second, post-policy phase that receives ctx.toolAuthority {fingerprint, allows(toolName), assertActive()}",
+    "source": [
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/config-contracts-Db6WHFol.d.ts",
+      "sha256": "48c2f15bb8041a49dd7da5d34663cab7f73081b2ed03f807c09c01ab61851a3d"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/hook-types-CoUXuQe1.mjs",
+      "sha256": "468f9f5bf542fba630cbf975d9c541c06f0a2d3550eef94700559d6733b49688"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/hooks/prompt-and-session.md",
+      "sha256": "6e84e739638c66a45315a9af7c5348dc9d244bbd0bb97a40e5e872212b369c4a"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/hooks/reference.md",
+      "sha256": "f5c829cad2363652f61b9892b22f0b983ad0335a07dce8ed9944d877b8c3f495"
+     }
+    ],
+    "can_stop": "nothing: a thrown error or timeout is logged and skipped and other handlers' results are kept (hooks/reference.md, 'Log and skip the failed handler'); it adds prompt context or narrows the turn's tools only",
+    "context": "prompt, session messages snapshot, agentId, sessionKey, sessionId, runId, assertMemoryAudienceCurrent, hookInvocation.assertActive(); ctx.toolAuthority (PluginHookToolAuthority in config-contracts) only in the authorized phase",
+    "authority": "not person authority: ctx.toolAuthority checks the finalized tool surface of the active turn and rejects after the hook dispatch closes ('A retained toolAuthority object fails closed after dispatch'); its fingerprint 'is not a bearer token or authorization proof'. Spec 7.6.1 states the same: the tool fingerprint and hook lifetime are not person authority and alone do not establish that an exception aborts the host turn",
+    "verdict": "neither stop nor fence"
    },
    {
     "name": "llm_input, model_call_started, model_call_ended, after_tool_call",
@@ -235,20 +269,28 @@
    },
    {
     "name": "GatewaySessionAccessAuthority.retain()",
-    "kind": "original-person access borrow {signal, assertCurrent, release} obtainable inside a sessionAccess gateway method handler",
+    "kind": "original-person access borrow {signal, assertCurrent, release}, obtained with retain() inside a sessionAccess gateway method handler (RelayMind already registers relaymind.skill and relaymind.recommendations with sessionAccess {mode: write}); the documented use is a borrow that outlives the handler, 'for example for an interactive viewer'",
     "source": [
      {
       "path": "integrations/openclaw/node_modules/openclaw/dist/config-contracts-Db6WHFol.d.ts",
       "sha256": "48c2f15bb8041a49dd7da5d34663cab7f73081b2ed03f807c09c01ab61851a3d"
      },
      {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/request-authorization-DsdcZTZi.mjs",
+      "sha256": "c2fcb84fd7646a54542259ad83e8f4706bb0a06fbecd93fb91b4444fb012d8d5"
+     },
+     {
+      "path": "integrations/openclaw/node_modules/openclaw/dist/operator-run-authority-6xa3ksBw.mjs",
+      "sha256": "d74debfa0f3bcefd78abd71f028d5a280138a57425587712fa3d8ee54f9041fd"
+     },
+     {
       "path": "integrations/openclaw/node_modules/openclaw/docs/plugins/sdk-runtime/gateway-and-nodes.md",
       "sha256": "636e26e07231dca7a49e98091790989ec66b7344ffd1abc6b022b52cd15e106d"
      }
     ],
-    "can_stop": "nothing by itself; the only host object found that could carry person currentness past the RPC into a later turn",
-    "authority": "a native delegation candidate whose acquisition, scope, lifetime and revocation 7.6.1/7.6.2(2) require to be qualified separately; spec 0.66 defines no such qualification",
-    "verdict": "unqualified delegation (spec gap, not used)"
+    "can_stop": "nothing by itself; its assertCurrent() throws, and its signal aborts, when a check fails, so a provider onPayload that calls it before dispatch can stop the next model request",
+    "authority": "a supported native delegation (spec 7.6.1). In request-authorization (retain and assertActor) every assertCurrent() of the borrow re-runs, at call time: the captured operator run authority and the person's originalGrant assertCurrent(), the profile's isCurrent(), the current role's agent scope, the session check (same store path, store generation, sessionId and lifecycleRevision as the admitted target; reset, deletion or store replacement retire it) and the current tool policy and sharing. It subscribes to session changes, session identity mutation, profile and role policy changes and the source grant's signal, and on a failed check aborts its signal and releases. It does not check the invocation (invocationClosed is not part of the retained check), so it stays valid after the handler returns. It is not an earlier RPC's closed request scope or a JSON copy of its identity. Its scope, expiry and revocation have not been qualified",
+    "verdict": "fence candidate (with the provider onPayload stop and a pinned-byte comparison of the outgoing messages); not qualified and not excluded, so stop_point_absent is not established"
    },
    {
     "name": "dispatchGatewayMethod (openclaw/plugin-sdk/gateway-method-runtime)",
@@ -291,7 +333,15 @@
     "sha256": "2ec6dbe7ca39d393138aa4de63581b8e813fd972e03cd2a96e2082652bce8675"
    }
   ],
-  "conclusion": "Points that can stop the read or the next request exist, but none can re-verify fresh person authority, the session incarnation and the pinned bytes at that boundary: none carries host person authority or a qualified native delegation, so each is a stop-only point and does not count. No host point can fence the next model request as section 7.6.1 requires: finding stop_point_absent (spec 0.66 section 12.6.6); skill_loaded_use stays disabled."
+  "conclusion": "Points that can stop the read or the next request exist (before_tool_call, tool-result middleware, the provider's onPayload, before_agent_run). On their own none can re-verify fresh person authority, the session incarnation and the pinned bytes at that boundary, so on their own they do not count. But the host also offers a supported native delegation, the retained session access borrow of GatewaySessionAccessAuthority.retain(), whose assertCurrent() re-checks the original person's grant, profile, role, sharing and tool policy and the exact session incarnation at call time. RelayMind's provider could call it in onPayload before dispatch and compare the outgoing instruction bytes with the pinned revision. Spec 7.6.1 admits such a delegation once its scope, expiry and revocation are qualified. This search did not show that this composition fails, so stop_point_absent is not established and no negative skill_loaded_use record is made. skill_loaded_use stays disabled because it is unqualified, not as a host limitation; the open questions above decide it.",
+  "finding": "not_established",
+  "open_questions": [
+   "Whether the provider's onPayload runs in the same process and realm as the gateway method handler, so that it can hold the retained borrow; not demonstrated on a running host.",
+   "Whether a borrow retained in a relaymind.skill or relaymind.recommendations RPC is the authority of the person whose turn reaches the provider (one borrow per session and person, matched by options.sessionId), and how long it lives (connection close, grant expiry, gateway restart).",
+   "Whether a throw in onPayload, or the borrow's aborted signal, prevents the HTTP dispatch on the pinned host; not exercised.",
+   "How the nonremoved library entry and the operator mapping that section 7.6.1 lists are re-checked at that boundary; the CI and VPS2 captures show the host keeps delivering the pinned revision after the entry is removed, so the fence itself would have to refuse it.",
+   "Revocation, reset and removal while a turn waits must be observed as a stop (section 7.6.1); none was tried."
+  ]
  },
  "mcp_use": {
   "question": "A supported host route that invokes an independent, non-App MCP tool by its exact native identity (server/original/exposed name/schema/currentness tuple). MCP App view routes are App-scoped and do not count (spec 0.66 section 12.6.6; section 7.6.2 conditions 3 and 10).",
@@ -359,6 +409,106 @@
     "verdict": "read-only discovery; invokes nothing. The pinned host returns {groups: [{tools: [entry]}], notices?}, with MCP entries carrying the host's server/original mapping. The VPS3 capture (checkout bba0cf1, after mcp.app.discover started the person session's MCP runtime) lists both colliding append tools under distinct exposed names (alpha-one__append for alpha.one, alpha-one-2__append for alpha?one); no server call was made. The earlier CI and VPS2 captures show an empty list only because their probe read payload.tools instead of payload.groups[].tools (fixed in be67556), and those runs did not start the session's MCP runtime first; the empty list was a harness projection, not a host result."
    }
   ],
+  "finding": "exact_route_absent",
   "conclusion": "No supported host route invokes an independent, non-App MCP tool by its exact native identity on 2026.10.7: tools.invoke is name-only, the harness tool runtimes are documented private, and mcp.app.callTool is App-scoped and does not count. Finding exact_route_absent (spec 0.66 section 12.6.6); mcp_use stays disabled and relaymind.mcp is not registered."
+ },
+ "attempted_routes": {
+  "note": "Host calls and controls attempted on a running pinned host, as recorded in the committed captures. Each row names the capture and the recorded outcome.",
+  "mcp_use": [
+   {
+    "capture": "openclaw-mcp-use-20261101-vps3.json",
+    "method": "mcp.app.discover",
+    "status": "ok",
+    "outcome": "started the person session's MCP runtime; no App view, no tool call"
+   },
+   {
+    "capture": "openclaw-mcp-use-20261101-vps3.json",
+    "method": "tools.effective",
+    "status": "ok",
+    "outcome": "listed alpha-one__append (alpha.one/append) and alpha-one-2__append (alpha?one/append); read-only discovery"
+   },
+   {
+    "capture": "openclaw-mcp-use-20261101-vps3.json",
+    "method": "mcp.app.listTools",
+    "status": "refused",
+    "outcome": "refused without a viewId"
+   },
+   {
+    "capture": "openclaw-mcp-use-20261101-ci.json",
+    "method": "mcp.app.listTools",
+    "status": "refused",
+    "outcome": "refused without a viewId"
+   },
+   {
+    "capture": "openclaw-mcp-use-20261101-vps2.json",
+    "method": "mcp.app.listTools",
+    "status": "refused",
+    "outcome": "refused without a viewId"
+   }
+  ],
+  "skill_loaded_use": [
+   {
+    "capture": "openclaw-loaded-use-observation-20261101-ci.json",
+    "case": "positive",
+    "intervention": null,
+    "observed": "loaded_pinned_revision"
+   },
+   {
+    "capture": "openclaw-loaded-use-observation-20261101-ci.json",
+    "case": "stale",
+    "intervention": "skills.library.save",
+    "observed": "loaded_pinned_revision"
+   },
+   {
+    "capture": "openclaw-loaded-use-observation-20261101-ci.json",
+    "case": "deleted",
+    "intervention": "skills.library.mutate",
+    "observed": "loaded_pinned_revision"
+   },
+   {
+    "capture": "openclaw-loaded-use-observation-20261101-ci.json",
+    "case": "reset",
+    "intervention": "sessions.reset",
+    "observed": "incomplete"
+   },
+   {
+    "capture": "openclaw-loaded-use-observation-20261101-vps2.json",
+    "case": "positive",
+    "intervention": null,
+    "observed": "loaded_pinned_revision"
+   },
+   {
+    "capture": "openclaw-loaded-use-observation-20261101-vps2.json",
+    "case": "stale",
+    "intervention": "skills.library.save",
+    "observed": "loaded_pinned_revision"
+   },
+   {
+    "capture": "openclaw-loaded-use-observation-20261101-vps2.json",
+    "case": "deleted",
+    "intervention": "skills.library.mutate",
+    "observed": "loaded_pinned_revision"
+   },
+   {
+    "capture": "openclaw-loaded-use-observation-20261101-vps2.json",
+    "case": "reset",
+    "intervention": "sessions.reset",
+    "observed": "control_refused"
+   }
+  ],
+  "not_attempted": {
+   "mcp_use": [
+    "tools.invoke",
+    "mcp.app.callTool",
+    "runAgentHarnessToolInvocation",
+    "materializeStaticMcpToolsForHarnessRun"
+   ],
+   "skill_loaded_use": [
+    "before_tool_call block of skills_read",
+    "tool-result middleware replacement",
+    "provider onPayload failure before dispatch",
+    "GatewaySessionAccessAuthority.retain() borrow checked at the next model request"
+   ]
+  }
  }
 }

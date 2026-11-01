@@ -36,8 +36,8 @@
     {
       "role": "inventory",
       "path": "openclaw-host-use-search-20261101-vps.json",
-      "sha256": "cea5178f3190e03d422c5123012349a211d86afea6242dedf5eeae51ea4595c4",
-      "bytes": 19315
+      "sha256": "2432d9d42abdcf72af5edb008036b6171a9fec69341f893fd182fc9c1533576a",
+      "bytes": 28612
     },
     {
       "role": "capture",

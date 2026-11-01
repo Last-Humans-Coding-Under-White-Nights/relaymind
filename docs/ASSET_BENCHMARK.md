@@ -668,8 +668,9 @@ tasks or labels it binds must be the resolved inputs. Every Time field must be
 a real UTC instant (`invalid_record_time`). Under spec 12.6.6 an approved
 `negative` record with scope `host_operation` closes the `skill_loaded_use`
 or `mcp_use` gate with the operation disabled; `known_host_limitations`
-returns those records for the roadmap, docs and reports to list. No approved
-negative record exists yet, so none is listed. The module is
+returns those records for the roadmap, docs and reports to list. A pending
+record lifts nothing. No approved negative record exists yet, so none is
+listed. The module is
 `relaymind.evaluation.asset_qualification_record`.
 
 **Native configuration validation (spec 0.65; #240).** Host, provider, sampling
