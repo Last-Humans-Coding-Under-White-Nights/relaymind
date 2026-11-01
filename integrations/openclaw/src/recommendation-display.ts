@@ -22,66 +22,77 @@ function escapeMarkup(value: unknown): string {
     .replace(/"/g, "\\u{22}");
 }
 const english = {
-  Recommendation: "Recommendation",
-  State: "State",
-  Decision: "Decision",
-  Candidate: "Candidate",
-  Kind: "Kind",
-  Source: "Source",
-  "Source locator": "Source locator",
-  "Source version": "Source version",
-  "Content hash": "Content hash",
-  Availability: "Availability",
-  Description: "Description",
-  "Recorded score": "Recorded score",
-  "Evidence fields": "Evidence fields",
+  recommendation: "Recommendation",
+  state: "State",
+  decision: "Decision",
+  candidate: "Candidate",
+  kind: "Kind",
+  source: "Source",
+  sourceLocator: "Source locator",
+  sourceVersion: "Source version",
+  contentHash: "Content hash",
+  availability: "Availability",
+  description: "Description",
+  score: "Recorded score",
+  evidence: "Evidence fields",
 };
 const chinese: typeof english = {
-  Recommendation: "推荐",
-  State: "状态",
-  Decision: "决定",
-  Candidate: "候选项",
-  Kind: "类型",
-  Source: "来源",
-  "Source locator": "来源位置",
-  "Source version": "来源版本",
-  "Content hash": "内容哈希",
-  Availability: "可用性",
-  Description: "描述",
-  "Recorded score": "记录分数",
-  "Evidence fields": "证据字段",
+  recommendation: "推荐",
+  state: "状态",
+  decision: "决定",
+  candidate: "候选项",
+  kind: "类型",
+  source: "来源",
+  sourceLocator: "来源位置",
+  sourceVersion: "来源版本",
+  contentHash: "内容哈希",
+  availability: "可用性",
+  description: "描述",
+  score: "记录分数",
+  evidence: "证据字段",
 };
+// The one locale rule for the panel and its evidence: zh, zh-CN, zh_CN, zh-Hans.
+export function chineseLocale(locale: unknown): boolean {
+  return typeof locale === "string" && /^zh(?:[-_]|$)/i.test(locale);
+}
+// Text mode doubles a source backslash before neutralizing controls, so a
+// source "\u{202e}" never reads like a neutralized control character.
+function plainText(value: unknown): string {
+  return neutralizeControls(String(value).replace(/\\/g, "\\\\"));
+}
 // The native RPC has already validated this scoped receipt. This formatter
 // adds no fields and never treats rendered text as action authority.
 export function formatRecommendation(
   view: RecommendationViewV1,
   options: RecommendationDisplayOptions = {},
 ): string {
-  const labels = /^zh\b/i.test(options.locale ?? "en-US") ? chinese : english;
-  const inert = options.format === "text" ? neutralizeControls : escapeMarkup;
+  const labels = chineseLocale(options.locale) ? chinese : english;
+  const text = options.format === "text";
+  const inert = text ? plainText : escapeMarkup;
+  // Escaping the quote keeps the quoted description from imitating a field.
+  const quoted = (value: unknown) =>
+    text ? plainText(value).replace(/"/g, '\\"') : escapeMarkup(value);
   const lines = [
-    labels.Recommendation + ": " + inert(view.recommendation_id),
-    labels.State + ": " + inert(view.state),
-    labels.Decision + ": " + inert(view.decision),
+    labels.recommendation + ": " + inert(view.recommendation_id),
+    labels.state + ": " + inert(view.state),
+    labels.decision + ": " + inert(view.decision),
   ];
   for (const [i, { candidate, asset }] of view.displayed_candidates.entries()) {
     lines.push(
-      labels.Candidate + " " + (i + 1) + ": " + inert(candidate.asset_id),
-      labels.Kind + ": " + inert(asset.kind),
-      labels.Source + ": " + inert(asset.source_id),
-      labels["Source locator"] + ": " + inert(asset.source_locator),
-      labels["Source version"] + ": " + inert(asset.source_version),
-      labels["Content hash"] + ": " + inert(asset.content_hash),
-      labels.Availability + ": " + inert(asset.availability),
-      labels.Description + ': "' + inert(asset.description) + '"',
-      labels["Recorded score"] +
+      labels.candidate + " " + (i + 1) + ": " + inert(candidate.asset_id),
+      labels.kind + ": " + inert(asset.kind),
+      labels.source + ": " + inert(asset.source_id),
+      labels.sourceLocator + ": " + inert(asset.source_locator),
+      labels.sourceVersion + ": " + inert(asset.source_version),
+      labels.contentHash + ": " + inert(asset.content_hash),
+      labels.availability + ": " + inert(asset.availability),
+      labels.description + ': "' + quoted(asset.description) + '"',
+      labels.score +
         ": " +
         inert(numericValue(candidate.score)) +
         "; " +
         inert(candidate.score_kind),
-      labels["Evidence fields"] +
-        ": " +
-        candidate.evidence_refs.map(inert).join(", "),
+      labels.evidence + ": " + candidate.evidence_refs.map(inert).join(", "),
     );
   }
   return lines.join("\n");
