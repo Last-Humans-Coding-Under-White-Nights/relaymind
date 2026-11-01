@@ -13,10 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from relaymind.evaluation.asset_qualification_record import load_record
-from relaymind.evaluation.asset_whole_task_qualification import (
-    _MACHINE_FIELDS,
-    _check_platform_machine,
-)
+from relaymind.evaluation.asset_whole_task_qualification import _check_platform_machine
 
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "docs" / "evidence" / "m10"
@@ -60,8 +57,7 @@ def test_owner_run_record_machine_matches_its_platform_report(machine, expected_
     platform = json.loads((OWNER_RUNS / machine / "platform/platform.json").read_bytes())[
         "platform"
     ]
-    for report_field, machine_field in _MACHINE_FIELDS:
-        assert record.machine[machine_field] == platform[report_field], machine_field
+    # A contradicting field raises; a missing one adds machine_identity_unverified.
     reasons: set[str] = set()
     _check_platform_machine(record.machine, platform, reasons)
     assert reasons == expected_reasons
@@ -102,7 +98,7 @@ def test_the_documented_verify_procedure_names_the_recorded_run_commit():
 
 def test_the_verify_procedure_skips_windows_even_with_shell_tools(tmp_path, monkeypatch):
     """RM16/AC29: Windows must skip the POSIX procedure even with bash and tar."""
-    namespace = test_the_documented_verify_procedure_reproduces_verify_txt.__globals__
+    namespace = globals()
     monkeypatch.setitem(
         namespace, "sys", SimpleNamespace(platform="win32", executable=sys.executable)
     )
