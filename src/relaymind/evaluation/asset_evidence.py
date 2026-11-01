@@ -191,7 +191,8 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
-            # Reviewed 0.66 with machine-drafted prompts, machine_dual labelling, the #268 amendment and the LHCWN rename.
+            # Reviewed 0.66 with machine-drafted prompts, machine_dual labelling,
+            # the #268 amendment and the LHCWN rename.
             ("6e84ff5a1df955fa81be5b23ad9d7ea9dd6ac9fbd8bf5757dc37f47b559a7889", 628842),
             # Reviewed 0.66 machine-drafted prompts and machine_dual labelling.
             ("e7d32fbff7848920acf30dbf6a91e3ba86231e10eb50b5d0c5ba670edc0907d5", 626858),
