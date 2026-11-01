@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Qualification assessment for the section 12.6.5 exports (#240; RM16, RM40,
+  RM42, RM44; AC31, AC33, AC36, AC37): graded host, platform and adaptation
+  results record the claimed label, the tier assessed from the resolved inputs
+  and fixed safe reasons. A provisional, qualified or measured label over
+  fixture inputs is rejected (`qualification_contradiction`), and no
+  unqualified tier passes a gate. The specification defines no reviewed S3
+  qualification record yet, so no report can be assessed qualified.
+  `plan-host` records the preregistered input and freeze digests, and the new
+  `plan-episodes` command verifies frozen episodes and writes their probe plan
+  (#236, #237). No measured or qualified result is claimed.
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,
   with isolated stale/deleted/reset observations over deterministic inference.

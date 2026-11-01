@@ -582,7 +582,8 @@ A Simplified Chinese version of this section is in
 
 | Command | What it does |
 | --- | --- |
-| `python scripts/asset_whole_task.py plan-host --tasks T --freeze F --output P` | Verifies `AssetHostTasksV1` against its `HostFreezeV1` and writes the three-arm plan: tasks in frozen UTF-8 order, arms ordered by SHA-256 of `{seed,task_id,arm}` |
+| `python scripts/asset_whole_task.py plan-host --tasks T --freeze F --output P` | Verifies `AssetHostTasksV1` against its `HostFreezeV1` and writes the three-arm plan: tasks in frozen UTF-8 order, arms ordered by SHA-256 of `{seed,task_id,arm}`, with the preregistered `input_digest` and `freeze_digest` |
+| `python scripts/asset_whole_task.py plan-episodes --episodes E --freeze F --output P` | Verifies `AssetEpisodesV1` against its `EpisodeFreezeV1` and writes `input_digest`, `config_digest` and, per episode, the chronological corrections, the paired probes in `(kind,case_id)` order with ordinals from one, and the reset probes |
 | `python scripts/asset_whole_task.py grade-host --report R --inputs M [--resolver X] --output O` | Resolves the companion input manifest, then verifies and regrades an `AssetHostReportV1` |
 | `python scripts/asset_whole_task.py grade-platform --report R --inputs M [--resolver X] --output O` | The same for an `AssetPlatformReportV1` (eleven lifecycle steps in fixed order) |
 | `python scripts/asset_whole_task.py grade-adaptation --report R --inputs M [--resolver X] --output O` | Verifies and regrades an `AssetAdaptationReportV1`; probe labels come from the verified corpus in the manifest |
@@ -593,8 +594,8 @@ failure; `2` the report or an input was rejected (a digest, identity, order,
 binding or arithmetic contradiction); `3` blocked (a required document,
 configuration, corpus document, inventory preimage or evidence is missing).
 Blocked is never reported as a pass. A grading command's output file always
-records `status`, `gate` and a fixed safe `reason`; `plan-host` writes only the
-plan, and on rejection it writes nothing and prints the reason to standard
+records `status`, `gate` and a fixed safe `reason`; `plan-host` and
+`plan-episodes` write only the plan, and on rejection it writes nothing and prints the reason to standard
 error. A graded result also lists `unverified`: for host and platform reports
 `configuration_semantics` (the pinned native host configurations are bound by
 digest but not parsed) and `qualified_evidence_review`; for adaptation reports
@@ -620,6 +621,24 @@ resolve only through an explicit `--resolver`; the runner inventory is the
 whole `src/relaymind` Python package plus `pyproject.toml` and
 `scripts/asset_whole_task.py`, whose package members must equal the running
 grader and whose other files must match reviewed bytes.
+
+**Qualification assessment (spec 0.65 sections 12.6.2 and 12.6.5; #240).** A
+graded result also records `qualification`: the report's `claimed` label, the
+`assessed` tier (`fixture`, `provisional` or `qualified`; `qualified` stands
+for `measured` on a platform report) and its fixed safe `reasons`. The tier is
+assessed from the resolved inputs, never from the label: a fixture corpus
+(`fixture_corpus`) or any report evidence with fixture provenance
+(`fixture_evidence`) makes it `fixture`; an unqualified corpus release
+(`corpus_unqualified`, from the section 12.6.1 assessment), artifact identities
+of unknown provenance (`artifact_provenance_unknown`), a platform other than
+Apple Silicon macOS or native x86-64 Windows (`platform_not_target`) and every
+`unverified` entry make it `provisional`. A report labelled `provisional`,
+`qualified` or `measured` over fixture inputs is rejected
+(`qualification_contradiction`); no gate passes unless the tier is
+`qualified`, and a known failure still fails. The specification defines no
+reviewed S3 qualification record and enables no native configuration
+verifier, so `qualified_evidence_review` is always listed and no report can
+be assessed `qualified` yet; observed provenance labels cannot change that.
 
 **Native configuration validation (spec 0.65; #240).** Host, provider, sampling
 and budget configuration documents stay unverified and cannot establish qualified

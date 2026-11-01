@@ -1345,7 +1345,20 @@ The pinned config validate command is recorded in the
 Provider/sampling/budget documents need their own applicable source-bound
 schema or a verified extraction from a validated parent; otherwise they remain
 unverified. These section 12.6.5 requirements do not implement the verifier or
-make fixture exports qualified. The [0.65 rationale](design/2026-11-01-spec-0-65-skill-use-mcp-host-config.md)
+make fixture exports qualified.
+
+#240 qualification assessment (spec 0.65 sections 12.6.2/12.6.5; RM16, RM40,
+RM42, RM44; AC31, AC33, AC36, AC37): `asset_whole_task_qualification.py`
+assesses every graded S3 report from its resolved inputs (fixture corpus or
+fixture evidence: fixture; unqualified corpus, unknown artifact provenance,
+non-target platform or any unverified input: provisional), rejects a
+non-fixture label over fixture inputs, and never lets an unqualified tier pass
+a gate. `plan-host` now records the preregistered input/freeze digests and
+`plan-episodes` verifies frozen episodes and writes their probe plan
+(#236/#237 preregistration). The specification still defines no reviewed S3
+qualification record and enables no native configuration verifier, so no
+report can be assessed qualified; that, genuine inputs and the host-validator
+parsing (#250) remain open. The [0.65 rationale](design/2026-11-01-spec-0-65-skill-use-mcp-host-config.md)
 records the decisions and remaining qualification work.
 
 #198/#202/#204/#205/#206 evaluation contract checkpoint (spec 0.60): closed
