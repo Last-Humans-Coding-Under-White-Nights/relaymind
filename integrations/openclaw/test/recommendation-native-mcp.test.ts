@@ -6,6 +6,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
+import { RecommendationClientError } from "../src/recommendation-transport.js";
 import { createFileUseLedger } from "../src/recommendation-native-ledger.js";
 import { fixture } from "./recommendation-native-fixture.js";
 import {
@@ -441,7 +442,7 @@ it.each([
     (f: any) => {
       f.deps.actionClient = async () => ({
         listFeedback: async () => {
-          throw Error("user_action_required");
+          throw new RecommendationClientError("user_action_required", 403);
         },
       });
     },
@@ -791,7 +792,7 @@ it("refuses historical recovery with only a closed code when registration was re
   await f.run();
   f.deps.actionClient = async () => ({
     listFeedback: async () => {
-      throw Error("user_action_required");
+      throw new RecommendationClientError("user_action_required", 403);
     },
   });
   await f.run();
@@ -885,11 +886,11 @@ it("lets the same key retry after a pre-dispatch refusal", async () => {
   const working = f.deps.actionClient;
   f.deps.actionClient = async () => ({
     listFeedback: async () => {
-      throw Error("deadline_exceeded");
+      throw new RecommendationClientError("deadline_exceeded");
     },
   });
   await f.run();
-  expect(f.reply()?.[1]).toEqual(receipt("not_dispatched", "unauthorized"));
+  expect(f.reply()?.[1]).toEqual(receipt("not_dispatched", "timeout"));
   f.deps.actionClient = working;
   await f.run();
   expect(f.reply()?.[1]).toMatchObject({ outcome: "completed", code: "ok" });
@@ -1009,4 +1010,145 @@ it("refuses a pattern-bound argument longer than the bounded match length", asyn
     receipt("not_dispatched", "unavailable"),
     undefined,
   ]);
+});
+
+// Review 4435447985/4435447991 (RM16): a gateway transport failure is reported
+// as unavailable or timeout from the closed list, never as an authority or
+// choice refusal; only the gateway's own refusals map to those codes.
+it.each([
+  ["registration", "transport_error", null, "unavailable"],
+  ["registration", "protocol_error", null, "unavailable"],
+  ["registration", "overloaded", 503, "unavailable"],
+  ["registration", "deadline_exceeded", null, "timeout"],
+  ["registration", "user_action_required", 403, "unauthorized"],
+  ["registration", "unauthenticated", 401, "unauthorized"],
+  ["choice", "transport_error", null, "unavailable"],
+  ["choice", "recommendation_unavailable", 503, "unavailable"],
+  ["choice", "deadline_exceeded", null, "timeout"],
+  ["choice", "recommendation_not_found", 404, "choice_unavailable"],
+  ["choice", "recommendation_expired", 410, "choice_unavailable"],
+])(
+  "maps a %s gateway error %s (status %s) to %s",
+  async (where, code, status, expected) => {
+    const f = setup();
+    const failure = new RecommendationClientError(
+      code as string,
+      status as any,
+    );
+    if (where === "registration")
+      f.deps.actionClient = async () => ({
+        listFeedback: async () => {
+          throw failure;
+        },
+      });
+    else
+      f.deps.recommendationClient = async () => ({
+        get: async () => {
+          throw failure;
+        },
+      });
+    await f.run();
+    expect(f.reply()).toEqual([
+      true,
+      receipt("not_dispatched", expected as string),
+      undefined,
+    ]);
+    expect(f.invokes()).toBe(0);
+  },
+);
+
+it("maps a non-gateway failure while reading the choice to unavailable", async () => {
+  const f = setup();
+  f.deps.recommendationClient = async () => ({
+    get: async () => {
+      throw Error("socket hang up");
+    },
+  });
+  await f.run();
+  expect(f.reply()?.[1]).toEqual(receipt("not_dispatched", "unavailable"));
+});
+
+// Review 4435447955/4435447965: once the outcome is settled it is never
+// settled again, so a failed response cannot corrupt the durable history.
+it("settles a completed outcome once even when sending the response fails", async () => {
+  const path = ledgerPath();
+  const f = setup({ ledger: path });
+  const respond = f.options.respond;
+  let first = true;
+  f.options.respond = (...args: unknown[]) => {
+    if (first) {
+      first = false;
+      throw Error("connection closed");
+    }
+    return respond(...args);
+  };
+  await f.run().catch(() => {});
+  expect(f.invokes()).toBe(1);
+  // The completed outcome is never re-reported as indeterminate.
+  expect(f.replies).toHaveLength(0);
+  const restarted = setup({ ledger: path });
+  await restarted.run();
+  expect(restarted.reply()).toEqual([
+    true,
+    receipt("completed", "ok", {
+      nativeRunId: "native-run-1",
+      nativeCallId: "native-call-1",
+    }),
+    undefined,
+  ]);
+  expect(restarted.invokes()).toBe(0);
+});
+
+/**
+ * Review 4435447968. Spec 0.65 section 7.6.2 condition 1: "indeterminate
+ * requires code=transport_unknown, timeout or cancelled after dispatch may
+ * have begun; other codes are not_dispatched and prove no native dispatch
+ * for this attempt", and "the same key may only recover its historical
+ * receipt after current authorization checks, never dispatch again". A
+ * same-key request arriving while the first attempt is still preparing waits
+ * for that attempt and recovers its actual receipt; it never fabricates an
+ * indeterminate outcome before dispatch.
+ */
+it("recovers the in-flight attempt's actual receipt for a concurrent same-key request", async () => {
+  const f = setup();
+  let decide: (value: unknown) => void = () => {};
+  f.setDecision(
+    (r: any) =>
+      new Promise((resolve) => {
+        decide = () =>
+          resolve({
+            decision: "deny",
+            approvalId: "approval-1",
+            operationId: r.operationId,
+            argumentsDigest: r.argumentsDigest,
+          });
+      }),
+  );
+  const first = f.run();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const second = f.handler(f.options);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(f.replies).toHaveLength(0);
+  decide(undefined);
+  await Promise.all([first, second]);
+  expect(f.replies).toEqual([
+    [true, receipt("not_dispatched", "approval_denied"), undefined],
+    [true, receipt("not_dispatched", "approval_denied"), undefined],
+  ]);
+  expect(f.invokes()).toBe(0);
+});
+
+it("refuses a concurrent same-key request with a different body as idempotency_conflict", async () => {
+  const f = setup();
+  f.setDecision(() => new Promise(() => {}));
+  void f.run();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  f.options.params.arguments = { text: "changed" };
+  await f.handler(f.options);
+  expect(f.reply()).toEqual([
+    true,
+    receipt("not_dispatched", "idempotency_conflict"),
+    undefined,
+  ]);
+  expect(f.invokes()).toBe(0);
 });
