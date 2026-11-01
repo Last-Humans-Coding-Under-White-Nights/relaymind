@@ -1002,7 +1002,7 @@ specification. Other pull requests stay fast. Each platform runs:
    closed to `src/relaymind`, `pyproject.toml` and
    `scripts/asset_whole_task.py`. The other files the platform run executes or
    loads are bound by the registered evidence `platform-runner-files` (path,
-   SHA-256 and size of each): the workflow, `asset_operations_run.py`,
+   SHA-256 and size of each tracked file): the workflow, `asset_operations_run.py`,
    `asset_platform_run.py`, `openclaw_install_check.py`, the ordinary
    installed-host harness with the action and person harnesses it is built on,
    and the test helpers the bundle and the harness import. The release tarball
