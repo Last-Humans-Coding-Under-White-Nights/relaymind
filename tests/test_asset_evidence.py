@@ -26,3 +26,14 @@ def test_unreviewed_spec_bytes_cannot_certify_a_protocol_inventory():
 
     with pytest.raises(AssetCorpusError, match="unsupported_generator"):
         verify_compiled_asset_inventory("protocol_inventory", inventory)
+
+
+def test_unreviewed_spec_length_cannot_certify_a_protocol_inventory():
+    """RM40/AC31: a valid hash cannot authorize an unreviewed byte length."""
+    root = Path(__file__).resolve().parents[1]
+    inventory = copy.deepcopy(file_inventory(root, protocol=True))
+    spec = next(item for item in inventory["files"] if item["path"] == "docs/SPECIFICATION.md")
+    spec["bytes"] += 1
+
+    with pytest.raises(AssetCorpusError, match="unsupported_generator"):
+        verify_compiled_asset_inventory("protocol_inventory", inventory)
