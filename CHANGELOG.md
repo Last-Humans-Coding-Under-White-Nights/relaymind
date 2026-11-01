@@ -93,6 +93,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   an `original` record rejects drafted cases but allows translated or generated
   validation cases. The trial's `record` step now matches the current checker,
   and a repeated machine pass keeps the earlier call bytes.
+  Second review of #276: an approved record of the `machine_dual_owner_approved` or
+  `machine_drafted_owner_approved` profile needs a preregistration
+  (`preregistration_missing`), since the owner approves the lock before it;
+  `machine_dual` `check_labels` checks the catalog Persons' roles;
+  `QualificationRecord.check_grade` rejects a grade that does not carry the
+  record's labelling and prompt authorship. The M1 trial record now names
+  `2b4e439`, the commit holding its `harness_sha256` bytes, and has a null
+  `preregistration`: its lock was neither committed nor owner-approved before a
+  separate preregistration commit, so it stays pending and cannot be approved.
+  Its committed grade was made without the record, as its README states. The
+  `record` command stops on an uncommitted harness, and the success adjudicator
+  is asked only for the disagreements.
 - #261 MacBook and Ubuntu VPS platform evidence (RM38, RM39, RM40, RM44; AC29,
   AC31, AC37; spec 0.66 sections 12.6.5, 12.6.6) in
   `docs/evidence/m10/owner-platform-runs-2026-11-01/`, with two pending
@@ -110,19 +122,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   selection; the README states that the report's `memory.complete` does not
   mean complete coverage and which private harness address remains in the VPS
   capture.
-  and a repeated machine pass keeps the earlier call bytes. Second review of
-  #276: an approved record of the `machine_dual_owner_approved` or
-  `machine_drafted_owner_approved` profile needs a preregistration
-  (`preregistration_missing`), since the owner approves the lock before it;
-  `machine_dual` `check_labels` checks the catalog Persons' roles;
-  `QualificationRecord.check_grade` rejects a grade that does not carry the
-  record's labelling and prompt authorship. The M1 trial record now names
-  `2b4e439`, the commit holding its `harness_sha256` bytes, and has a null
-  `preregistration`: its lock was neither committed nor owner-approved before a
-  separate preregistration commit, so it stays pending and cannot be approved.
-  Its committed grade was made without the record, as its README states. The
-  `record` command stops on an uncommitted harness, and the success adjudicator
-  is asked only for the disagreements.
 - #274 native Windows platform evidence (RM38; AC29, AC37), with a pending
   qualification draft in `docs/evidence/m10/windows-platform-run-2026-11-01/`.
   The packaged lifecycle passes; fixture qualification and unobserved host

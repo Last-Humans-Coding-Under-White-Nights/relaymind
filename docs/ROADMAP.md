@@ -1779,4 +1779,14 @@ original English skills, pairs, rights review), non-fixture AC29 reports within
 the bounds, restart and a real interactive allow/deny, and review of both
 records. The reports verify only with the run commit's own grader (its
 inventory check compares the running package); the evidence README gives that
-procedure and a test runs it.
+procedure and a test runs it on POSIX systems, skipping Windows even when bash
+and tar are installed.
+
+Correction to that digest-bound README's Verify section (RM16; spec 12.6.5,
+12.6.6): a later checkout can reject the reports with `inventory_membership`
+when the source file set differs, or `unsupported_generator` when the file
+set matches but a digest or size differs. At review commit `33201078`, both
+reports reject with `inventory_membership`. The README's claim that a later
+commit always produces `unsupported_generator` is too narrow. Use its
+procedure with the recorded run commit `2f4ddecc3da0efd632df89ed0d63f3cc1d72c00f`
+to reproduce `verify.txt`; the bound README and evidence remain unchanged.

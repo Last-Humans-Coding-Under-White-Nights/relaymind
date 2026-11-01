@@ -19,10 +19,13 @@ import hashlib
 import json
 import os
 import re
+import runpy
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -33,6 +36,129 @@ CAPTURE = Path(__file__).resolve().parents[1] / "evaluation" / "assets" / "accep
 QUOTA = 100
 # Files outside the lock: the lock itself, the locked document and the notes.
 UNLOCKED = {"lock.v1.json", "capture.v1.json", "README.md"}
+
+
+@pytest.fixture
+def acquisition():
+    """Load the frozen script without writing a __pycache__ into its locked folder."""
+    if sys.platform == "win32":
+        pytest.skip("the acquisition script uses POSIX select on subprocess pipes")
+    return SimpleNamespace(**runpy.run_path(str(CAPTURE / "capture_mcp_tools.py")))
+
+
+@pytest.fixture
+def session(acquisition, tmp_path):
+    sessions = []
+
+    def start(source):
+        process = acquisition.Session([sys.executable, "-u", "-c", source], tmp_path, os.environ)
+        sessions.append(process)
+        return process
+
+    yield start
+    for process in sessions:
+        process.close()
+
+
+def test_acquisition_line_times_out_without_server_output(session):
+    """RM40/AC31: a silent local server cannot leave acquisition waiting forever."""
+    process = session("import sys; sys.stdin.buffer.read()")
+    with pytest.raises(TimeoutError, match="server_timeout"):
+        process._line(time.monotonic() + 0.05)
+
+
+def test_acquisition_line_reports_eof(session):
+    """RM40/AC31: an exited server fails acquisition instead of supplying a listing."""
+    process = session("pass")
+    with pytest.raises(EOFError, match="server_closed"):
+        process._line(time.monotonic() + 5)
+
+
+def test_acquisition_response_filters_ids_and_refuses_server_requests(session):
+    """RM40/AC31: preserve the requested response bytes; grant no server capability."""
+    process = session("""
+import json
+import sys
+print('server log')
+print('[]')
+print('{"jsonrpc":"2.0","method":"notifications/message","params":{}}')
+print('{"jsonrpc":"2.0","id":99,"result":{}}')
+print('{"jsonrpc":"2.0","id":7,"method":"roots/list","params":{}}')
+reply = json.loads(sys.stdin.readline())
+assert reply == {
+    "jsonrpc": "2.0", "id": 7,
+    "error": {"code": -32601, "message": "not supported"},
+}
+sys.stdout.buffer.write(b'{"jsonrpc": "2.0", "id": 7, "result": {"tools": []}}  \\r\\n')
+sys.stdout.buffer.flush()
+""")
+    assert process.response(7) == b'{"jsonrpc": "2.0", "id": 7, "result": {"tools": []}}  '
+
+
+def test_acquisition_follows_next_cursor_and_keeps_each_original(acquisition, tmp_path):
+    """RM40/AC31, 12.6.6: every page retains its own original bytes and tool binding."""
+    initialize = (
+        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18",'
+        b'"serverInfo":{"name":"fixture","version":"1"},"capabilities":{"tools":{}}}}'
+    )
+    first = (
+        b'{"jsonrpc":"2.0","id":2,"result":{"tools":['
+        b'{"name":"first","inputSchema":{"type":"object","properties":{}}}],'
+        b'"nextCursor":"page-two"}}'
+    )
+    second = (
+        b'{"jsonrpc":"2.0","id":3,"result":{"tools":['
+        b'{"name":"second","inputSchema":{"type":"object","properties":{}}}]}}'
+    )
+    source = f"""
+import json
+import sys
+request = json.loads(sys.stdin.readline())
+assert request == {{
+    "jsonrpc": "2.0", "id": 1, "method": "initialize",
+    "params": {{"protocolVersion": "2025-06-18", "capabilities": {{}},
+               "clientInfo": {{"name": "relaymind-catalog-capture", "version": "1"}}}},
+}}
+print({initialize!r}.decode(), flush=True)
+assert json.loads(sys.stdin.readline()) == {{
+    "jsonrpc": "2.0", "method": "notifications/initialized",
+}}
+for request_id, params, raw in [(2, {{}}, {first!r}), (3, {{"cursor": "page-two"}}, {second!r})]:
+    assert json.loads(sys.stdin.readline()) == {{
+        "jsonrpc": "2.0", "id": request_id, "method": "tools/list", "params": params,
+    }}
+    print(raw.decode(), flush=True)
+assert not sys.stdin.read()
+"""
+    license_path = tmp_path / "LICENSE"
+    license_path.write_text("Disposable test fixture.\n", encoding="utf-8")
+    out = tmp_path / "capture"
+    captured = acquisition.capture(
+        dict(
+            id="fixture",
+            argv=[sys.executable, "-u", "-c", source],
+            cwd=str(tmp_path),
+            package=dict(ecosystem="fixture", name="fixture", version="1"),
+            source_url="https://example.invalid/fixture",
+            license_file=str(license_path),
+            license_spdx="CC0-1.0",
+        ),
+        out,
+    )
+    expected = [
+        ("initialize", "originals/fixture.initialize.json", initialize),
+        ("tools_list", "originals/fixture.tools-list.0.json", first),
+        ("tools_list", "originals/fixture.tools-list.1.json", second),
+    ]
+    assert captured["originals"] == [
+        dict(kind=kind, path=path, sha256=_sha(raw), bytes=len(raw)) for kind, path, raw in expected
+    ]
+    for _, path, raw in expected:
+        assert (out / path).read_bytes() == raw
+    assert [(tool["name"], tool["original"]) for tool in captured["tools"]] == [
+        ("first", "originals/fixture.tools-list.0.json"),
+        ("second", "originals/fixture.tools-list.1.json"),
+    ]
 
 
 def _sha(payload: bytes) -> str:

@@ -8,10 +8,15 @@ import subprocess
 import sys
 import unicodedata
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from relaymind.evaluation.asset_qualification_record import load_record
+from relaymind.evaluation.asset_whole_task_qualification import (
+    _MACHINE_FIELDS,
+    _check_platform_machine,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "docs" / "evidence" / "m10"
@@ -44,6 +49,22 @@ def test_owner_run_records_live_where_section_12_6_6_says(machine):
     assert "owner-platform-runs-2026-11-01/README.md" in paths
     assert f"owner-platform-runs-2026-11-01/{machine}/platform/platform.json" in paths
     assert not list(OWNER_RUNS.glob("owner-platform-run-*.json"))
+
+
+@pytest.mark.parametrize(
+    ("machine", "expected_reasons"), [("macbook", set()), ("vps", {"platform_not_target"})]
+)
+def test_owner_run_record_machine_matches_its_platform_report(machine, expected_reasons):
+    """RM38/AC29, AC37; 12.6.6: identity matches; the VPS is never a target."""
+    record = load_record(EVIDENCE / f"owner-platform-run-{machine}-2026-11-01.json")
+    platform = json.loads((OWNER_RUNS / machine / "platform/platform.json").read_bytes())[
+        "platform"
+    ]
+    for report_field, machine_field in _MACHINE_FIELDS:
+        assert record.machine[machine_field] == platform[report_field], machine_field
+    reasons: set[str] = set()
+    _check_platform_machine(record.machine, platform, reasons)
+    assert reasons == expected_reasons
 
 
 def _git(*args: str) -> subprocess.CompletedProcess:
@@ -79,6 +100,23 @@ def test_the_documented_verify_procedure_names_the_recorded_run_commit():
     assert 'gen="${GEN:?' in block and 'work="${WORK:?' in block
 
 
+def test_the_verify_procedure_skips_windows_even_with_shell_tools(tmp_path, monkeypatch):
+    """RM16/AC29: Windows must skip the POSIX procedure even with bash and tar."""
+    namespace = test_the_documented_verify_procedure_reproduces_verify_txt.__globals__
+    monkeypatch.setitem(
+        namespace, "sys", SimpleNamespace(platform="win32", executable=sys.executable)
+    )
+    monkeypatch.setitem(namespace, "_git", lambda *args: SimpleNamespace(returncode=0))
+    monkeypatch.setattr(shutil, "which", lambda name: name)
+
+    def unexpected_shell(*args, **kwargs):
+        pytest.fail("the POSIX verify procedure must not launch on Windows")
+
+    monkeypatch.setattr(subprocess, "run", unexpected_shell)
+    with pytest.raises(pytest.skip.Exception, match="POSIX"):
+        test_the_documented_verify_procedure_reproduces_verify_txt(tmp_path)
+
+
 def test_the_documented_verify_procedure_reproduces_verify_txt(tmp_path):
     """Running the README's Verify block reproduces both verify.txt files (#261).
 
@@ -88,6 +126,8 @@ def test_the_documented_verify_procedure_reproduces_verify_txt(tmp_path):
     ``verify`` on copies of the evidence. The committed evidence must stay
     byte-identical.
     """
+    if sys.platform == "win32":
+        pytest.skip("the documented procedure needs a POSIX shell and executable wrapper")
     run = _run_commit()
     if _git("cat-file", "-e", f"{run}^{{commit}}").returncode != 0:
         pytest.skip(f"run commit {run} is not in this clone (shallow checkout)")
