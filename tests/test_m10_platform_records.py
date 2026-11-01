@@ -7,7 +7,12 @@ import pytest
 from relaymind.evaluation.asset_qualification_record import load_record
 
 EVIDENCE = Path(__file__).resolve().parents[1] / "docs" / "evidence" / "m10"
-RECORDS = sorted(EVIDENCE.glob("*platform-run*/*platform-run*-review.json"))
+RECORDS = sorted(
+    {
+        *EVIDENCE.glob("*platform-run*/*platform-run*-review.json"),
+        *EVIDENCE.glob("owner-platform-runs-*/owner-platform-run-*.json"),
+    }
+)
 
 
 @pytest.mark.parametrize("path", RECORDS, ids=lambda path: path.name)

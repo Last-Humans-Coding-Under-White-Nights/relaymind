@@ -15,6 +15,7 @@
   "machine": {
     "role": "target_macos_m1_8gib",
     "os": "Darwin",
+    "os_version": "macOS 27.0.1",
     "os_build": "macOS 27.0.1 26A434",
     "architecture": "arm64",
     "cpu_model": "Apple M1",
