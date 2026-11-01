@@ -47,6 +47,8 @@ elif args[:2] == ["plugins", "install"]:
     print("installed relaymind")
     sys.exit(1 if mode == "install-fails" else 0)
 elif args[:2] == ["plugins", "inspect"]:
+    if mode == "stderr-noise":
+        print("(node) ExperimentalWarning: update available", file=sys.stderr)
     print(json.dumps({"plugin": {"status": "loaded", "enabled": False, "version": "1.0.0"},
                       "diagnostics": []}))
 else:
@@ -503,3 +505,116 @@ def test_preflight_command_exits_nonzero_off_target(tmp_path, bundle, monkeypatc
     argv += [str(tarball), "--output", str(output), "--", *fake_host(tmp_path)]
     assert main(argv) == 3
     assert json.loads(output.read_bytes())["passed"] is False
+
+
+# --- review follow-ups (PR #262) ----------------------------------------------
+
+
+def test_preflight_with_a_missing_tarball_fails_its_release_checks(tmp_path, bundle):
+    """RM39/AC30: an unreadable release is a failed check, never a crash."""
+    set_lock(bundle, M1)
+    record = kit.preflight(
+        environment=M1,
+        lock=M1,
+        host_command=fake_host(tmp_path),
+        tarball=tmp_path / "absent" / "relaymind-openclaw-provider-1.0.0.tgz",
+        freeze=bundle.freeze,
+    )
+    status = checks(record)
+    assert status["release_checksum"] == status["frozen_package"] == "failed"
+    assert status["host_version"] == "passed" and record["passed"] is False
+    assert record["observed"]["release"]["sha256"] is None
+
+
+def test_inspect_parses_stdout_only_and_keeps_stderr_in_a_private_log(tmp_path):
+    tarball = release(tmp_path)
+    work = tmp_path / "install"
+    record = kit.install_plugin(fake_host(tmp_path, "stderr-noise"), tarball, work)
+    assert record["passed"] is True
+    inspect = record["steps"][1]
+    assert json.loads((work / inspect["log"]).read_bytes())["plugin"]["status"] == "loaded"
+    stderr = (work / inspect["stderr_log"]).read_bytes()
+    assert b"ExperimentalWarning" in stderr
+    assert inspect["stderr_sha256"] == hashlib.sha256(stderr).hexdigest()
+
+
+def test_documents_without_a_path_are_left_to_the_resolver(tmp_path, bundle):
+    """A null DocumentRef path is not copied and never read as a local path."""
+    entry = next(d for d in bundle.documents if d["kind"] == "referenced_config")
+    entry["path"] = None
+    code, result = run(tmp_path, bundle)
+    assert result["reason"] != "path_traversal" and result["status"] != "rejected"
+    copied = json.loads((tmp_path / "out" / "inputs.json").read_bytes())["documents"]
+    assert next(d for d in copied if d["id"] == entry["id"])["path"] is None
+    assert code == 3
+
+
+def test_a_null_path_root_document_blocks(tmp_path, bundle):
+    next(d for d in bundle.documents if d["kind"] == "host_tasks")["path"] = None
+    code, result = run(tmp_path, bundle)
+    assert (code, result["status"], result["reason"]) == (3, "blocked", "input_unresolved")
+
+
+def test_end_of_input_stops_asking_and_leaves_rows_unobserved(tmp_path, bundle):
+    observed = observations(tmp_path, bundle, skip={1, 3})
+    asked = []
+
+    def ask(text):
+        asked.append(text)
+        raise EOFError
+
+    code, result = run(tmp_path, bundle, observed=observed, ask=ask)
+    rows = json.loads((tmp_path / "out" / "report.json").read_bytes())["rows"]
+    assert [rows[0]["reason"], rows[2]["reason"]] == ["observation_missing"] * 2
+    assert rows[1]["status"] == "completed"
+    assert len(asked) == 1 and result["status"] == "graded"
+
+
+def cli_records(tmp_path, bundle):
+    tarball = release(tmp_path)
+    preflight = kit.preflight(
+        environment=ENVIRONMENT,
+        lock=ENVIRONMENT,
+        host_command=fake_host(tmp_path),
+        tarball=tarball,
+        freeze=bundle.freeze,
+    )
+    path = tmp_path / "preflight.json"
+    path.write_text(json.dumps(preflight), encoding="utf-8")
+    return tarball, path
+
+
+def test_trial_run_command_uses_the_preflight_environment(tmp_path, bundle, monkeypatch):
+    """Offline bundling on another machine keeps the target's recorded environment."""
+    monkeypatch.setattr(kit, "observed_environment", lambda: M1)
+    tarball, preflight = cli_records(tmp_path, bundle)
+    argv = ["trial-run", "--inputs", str(frozen_manifest(bundle)), "--observations"]
+    argv += [str(observations(tmp_path, bundle)), "--bundle", str(tmp_path / "out")]
+    argv += ["--preflight", str(preflight), "--resolver", str(bundle.resolver)]
+    argv += ["--qualification", "fixture"]
+    assert main(argv) == 3
+    report = json.loads((tmp_path / "out" / "report.json").read_bytes())
+    assert report["environment"] == ENVIRONMENT
+    assert json.loads((tmp_path / "out" / "grade.json").read_bytes())["status"] == "graded"
+
+
+def test_trial_run_command_refuses_a_preflight_without_an_environment(tmp_path, bundle):
+    _, preflight = cli_records(tmp_path, bundle)
+    record = json.loads(preflight.read_bytes())
+    del record["observed"]["environment"]
+    preflight.write_text(json.dumps(record), encoding="utf-8")
+    argv = ["trial-run", "--inputs", str(frozen_manifest(bundle)), "--observations"]
+    argv += [str(observations(tmp_path, bundle)), "--bundle", str(tmp_path / "out")]
+    argv += ["--preflight", str(preflight), "--qualification", "fixture"]
+    assert main(argv) == 2
+    assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize(("mode", "code"), [("ok", 0), ("install-fails", 3)])
+def test_trial_install_command_writes_its_record(tmp_path, mode, code):
+    tarball = release(tmp_path)
+    output = tmp_path / "install.json"
+    argv = ["trial-install", "--tarball", str(tarball), "--work", str(tmp_path / "work")]
+    argv += ["--output", str(output), "--", *fake_host(tmp_path, mode)]
+    assert main(argv) == code
+    assert json.loads(output.read_bytes())["passed"] is (code == 0)

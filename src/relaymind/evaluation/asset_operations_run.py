@@ -278,10 +278,11 @@ async def _read_token(
                     raise ValueError("gateway_pid_invalid")
                 pid = int(value)
             elif text.startswith(_TOKEN_PREFIX):
-                if time.monotonic() < deadline:
-                    if pid is None:
-                        raise ValueError("gateway_pid_missing")
-                    return text.removeprefix(_TOKEN_PREFIX).strip(), pid
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("gateway_token_unavailable")
+                if pid is None:
+                    raise ValueError("gateway_pid_missing")
+                return text.removeprefix(_TOKEN_PREFIX).strip(), pid
             else:
                 target.write(line)
                 target.flush()
@@ -396,8 +397,9 @@ async def _gateway(
     work.mkdir(parents=True, exist_ok=True)
     # Both logs start clean on every launch, so a reused work directory never
     # mixes two launches.
-    (work / "stdout.log").unlink(missing_ok=True)
-    (work / "stderr.log").unlink(missing_ok=True)
+    stdout_log, stderr_log = work / "stdout.log", work / "stderr.log"
+    stdout_log.unlink(missing_ok=True)
+    stderr_log.unlink(missing_ok=True)
     port = _free_port()
     catalog = None if catalog is None else Path(catalog).absolute()
     imports = None if imports is None else Path(imports).absolute()
@@ -405,7 +407,7 @@ async def _gateway(
         work, base_config, catalog, port, recommendations=recommendations, imports=imports
     )
     deadline = time.monotonic() + timeout
-    with (work / "stderr.log").open("ab") as stderr:
+    with stderr_log.open("ab") as stderr:
         process = await asyncio.create_subprocess_exec(
             *(_controlled_argv if controlled else _child_argv)(config),
             stdin=asyncio.subprocess.PIPE if controlled else None,
@@ -432,8 +434,8 @@ async def _gateway(
             replies.pop(ordinal, None)
 
     try:
-        token, pid = await _read_token(process, deadline, work / "stdout.log")
-        drain = asyncio.create_task(_drain(process.stdout, work / "stdout.log", replies))
+        token, pid = await _read_token(process, deadline, stdout_log)
+        drain = asyncio.create_task(_drain(process.stdout, stdout_log, replies))
         async with httpx.AsyncClient(
             base_url=f"http://127.0.0.1:{port}",
             headers={"Authorization": "Bearer " + token},
@@ -975,8 +977,13 @@ def load_operations_report(
 # --- platform report -----------------------------------------------------------------
 
 
-def _evidence(path: Path, evidence_id: str, served_path: str) -> dict:
+def _read_json(path: Path) -> tuple[object, bytes]:
+    """The parsed document and the exact bytes it was parsed from (one read)."""
     payload = Path(path).read_bytes()
+    return json.loads(payload.decode("utf-8")), payload
+
+
+def _evidence(payload: bytes, evidence_id: str, served_path: str) -> dict:
     return dict(
         id=evidence_id,
         path=served_path,
@@ -1031,11 +1038,14 @@ def ordinary_product_failure(capture: Mapping) -> str | None:
 _FAILED = ("failed", "timed_out")
 
 
-def _lifecycle_status(check: Mapping, names: tuple[str, ...]) -> str:
+def _lifecycle_statuses(check: Mapping) -> dict:
     steps = check.get("steps")
     if not isinstance(steps, list) or not all(isinstance(s, dict) for s in steps):
         raise ValueError("install_check_invalid")
-    statuses = {s.get("name"): s.get("status") for s in steps}
+    return {s.get("name"): s.get("status") for s in steps}
+
+
+def _lifecycle_status(statuses: Mapping, names: tuple[str, ...]) -> str:
     observed = [statuses.get(name, "not_run") for name in names]
     if any(status in _FAILED for status in observed):
         return "failed"
@@ -1074,28 +1084,29 @@ def platform_report(
         raise ValueError("measured_requires_acceptance_platform")
     if ordinary is not None and ordinary_check is None:
         raise ValueError("ordinary_check_required")
-    check = json.loads(Path(install_check).read_text(encoding="utf-8"))
+    check, payload = _read_json(install_check)
     if not isinstance(check, dict):
         raise ValueError("install_check_invalid")
-    evidence = [_evidence(install_check, "install-check", evidence_paths["install-check"])]
+    evidence = [_evidence(payload, "install-check", evidence_paths["install-check"])]
     ordinary_ok, linux_only, failed_action = False, False, None
     if ordinary is not None:
-        capture = json.loads(Path(ordinary).read_text(encoding="utf-8"))
+        capture, payload = _read_json(ordinary)
         ordinary_ok = isinstance(capture, dict) and ordinary_check(capture) is True
         linux_only = isinstance(capture, dict) and capture.get("reason") == "linux_runner_required"
         failed_action = None if ordinary_ok else ordinary_product_failure(capture)
-        evidence.append(_evidence(ordinary, "ordinary-capture", evidence_paths["ordinary-capture"]))
+        evidence.append(_evidence(payload, "ordinary-capture", evidence_paths["ordinary-capture"]))
     operations_entry = None
     if operations is not None:
         operations_entry = _evidence(
-            operations, "operations-report", evidence_paths["operations-report"]
+            Path(operations).read_bytes(), "operations-report", evidence_paths["operations-report"]
         )
         evidence.append(operations_entry)
+    statuses = _lifecycle_statuses(check)
     steps = []
     for name in PLATFORM_STEPS:
         status, ids, reason = "not_run", [], f"{name}_not_run"
         if name in _LIFECYCLE:
-            status = _lifecycle_status(check, _LIFECYCLE[name])
+            status = _lifecycle_status(statuses, _LIFECYCLE[name])
             ids = [] if status == "not_run" else ["install-check"]
             reason = None if status == "passed" else f"{name}_{status}"
         elif name in _ORDINARY_ACTIONS:
