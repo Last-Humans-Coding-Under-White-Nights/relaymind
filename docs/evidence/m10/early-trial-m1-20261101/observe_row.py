@@ -20,8 +20,10 @@ transcript (provider-reported usage persisted by the host; ``input_tokens`` is
 the host's ``contextUsage.promptTokens``); the RelayMind arms take the
 gateway's external model calls through the existing ``attempts_from_trace``.
 Both use ``cached_within_input_reasoning_within_output`` with the
-``usage-relationship`` evidence. ``success`` is always ``null``: the owner and
-the machine annotator judge rows blind against the frozen rubric afterwards.
+``usage-relationship`` evidence. ``success`` is always ``null``: under the
+``machine_dual_owner_approved`` profile the two machine annotators judge rows
+blind against the frozen rubric afterwards, the machine adjudicator settles any
+disagreement, and the owner only approves (``machine_passes.py judge``).
 The external credential is passed to the host only for the native arm and is
 never written.
 """

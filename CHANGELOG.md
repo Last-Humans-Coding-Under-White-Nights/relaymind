@@ -32,7 +32,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   lane); a drafted release is drafted throughout (`drafted_authorship_mixed`);
   an `original` record rejects drafted cases but allows translated or generated
   validation cases. The trial's `record` step now matches the current checker,
-  and a repeated machine pass keeps the earlier call bytes.
+  and a repeated machine pass keeps the earlier call bytes. Second review of
+  #276: an approved record of the `machine_dual_owner_approved` or
+  `machine_drafted_owner_approved` profile needs a preregistration
+  (`preregistration_missing`), since the owner approves the lock before it;
+  `machine_dual` `check_labels` checks the catalog Persons' roles;
+  `QualificationRecord.check_grade` rejects a grade that does not carry the
+  record's labelling and prompt authorship. The M1 trial record now names
+  `2b4e439`, the commit holding its `harness_sha256` bytes, and has a null
+  `preregistration`: its lock was neither committed nor owner-approved before a
+  separate preregistration commit, so it stays pending and cannot be approved.
+  Its committed grade was made without the record, as its README states. The
+  `record` command stops on an uncommitted harness, and the success adjudicator
+  is asked only for the disagreements.
 - #274 native Windows platform evidence (RM38; AC29, AC37), with a pending
   qualification draft in `docs/evidence/m10/windows-platform-run-2026-11-01/`.
   The packaged lifecycle passes; fixture qualification and unobserved host
@@ -463,14 +475,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   frozen corpus) and is null on walkthrough and host_operation records; under
   `owner_machine` the tuner exclusion is waived for the owner custodian only.
   "Customer" wording about who runs trials becomes owner/operator. No metric,
-  threshold or budget changes.
-  A later 0.66 addition (#260) adds `machine_drafted_owner_approved` prompt
-  authorship (one pinned drafting model, owner approval by PR review) and
-  `machine_dual_owner_approved` labelling (two blind machine annotators,
-  `same_family` when only one model family is available, Cohen's kappa before
-  a third machine adjudication pass, owner approval of the frozen labels). The
-  record gains `prompt_authorship`, `drafter` and a machine annotators shape;
-  reports never say `independent` for these labels.
   threshold or budget changes. Amended before release (#268; RM34/AC25;
   sections 4.6, 4.6.1, 14.5): each ordinary local SKILL.md candidate is
   admitted or rejected on its own. A rejected file records one
@@ -480,6 +484,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   cancellation still fail the whole scan. The markup and repeated-line rules
   apply to offered record fields; the internal instruction body keeps only the
   NFC, encoding, control and size rules.
+  A later 0.66 addition (#260) adds `machine_drafted_owner_approved` prompt
+  authorship (one pinned drafting model, owner approval by PR review) and
+  `machine_dual_owner_approved` labelling (two blind machine annotators,
+  `same_family` when only one model family is available, Cohen's kappa before
+  a third machine adjudication pass, owner approval of the frozen labels). The
+  record gains `prompt_authorship`, `drafter` and a machine annotators shape;
+  reports never say `independent` for these labels.
 - Specification 0.64 → 0.65 (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;
   AC25/AC28/AC30/AC31/AC35–AC37): defines native skill loaded-byte delivery,
   immutable-pin versus removal semantics and the later-use authority fence;

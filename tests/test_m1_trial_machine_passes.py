@@ -278,3 +278,212 @@ def test_the_first_dispatch_orders_attempt_times_as_times(builder):
     assert builder._first_dispatch(json.loads((TRIAL / "bundle/report.json").read_text())) == (
         committed
     )
+
+
+# --- the success adjudicator sees and answers only the disagreements (12.6.6) ------
+
+
+def test_the_success_adjudicator_is_asked_only_for_the_disagreements(passes, tmp_path, monkeypatch):
+    """Spec 12.6.6 (review of #276): disagreements are adjudicated with a reason.
+
+    The adjudicator's packet holds only the disagreeing transcripts and their two
+    raw verdicts, and its prompt asks for exactly those blind IDs, so an
+    adjudicator that follows its prompt is accepted by the strict check.
+    """
+    from relaymind.canonical import canonical_digest
+
+    private, observations, machine = tmp_path / "private", tmp_path / "obs", tmp_path / "m"
+    for path in (private, observations, machine):
+        path.mkdir()
+    packet = dict(transcripts=[dict(blind_id=b, transcript={"b": b}) for b in IDS])
+    (private / "blind-packet.json").write_text(json.dumps(packet))
+    entries = [dict(blind_id=b, ordinal=n, arm="x") for n, b in enumerate(IDS, 1)]
+    mapping = dict(schema_version=1, seed=1, entries=entries)
+    (private / "blind-map.json").write_text(json.dumps(mapping))
+    (machine / "blind-map.digest.json").write_text(
+        json.dumps(dict(schema_version=1, blind_map_sha256=canonical_digest(mapping)))
+    )
+    for n in (1, 2):
+        (observations / f"row-{n:04d}.json").write_text(json.dumps(dict(row=dict(success=None))))
+    (tmp_path / "rubric.md").write_text("rubric")
+    answers = {
+        "judge_a": [v("aaaa", True), v("bbbb", True)],
+        "judge_b": [v("aaaa", True), v("bbbb", False)],
+        "success_adjudicator": [v("bbbb", False, "no final answer")],
+    }
+    seen = {}
+
+    def call(role, name, payload):
+        seen[role] = payload
+        return dict(value=dict(verdicts=answers[role]))
+
+    monkeypatch.setattr(passes, "MACHINE", machine)
+    monkeypatch.setattr(passes, "call", call)
+    args = passes.argparse.Namespace(
+        private=private,
+        observations=observations,
+        rubric=tmp_path / "rubric.md",
+        request_date="2026-11-01",
+    )
+    passes.judge(args)
+    asked = seen["success_adjudicator"]
+    assert [t["blind_id"] for t in asked["transcripts"]] == ["bbbb"]
+    assert set(asked["raw"]) == {"bbbb"}
+    rows = json.loads((machine / "success-verdicts.json").read_text())["rows"]
+    assert {r["blind_id"]: r["final"]["success"] for r in rows} == {"aaaa": True, "bbbb": False}
+    template = (TRIAL / "machine/success-adjudicator.md").read_text(encoding="utf-8")
+    assert 'only for the blind_ids in "raw"' in template
+    assert "for\neach blind_id" not in template and "for each blind_id from" not in template
+
+
+# --- the committed M1 evidence, re-checked (spec 12.6.6) ---------------------------
+
+
+def test_the_committed_blind_map_matches_its_digest_and_the_verdicts():
+    """The opened blind map is the one committed by digest before judging, and it
+    maps exactly the judged blind IDs to the judged ordinals and arms."""
+    from relaymind.canonical import canonical_digest
+
+    mapping = json.loads((TRIAL / "machine/blind-map.json").read_text())
+    digest = json.loads((TRIAL / "machine/blind-map.digest.json").read_text())
+    assert canonical_digest(mapping) == digest["blind_map_sha256"]
+    rows = json.loads((TRIAL / "machine/success-verdicts.json").read_text())["rows"]
+    assert sorted((e["blind_id"], e["ordinal"], e["arm"]) for e in mapping["entries"]) == sorted(
+        (r["blind_id"], r["ordinal"], r["arm"]) for r in rows
+    )
+    report = json.loads((TRIAL / "bundle/report.json").read_text())
+    judged = {r["ordinal"]: r["final"]["success"] for r in rows}
+    plan = json.loads((TRIAL / "bundle/plan.json").read_text())
+    planned = [(entry["ordinal"], entry["arm"]) for entry in plan["planned"]]
+    for (ordinal, arm), row in zip(planned, report["rows"], strict=True):
+        assert row["arm"] == arm
+        if ordinal in judged:
+            assert row["success"] is judged[ordinal]
+        else:
+            assert row["status"] == "not_run" and row["success"] is None
+
+
+def _git(*args):
+    import subprocess
+
+    return subprocess.run(["git", *args], cwd=TRIAL.parents[3], capture_output=True, check=False)
+
+
+def test_the_record_harness_belongs_to_its_repository_commit():
+    """The record's harness_sha256 is the SHA-256 of build_trial_inputs.py as
+    committed at the record's repository_commit (review of #276)."""
+    import hashlib
+
+    revisions = json.loads(RECORD.read_text())["revisions"]
+    commit = revisions["repository_commit"]
+    if _git("cat-file", "-e", commit + "^{commit}").returncode != 0:
+        pytest.skip("the record's repository_commit is not in this (shallow) checkout")
+    path = (TRIAL / "build_trial_inputs.py").relative_to(TRIAL.parents[3]).as_posix()
+    shown = _git("show", f"{commit}:{path}")
+    assert shown.returncode == 0
+    assert hashlib.sha256(shown.stdout).hexdigest() == revisions["harness_sha256"]
+
+
+def test_the_m1_record_is_not_preregistered_and_cannot_be_approved(tmp_path):
+    """Spec 12.6.6 (review of #276): the cases and labels were frozen in the same
+    commit used as the run's freeze, with no owner approval before it, so the
+    trial has no section 12.6.6 preregistration. The record says so (null) and an
+    approved copy of it rejects."""
+    from relaymind.evaluation.asset_qualification_record import load_record
+    from relaymind.evaluation.asset_whole_task import WholeTaskRejected
+
+    document = json.loads(RECORD.read_text())
+    assert document["preregistration"] is None
+    assert not load_record(RECORD).approved
+    approved = json.loads(RECORD.read_text())
+    approved["review"].update(
+        pull_request=276, reviewer_logins=["another-member"], approved_at="2026-11-03T00:00:00Z"
+    )
+    bundle = _record_tree(tmp_path)
+    copy_path = bundle.parents[1] / RECORD.name
+    copy_path.write_text(json.dumps(approved), encoding="utf-8")
+    with pytest.raises(WholeTaskRejected, match="preregistration_missing"):
+        load_record(copy_path)
+
+
+def test_the_committed_grade_was_made_without_the_record():
+    """The committed, digest-bound grade predates the record: it carries no
+    labelling or prompt authorship, so it is not a grade under the record and
+    check_grade rejects it (the README says so)."""
+    from relaymind.evaluation.asset_qualification_record import load_record
+    from relaymind.evaluation.asset_whole_task import WholeTaskRejected
+
+    grade = json.loads((TRIAL / "bundle/grade.json").read_text())
+    assert grade["qualification"]["labelling"] is None
+    with pytest.raises(WholeTaskRejected, match="record_grade_mismatch"):
+        load_record(RECORD).check_grade(grade)
+
+
+# --- the documented record command (build_trial_inputs.py record) ------------------
+
+
+def _fake_run(commands, *, dirty=""):
+    import subprocess
+
+    def run(argv, **kwargs):
+        commands.append(list(argv))
+        if argv[:2] == ["sw_vers", "-buildVersion"]:
+            out = "26A434\n"
+        elif argv[:2] == ["git", "rev-parse"]:
+            out = "c" * 40 + "\n"
+        elif argv[:2] == ["git", "status"]:
+            out = dirty
+        elif argv[:2] == ["git", "show"]:
+            out = "d" * 40 + " 1762000000\n"
+        else:
+            raise AssertionError(argv)
+        return subprocess.CompletedProcess(argv, 0, stdout=out, stderr="")
+
+    return run
+
+
+def _record_tree(tmp_path):
+    import shutil
+
+    evidence = tmp_path / "docs/evidence/m10"
+    shutil.copytree(TRIAL / "bundle", evidence / TRIAL.name / "bundle")
+    return evidence / TRIAL.name / "bundle"
+
+
+def test_the_documented_record_command_writes_a_record_that_loads(builder, tmp_path, monkeypatch):
+    """``record --bundle B --record-id ID`` as documented: it writes the pending
+    record and checks it with load_record, check_labels (with the catalog
+    people) and check_cases. Only the run-time facts differ from the committed
+    record."""
+    import subprocess
+
+    bundle = _record_tree(tmp_path)
+    commands = []
+    monkeypatch.setattr(builder, "REPO", tmp_path)
+    monkeypatch.setattr(subprocess, "run", _fake_run(commands))
+    assert builder.main(["record", "--bundle", str(bundle), "--record-id", RECORD.stem]) == 0
+    written = json.loads((tmp_path / "docs/evidence/m10" / RECORD.name).read_text())
+    committed = json.loads(RECORD.read_text())
+    assert written["revisions"]["repository_commit"] == "c" * 40
+    for value in (written, committed):
+        for key in ("recorded_at",):
+            value.pop(key)
+        value["machine"].pop("hostname_sha256")
+        value.pop("revisions")
+    assert written == committed
+    # The harness and product code must be committed before the record names them.
+    assert any(c[:2] == ["git", "status"] for c in commands)
+
+
+def test_the_record_command_refuses_an_uncommitted_harness(builder, tmp_path, monkeypatch):
+    """The record's harness_sha256 must belong to its repository_commit, so the
+    command stops before writing when the harness or product code is dirty."""
+    import subprocess
+
+    bundle = _record_tree(tmp_path)
+    monkeypatch.setattr(builder, "REPO", tmp_path)
+    dirty = " M docs/evidence/m10/early-trial-m1-20261101/build_trial_inputs.py\n"
+    monkeypatch.setattr(subprocess, "run", _fake_run([], dirty=dirty))
+    with pytest.raises(SystemExit, match="harness_uncommitted"):
+        builder.main(["record", "--bundle", str(bundle), "--record-id", RECORD.stem])
+    assert not (tmp_path / "docs/evidence/m10" / RECORD.name).exists()

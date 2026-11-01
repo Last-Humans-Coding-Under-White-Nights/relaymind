@@ -1680,10 +1680,14 @@ completed (judged a success blind by both machine annotators, 19,246 tokens);
 provider_only failed after RelayMind's default 30 s `external_seconds` budget
 cut off four generations (usage of those calls unknown); recommendations
 `not_run` (`person_ingress_unavailable_macos`: the only person sign-in harness is
-Linux x86-64). The provisional bundle grades `blocked`; the pending host_trial
-record binds it and lifts nothing until reviewed. Findings also include the
-kit's fresh-host install order and the machine name in host system prompts
-(redacted before bundling). Still open: owner approval by review, an equal
+Linux x86-64). The provisional bundle grades `blocked` (graded without the
+record, so its output carries no labelling). The pending host_trial record binds
+it but is not a section 12.6.6 preregistration: the case and label lock was not
+committed and owner-approved before a separate preregistration commit, so the
+record's `preregistration` is null and the verifier rejects any approved copy of
+it. Findings also include the kit's fresh-host install order and the machine
+name in host system prompts (redacted before bundling). Still open: a
+preregistered rerun with the owner's lock approval first, an equal
 per-generation limit across arms, the recommendations arm's person sign-in, more
 tasks, the walkthroughs (Linux harness) and #240. No gate is claimed.
 

@@ -592,13 +592,114 @@ def _dual_labels(adjudicator="machine-adjudicator"):
     return labels
 
 
-def test_machine_dual_record_matches_the_frozen_annotators_and_adjudicator(tmp_path):
+DUAL_PEOPLE = {
+    "machine-a": dict(id="machine-a", roles=["annotator"]),
+    "machine-b": dict(id="machine-b", roles=["annotator"]),
+    "machine-adjudicator": dict(id="machine-adjudicator", roles=["adjudicator"]),
+}
+
+
+def _dual_kappa_record(tmp_path):
     document = dual_record(tmp_path)
     document["agreement"]["cohen_kappa"] = round(0.22 / 0.42, 12)
-    record = load_record(save(tmp_path, document))
-    record.check_labels(_dual_labels(), {})
+    return load_record(save(tmp_path, document))
+
+
+def test_machine_dual_record_matches_the_frozen_annotators_and_adjudicator(tmp_path):
+    record = _dual_kappa_record(tmp_path)
+    record.check_labels(_dual_labels(), DUAL_PEOPLE)
     with pytest.raises(WholeTaskRejected, match="labelling_mismatch"):
-        record.check_labels(_dual_labels(adjudicator="machine-a"), {})
+        record.check_labels(_dual_labels(adjudicator="machine-a"), DUAL_PEOPLE)
+
+
+@pytest.mark.parametrize(
+    ("person", "roles"),
+    [
+        ("machine-a", ["annotator", "tuner"]),
+        ("machine-b", ["annotator", "author"]),
+        ("machine-adjudicator", ["adjudicator", "tuner"]),
+        ("machine-adjudicator", ["adjudicator", "annotator"]),
+        ("machine-a", None),  # not a catalog Person at all
+    ],
+)
+def test_machine_dual_record_checks_the_catalog_persons_roles(tmp_path, person, roles):
+    """Spec 12.6.6 (review of #276): the two machine annotators hold ``annotator``
+    only and the machine adjudicator ``adjudicator`` only, checked against the
+    catalog Persons even when check_labels is called directly."""
+    record = _dual_kappa_record(tmp_path)
+    people = copy.deepcopy(DUAL_PEOPLE)
+    if roles is None:
+        del people[person]
+    else:
+        people[person]["roles"] = roles
+    with pytest.raises(WholeTaskRejected, match="labelling_roles"):
+        record.check_labels(_dual_labels(), people)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {},  # machine_dual labels over drafted prompts
+        dict(prompt_authorship="original", drafter=None),  # machine_dual labels only
+        # owner_machine labels over drafted prompts
+        dict(
+            labelling="owner_machine",
+            annotators=dict(owner_annotator_id="owner", machine=_machine("machine")),
+        ),
+    ],
+)
+def test_an_owner_approved_profile_cannot_be_approved_without_preregistration(tmp_path, overrides):
+    """Spec 12.6.6: the owner approves drafted cases and machine_dual labels in the
+    pull request that commits their lock, before preregistration. A record of
+    these profiles without a preregistration loads while pending and rejects
+    once it is marked approved (review of #276)."""
+    record = dual_record(tmp_path, scope="host_trial", preregistration=None, **overrides)
+    pending = copy.deepcopy(record)
+    pending["review"].update(pull_request=None, reviewer_logins=[], approved_at=None)
+    assert not load_record(save(tmp_path, pending, "pending.json")).approved
+    with pytest.raises(WholeTaskRejected, match="preregistration_missing"):
+        load_record(save(tmp_path, record))
+
+
+def test_an_independent_original_trial_record_may_omit_preregistration(tmp_path):
+    record = host_record(
+        tmp_path,
+        scope="host_trial",
+        labelling="independent",
+        annotators=None,
+        agreement=None,
+        preregistration=None,
+    )
+    assert load_record(save(tmp_path, record)).approved
+
+
+def _grade(labelling, prompt_authorship):
+    return dict(
+        status="graded",
+        qualification=dict(
+            claimed="provisional",
+            assessed="provisional",
+            reasons=[REVIEW_UNDEFINED],
+            labelling=labelling,
+            prompt_authorship=prompt_authorship,
+        ),
+    )
+
+
+def test_a_grade_presented_under_a_record_carries_its_labelling(tmp_path):
+    """Spec 12.6.6: a report graded under the record carries the record's
+    ``labelling`` and ``prompt_authorship`` in its qualification output."""
+    record = load_record(save(tmp_path, dual_record(tmp_path)))
+    record.check_grade(_grade("machine_dual_owner_approved", "machine_drafted_owner_approved"))
+    for grade in (
+        _grade(None, None),
+        _grade("independent", "machine_drafted_owner_approved"),
+        _grade("machine_dual_owner_approved", "original"),
+        dict(status="graded"),
+        dict(status="rejected", qualification=None),
+    ):
+        with pytest.raises(WholeTaskRejected, match="record_grade_mismatch"):
+            record.check_grade(grade)
 
 
 def _cases(authorship, author="machine-drafter"):
