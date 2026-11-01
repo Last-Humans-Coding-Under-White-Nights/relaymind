@@ -23,7 +23,11 @@ const QUALIFIED = { adapterRevision: "a".repeat(64) } as any;
 function ledgerPath(): string {
   return join(mkdtempSync(join(tmpdir(), "relaymind-ledger-")), "use.jsonl");
 }
-function setup(qualified = true, ledger: string | null = ledgerPath()) {
+function setup(
+  qualified = true,
+  ledger: string | null = ledgerPath(),
+  limits: { maxRecords?: number; maxBlocks?: number } = {},
+) {
   const f = fixture();
   const view: any = {
     recommendation_id: skillId,
@@ -90,7 +94,7 @@ function setup(qualified = true, ledger: string | null = ledgerPath()) {
         };
       },
     }),
-    ledger: ledger === null ? undefined : createFileUseLedger(ledger),
+    ledger: ledger === null ? undefined : createFileUseLedger(ledger, limits),
     dispatch: async (method: string, params: unknown) => {
       calls.push([method, params]);
       return { ok: true, payload: library };
@@ -153,8 +157,10 @@ it("admits only the exact immutable revision bytes when a fixture registry quali
     ],
   ]);
   await f.fence.deliver(f.options, f.use, content);
-  // Every boundary rechecks registration and the retained choice.
-  expect(f.gateway.filter((item) => item === "registration")).toHaveLength(2);
+  // Every boundary rechecks registration and the retained choice before and
+  // after the exact native read.
+  expect(f.gateway.filter((item) => item === "registration")).toHaveLength(4);
+  expect(f.gateway.filter((item) => item === "get")).toHaveLength(4);
   expect(f.calls).toHaveLength(2);
 });
 
@@ -356,6 +362,7 @@ it("keeps a blocked conversation blocked across a restart", async () => {
   expect(await refused(f.fence.deliver(f.options, f.use, content))).toBe(
     "binding_changed",
   );
+  f.deps.ledger.close();
   const restarted = setup(true, path);
   expect(
     await refused(restarted.fence.load(restarted.options, restarted.use)),
@@ -449,6 +456,7 @@ it.each([
     const f = setup(true, path);
     change(f);
     expect(await refused(f.fence.load(f.options, f.use))).toBe(code);
+    f.deps.ledger.close();
     const healthy = setup(true, path);
     expect(
       await healthy.fence.load(healthy.options, healthy.use),
@@ -457,3 +465,113 @@ it.each([
     });
   },
 );
+
+/**
+ * Second review: spec 0.65 7.6.1 "Before native loading, after each awaited
+ * preparation/read and immediately before instruction delivery to the next
+ * model request, check current native authority, session/lifecycle/workspace/
+ * policy, registration, retained unexpired choice, exact eligible asset/
+ * operator mapping, nonremoved library entry and immutable selected bytes."
+ */
+it.each([
+  [
+    "the operator association is removed",
+    "binding_changed",
+    (f: any) => f.setSkills([]),
+  ],
+  [
+    "the operator association is remapped",
+    "binding_changed",
+    (f: any) =>
+      f.setSkills([
+        {
+          assetId: "skill:fixture",
+          contentHash: hash,
+          sourceVersion: null,
+          skillId,
+          revision: R1,
+        },
+      ]),
+  ],
+  [
+    "the choice is erased",
+    "choice_unavailable",
+    (f: any) => {
+      f.view.state = "expired";
+      f.view.selected_action = null;
+    },
+  ],
+  [
+    "the gateway registration is revoked",
+    "unauthorized",
+    (f: any) => {
+      f.deps.actionClient = async () => ({
+        listFeedback: async () => {
+          throw new RecommendationClientError("user_action_required", 403);
+        },
+      });
+    },
+  ],
+])(
+  "refuses delivery when %s while the exact read is awaited",
+  async (_label, code, change) => {
+    const f = setup();
+    await f.fence.load(f.options, f.use);
+    const read = f.deps.dispatch;
+    f.deps.dispatch = async (...args: any[]) => {
+      const value = await read(...args);
+      change(f);
+      return value;
+    };
+    expect(await refused(f.fence.deliver(f.options, f.use, content))).toBe(
+      code,
+    );
+    expect(f.fence.isBlocked(f.use)).toBe(true);
+  },
+);
+
+// Second review: a full ledger must not lose the permanent stop.
+it("keeps the stop after a fence failure on a full ledger, across restoration and restart", async () => {
+  const path = ledgerPath();
+  const f = setup(true, path, { maxRecords: 1 });
+  expect(f.deps.ledger.consumeApproval("fill")).toBe(true);
+  await f.fence.load(f.options, f.use);
+  const mapping = f.deps.skills();
+  f.setSkills([]);
+  expect(await refused(f.fence.deliver(f.options, f.use, content))).toBe(
+    "binding_changed",
+  );
+  expect(f.fence.isBlocked(f.use)).toBe(true);
+  f.setSkills(mapping);
+  expect(await refused(f.fence.deliver(f.options, f.use, content))).toBe(
+    "binding_changed",
+  );
+  f.deps.ledger.close();
+  const restarted = setup(true, path, { maxRecords: 1 });
+  expect(
+    await refused(restarted.fence.load(restarted.options, restarted.use)),
+  ).toBe("binding_changed");
+});
+
+it("refuses managed use when no further block could be recorded", async () => {
+  const f = setup(true, ledgerPath(), { maxBlocks: 0 });
+  expect(await refused(f.fence.load(f.options, f.use))).toBe("unavailable");
+  expect(f.calls).toHaveLength(0);
+});
+
+it("keeps the stop in this process when the block cannot be written", async () => {
+  const f = setup();
+  await f.fence.load(f.options, f.use);
+  f.deps.ledger.block = () => {
+    throw Error("ledger_unavailable");
+  };
+  const mapping = f.deps.skills();
+  f.setSkills([]);
+  expect(await refused(f.fence.deliver(f.options, f.use, content))).toBe(
+    "binding_changed",
+  );
+  f.setSkills(mapping);
+  expect(await refused(f.fence.deliver(f.options, f.use, content))).toBe(
+    "binding_changed",
+  );
+});

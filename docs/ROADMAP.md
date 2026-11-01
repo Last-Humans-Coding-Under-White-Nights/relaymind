@@ -1122,7 +1122,7 @@ define local locators as resolved `SKILL.md` paths and return that record in
 the scoped view; no home-path abbreviation/redaction rule is specified.
 The adapter revision is repinned to the built bytes that combine these
 changes with the #256 review fixes
-(`a82313a995479eb61239c3307dc9fc145ea2dc506ab9872b481da5e2c9d960c6`);
+(`adb212d0b9f337df3d03a870711d23d5b348b135d24545913a0304dded22cfa9`);
 evidenceRevision is unchanged: **recapture pending before merge**. Browser fixtures do not establish
 native host qualification for those bytes.
 
@@ -1370,9 +1370,15 @@ pinned OpenClaw 2026.10.7, Ubuntu runner, commit 548588a, PR merge checkout
 (SHA-256 `933fb4e7c8b3057305fae165561825984a63325275b821be84b008dd574589f7`), which the registry's evidence revision names. The #256
 review fixes (ledger single settle and close, in-flight receipt recovery,
 honest gateway failure codes, attributable conversation blocks, independent
-registration) change the adapter bytes again: the entry is re-pinned to
-`d5b6048af14dce5b6069dea2bd1a7e8abf57077e08d8b20d390791389dd22572`, and the evidence recapture of these bytes is pending before merge;
-the capture above records the earlier revision. As before, this is
+registration; then exclusive ledger ownership, admission-time key binding
+with dispatch markers, reserved block capacity and the post-read fence
+recheck) change the adapter bytes again: the entry is re-pinned to
+`943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`, and
+the ordinary installed-host run of these exact bytes (CI run 41307043410,
+commit f800c60, PR merge checkout 2c8c8cd) passed the ordinary-pass and
+ordinary-skill-pass predicates with all 15 harness sources matching; its
+capture `openclaw-native-actions-20261101-adapter.json` (SHA-256
+`babba902bb57…`) is the registry's evidence revision. As before, this is
 Linux functional evidence with disposable accounts, not macOS/Windows or
 owner-run acceptance. The person-ingress harness hardening raised in the #224 review
 (#228) changed evidence-bound harness files; a fresh ordinary installed-host
@@ -1464,7 +1470,7 @@ conversation after a failure. The MCP handler implements the closed request,
 the 512 KiB native row, the 60-second deadline with the separately bounded
 approval wait, the exact binding with a recomputed canonical schema hash,
 approval binding to the bound target and single use, the closed receipt and
-idempotency. Key claims, consumed approvals and conversation blocks are kept
+idempotency. Key bindings, dispatch markers, consumed approvals and conversation blocks are kept
 in a durable private ledger synced before dispatch, so a restart replays an
 unresolved key as indeterminate and never reuses an approval; without a
 ledger nothing is dispatched. Retention/erasure of ledger records and the
@@ -1478,10 +1484,9 @@ spec 0.65 names no qualified native boundary that can stop the next model
 request. HOST-EXACT-SKILL-USE (#239) and MCP use with real approvals (#204)
 remain open. The changed adapter bytes have a new exact revision, and the
 shipped `direct_actions`/`exact_skill_selection` entry is re-pinned to it
-(`d5b6048af14dce5b6069dea2bd1a7e8abf57077e08d8b20d390791389dd22572`), as for the spec 0.63 scope fix. Its evidence revision still
-names the capture of the earlier revision `653902615edf…`
-(`openclaw-native-actions-20261101-adapter.json`, SHA-256 `933fb4e7c8b3…`);
-the evidence recapture of this revision is pending before merge. `tests/test_openclaw_install.py` fails when the registry and
+(`943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`), as for the spec 0.63 scope fix. Its evidence revision names
+the fresh capture of this revision (CI run 41307043410,
+`openclaw-native-actions-20261101-adapter.json`, SHA-256 `babba902bb57…`). `tests/test_openclaw_install.py` fails when the registry and
 the built adapter digest of the release artifact drift.
 
 #240 host_config evidence must validate with the pinned host's own validator
