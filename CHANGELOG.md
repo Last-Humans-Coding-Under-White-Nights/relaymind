@@ -55,6 +55,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (`payload.tools` instead of `groups[].tools`), not a host result; the
   settlement document records the correction.
 
+### Fixed
+
+- `scripts/asset_whole_task.py trial-install` (and `trial`) failed on a fresh
+  OpenClaw 2026.10.7 host, which installs the plugin disabled until it is
+  configured (#269; RM39/RM44; AC30/AC36 tooling). The kit now follows the
+  operator guide's lifecycle: install, configure `baseUrl` (`--base-url`,
+  default `http://127.0.0.1:8080/v1`), enable, inspect. It records each step,
+  and inspect must report the plugin loaded and enabled. `--base-url` must meet
+  the plugin's `baseUrl` rules (loopback http/https `/v1` root, no
+  credentials, query or fragment); any other value is refused before any host
+  command runs and is never written out. The kit parses the value with the
+  plugin's WHATWG URL rules (`src/relaymind/evaluation/plugin_base_url.py`), so
+  it accepts and refuses what the plugin does and configures the plugin's
+  normal form (`http://127.1:8080/v1` becomes `http://127.0.0.1:8080/v1`);
+  `tests/test_openclaw_pinned_package.py` compares it case by case with the
+  plugin's own `config.ts` under Node. Verified with a host
+  double that models the disabled fresh install; not yet rerun on the
+  owner's M1 (#259).
+- Ordinary local skill discovery (#268; RM34/AC25; spec 0.66 section 4.6.1)
+  admitted only 8 of OpenClaw 2026.10.7's 49 bundled skills: 32 bodies were
+  rejected for `<placeholder>` text or HTML examples and 9 for more than three
+  code-fence lines, and one rejected file failed the whole folder. Bodies now
+  keep only the NFC, encoding, control and size checks, and a rejected candidate is
+  excluded on its own with a fixed reason. Five verbatim copies are test
+  fixtures (`tests/fixtures/openclaw-bundled-skills/`, MIT) in the default
+  suite. `tests/test_openclaw_pinned_package.py` scans a copy of the pinned
+  package's `skills/` directory installed by `npm ci` and checks that all 49
+  bundled skills are admitted; it runs in the `openclaw-plugin` CI job and
+  skips elsewhere without `node_modules`. This is a developer check of the
+  bundled files, not an AC25 live host subcase. A rejected root `SKILL.md`
+  after an earlier child generation is now a partial generation (the child
+  records stay, stale) instead of a whole-scan failure, and a scan that fails
+  after a candidate rejection keeps that rejection in its recorded exclusions
+  and rejected count (spec 0.66 section 4.6.1).
 - Walkthrough recorder fonts (RM39; AC30): `--font-dir` on
   `integrations/openclaw/test/host-walkthrough/record.py` copies the `.otf`,
   `.ttf` and `.ttc` files of a directory once into the private work root, and
@@ -433,7 +467,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   frozen corpus) and is null on walkthrough and host_operation records; under
   `owner_machine` the tuner exclusion is waived for the owner custodian only.
   "Customer" wording about who runs trials becomes owner/operator. No metric,
-  threshold or budget changes.
+  threshold or budget changes. Amended before release (#268; RM34/AC25;
+  sections 4.6, 4.6.1, 14.5): each ordinary local SKILL.md candidate is
+  admitted or rejected on its own. A rejected file records one
+  `{asset_id,reason}` exclusion and makes the scan a partial generation
+  (complete=false, rejected/omitted records kept stale, no removals) instead
+  of failing the whole folder; path safety, read errors, budgets and
+  cancellation still fail the whole scan. The markup and repeated-line rules
+  apply to offered record fields; the internal instruction body keeps only the
+  NFC, encoding, control and size rules.
 - Specification 0.64 → 0.65 (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;
   AC25/AC28/AC30/AC31/AC35–AC37): defines native skill loaded-byte delivery,
   immutable-pin versus removal semantics and the later-use authority fence;

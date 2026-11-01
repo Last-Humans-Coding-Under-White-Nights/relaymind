@@ -1206,9 +1206,9 @@ result.
 | Command | What it does |
 | --- | --- |
 | `trial-preflight --inputs M --tarball T --output P -- openclaw` | Checks the machine and the release, writes the record, and exits `0` only when every check passed, otherwise `3` |
-| `trial-install --tarball T --work W --output I -- openclaw` | `plugins install npm-pack:T --force --accept-capabilities`, then `plugins inspect relaymind --runtime --json` |
+| `trial-install --tarball T --work W --output I [--base-url U] -- openclaw` | `plugins install npm-pack:T --force --accept-capabilities`, `config set plugins.entries.relaymind.config.baseUrl U`, `plugins enable relaymind`, then `plugins inspect relaymind --runtime --json` |
 | `trial-run --inputs M --observations O --bundle B --preflight P [--install I] [--tarball T] [--resolver X] --qualification fixture\|provisional [--interactive]` | Runs the frozen plan over row observations, bundles every file and grades the bundle |
-| `trial --inputs M --tarball T --observations O --bundle B --work W [--resolver X] --qualification fixture\|provisional [--interactive] -- openclaw` | All of the above, in order |
+| `trial --inputs M --tarball T --observations O --bundle B --work W [--base-url U] [--resolver X] --qualification fixture\|provisional [--interactive] -- openclaw` | All of the above, in order |
 
 **Preflight.** Seven checks, each `passed` or `failed`; an unknown value fails:
 
@@ -1224,22 +1224,38 @@ result.
 - `frozen_package`: exactly one frozen package has the tarball's SHA-256 and
   size, and its version is the release version.
 
-**Install.** The install changes the operator's actual host (the same command
-as the operator guide), so it checks first and runs no host command that
-changes anything when a check fails: a release that fails `release_checksum`
-is rejected (`release_checksum`, exit `2`), and a host whose `--version` does
-not name only the pinned version is blocked (`host_version`, exit `3`). Then
-neither the work directory nor the record is written. Host standard output and standard error stay in
-separate private logs (`install.log`, `install.stderr.log`, `inspect.log`,
-`inspect.stderr.log`, each `0600`) under the work directory. The record keeps
-only placeholders (`<openclaw>`, `<artifact>`), exit codes, SHA-256 digests
-and closed inspect codes: `status` and `version` only when they are a plain
-code or release version (otherwise `null`), `enabled`, and
-`diagnostics_count`. Diagnostic text can carry paths, user names or tokens, so
-it stays only in the private log, bound by `output_sha256`. Inspect passes
-when the JSON on standard output (warnings on standard error are ignored)
-shows the plugin `loaded` at the release version with no diagnostics. A missing or unreadable tarball fails `release_checksum` and
-`frozen_package` in the preflight record; it does not stop the preflight.
+**Install.** The install changes the operator's actual host, so it checks
+first and runs no host command that changes anything when a check fails: a
+release that fails `release_checksum` is rejected (`release_checksum`, exit
+`2`), and a host whose `--version` does not name only the pinned version is
+blocked (`host_version`, exit `3`). Then neither the work directory nor the
+record is written. It follows the operator guide's lifecycle (`integrations/openclaw/README.md`, step 4):
+install, configure, enable, inspect. The pinned host installs the plugin
+disabled until it is configured, so the kit sets `baseUrl` (`--base-url`,
+default `http://127.0.0.1:8080/v1`, the gateway's default loopback listener)
+and then runs `plugins enable relaymind` (#269). The URL must meet the
+plugin's own `baseUrl` rules (http or https, a loopback host, the `/v1` root,
+no credentials, query or fragment), applied after the same WHATWG URL parse
+the plugin uses, so the kit accepts and refuses exactly what the plugin does
+and configures the plugin's normal form (for example `http://127.1:8080/v1`
+is configured as `http://127.0.0.1:8080/v1`); any other value is refused with
+`invalid_base_url` before any host command runs, and is never written to a
+record or an error message. Each step is recorded with
+its exit code; a failed step stops the rest, which are `not_run`. Each step's
+host standard output and standard error stay in separate private logs
+(`<step>.log` and `<step>.stderr.log`, each `0600`, for `install`,
+`configure`, `enable` and `inspect`) under the work directory. The record
+keeps only placeholders (`<openclaw>`, `<artifact>`), the configured
+`base_url`, exit codes, SHA-256 digests and sizes, and closed inspect codes:
+`status` and `version` only when they are a plain code or release version
+(otherwise `null`), `enabled`, and `diagnostics_count`. Diagnostic text can
+carry paths, user names or tokens, so it stays only in the private log, bound
+by `output_sha256`. Inspect passes when the JSON on standard output (warnings
+on standard error are ignored) shows the plugin `loaded` and enabled at the
+release version with no diagnostics. The gateway token is not stored here
+(operator guide step 5). A missing or unreadable tarball fails
+`release_checksum` and `frozen_package` in the preflight record; it does not
+stop the preflight.
 Configuring each arm's frozen host configuration is the operator's step;
 see the operator guide in `integrations/openclaw/README.md`.
 
@@ -1299,14 +1315,16 @@ A root document (tasks, freeze or environment lock) with a null path blocks
 install records before any bundle file is written. A `passed` label alone is
 not accepted:
 
-- each record must have exactly the closed shape the kit writes, otherwise it
-  rejects (`preflight_record`, `install_record`; exit `2`);
+- each record must have exactly the closed shape the kit writes (for the
+  install, the four lifecycle steps, with the configure step naming the
+  recorded `base_url` in the plugin's normal form), otherwise it rejects
+  (`preflight_record`, `install_record`; exit `2`);
 - a well-formed failed preflight or install, or no install record, blocks
   (`preflight_failed`, `install_failed`; exit `3`);
 - the target machine checks are recomputed from the recorded environment and
   the frozen lock, and the recorded host version must be the pinned one
   (`preflight_contradiction`); a passed install must agree with its own steps
-  and inspection (`install_contradiction`);
+  and inspection, the plugin loaded and enabled (`install_contradiction`);
 - the recorded environment must be the report environment, the release must
   be exactly one frozen package with its evidence ID, the install archive must
   be that release, and `--tarball`, when given, those bytes

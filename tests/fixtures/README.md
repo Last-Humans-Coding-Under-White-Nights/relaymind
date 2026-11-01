@@ -16,3 +16,9 @@ Nothing here is a production resource, and tests must never touch one.
 output schemas, then copies it into its own working directory. Tests
 give each service a fresh `tmp_path`, so state resets between tests, and
 `delete_demo_database` only ever writes that working copy.
+
+`openclaw-bundled-skills/` holds verbatim copies of five SKILL.md files
+bundled with OpenClaw 2026.10.7 (`skills/` in the `openclaw` npm package),
+with that package's MIT `LICENSE`. They test ordinary local discovery of
+real host skills (spec section 4.6.1, RM34/AC25); their SHA-256 values are
+pinned in `tests/test_asset_sources.py`.

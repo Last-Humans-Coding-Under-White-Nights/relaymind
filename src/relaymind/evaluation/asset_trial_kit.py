@@ -7,7 +7,9 @@ existing host-trial driver and grader, never a replacement for them:
   frozen environment lock, the pinned OpenClaw host version and the packaged
   plugin release (tarball, ``SHA256SUMS`` and ``release.json`` from
   ``npm run pack:release``, and the frozen package bytes);
-- ``install_plugin`` installs that tarball with the pinned host CLI;
+- ``install_plugin`` installs that tarball with the pinned host CLI through the
+  operator guide's lifecycle: install, configure ``baseUrl``, enable, inspect
+  (the pinned host installs the plugin disabled until it is configured, #269);
 - ``trial_run`` executes the frozen early-trial plan through
   ``run_host_trial`` over operator-captured row observations, collects every
   original into a bundle with its SHA-256, writes the companion input
@@ -58,6 +60,7 @@ from relaymind.evaluation.asset_whole_task import (
     validate_whole_task,
     verify_host_tasks,
 )
+from relaymind.evaluation.plugin_base_url import check_base_url
 
 PINNED_OPENCLAW = "2026.10.7"
 TARGET_OS, TARGET_ARCHITECTURE, TARGET_CPU = "Darwin", "arm64", "Apple M1"
@@ -73,6 +76,10 @@ PREFLIGHT_CHECKS = (
 )
 QUALIFICATIONS = ("fixture", "provisional")
 HOST_TIMEOUT_SECONDS = 120
+PLUGIN_ID = "relaymind"
+# The gateway's default loopback listener (relaymind.example.toml) and the
+# operator guide's ``baseUrl``; the plugin refuses a non-loopback URL itself.
+DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1"
 # A whole version token: a pre-release, build or fourth part stays attached, so
 # ``2026.10.7-beta.2`` or ``2026.10.7.1`` is never read as the pinned version.
 _VERSION = re.compile(r"(?<![\d.])\d{4}\.\d{1,2}\.\d{1,2}(?:[-+.\w][0-9A-Za-z.+-]*)?(?<!\.)")
@@ -99,7 +106,15 @@ _PREFLIGHT_OBSERVED = {
     "release",
     "frozen_package_evidence_id",
 }
-_INSTALL_KEYS = {"schema_version", "kind", "pinned_openclaw", "archive", "steps", "passed"}
+_INSTALL_KEYS = {
+    "schema_version",
+    "kind",
+    "pinned_openclaw",
+    "archive",
+    "base_url",
+    "steps",
+    "passed",
+}
 _STEP_KEYS = {
     "name",
     "argv",
@@ -113,10 +128,23 @@ _STEP_KEYS = {
     "status",
 }
 _INSPECT_KEYS = {"status", "enabled", "version", "diagnostics_count", "passed"}
-_INSTALL_PLAN = (
-    ("install", ("plugins", "install", "npm-pack:<artifact>", "--force", "--accept-capabilities")),
-    ("inspect", ("plugins", "inspect", "relaymind", "--runtime", "--json")),
-)
+
+
+def _install_plan(base_url: str) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """The operator guide's lifecycle: install, configure ``baseUrl``, enable, inspect (#269).
+
+    ``base_url`` is already in the plugin's normal form (``check_base_url``):
+    no credential, query or fragment, so it may appear in the recorded argv.
+    """
+    return (
+        (
+            "install",
+            ("plugins", "install", "npm-pack:<artifact>", "--force", "--accept-capabilities"),
+        ),
+        ("configure", ("config", "set", f"plugins.entries.{PLUGIN_ID}.config.baseUrl", base_url)),
+        ("enable", ("plugins", "enable", PLUGIN_ID)),
+        ("inspect", ("plugins", "inspect", PLUGIN_ID, "--runtime", "--json")),
+    )
 
 
 def observed_environment() -> dict:
@@ -358,6 +386,7 @@ def _inspect(output: bytes, version: str | None) -> dict:
     )
     check["passed"] = (
         check["status"] == "loaded"
+        and check["enabled"] is True
         and check["diagnostics_count"] == 0
         and check["version"] is not None
         and check["version"] == version
@@ -365,12 +394,19 @@ def _inspect(output: bytes, version: str | None) -> dict:
     return check
 
 
-def install_plugin(host_command: Sequence[str], tarball: Path, work: Path) -> dict:
-    """Install the packaged plugin with the pinned host CLI and inspect it.
+def install_plugin(
+    host_command: Sequence[str], tarball: Path, work: Path, *, base_url: str = DEFAULT_BASE_URL
+) -> dict:
+    """Install, configure, enable and inspect the packaged plugin with the pinned host CLI.
 
-    The same command the operator guide and the ordinary installed-host
-    qualification use. Host output stays in private logs under ``work``; the
-    record keeps only placeholders, exit codes and SHA-256 digests.
+    The operator guide's lifecycle (``integrations/openclaw/README.md`` step 4)
+    and the install check's steps: the pinned host installs the plugin
+    disabled until it is configured, so ``plugins enable`` follows the
+    ``baseUrl`` configuration (#269). Each step is recorded; a step that fails
+    stops the rest (``not_run``). Each step's standard output and standard
+    error stay in separate private logs under ``work``; the record keeps only
+    placeholders, exit codes, SHA-256 digests and sizes, and the configured
+    loopback ``base_url``. Inspect reads the JSON on standard output only.
 
     The install replaces the plugin in the operator's real host, so before any
     mutating host command (and before ``work`` is created) the release must
@@ -378,6 +414,7 @@ def install_plugin(host_command: Sequence[str], tarball: Path, work: Path) -> di
     ``release_checksum``) and the host must name only the pinned version (else
     blocked, ``host_version``).
     """
+    base_url = check_base_url(base_url)
     tarball = real_path(tarball)
     identity = release_identity(tarball)
     if not identity["checksum_ok"]:
@@ -388,7 +425,7 @@ def install_plugin(host_command: Sequence[str], tarball: Path, work: Path) -> di
     work.mkdir(mode=0o700, parents=True, exist_ok=False)
     work.chmod(0o700)
     steps, failed = [], False
-    for name, shown_args in _INSTALL_PLAN:
+    for name, shown_args in _install_plan(base_url):
         shown = ["<openclaw>", *shown_args]
         args = [a.replace("<artifact>", str(tarball)) for a in shown_args]
         if failed:
@@ -422,6 +459,7 @@ def install_plugin(host_command: Sequence[str], tarball: Path, work: Path) -> di
         kind="asset-trial-install",
         pinned_openclaw=PINNED_OPENCLAW,
         archive={k: identity[k] for k in _RELEASE_KEYS},
+        base_url=base_url,
         steps=steps,
         passed=all(s["status"] == "passed" for s in steps),
     )
@@ -511,22 +549,30 @@ def _step_shape(step, name: str, argv: list) -> bool:
 def verify_install(record, release: Mapping) -> None:
     """The provisional install gate over the preflight's verified release.
 
-    Closed shape (``install_record``), then a well-formed failed install blocks
+    Closed shape over the four lifecycle steps for the recorded ``base_url``
+    (``install_record``), then a well-formed failed install blocks
     (``install_failed``). A passed label must agree with its own steps and
-    inspection (``install_contradiction``) and name the same archive as the
-    preflight (``install_binding``).
+    inspection, loaded and enabled (``install_contradiction``), and name the
+    same archive as the preflight (``install_binding``).
     """
     steps = record.get("steps") if isinstance(record, Mapping) else None
+    base_url = record.get("base_url") if isinstance(record, Mapping) else None
+    try:
+        # The recorded baseUrl must already be the plugin's normal form (#269).
+        plan = _install_plan(base_url) if check_base_url(base_url) == base_url else None
+    except ValueError:
+        plan = None
     if not (
-        _closed(record, _INSTALL_KEYS)
+        plan is not None
+        and _closed(record, _INSTALL_KEYS)
         and (record["schema_version"], record["kind"]) == (1, "asset-trial-install")
         and record["pinned_openclaw"] == PINNED_OPENCLAW
         and _closed(record["archive"], set(_RELEASE_KEYS))
         and isinstance(steps, list)
-        and len(steps) == len(_INSTALL_PLAN)
+        and len(steps) == len(plan)
         and all(
             _step_shape(step, name, ["<openclaw>", *argv])
-            for step, (name, argv) in zip(steps, _INSTALL_PLAN, strict=True)
+            for step, (name, argv) in zip(steps, plan, strict=True)
         )
         and isinstance(record["passed"], bool)
         and record["passed"] == all(step["status"] == "passed" for step in steps)
@@ -534,12 +580,13 @@ def verify_install(record, release: Mapping) -> None:
         raise WholeTaskRejected("install_record")
     if not record["passed"]:
         raise WholeTaskBlocked("install_failed")
-    inspect = steps[1]["inspect"]
+    inspect = steps[-1]["inspect"]
     if not (
         all(step["exit_code"] == 0 for step in steps)
         and _closed(inspect, _INSPECT_KEYS)
         and inspect["passed"] is True
         and inspect["status"] == "loaded"
+        and inspect["enabled"] is True
         and inspect["diagnostics_count"] == 0
         and inspect["version"] == record["archive"]["version"]
     ):

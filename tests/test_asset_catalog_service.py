@@ -1,7 +1,9 @@
 """RM34/AC25: explicit configuration and one bounded cancellable catalog worker."""
 
 import asyncio
+import hashlib
 import logging
+import os
 import threading
 from datetime import timedelta
 
@@ -16,7 +18,7 @@ from relaymind.launcher import LaunchError, build_app, load_config
 from relaymind.store import RunStore
 from relaymind.store.asset_catalog import AssetCatalogStore as facade
 from relaymind.store.run_store import utc_iso
-from test_asset_sources import imported, skill
+from test_asset_sources import capture, imported, package_id, skill
 
 
 def settings(path, *, kind="local_directory", refresh=None):
@@ -752,6 +754,37 @@ def test_catalog_conflict_is_recorded_as_index_error(tmp_path, monkeypatch):
         assert source["rejected_count"] == 0
 
 
+def test_failure_after_capture_keeps_the_candidate_rejections(tmp_path, monkeypatch):
+    """RM34/AC25, spec 0.66 section 4.6.1: a failed scan records its rejection evidence."""
+    from relaymind.store.asset_catalog import CatalogConflict
+
+    root = tmp_path / "source"
+    skill(root / "good")
+    (root / "bad").mkdir()
+    (root / "bad" / "SKILL.md").write_text("---\nname: bad\n---\nno description\n")
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(root), catalog)
+
+        def conflict(*args, **kwargs):
+            raise CatalogConflict("revision moved")
+
+        monkeypatch.setattr(catalog, "commit", conflict)
+
+        async def run():
+            await service.tick()
+            await service.stop()
+
+        asyncio.run(run())
+        outcome = catalog.job_outcomes()[0]
+        assert (outcome["state"], outcome["reason"]) == ("failed", "index_error")
+        source = catalog.snapshot().sources[0]
+        assert [e["reason"] for e in source["exclusions"]] == ["invalid_data", "index_error"]
+        assert source["exclusions"][0]["asset_id"] is not None
+        assert source["exclusions"][1]["asset_id"] is None
+        assert source["rejected_count"] == 1
+
+
 def test_periodic_sources_are_scheduled_oldest_due_first(tmp_path):
     """RM34/AC25: slow scans cannot starve a later source (31 s scans, 30 s interval)."""
     sources = [
@@ -779,3 +812,148 @@ def test_periodic_sources_are_scheduled_oldest_due_first(tmp_path):
             now += 31  # the scan takes longer than the 30-second interval
             service._next[key] = now + 30
         assert order == ["a", "b", "c", "a", "b", "c"]
+
+
+@pytest.mark.parametrize("prior_generation", [False, True])
+def test_one_rejected_skill_publishes_the_others_as_a_partial_generation(
+    tmp_path, prior_generation
+):
+    """RM34/AC25 (#268, spec 0.66 section 4.6.1): a bad file never hides its siblings."""
+    root = tmp_path / "source"
+    good = skill(root / "good")
+    skill(root / "other", description="Other skill")
+    clock = FakeClock()
+    with RunStore(clock=clock) as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(root), catalog, clock=clock)
+
+        async def run():
+            if prior_generation:
+                retired = skill(root / "retired", description="Retired skill")
+                await service.tick()
+                initial = catalog.snapshot()
+                assert initial.catalog_revision == 1
+                assert initial.sources[0]["complete"]
+                assert all(not a.stale for a in initial.assets)
+                retired.unlink()
+                skill(root / "good", description="Updated skill", body="Updated instructions.")
+                clock.advance(1)
+            (root / "bad").mkdir()
+            (root / "bad" / "SKILL.md").write_text("---\nname: bad\n---\nno description\n")
+            before = catalog.snapshot()
+            staged = capture(root, previous=catalog.inventory("example"))
+            preview = catalog.preview(
+                catalog.prepare(staged), expected_revision=before.catalog_revision, base=before
+            )
+            result = await service.rescan("example")
+            await service.stop()
+            assert result.removed_asset_ids == ()
+            assert catalog.inventory("example").tombstones == frozenset()
+            for snapshot in (preview, catalog.snapshot()):
+                assert snapshot.catalog_revision == before.catalog_revision + 1
+                records = {a.asset_id: a for a in snapshot.assets}
+                expected = {package_id("good"), package_id("other")}
+                if prior_generation:
+                    expected.add(package_id("retired"))
+                    retained = records[package_id("retired")]
+                    original = next(a for a in initial.assets if a.asset_id == retained.asset_id)
+                    assert retained.stale
+                    assert retained.description == original.description
+                    assert retained.content_hash == original.content_hash
+                assert set(records) == expected
+                updated = records[package_id("good")]
+                assert not updated.stale
+                assert updated.description == (
+                    "Updated skill" if prior_generation else "Greeting skill"
+                )
+                assert updated.content_hash == hashlib.sha256(good.read_bytes()).hexdigest()
+                assert not records[package_id("other")].stale
+                assert records[package_id("other")].description == "Other skill"
+                source = snapshot.sources[0]
+                assert not source["complete"] and not source["stale"]
+                assert source["rejected_count"] == 1
+                assert list(source["exclusions"]) == [
+                    {"asset_id": package_id("bad"), "reason": "invalid_data"},
+                ]
+            documents = {d.record.asset_id: d for d in catalog.search_documents()}
+            assert documents[package_id("good")].body == (
+                "Updated instructions." if prior_generation else "Say hello."
+            )
+            outcome = catalog.job_outcomes()[0]
+            assert outcome["state"] == "succeeded"
+            published = [
+                e for e in catalog.job_events(outcome["job_id"]) if e["event_type"] == "published"
+            ]
+            assert published[0]["payload"]["rejected_count"] == 1
+            assert published[0]["payload"]["accepted_count"] == 2
+
+        asyncio.run(run())
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX read path")
+def test_growth_during_reading_keeps_the_prior_generation(tmp_path, monkeypatch):
+    """RM34/AC25, spec 0.66 section 4.6.1: a change during capture retains the prior generation.
+
+    A file that fits at its size check but grows past the limit while it is
+    read changed during capture. Its sibling's update must not be published.
+    """
+    from test_asset_sources import grow_while_reading
+
+    root = tmp_path / "source"
+    skill(root / "other", description="Other skill")
+    growing = skill(root / "growing")
+    clock = FakeClock()
+    with RunStore(clock=clock) as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(root), catalog, clock=clock)
+
+        async def run():
+            await service.tick()
+            before = catalog.snapshot()
+            assert before.catalog_revision == 1
+            skill(root / "other", description="Updated skill")
+            grown = grow_while_reading(monkeypatch, growing, 10 * 1024 * 1024)
+            with pytest.raises(SourceFailure) as caught:
+                await service.rescan("example")
+            assert grown[0]
+            assert caught.value.reason == "source_unavailable"
+            after = catalog.snapshot()
+            # The failed scan only marks the retained records stale (a stale
+            # change is its own revision, spec section 14.5); no captured
+            # content, including the sibling's update, is published.
+            assert [(a.asset_id, a.content_hash, a.description) for a in after.assets] == [
+                (a.asset_id, a.content_hash, a.description) for a in before.assets
+            ]
+            assert "Updated skill" not in {a.description for a in after.assets}
+            assert all(a.stale for a in after.assets)
+            assert not after.sources[0]["complete"]
+            outcomes = sorted((o["state"], o["reason"]) for o in catalog.job_outcomes())
+            assert outcomes == [("failed", "source_unavailable"), ("succeeded", None)]
+            await service.stop()
+
+        asyncio.run(run())
+
+
+def test_a_published_markup_body_reads_back_from_the_catalog(tmp_path):
+    """RM34/AC25 (#268, spec 0.66 section 4.6): an admitted body stays readable.
+
+    The instruction body keeps only the NFC, encoding, control and size rules,
+    so a body with markup and repeated lines that capture admits must also
+    pass the stored-row check when the committed catalog is read back.
+    """
+    root = tmp_path / "source"
+    body = "Use <session> here.\n" + "```\n" * 4 + "Run `tmux attach -t <name>`.\n"
+    skill(root / "markup", body=body)
+    with RunStore() as run_store:
+        catalog = facade(run_store)
+        service = s.AssetCatalogService(settings(root), catalog)
+
+        async def run():
+            await service.tick()
+            await service.stop()
+
+        asyncio.run(run())
+        assert catalog.job_outcomes()[0]["state"] == "succeeded"
+        snapshot = catalog.snapshot()
+        assert [a.description for a in snapshot.assets] == ["Greeting skill"]
+        assert snapshot.sources[0]["complete"]

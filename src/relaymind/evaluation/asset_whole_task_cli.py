@@ -180,13 +180,18 @@ def _trial(args) -> int:
         # A programming error, not an operator input: never fall through to trial-run.
         raise ValueError(f"trial_command: {args.command}")
     try:
+        # Checked before any host command or file; a refused value is never echoed.
+        if hasattr(args, "base_url"):
+            args.base_url = asset_trial_kit.check_base_url(args.base_url)
         if args.command == "trial-preflight":
             record = _trial_preflight(args, asset_trial_kit.observed_environment())
             atomic_bytes(asset_trial_kit.real_path(args.output), json_bytes(record))
             print(json.dumps(dict(passed=record["passed"], checks=record["checks"])))
             return 0 if record["passed"] else 3
         if args.command == "trial-install":
-            record = asset_trial_kit.install_plugin(_host(args), args.tarball, args.work)
+            record = asset_trial_kit.install_plugin(
+                _host(args), args.tarball, args.work, base_url=args.base_url
+            )
             atomic_bytes(asset_trial_kit.real_path(args.output), json_bytes(record))
             print(json.dumps(dict(passed=record["passed"])))
             return 0 if record["passed"] else 3
@@ -200,7 +205,7 @@ def _trial(args) -> int:
             # A provisional trial stops at a failed preflight; nothing is installed.
             if preflight["passed"] or args.qualification == "fixture":
                 install = asset_trial_kit.install_plugin(
-                    _host(args), args.tarball, work / "install"
+                    _host(args), args.tarball, work / "install", base_url=args.base_url
                 )
         elif args.command == "trial-run":
             preflight, _ = read_json_path(asset_trial_kit.real_path(args.preflight))
@@ -247,6 +252,13 @@ def _trial_parsers(sub) -> None:
             "host", nargs=argparse.REMAINDER, help="-- then the OpenClaw command, e.g. openclaw"
         )
 
+    def base_url(parser):
+        parser.add_argument(
+            "--base-url",
+            default=asset_trial_kit.DEFAULT_BASE_URL,
+            help="the gateway's loopback URL for the plugin's baseUrl (default %(default)s)",
+        )
+
     def run(parser):
         parser.add_argument("--inputs", type=Path, required=True, help="frozen input manifest")
         parser.add_argument("--observations", type=Path, required=True)
@@ -266,6 +278,7 @@ def _trial_parsers(sub) -> None:
     install.add_argument("--tarball", type=Path, required=True)
     install.add_argument("--work", type=Path, required=True)
     install.add_argument("--output", type=Path, required=True)
+    base_url(install)
     host(install)
     trial_run = sub.add_parser("trial-run", help="run, bundle and grade the early trial")
     run(trial_run)
@@ -276,6 +289,7 @@ def _trial_parsers(sub) -> None:
     run(trial)
     trial.add_argument("--tarball", type=Path, required=True)
     trial.add_argument("--work", type=Path, required=True, help="new private work directory")
+    base_url(trial)
     host(trial)
 
 

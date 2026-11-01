@@ -245,7 +245,9 @@ class AssetCatalogStore:
                     raise ValueError
                 body = search["body"]
                 if body is not None:
-                    text(body, 262144)
+                    # The stored body keeps the instruction-body rules it was
+                    # admitted under, not the offered-field ones (spec 0.66 4.6).
+                    text(body, 262144, body=True)
                 digest = projection_digest(record, body)
                 if (
                     row["asset_id"] != record.asset_id
@@ -388,7 +390,12 @@ class AssetCatalogStore:
                 )
             )
         check()
-        if ids & capture.removed_asset_ids or (not capture.complete and capture.removed_asset_ids):
+        # Spec 0.66 section 4.6.1: excluded candidates make a partial generation.
+        if (
+            ids & capture.removed_asset_ids
+            or (not capture.complete and capture.removed_asset_ids)
+            or (capture.complete and capture.exclusions)
+        ):
             raise AssetValidationError("invalid_capture")
         return PreparedPublication(capture, tuple(rows), frozenset(ids), tuple(records))
 
@@ -469,14 +476,15 @@ class AssetCatalogStore:
                 records.pop(asset_id)
                 encoded.pop(asset_id)
         accepted = sum(r.source_id == capture.source_id for r in records.values())
+        exclusions = [dict(e) for e in capture.exclusions]
         after = dict(
             source_version=capture.source_version,
             content_hash=capture.source_digest,
             stale=0,
             complete=int(capture.complete),
             accepted_count=accepted,
-            rejected_count=0,
-            exclusions_json="[]",
+            rejected_count=capture.rejected_count,
+            exclusions_json=canonical_json(exclusions),
         )
         changed = changed or any(previous[k] != v for k, v in after.items())
         source_view = dict(
@@ -486,10 +494,10 @@ class AssetCatalogStore:
             captured_at=capture.captured_at,
             last_success_at=utc_iso(self.store.clock.utc_now()),
             accepted_count=accepted,
-            rejected_count=0,
+            rejected_count=capture.rejected_count,
             stale=False,
             complete=capture.complete,
-            exclusions=[],
+            exclusions=exclusions,
         )
         sources = {s["source_id"]: s for s in base.sources}
         sources[capture.source_id] = freeze_json(source_view)
@@ -624,19 +632,20 @@ class AssetCatalogStore:
             accepted = connection.execute(
                 "SELECT count(*) FROM asset_catalog_assets WHERE source_id=?", (capture.source_id,)
             ).fetchone()[0]
+            exclusions_json = canonical_json([dict(e) for e in capture.exclusions])
             source_after = {
                 "source_version": capture.source_version,
                 "content_hash": capture.source_digest,
                 "stale": 0,
                 "complete": int(capture.complete),
                 "accepted_count": accepted,
-                "rejected_count": 0,
-                "exclusions_json": "[]",
+                "rejected_count": capture.rejected_count,
+                "exclusions_json": exclusions_json,
             }
             connection.execute(
                 "UPDATE asset_catalog_sources SET source_version=?,content_hash=?,captured_at=?,"
-                "last_success_at=?,stale=0,complete=?,accepted_count=?,rejected_count=0,"
-                "exclusions_json='[]',config_digest=?,consecutive_failures=0,next_attempt_at=NULL "
+                "last_success_at=?,stale=0,complete=?,accepted_count=?,rejected_count=?,"
+                "exclusions_json=?,config_digest=?,consecutive_failures=0,next_attempt_at=NULL "
                 "WHERE source_id=?",
                 (
                     capture.source_version,
@@ -645,6 +654,8 @@ class AssetCatalogStore:
                     now,
                     int(capture.complete),
                     accepted,
+                    capture.rejected_count,
+                    exclusions_json,
                     capture.config_digest,
                     capture.source_id,
                 ),

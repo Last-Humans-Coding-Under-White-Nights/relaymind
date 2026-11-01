@@ -243,10 +243,22 @@ def test_nfc_repetition_exact_utf8_boundaries_and_nonfinite_schema():
         ).body
         == "one\n\n\n\n two\n"
     )
+    # NFC repetition applies to offered fields; the internal body is exempt (spec 0.66 4.6).
+    with pytest.raises(catalog.AssetValidationError):
+        catalog.validate_asset_record(record(description="é\ne\u0301\né\ne\u0301"))
+    assert (
+        catalog.project_asset(
+            catalog.validate_asset_record(record()),
+            body="é\ne\u0301\né\ne\u0301 <id>",
+            redactor=Redactor(),
+            secrets=(),
+        ).body
+        == "é\né\né\né <id>"
+    )
     with pytest.raises(catalog.AssetValidationError):
         catalog.project_asset(
             catalog.validate_asset_record(record()),
-            body="é\ne\u0301\né\ne\u0301",
+            body="control \x01",
             redactor=Redactor(),
             secrets=(),
         )

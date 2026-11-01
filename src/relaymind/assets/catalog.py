@@ -72,8 +72,13 @@ def _fail(reason: str) -> None:
     raise AssetValidationError(reason)
 
 
-def text(value: object, limit: int, *, empty: bool = False) -> str:
-    """Validate projected text with UTF-8 byte, control and repetition bounds."""
+def text(value: object, limit: int, *, empty: bool = False, body: bool = False) -> str:
+    """Validate projected text with UTF-8 byte, control and repetition bounds.
+
+    A skill instruction body (``body=True``) is internal searchable data, never
+    offered, rendered or ranked: it keeps the encoding, NFC, control and byte
+    bounds, and skips the markup and repeated-line rules (spec 0.66 section 4.6).
+    """
     if not isinstance(value, str) or (not empty and not value.strip()):
         _fail("invalid_text")
     try:
@@ -87,6 +92,8 @@ def text(value: object, limit: int, *, empty: bool = False) -> str:
         _fail("size_limit")
     if any((ord(c) < 32 and c not in "\t\r\n") or 127 <= ord(c) <= 159 for c in normalized):
         _fail("invalid_control")
+    if body:
+        return normalized
     if _MARKUP.search(normalized):
         _fail("invalid_markup")
     if any(
@@ -305,15 +312,15 @@ def _contains_normalized_secret(value: object, secrets: Collection[str]) -> bool
     return False
 
 
-def _safe_free_text(value: str, limit: int, secrets: Collection[str]) -> str:
+def _safe_free_text(value: str, limit: int, secrets: Collection[str], *, body: bool = False) -> str:
     # Preserve the pre-normalization byte cap, then scrub at both sides of NFC.
     try:
         if len(value.encode("utf-8")) > limit:
             _fail("size_limit")
     except UnicodeError:
         raise AssetValidationError("invalid_encoding") from None
-    normalized = text(redact_text(value, secrets), limit)
-    return text(redact_text(normalized, secrets), limit)
+    normalized = text(redact_text(value, secrets), limit, body=body)
+    return text(redact_text(normalized, secrets), limit, body=body)
 
 
 def project_asset(
@@ -333,7 +340,7 @@ def project_asset(
     # The record is already validated; only its description changes here, and
     # _safe_free_text applies the same text bounds the record validator does.
     projected = replace(record, description=_safe_free_text(raw["description"], 8192, secrets))
-    normalized_body = None if body is None else _safe_free_text(body, 262144, secrets)
+    normalized_body = None if body is None else _safe_free_text(body, 262144, secrets, body=True)
     return SearchDocument(projected, normalized_body, projection_digest(projected, normalized_body))
 
 
@@ -409,3 +416,9 @@ class SourceCapture:
     package_paths: Mapping[str, str]
     received_bytes: int
     batch_durations_ms: tuple[float, ...] = ()
+    # Spec 0.66 section 4.6.1: candidates a partial local scan rejected on their own.
+    exclusions: tuple[Mapping[str, Any], ...] = ()
+
+    @property
+    def rejected_count(self) -> int:
+        return len(self.exclusions)

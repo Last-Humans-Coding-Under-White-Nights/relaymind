@@ -34,27 +34,49 @@ M1 = dict(
     cpu="Apple M1",
     ram_bytes=8 * 1024**3,
 )
+# Like the pinned 2026.10.7 host (#269): a fresh install is disabled until it is
+# configured and enabled; inspect then reports status "disabled".
 FAKE_HOST = r"""
-import json, sys
+import json, os, sys
 args = sys.argv[1:]
-mode = open(sys.argv[0] + ".mode").read().strip() if __import__("os").path.exists(
+mode = open(sys.argv[0] + ".mode").read().strip() if os.path.exists(
     sys.argv[0] + ".mode") else "ok"
 with open(sys.argv[0] + ".log", "a") as log:
     log.write(json.dumps(args) + "\n")
+path = sys.argv[0] + ".state"
+state = json.load(open(path)) if os.path.exists(path) else {}
+def save():
+    json.dump(state, open(path, "w"))
 if args == ["--version"]:
     print("OpenClaw 2026.10.7" if mode != "old" else "OpenClaw 2026.9.1")
 elif args[:2] == ["plugins", "install"]:
     print("installed relaymind")
-    sys.exit(1 if mode == "install-fails" else 0)
+    if mode == "install-fails":
+        sys.exit(1)
+    state.update(installed=True, enabled=False)
+    save()
+elif args[:3] == ["config", "set", "plugins.entries.relaymind.config.baseUrl"] and len(args) == 4:
+    if mode == "config-fails":
+        sys.exit(1)
+    if state.get("installed") and not state.get("enabled"):
+        print("plugin disabled (relaymind) but config is present")
+    state["base_url"] = args[3]
+    save()
+elif args == ["plugins", "enable", "relaymind"]:
+    if not state.get("installed") or "base_url" not in state:
+        sys.exit(1)
+    state["enabled"] = mode != "stays-disabled"
+    save()
 elif args[:2] == ["plugins", "inspect"]:
     if mode == "stderr-noise":
         print("(node) ExperimentalWarning: update available", file=sys.stderr)
-    status, diagnostics = "loaded", []
+    enabled = bool(state.get("enabled"))
+    status, diagnostics = "loaded" if enabled else "disabled", []
     if mode == "diagnostics":
         diagnostics = [{"message": "config /Users/alice/.openclaw/openclaw.json token sk-live-9"}]
     if mode == "bad-status":
         status = "error at /home/alice/.openclaw"
-    print(json.dumps({"plugin": {"status": status, "enabled": False, "version": "1.0.0"},
+    print(json.dumps({"plugin": {"status": status, "enabled": enabled, "version": "1.0.0"},
                       "diagnostics": diagnostics}))
 else:
     sys.exit(9)
@@ -227,22 +249,28 @@ def test_preflight_requires_the_frozen_package_bytes(tmp_path, bundle):
 
 
 def test_install_uses_the_pinned_cli_and_records_digests(tmp_path):
+    """#269: install, configure, enable, inspect, the operator guide's lifecycle."""
     tarball = release(tmp_path)
     work = tmp_path / "install"
     record = kit.install_plugin(fake_host(tmp_path), tarball, work)
     assert record["passed"] is True
     names = [s["name"] for s in record["steps"]]
-    assert names == ["install", "inspect"]
-    log = (tmp_path / "fake_openclaw.py.log").read_text().splitlines()
-    # The pinned host version is checked before the host is changed.
-    assert json.loads(log[0]) == ["--version"]
-    assert json.loads(log[1]) == [
-        "plugins",
-        "install",
-        "npm-pack:" + str(tarball),
-        "--force",
-        "--accept-capabilities",
+    assert names == ["install", "configure", "enable", "inspect"]
+    assert all(s["status"] == "passed" for s in record["steps"])
+    log = [
+        json.loads(line) for line in (tmp_path / "fake_openclaw.py.log").read_text().splitlines()
     ]
+    # The pinned host version is checked before the host is changed.
+    assert log == [
+        ["--version"],
+        ["plugins", "install", "npm-pack:" + str(tarball), "--force", "--accept-capabilities"],
+        ["config", "set", "plugins.entries.relaymind.config.baseUrl", kit.DEFAULT_BASE_URL],
+        ["plugins", "enable", "relaymind"],
+        ["plugins", "inspect", "relaymind", "--runtime", "--json"],
+    ]
+    assert record["base_url"] == kit.DEFAULT_BASE_URL == "http://127.0.0.1:8080/v1"
+    assert record["steps"][-1]["inspect"]["enabled"] is True
+    assert record["steps"][-1]["inspect"]["status"] == "loaded"
     # The record never carries the private path, only placeholders and digests.
     assert str(tarball) not in json.dumps(record)
     assert record["archive"]["sha256"] == hashlib.sha256(b"ev-package").hexdigest()
@@ -255,7 +283,188 @@ def test_failed_install_is_recorded_and_not_passed(tmp_path):
     tarball = release(tmp_path)
     record = kit.install_plugin(fake_host(tmp_path, "install-fails"), tarball, tmp_path / "i")
     assert record["passed"] is False
-    assert [s["status"] for s in record["steps"]] == ["failed", "not_run"]
+    assert [s["status"] for s in record["steps"]] == ["failed", "not_run", "not_run", "not_run"]
+
+
+def test_install_configures_the_given_loopback_url(tmp_path):
+    """#269: the configure step sets the operator's gateway URL before enable."""
+    tarball = release(tmp_path)
+    url = "http://127.0.0.1:18080/v1"
+    record = kit.install_plugin(fake_host(tmp_path), tarball, tmp_path / "i", base_url=url)
+    assert record["passed"] is True and record["base_url"] == url
+    configure = next(s for s in record["steps"] if s["name"] == "configure")
+    assert configure["argv"] == [
+        "<openclaw>",
+        "config",
+        "set",
+        "plugins.entries.relaymind.config.baseUrl",
+        url,
+    ]
+    assert json.loads((tmp_path / "fake_openclaw.py.state").read_text())["base_url"] == url
+
+
+@pytest.mark.parametrize(
+    ("mode", "statuses"),
+    [
+        ("config-fails", ["passed", "failed", "not_run", "not_run"]),
+        ("stays-disabled", ["passed", "passed", "passed", "failed"]),
+    ],
+)
+def test_a_real_lifecycle_failure_is_recorded_and_not_passed(tmp_path, mode, statuses):
+    """#269: a refused configure, or a plugin still disabled after enable, fails."""
+    tarball = release(tmp_path)
+    record = kit.install_plugin(fake_host(tmp_path, mode), tarball, tmp_path / "i")
+    assert record["passed"] is False
+    assert [s["status"] for s in record["steps"]] == statuses
+
+
+def test_trial_install_command_takes_the_base_url(tmp_path):
+    """#269: ``trial-install --base-url`` reaches the configure step."""
+    tarball = release(tmp_path)
+    output = tmp_path / "install.json"
+    url = "http://localhost:9090/v1"
+    argv = ["trial-install", "--tarball", str(tarball), "--work", str(tmp_path / "w")]
+    argv += ["--output", str(output), "--base-url", url, "--", *fake_host(tmp_path)]
+    assert main(argv) == 0
+    record = json.loads(output.read_bytes())
+    assert record["passed"] is True and record["base_url"] == url
+
+
+SECRET = "s3cr3t-token"
+REJECTED_BASE_URLS = [
+    f"http://user:{SECRET}@127.0.0.1:8080/v1",
+    f"http://{SECRET}@localhost:8080/v1",
+    f"http://127.0.0.1:8080/v1?token={SECRET}",
+    f"http://127.0.0.1:8080/v1#{SECRET}",
+    f"http://example.com:8080/v1/{SECRET}",
+    f"http://10.0.0.1:8080/v1?{SECRET}",
+    f"ftp://127.0.0.1/v1?{SECRET}",
+    f"http://127.0.0.1:8080/{SECRET}",
+    f"http://127.0.0.1:8080/v1 {SECRET}",
+    f"http://127.0.0.1:99999/v1?{SECRET}",
+    f"http:\\\\127.0.0.1\\v1?{SECRET}",
+    f"{SECRET}",
+]
+
+
+@pytest.mark.parametrize("url", REJECTED_BASE_URLS)
+def test_base_url_outside_the_plugin_rules_is_refused_before_any_host_command(tmp_path, url):
+    """#269 review: the plugin's baseUrl rules (integrations/openclaw/src/config.ts).
+
+    http/https, a loopback host, the /v1 root, no credentials, query or fragment.
+    A refused value never reaches the host, a record or an error message.
+    """
+    tarball = release(tmp_path)
+    work = tmp_path / "install"
+    with pytest.raises(ValueError) as caught:
+        kit.install_plugin(fake_host(tmp_path), tarball, work, base_url=url)
+    assert str(caught.value) == "invalid_base_url"
+    assert SECRET not in repr(caught.value)
+    assert not work.exists()
+    assert not (tmp_path / "fake_openclaw.py.log").exists()
+
+
+# Forms the pinned plugin's WHATWG URL parse accepts and normalizes (#269, #271
+# review; the expected values are what `parsePluginConfig` in config.ts returns):
+# the configured value is the plugin's own form, origin plus /v1.
+PLUGIN_NORMALIZED_BASE_URLS = [
+    ("http://127.0.0.1:8080/v1", "http://127.0.0.1:8080/v1"),
+    ("http://LOCALHOST:8080/v1/", "http://localhost:8080/v1"),
+    ("https://127.10.0.1/v1", "https://127.10.0.1/v1"),
+    ("http://[::1]:8080/v1", "http://[::1]:8080/v1"),
+    ("http://127.0.0.1.:8080/v1", "http://127.0.0.1:8080/v1"),
+    ("http://[0:0:0:0:0:0:0:1]:8080/v1", "http://[::1]:8080/v1"),
+    ("http://127.1:8080/v1", "http://127.0.0.1:8080/v1"),
+    ("http://127.000.000.001:8080/v1", "http://127.0.0.1:8080/v1"),
+    ("http://0x7f.1:8080/v1", "http://127.0.0.1:8080/v1"),
+    ("http://0177.0.0.1/v1", "http://127.0.0.1/v1"),
+    ("http://2130706433/v1", "http://127.0.0.1/v1"),
+    ("http://@127.0.0.1/v1", "http://127.0.0.1/v1"),
+    ("http://:@127.0.0.1/v1", "http://127.0.0.1/v1"),
+    ("http://127.0.0.1:8080/v1?#", "http://127.0.0.1:8080/v1"),
+    ("HTTP://127.0.0.1:80/v1", "http://127.0.0.1/v1"),
+    ("https://127.0.0.1:443/v1", "https://127.0.0.1/v1"),
+    ("http:127.0.0.1:8080/v1", "http://127.0.0.1:8080/v1"),
+    ("http:\\\\127.0.0.1:8080\\v1", "http://127.0.0.1:8080/v1"),
+    ("http://127.0.0.1:08080/v1", "http://127.0.0.1:8080/v1"),
+    ("http://127.0.0.1:/v1", "http://127.0.0.1/v1"),
+    ("http://%6Cocalhost:8080/v1", "http://localhost:8080/v1"),
+    ("http://loc\talhost:8080/v1", "http://localhost:8080/v1"),
+    ("http://local\u00adhost/v1", "http://localhost/v1"),
+    (
+        "http://\uff4c\uff4f\uff43\uff41\uff4c\uff48\uff4f\uff53\uff54:8080/v1",
+        "http://localhost:8080/v1",
+    ),
+    ("  http://127.0.0.1:8080/v1 \n", "http://127.0.0.1:8080/v1"),
+    ("http://127.0.0.1:8080/x/../v1", "http://127.0.0.1:8080/v1"),
+    ("http://127.0.0.1/v1/%2e/", "http://127.0.0.1/v1"),
+    ("http://127.0.0.1/v1//", "http://127.0.0.1/v1"),
+]
+PLUGIN_REFUSED_BASE_URLS = [
+    "http://localhost.:8080/v1",
+    "http://[::ffff:127.0.0.1]/v1",
+    "http://127.0.0.1/V1",
+    "http://127.0.0.1/%76%31",
+    "http://128.0.0.1/v1",
+    "http://127.0.0.256/v1",
+    "http://127.0.0.0.1/v1",
+    "http://0x80.1/v1",
+    "http://08.0.0.1/v1",
+    "http://a@@127.0.0.1/v1",
+    "http://::@127.0.0.1/v1",
+    "http://127.0.0.1:65536/v1",
+    "http://127.0.0.1:8o/v1",
+    "http://[::1/v1",
+    "http://[::1]x/v1",
+    "http:///v1",
+    "http://127.0.0.1/v1?a",
+    "http://127.0.0.1/v1#a",
+    "http://127.0.0.1//v1",
+    "http://xn--localhost/v1",
+    "file:///v1",
+    "127.0.0.1:8080/v1",
+    "",
+]
+
+
+@pytest.mark.parametrize(("url", "configured"), PLUGIN_NORMALIZED_BASE_URLS)
+def test_base_url_forms_the_plugin_normalizes_are_accepted(url, configured):
+    """#271 review: the kit applies the plugin's WHATWG URL parse, not a stricter one."""
+    assert kit.check_base_url(url) == configured
+
+
+@pytest.mark.parametrize("url", PLUGIN_REFUSED_BASE_URLS)
+def test_base_url_forms_the_plugin_refuses_are_refused(url):
+    """#271 review: and refuses exactly what the plugin's parsePluginConfig refuses."""
+    with pytest.raises(ValueError, match="^invalid_base_url$"):
+        kit.check_base_url(url)
+
+
+@pytest.mark.parametrize("command", ["trial-install", "trial"])
+def test_trial_commands_refuse_a_credential_url_without_writing_it(
+    tmp_path, bundle, command, capsys, monkeypatch
+):
+    """#269 review: no host command runs and no output file or stream holds the value."""
+    monkeypatch.setattr(kit, "observed_environment", lambda: ENVIRONMENT)
+    tarball = release(tmp_path)
+    url = REJECTED_BASE_URLS[0]
+    work = tmp_path / "work"
+    if command == "trial-install":
+        argv = ["trial-install", "--tarball", str(tarball), "--work", str(work)]
+        argv += ["--output", str(tmp_path / "install.json")]
+    else:
+        argv = ["trial", "--inputs", str(frozen_manifest(bundle)), "--tarball", str(tarball)]
+        argv += ["--observations", str(observations(tmp_path, bundle))]
+        argv += ["--bundle", str(tmp_path / "out"), "--work", str(work)]
+        argv += ["--qualification", "fixture"]
+    argv += ["--base-url", url, "--", *fake_host(tmp_path)]
+    assert main(argv) == 2
+    streams = capsys.readouterr()
+    assert SECRET not in streams.out + streams.err
+    assert "invalid_base_url" in streams.err
+    assert not (tmp_path / "fake_openclaw.py.log").exists()
+    assert not work.exists() and not (tmp_path / "out").exists()
+    assert not (tmp_path / "install.json").exists()
 
 
 # --- install preflight (PR #262 adversarial review) ---------------------------
@@ -561,6 +770,29 @@ def test_one_command_trial_runs_every_stage(tmp_path, bundle, monkeypatch):
     assert {"trial-preflight", "trial-install"} <= registry
 
 
+def test_one_command_trial_uses_the_base_url(tmp_path, bundle, monkeypatch):
+    """#269, #271 review: ``trial --base-url`` reaches configure and the install record.
+
+    A custom loopback URL in a form the plugin normalizes is configured, and
+    recorded, in the plugin's normal form, never the default URL.
+    """
+    monkeypatch.setattr(kit, "observed_environment", lambda: ENVIRONMENT)
+    tarball = release(tmp_path)
+    argv = ["trial", "--inputs", str(frozen_manifest(bundle)), "--tarball", str(tarball)]
+    argv += ["--observations", str(observations(tmp_path, bundle))]
+    argv += ["--bundle", str(tmp_path / "out"), "--work", str(tmp_path / "work")]
+    argv += ["--resolver", str(bundle.resolver), "--qualification", "fixture"]
+    argv += ["--base-url", "http://127.1:18080/v1/", "--", *fake_host(tmp_path)]
+    assert main(argv) == 3
+    url = "http://127.0.0.1:18080/v1"
+    assert url != kit.DEFAULT_BASE_URL
+    install = json.loads((tmp_path / "out" / "install.json").read_bytes())
+    assert install["passed"] is True and install["base_url"] == url
+    configure = next(s for s in install["steps"] if s["name"] == "configure")
+    assert configure["argv"][-1] == url
+    assert json.loads((tmp_path / "fake_openclaw.py.state").read_text())["base_url"] == url
+
+
 def test_preflight_command_exits_nonzero_off_target(tmp_path, bundle, monkeypatch):
     monkeypatch.setattr(kit, "observed_environment", lambda: ENVIRONMENT)
     tarball = release(tmp_path)
@@ -595,7 +827,13 @@ def test_inspect_parses_stdout_only_and_keeps_stderr_in_a_private_log(tmp_path):
     work = tmp_path / "install"
     record = kit.install_plugin(fake_host(tmp_path, "stderr-noise"), tarball, work)
     assert record["passed"] is True
-    inspect = record["steps"][1]
+    # Every lifecycle step (#269) keeps its own private stdout and stderr logs.
+    assert [s["name"] for s in record["steps"]] == ["install", "configure", "enable", "inspect"]
+    for step in record["steps"]:
+        assert step["stderr_log"] == step["name"] + ".stderr.log"
+        assert step["stderr_bytes"] == len((work / step["stderr_log"]).read_bytes())
+    inspect = record["steps"][-1]
+    assert inspect["inspect"]["enabled"] is True
     assert json.loads((work / inspect["log"]).read_bytes())["plugin"]["status"] == "loaded"
     stderr = (work / inspect["stderr_log"]).read_bytes()
     assert b"ExperimentalWarning" in stderr
@@ -740,7 +978,7 @@ def test_install_record_keeps_no_raw_host_text(tmp_path, mode):
     record = kit.install_plugin(fake_host(tmp_path, mode), tarball, work)
     text = json.dumps(record)
     assert "alice" not in text and "sk-live" not in text and ".openclaw" not in text
-    inspect = record["steps"][1]["inspect"]
+    inspect = record["steps"][-1]["inspect"]
     assert set(inspect) == {"status", "enabled", "version", "diagnostics_count", "passed"}
     assert inspect["passed"] is False and record["passed"] is False
     if mode == "diagnostics":
@@ -748,9 +986,9 @@ def test_install_record_keeps_no_raw_host_text(tmp_path, mode):
     else:
         assert inspect["status"] is None and inspect["diagnostics_count"] == 0
     # The raw output is still reviewable in the private log, bound by its digest.
-    raw = (work / record["steps"][1]["log"]).read_bytes()
+    raw = (work / record["steps"][-1]["log"]).read_bytes()
     assert b"alice" in raw
-    assert record["steps"][1]["output_sha256"] == hashlib.sha256(raw).hexdigest()
+    assert record["steps"][-1]["output_sha256"] == hashlib.sha256(raw).hexdigest()
 
 
 def test_provisional_rejects_an_install_record_without_its_closed_shape(tmp_path, bundle):
@@ -758,6 +996,51 @@ def test_provisional_rejects_an_install_record_without_its_closed_shape(tmp_path
     preflight, _, tarball = provisional_records(tmp_path, bundle)
     code, result = provisional(tmp_path, bundle, preflight, {"passed": True}, tarball=tarball)
     assert (code, result["status"], result["reason"]) == (2, "rejected", "install_record")
+    assert no_partial_output(tmp_path)
+
+
+def _two_step(install):
+    install["steps"] = [install["steps"][0], install["steps"][-1]]
+
+
+def _foreign_base_url(install):
+    install["base_url"] = "http://user:secret@127.0.0.1:8080/v1"
+
+
+def _argv_off_base_url(install):
+    install["steps"][1]["argv"][-1] = "http://127.0.0.1:9999/v1"
+
+
+def _non_normal_base_url(install):
+    install["base_url"] = "http://127.1:8080/v1"
+    install["steps"][1]["argv"][-1] = install["base_url"]
+
+
+def _disabled_but_passed(install):
+    install["steps"][-1]["inspect"]["enabled"] = False
+
+
+@pytest.mark.parametrize(
+    ("tamper", "reason"),
+    [
+        (_two_step, "install_record"),
+        (_foreign_base_url, "install_record"),
+        (_argv_off_base_url, "install_record"),
+        (_non_normal_base_url, "install_record"),
+        (_disabled_but_passed, "install_contradiction"),
+    ],
+)
+def test_provisional_install_gate_follows_the_host_lifecycle(tmp_path, bundle, tamper, reason):
+    """RM39/RM44; AC30/AC36 tooling: the #262 gate over the #269 lifecycle.
+
+    The recorded base_url must be the plugin's normal form and match the
+    configure argv, and a passed inspection must report the plugin enabled.
+    """
+    preflight, install, tarball = provisional_records(tmp_path, bundle)
+    assert [s["name"] for s in install["steps"]] == ["install", "configure", "enable", "inspect"]
+    tamper(install)
+    code, result = provisional(tmp_path, bundle, preflight, install, tarball=tarball)
+    assert (code, result["reason"]) == (2, reason)
     assert no_partial_output(tmp_path)
 
 

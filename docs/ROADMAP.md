@@ -1128,7 +1128,12 @@ host availability or execution authority.
 #193 selection and #194's partial lifecycle implementation are recorded below.
 The AC25 live host subcases, full 300-asset measurements, Windows/macOS
 qualification, Matrix rights/cohort/refresh and formal independent corpus gates
-remain separate from #192's completed catalog criteria.
+remain separate from #192's completed catalog criteria. #268 (spec 0.66
+amendment) admits each local SKILL.md candidate on its own: a rejected file is
+an exclusion in a partial generation, not a whole-folder failure, and body text
+is no longer markup/repetition checked. A local scan of the pinned OpenClaw
+2026.10.7 package admits all 49 bundled skills; this is a developer
+observation, not an AC25 live host subcase.
 
 The #193 selection component implements RM35/AC26: separate closed selection
 v2 and recommendation-result schemas, projection-only lexical ranking, strict
@@ -1644,12 +1649,14 @@ is claimed.
 (`asset_trial_kit.py`) add the Apple M1 8 GiB / pinned host / release-checksum
 preflight, the pinned-CLI plugin install, and the frozen plan run through the
 existing driver over operator-captured row observations, bundled with
-SHA-256 digests and graded offline. The bundle is private, the install record
-keeps no host free text, and the provisional gate binds closed preflight/install
-records to the frozen package. They are verified over fixture bundles and a
-host double only. The owner-run trial itself (#259), its frozen inputs and
-genuine native row observations remain open; no provisional cost has been
-recorded.
+SHA-256 digests and graded offline. #269: the install follows the host's
+lifecycle (install, configure `baseUrl`, enable, inspect), because the pinned
+host installs the plugin disabled until it is configured. The bundle is
+private, the install record keeps no host free text, and the provisional gate
+binds closed preflight/install records to the frozen package. They are verified
+over fixture bundles and a host double only. The owner-run trial itself (#259),
+its frozen inputs and genuine
+native row observations remain open; no provisional cost has been recorded.
 
 #201 native benchmark contract checkpoint (spec 0.61): explicit local-cold
 preparation records actual gateway worker jobs/readiness, setup and owned cleanup
