@@ -21,6 +21,7 @@ qualified result: a caller cannot flag a run ``qualified``.
 
 import copy
 import subprocess
+import threading
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 
@@ -45,6 +46,8 @@ from relaymind.evaluation.asset_whole_task import (
 
 EXECUTOR_REQUEST = "relaymind.host_executor_request.v1"
 REQUIRED_LANES = tuple(lane for lane in LANES if lane != "zh_hant_diagnostic")
+EXECUTOR_OUTPUT_BYTES = REPORT_BYTES
+_CHUNK = 64 * 1024
 RUN_QUALIFICATIONS = ("fixture", "provisional")
 TOKEN_RELATIONSHIPS = (
     "component_disjoint",
@@ -69,8 +72,10 @@ def host_preregistration(tasks: Mapping, freeze: Mapping) -> dict:
 
     Section 12.6.5: at least 100 preregistered paired tasks are required for
     acceptance and an early trial never asserts the full gate through a smaller
-    set. Lane counts are reported for the per-language report; this revision
-    states no per-lane host-task minimum, so missing lanes are listed only.
+    set. AC36 pairs the whole tasks with the five required language lanes and
+    RM44 reports per-language tradeoffs, so a set missing a required lane is not
+    eligible; the spec states no per-lane host-task count, so one task per
+    lane is the only lane condition checked here.
     """
     input_digest = verify_host_tasks(tasks, freeze)
     plan = plan_host_trial(tasks)
@@ -80,6 +85,9 @@ def host_preregistration(tasks: Mapping, freeze: Mapping) -> dict:
         reasons.append("kind_not_acceptance")
     if len(tasks["tasks"]) < ACCEPTANCE_TASKS:
         reasons.append("below_minimum_tasks")
+    missing = [lane for lane in REQUIRED_LANES if lane not in lanes]
+    if missing:
+        reasons.append("missing_required_lanes")
     return dict(
         kind=tasks["kind"],
         input_digest=input_digest,
@@ -88,7 +96,7 @@ def host_preregistration(tasks: Mapping, freeze: Mapping) -> dict:
         tasks=len(tasks["tasks"]),
         planned_rows=len(plan),
         lanes=[dict(lane=lane, tasks=lanes[lane]) for lane in sorted(lanes, key=_utf8)],
-        missing_lanes=[lane for lane in REQUIRED_LANES if lane not in lanes],
+        missing_lanes=missing,
         acceptance_eligible=not reasons,
         reasons=reasons,
     )
@@ -154,7 +162,13 @@ def run_host_plan(
     rows: dict[int, dict] = {}
     evidence: dict[str, dict] = {}
     seen: set[str] = set()
-    with RunJournal(journal_path, bound_header("host", record)) as journal:
+    identity = dict(
+        environment=environment,
+        artifacts=list(artifacts),
+        input_manifest=input_manifest,
+        qualification=qualification,
+    )
+    with RunJournal(journal_path, bound_header("host", record, identity)) as journal:
         for planned in plan:
             key, ordinal = str(planned["ordinal"]), planned["ordinal"]
             task_id, arm = planned["task_id"], planned["arm"]
@@ -204,6 +218,55 @@ def run_host_plan(
     return report
 
 
+def _run_program(argv: list[str], payload: bytes, timeout: float | None) -> bytes:
+    """Run one executor program; its output is bounded while it is read."""
+    try:
+        process = subprocess.Popen(  # noqa: S603 - the operator's own executor program
+            argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE
+        )
+    except OSError:
+        raise ExecutorFailed("executor_start") from None
+    chunks: list[bytes] = []
+    flooded = threading.Event()
+
+    def feed() -> None:
+        try:
+            process.stdin.write(payload)
+            process.stdin.close()
+        except OSError:
+            pass  # The program stopped reading; its exit status decides.
+
+    def drain() -> None:
+        size = 0
+        while chunk := process.stdout.read(_CHUNK):
+            size += len(chunk)
+            if size > EXECUTOR_OUTPUT_BYTES:
+                flooded.set()
+                process.kill()
+                break
+            chunks.append(chunk)
+
+    threads = [threading.Thread(target=f, daemon=True) for f in (feed, drain)]
+    for thread in threads:
+        thread.start()
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+        raise ExecutorFailed("executor_timeout") from None
+    finally:
+        for thread in threads:
+            # A grandchild may keep the pipe open; the wait stays bounded.
+            thread.join(timeout)
+        process.stdout.close()
+    if flooded.is_set() or any(thread.is_alive() for thread in threads):
+        raise ExecutorFailed("executor_output")
+    if process.returncode != 0:
+        raise ExecutorFailed("executor_exit")
+    return b"".join(chunks)
+
+
 def command_executor(
     argv: Sequence[str], tasks: Mapping, *, timeout: float | None = None
 ) -> Executor:
@@ -220,6 +283,8 @@ def command_executor(
     with unknown consumption, never recorded as a host task timeout. Set it
     above the frozen task budgets; it never replaces or changes them. Only the
     direct child process is killed; the program must stop its own children.
+    Standard output is read incrementally and the program is killed as soon as
+    it exceeds the report size bound (``executor_output``).
     """
     argv = [str(a) for a in argv]
     ordinals = {(p["task_id"], p["arm"]): p["ordinal"] for p in plan_host_trial(tasks)}
@@ -232,24 +297,9 @@ def command_executor(
             arm=arm,
             arm_config=dict(config),
         )
+        stdout = _run_program(argv, json_bytes(request), timeout)
         try:
-            done = subprocess.run(  # noqa: S603 - the operator's own executor program
-                argv,
-                input=json_bytes(request),
-                stdout=subprocess.PIPE,
-                check=False,
-                timeout=timeout,
-            )
-        except subprocess.TimeoutExpired:
-            raise ExecutorFailed("executor_timeout") from None
-        except OSError:
-            raise ExecutorFailed("executor_start") from None
-        if done.returncode != 0:
-            raise ExecutorFailed("executor_exit")
-        if len(done.stdout) > REPORT_BYTES:
-            raise ExecutorFailed("executor_output")
-        try:
-            reply = parse_json(done.stdout)
+            reply = parse_json(stdout)
         except AssetCorpusError:
             raise ExecutorFailed("executor_output") from None
         if set(reply) != {"row", "evidence"}:
@@ -264,19 +314,39 @@ def command_executor(
 _COUNTS = ("input_tokens", "output_tokens", "cached_tokens", "reasoning_tokens")
 
 
+# Gateway-side stops of a call: the gateway cancelled it or a gateway bound
+# (placement deadline, time budget) ended it, or the run was interrupted. They
+# are not provider failures, and they alone do not show that the request
+# reached the provider.
+_GATEWAY_STOPS = {
+    "cancelled": "cancelled",
+    "deadline_exceeded": "timeout",
+    "time_budget": "timeout",
+    "interrupted": "failed",
+}
+# The request never left the gateway: no dispatch.
+_NOT_DISPATCHED = {"provider_unreachable", "missing_credentials"}
+
+
 def _outcome(finished: Mapping | None) -> tuple[str, int | None]:
     """The attempt outcome and its evidenced call count."""
     if finished is None:
         # Started without a recorded finish: neither dispatch nor usage known.
         return "unknown", None
-    error = finished["payload"].get("error")
+    payload = finished["payload"]
+    error = payload.get("error")
     if error is None:
         return "success", 1
-    if error["code"] == "provider_unreachable":
-        # The provider was never reached: no evidenced dispatch.
+    code = error["code"]
+    if code in _NOT_DISPATCHED:
         return "failed", None
-    if error["code"] == "provider_timeout":
+    if code in _GATEWAY_STOPS:
+        # Dispatch is evidenced only by a received token or reported usage.
+        received = payload.get("first_token_ms") is not None or payload.get("usage") is not None
+        return _GATEWAY_STOPS[code], 1 if received else None
+    if code == "provider_timeout":
         return "timeout", 1
+    # A provider error or an invalid/incomplete response came from the provider.
     return "failed", 1
 
 
@@ -292,9 +362,11 @@ def attempts_from_trace(
 ) -> list[dict]:
     """HostAttempts for every external model call in RelayMind trace events.
 
-    ``events`` are TraceEvent objects of one or more gateway runs in their
-    recorded order; ``evidence_id`` names the registered export holding them,
-    which is the dispatch evidence. Counts are those the provider reported to
+    ``events`` are the trace events of one or more gateway runs in their
+    recorded order, as ``TraceEvent`` instances or as the JSON objects of
+    ``TraceEvent.to_json_object()`` (the native API and store export shape).
+    ``evidence_id`` names the registered export holding them, which is the
+    dispatch evidence. Counts are those the provider reported to
     the gateway (``reported``); absent counts stay null, never zero. The
     gateway does not record a total, and the component relationship is unknown
     unless the operator names evidence for it. Local model calls are local cost
@@ -309,6 +381,8 @@ def attempts_from_trace(
     checked = []
     last: dict[str, int] = {}
     for item in events:
+        if hasattr(item, "to_json_object"):
+            item = item.to_json_object()
         data = validate_trace_event(dict(item)).to_json_object()
         if data["seq"] <= last.get(data["run_id"], 0):
             raise ValueError("trace_order")

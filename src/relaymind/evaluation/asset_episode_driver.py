@@ -442,7 +442,10 @@ async def run_adaptation_episodes(
     results = []
     bound = contextlib.nullcontext()
     if journal is not None:
-        header = bound_header("adaptation", episode_preregistration(episodes, freeze))
+        identity = dict(
+            environment=environment, input_manifest=input_manifest, qualification=qualification
+        )
+        header = bound_header("adaptation", episode_preregistration(episodes, freeze), identity)
         bound = RunJournal(journal, header)
     with bound as book:
         for episode in episodes["episodes"]:

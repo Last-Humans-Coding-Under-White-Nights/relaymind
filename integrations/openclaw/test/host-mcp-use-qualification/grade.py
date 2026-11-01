@@ -174,22 +174,59 @@ def zero_gateway_execution(runs: object) -> bool:
         return False
 
 
+COLLIDING_SERVERS = ("alpha.one", "alpha?one")
+INVENTORY_OUTCOMES = frozenset({"listed", "empty", "malformed", "none"})
+
+
+def session_inventory_shows_collision(event: dict) -> bool:
+    """One tools.effective projection lists both fixture servers' `append`.
+
+    Each server has exactly one usable row with its original name, the exposed
+    names differ, and both are in the session's listed tool names.
+    """
+    if (
+        event.get("method") != "tools.effective"
+        or event.get("status") != "ok"
+        or event.get("inventory") != "listed"
+    ):
+        return False
+    rows, names = event["mcp_tools"], event["tool_names"]
+    exposed = []
+    for server in COLLIDING_SERVERS:
+        matches = [row for row in rows if row["server"] == server]
+        if len(matches) != 1 or matches[0]["original"] != "append":
+            return False
+        if matches[0].get("denied_by_session") is not None:
+            return False
+        exposed.append(matches[0]["name"])
+    return len(set(exposed)) == 2 and all(
+        isinstance(name, str) and name in names for name in exposed
+    )
+
+
 def fixture_discovery_pass(capture: dict) -> bool:
-    """Raw discovery is a prerequisite, never an AC35 exact-use proof term."""
+    """Raw discovery is a prerequisite, never an AC35 exact-use proof term.
+
+    The session inventory must actually show both colliding fixture tools; an
+    empty, malformed or unlabelled tools.effective projection is not discovery.
+    """
     try:
         value = capture["mcp_use"]
         events = value["server_events"]
+        effective = [
+            event for event in value["inventories"] if event.get("method") == "tools.effective"
+        ]
         return (
             type(value["probe_exit_code"]) is int
             and value["probe_exit_code"] == 0
             and {event["server"] for event in events if event["kind"] == "list"}
-            == {"alpha.one", "alpha?one"}
+            == set(COLLIDING_SERVERS)
             and all(event["kind"] in {"started", "list"} for event in events)
             and value["sandbox_files"] == {"alpha.one": [], "alpha?one": []}
-            and any(
-                event.get("method") == "tools.effective" and event.get("status") == "ok"
-                for event in value["inventories"]
+            and all(
+                event.get("inventory") in INVENTORY_OUTCOMES - {"malformed"} for event in effective
             )
+            and any(session_inventory_shows_collision(event) for event in effective)
         )
     except (KeyError, TypeError, AttributeError):
         return False
