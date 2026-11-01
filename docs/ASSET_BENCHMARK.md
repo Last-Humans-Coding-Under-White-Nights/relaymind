@@ -717,7 +717,8 @@ hosts and hardware; fixture runs establish no measured result.
 `fixture`.
 
 - `startup` generates a bilingual catalog of `--assets` skills (default 300,
-  the AC29 size). It then starts a real `relaymind serve` process ten times
+  the AC29 size; the count must be positive). It then starts a real
+  `relaymind serve` process ten times
   through the existing AC29 startup driver (`measure_startups`) and records each
   process's memory: `ps` resident set size on POSIX, `tasklist` working set on
   Windows. `memory_counter` names the counter used.
@@ -730,7 +731,8 @@ hosts and hardware; fixture runs establish no measured result.
     that already has them.
   - **Readiness and logs.** A startup counts only once recommendations report
     `ready`. Each run directory keeps the gateway's `stdout.log` (without the
-    token) and `stderr.log`.
+    token) and `stderr.log`; both start clean on every launch, so reusing
+    `--work` never mixes separate runs.
   - **Completeness.** `complete` is true only when all ten startups were useful
     and every memory sample is known.
 - `platform` turns an install-check record from
