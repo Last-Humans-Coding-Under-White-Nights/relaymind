@@ -324,6 +324,81 @@ def test_trial_install_command_takes_the_base_url(tmp_path):
     assert record["passed"] is True and record["base_url"] == url
 
 
+SECRET = "s3cr3t-token"
+REJECTED_BASE_URLS = [
+    f"http://user:{SECRET}@127.0.0.1:8080/v1",
+    f"http://{SECRET}@localhost:8080/v1",
+    f"http://127.0.0.1:8080/v1?token={SECRET}",
+    f"http://127.0.0.1:8080/v1#{SECRET}",
+    f"http://example.com:8080/v1/{SECRET}",
+    f"http://10.0.0.1:8080/v1?{SECRET}",
+    f"ftp://127.0.0.1/v1?{SECRET}",
+    f"http://127.0.0.1:8080/{SECRET}",
+    f"http://127.0.0.1:8080/v1 {SECRET}",
+    f"http://127.0.0.1:99999/v1?{SECRET}",
+    f"http:\\\\127.0.0.1\\v1?{SECRET}",
+    f"{SECRET}",
+]
+
+
+@pytest.mark.parametrize("url", REJECTED_BASE_URLS)
+def test_base_url_outside_the_plugin_rules_is_refused_before_any_host_command(tmp_path, url):
+    """#269 review: the plugin's baseUrl rules (integrations/openclaw/src/config.ts).
+
+    http/https, a loopback host, the /v1 root, no credentials, query or fragment.
+    A refused value never reaches the host, a record or an error message.
+    """
+    tarball = release(tmp_path)
+    work = tmp_path / "install"
+    with pytest.raises(ValueError) as caught:
+        kit.install_plugin(fake_host(tmp_path), tarball, work, base_url=url)
+    assert str(caught.value) == "invalid_base_url"
+    assert SECRET not in repr(caught.value)
+    assert not work.exists()
+    assert not (tmp_path / "fake_openclaw.py.log").exists()
+
+
+@pytest.mark.parametrize(
+    ("url", "configured"),
+    [
+        ("http://127.0.0.1:8080/v1", "http://127.0.0.1:8080/v1"),
+        ("http://LOCALHOST:8080/v1/", "http://localhost:8080/v1"),
+        ("https://127.10.0.1/v1", "https://127.10.0.1/v1"),
+        ("http://[::1]:8080/v1", "http://[::1]:8080/v1"),
+    ],
+)
+def test_loopback_base_url_is_configured_in_its_normal_form(url, configured):
+    """#269 review: the configured value is the plugin's own form, origin plus /v1."""
+    assert kit.check_base_url(url) == configured
+
+
+@pytest.mark.parametrize("command", ["trial-install", "trial"])
+def test_trial_commands_refuse_a_credential_url_without_writing_it(
+    tmp_path, bundle, command, capsys, monkeypatch
+):
+    """#269 review: no host command runs and no output file or stream holds the value."""
+    monkeypatch.setattr(kit, "observed_environment", lambda: ENVIRONMENT)
+    tarball = release(tmp_path)
+    url = REJECTED_BASE_URLS[0]
+    work = tmp_path / "work"
+    if command == "trial-install":
+        argv = ["trial-install", "--tarball", str(tarball), "--work", str(work)]
+        argv += ["--output", str(tmp_path / "install.json")]
+    else:
+        argv = ["trial", "--inputs", str(frozen_manifest(bundle)), "--tarball", str(tarball)]
+        argv += ["--observations", str(observations(tmp_path, bundle))]
+        argv += ["--bundle", str(tmp_path / "out"), "--work", str(work)]
+        argv += ["--qualification", "fixture"]
+    argv += ["--base-url", url, "--", *fake_host(tmp_path)]
+    assert main(argv) == 2
+    streams = capsys.readouterr()
+    assert SECRET not in streams.out + streams.err
+    assert "invalid_base_url" in streams.err
+    assert not (tmp_path / "fake_openclaw.py.log").exists()
+    assert not work.exists() and not (tmp_path / "out").exists()
+    assert not (tmp_path / "install.json").exists()
+
+
 # --- run, bundle and grade ----------------------------------------------------
 
 

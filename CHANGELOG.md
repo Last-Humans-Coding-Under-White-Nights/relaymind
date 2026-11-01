@@ -31,7 +31,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   configured (#269; RM39/RM44; AC30/AC36 tooling). The kit now follows the
   operator guide's lifecycle: install, configure `baseUrl` (`--base-url`,
   default `http://127.0.0.1:8080/v1`), enable, inspect. It records each step,
-  and inspect must report the plugin loaded and enabled. Verified with a host
+  and inspect must report the plugin loaded and enabled. `--base-url` must meet
+  the plugin's `baseUrl` rules (loopback http/https `/v1` root, no
+  credentials, query or fragment); any other value is refused before any host
+  command runs and is never written out. Verified with a host
   double that models the disabled fresh install; not yet rerun on the
   owner's M1 (#259).
 - Ordinary local skill discovery (#268; RM34/AC25; spec 0.66 section 4.6.1)
