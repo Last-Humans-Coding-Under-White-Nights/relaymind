@@ -38,6 +38,12 @@ def add_commands(sub) -> None:
         parser.add_argument("--catalog", type=Path, required=True)
         parser.add_argument("--cases", type=Path, required=True)
         parser.add_argument("--output", type=Path, required=True)
+        parser.add_argument(
+            "--labelling",
+            choices=("independent", "owner_machine"),
+            default="independent",
+            help="spec 12.6.1 independent or 12.6.6 owner_machine labelling",
+        )
     template.add_argument("--annotator", required=True)
     for parser in (worksheet, freeze):
         parser.add_argument("--judgments", type=Path, nargs="+", required=True)
@@ -92,14 +98,19 @@ def _labels(args) -> dict:
     from relaymind.evaluation import asset_labelling
 
     catalog, cases = _read(args.catalog), _read(args.cases)
+    labelling = args.labelling
     if args.command == "label-template":
-        return asset_labelling.label_template(catalog, cases, args.annotator)
+        return asset_labelling.label_template(catalog, cases, args.annotator, labelling=labelling)
     judgments = asset_labelling.raw_judgments(
-        catalog, cases, [_read(path) for path in args.judgments]
+        catalog, cases, [_read(path) for path in args.judgments], labelling=labelling
     )
     if args.command == "label-worksheet":
-        return asset_labelling.adjudication_worksheet(catalog, cases, judgments)
-    return asset_labelling.freeze_labels(catalog, cases, judgments, _read(args.worksheet))
+        return asset_labelling.adjudication_worksheet(
+            catalog, cases, judgments, labelling=labelling
+        )
+    return asset_labelling.freeze_labels(
+        catalog, cases, judgments, _read(args.worksheet), labelling=labelling
+    )
 
 
 def _episodes(args) -> dict:

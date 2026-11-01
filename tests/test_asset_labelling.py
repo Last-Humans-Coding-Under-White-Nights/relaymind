@@ -181,3 +181,44 @@ def test_raw_judgments_cannot_change_during_adjudication(tmp_path):
     tuner["items"][0]["adjudication"]["adjudicator_id"] = "author"
     with pytest.raises(AssetCorpusError, match="role_conflict"):
         freeze_labels(catalog, cases, judgments, tuner)
+
+
+# --- spec 0.66 section 12.6.6 owner_machine labelling (#251) -----------------------
+
+
+def _owner_machine(tmp_path, owner_roles=("annotator", "tuner"), machine_roles=("annotator",)):
+    catalog, cases, labels = corpus(tmp_path)
+    people = {p["id"]: p for p in catalog["people"]}
+    people["judge-a"]["roles"] = sorted(owner_roles)
+    people["judge-b"]["roles"] = sorted(machine_roles)
+    return catalog, cases, labels
+
+
+def test_owner_machine_labelling_admits_the_owner_who_also_tunes(tmp_path):
+    """Spec 12.6.6: the owner may hold the tuner role; the label says owner_machine."""
+    catalog, cases, labels = _owner_machine(tmp_path)
+    with pytest.raises(AssetCorpusError, match="role_conflict"):
+        label_template(catalog, cases, "judge-a")
+    templates = [
+        filled(label_template(catalog, cases, a, labelling="owner_machine"), labels, a)
+        for a in ("judge-a", "judge-b")
+    ]
+    judgments = raw_judgments(catalog, cases, templates, labelling="owner_machine")
+    worksheet = adjudication_worksheet(catalog, cases, judgments, labelling="owner_machine")
+    assert worksheet["agreement"]["method"] == "owner_machine.v1"
+    frozen = freeze_labels(
+        catalog, cases, judgments, adjudicated(worksheet, labels), labelling="owner_machine"
+    )
+    assert frozen["agreement"]["method"] == "owner_machine.v1"
+    assert frozen["agreement"]["groups"] == labels["agreement"]["groups"]
+
+
+def test_owner_machine_labelling_still_needs_one_non_tuner_annotator(tmp_path):
+    """The machine annotator never saw tuning results: it cannot be a tuner."""
+    catalog, cases, labels = _owner_machine(tmp_path, machine_roles=("annotator", "tuner"))
+    templates = [
+        filled(label_template(catalog, cases, a, labelling="owner_machine"), labels, a)
+        for a in ("judge-a", "judge-b")
+    ]
+    with pytest.raises(AssetCorpusError, match="role_conflict"):
+        raw_judgments(catalog, cases, templates, labelling="owner_machine")

@@ -186,17 +186,19 @@ memory-leak request still missed its original English target. No translation,
 semantic-quality or independent-annotation pass follows from these diagnostics.
 No external customer dataset or human panel is needed to start using the tooling.
 Production semantic qualification and installed M10 host execution/approval/
-correction walkthroughs are separate pending work; see [status](ROADMAP.md#m10--multilingual-asset-recommendations-spec-064).
+correction walkthroughs are separate pending work; see [status](ROADMAP.md#m10--multilingual-asset-recommendations-spec-066).
 
 ## Early trial and walkthroughs on the installed host
 
-- **Early installed-skill trial (#234).** On the Apple M1 8 GiB machine,
+- **Early installed-skill trial (#234, #259).** The owner, as operator, runs
+  it on the owner's Apple M1 8 GiB MacBook (spec 0.66 section 12.6.6). There,
   `python scripts/asset_whole_task.py trial ... -- openclaw` does these steps
   in order: it checks the machine, the pinned OpenClaw 2026.10.7 host and the
   release checksum; installs the packaged plugin; runs the frozen three-arm
   plan over the row observations you capture on the host; bundles every file
-  with SHA-256 digests; and grades the bundle offline. An early trial is
-  `provisional` at most and never passes acceptance. See the
+  with SHA-256 digests; and grades the bundle offline. An early trial never
+  passes acceptance; without an approved owner-run qualification record it is
+  `provisional` at most. See the
   [trial kit](ASSET_BENCHMARK.md#early-installed-skill-trial-kit-234).
 - **Bilingual walkthrough recorder (#238).**
   `integrations/openclaw/test/host-walkthrough/record.py record` records

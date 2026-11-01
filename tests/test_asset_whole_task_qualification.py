@@ -56,6 +56,7 @@ def test_fixture_host_report_names_its_assessed_qualification(bundle):
             "fixture_evidence",
             "qualified_evidence_review",
         ],
+        labelling=None,
     )
 
 
@@ -306,3 +307,47 @@ def test_plan_episodes_rejects_unsorted_episodes(bundle, capsys):
     )
     assert code == 2 and "episode_order" in capsys.readouterr().err
     assert not (bundle.root / "episodes-plan.json").exists()
+
+
+# --- spec 0.66 section 12.6.6 qualification records on the command line (#251) ----
+
+
+def _graded_with_record(bundle, labelling, *, bind=True):
+    import hashlib
+
+    from test_asset_qualification_record import host_record
+
+    report_path = bundle.save("grade-host.json", bundle.host_report())
+    record = host_record(bundle.root, labelling=labelling)
+    if labelling != "owner_machine":
+        record.update(annotators=None, agreement=None)
+    payload = report_path.read_bytes() if bind else b"{}"
+    for subject in record["subjects"]:
+        if subject["role"] == "report":
+            (bundle.root / subject["path"]).write_bytes(payload)
+            subject.update(sha256=hashlib.sha256(payload).hexdigest(), bytes=len(payload))
+    record_path = bundle.save("record.json", record)
+    output = bundle.root / "graded.json"
+    argv = ["grade-host", "--report", str(report_path), "--inputs"]
+    argv += [str(bundle.root / "inputs.json"), "--resolver", str(bundle.resolver)]
+    argv += ["--qualification-record", str(record_path), "--output", str(output)]
+    return main(argv), json.loads(output.read_text())
+
+
+def test_a_bound_record_reports_its_labelling_but_never_lifts_fixture_inputs(bundle):
+    code, result = _graded_with_record(bundle, "independent")
+    assert code == 3 and result["gate"] == "blocked"
+    assert result["qualification"]["assessed"] == "fixture"
+    assert result["qualification"]["labelling"] == "independent"
+    assert REVIEW_UNDEFINED not in result["qualification"]["reasons"]
+
+
+def test_a_record_for_another_report_rejects(bundle):
+    code, result = _graded_with_record(bundle, "independent", bind=False)
+    assert (code, result["reason"]) == (2, "qualification_record_unbound")
+
+
+def test_an_owner_machine_record_over_independent_labels_rejects(bundle):
+    """The record's labelling must be the frozen labels' agreement method."""
+    code, result = _graded_with_record(bundle, "owner_machine")
+    assert (code, result["reason"]) == (2, "labelling_mismatch")
