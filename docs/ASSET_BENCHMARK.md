@@ -1370,9 +1370,8 @@ match but render as empty boxes. `--font-dir` copies the `.otf`, `.ttf` and
 that copy into each isolated home's `$XDG_DATA_HOME/fonts` (Linux fontconfig)
 as part of the install step, before the host is installed. The manifest lists
 the names and digests of that copy under `fonts`, so they are the bytes every
-language installed. Use a
-work root whose path holds no user name, because the source locator and the
-capture show it.
+language installed. Use a work root whose path holds no user name, because the
+source locator and the capture show it.
 
 The output directory holds, per language, `capture.json` (the harness's
 sanitized capture), `screens/`, `screens.json` and `video/`. `manifest.json`

@@ -55,6 +55,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (`payload.tools` instead of `groups[].tools`), not a host result; the
   settlement document records the correction.
 
+- Walkthrough recorder fonts (RM39; AC30): `--font-dir` on
+  `integrations/openclaw/test/host-walkthrough/record.py` copies the `.otf`,
+  `.ttf` and `.ttc` files of a directory once into the private work root, and
+  each language's install step copies that snapshot into the isolated browser
+  home's `$XDG_DATA_HOME/fonts` (fontconfig), so Chinese labels render on a host
+  without a system CJK font. `manifest.json` lists the snapshot's file names,
+  SHA-256 digests and sizes under `fonts`. An empty, missing or non-directory
+  font directory is the structured refusal `walkthrough_font_dir` before
+  anything is created, and an environment whose font data directory
+  (`XDG_DATA_HOME`, else `HOME/.local/share`) is unset or relative fails the
+  install step (`walkthrough_font_home`) rather than installing elsewhere.
+  `tests/test_openclaw_walkthrough.py` covers these cases.
+
 - Owner-run qualification records and `owner_machine` labelling (#251; RM16,
   RM39, RM40, RM42, RM44; AC30, AC31, AC33, AC35–AC37; spec 0.66 section
   12.6.6): the closed `asset_qualification_record.v1.json` schema and
