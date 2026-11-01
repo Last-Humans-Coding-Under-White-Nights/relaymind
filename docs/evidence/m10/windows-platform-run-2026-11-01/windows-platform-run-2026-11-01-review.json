@@ -22,7 +22,7 @@
   },
   "revisions": {
     "repository_commit": "52492ee4e16035d997cbe15fa05d928ebedce3e4",
-    "adapter_revision": "m10-control-ui-l10n",
+    "adapter_revision": null,
     "harness_sha256": "d056dd09235755adff8aa6aacb3a37235670c379c1b253fa07a4545bdb7f24dd"
   },
   "operation": null,
@@ -30,8 +30,8 @@
     {
       "role": "evidence",
       "path": "README.md",
-      "sha256": "3b3ac85566501da8ff1442bd0d229f504d6572f4b2fcac251c7febc0868baaa1",
-      "bytes": 5097
+      "sha256": "d0a76daa7ebafe57c37db32013d50012b7c6a468a7b932f3f0e157f6d85d83f4",
+      "bytes": 5514
     },
     {
       "role": "evidence",

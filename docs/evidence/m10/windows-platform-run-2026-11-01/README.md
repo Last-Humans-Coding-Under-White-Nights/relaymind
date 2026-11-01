@@ -70,7 +70,13 @@ the dirty state. Its `harness_sha256` (d056dd09…) is the archived snapshot of
 `src/relaymind/evaluation/asset_operations_run.py`, which differs from that
 file at both 4c1ce6e and 52492ee. The uncommitted harness changes were
 committed afterwards as 8d406e943d76d4d67c2adc8bf7ae9a124ccae270, whose three
-harness files match the archived snapshots byte for byte. Review fields remain
+harness files match the archived snapshots byte for byte. The archived full
+record names the branch `m10-control-ui-l10n` as `adapter_revision`; a branch
+moves and identifies no revision, and the native adapter revision of the
+measured tarball could not be recomputed, so the committed record leaves
+`adapter_revision` null. The measured adapter is the tarball with SHA-256
+85512a7bba21273180c63d03c07ecd0db5a976515cab97392ffc3f497f67b6e2 in
+`release.json` and `SHA256SUMS`. Review fields remain
 empty. An organization member other than the owner must approve the PR.
 The schema's `positive` platform-record category is not a passing gate.
 
