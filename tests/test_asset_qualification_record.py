@@ -819,3 +819,20 @@ def test_fractional_seconds_are_real_instants(tmp_path):
     record = host_record(tmp_path, runs_started_at="2026-11-03T00:00:00.123456789Z")
     record["review"]["approved_at"] = "2026-11-05T00:00:00.5Z"
     assert load_record(save(tmp_path, record)).approved
+
+
+def test_a_record_for_another_report_rejects_as_unbound_before_input_checks(tmp_path):
+    """Spec 12.6.6: a record for another report rejects as unbound.
+
+    The report binding is checked right after the scope, before the record's
+    input subjects or labels are compared, so the closed reason names the
+    actual contradiction.
+    """
+    from relaymind.evaluation.asset_whole_task_qualification import assess_inputs
+
+    record = _input_record(tmp_path)
+    report = dict(qualification="qualified", evidence=[], artifacts=[])
+    inputs = _inputs(root=dict(TASKS, tasks=[{"id": "other"}]))
+    inputs.release = None  # never reached: the binding rejects first
+    with pytest.raises(WholeTaskRejected, match="qualification_record_unbound"):
+        assess_inputs("host", report, inputs, record=record, report_sha256="c" * 64)

@@ -258,6 +258,17 @@ class QualificationRecord:
             },
         )
 
+    def check_scope(self, kind: str) -> None:
+        """Spec 12.6.6: only a positive record of the matching scope reviews a report."""
+        if self.outcome != "positive" or REPORT_SCOPES.get(self.scope) != kind:
+            _reject("qualification_record_scope")
+
+    def check_report(self, kind: str, report_sha256: str | None) -> None:
+        """The scope first, then the binding of the report's exact bytes."""
+        self.check_scope(kind)
+        if report_sha256 is None or not self.binds("report", report_sha256):
+            _reject("qualification_record_unbound")
+
     def check_inputs(self, kind: str, inputs) -> None:
         """Spec 12.6.6: the bound freeze/tasks/episodes are the resolved inputs.
 
@@ -265,8 +276,7 @@ class QualificationRecord:
         record cannot review an acceptance report without preregistration.
         """
         # The scope rejects first, for every report kind.
-        if self.outcome != "positive" or REPORT_SCOPES.get(self.scope) != kind:
-            _reject("qualification_record_scope")
+        self.check_scope(kind)
         root = inputs.root
         if kind == "host" and _HOST_SCOPES.get(root.get("kind")) != self.scope:
             _reject("qualification_record_scope")
