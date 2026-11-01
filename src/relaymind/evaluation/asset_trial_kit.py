@@ -54,6 +54,7 @@ from relaymind.evaluation.asset_corpus_io import (
 from relaymind.evaluation.asset_whole_task import (
     WholeTaskBlocked,
     WholeTaskRejected,
+    _not_run,
     plan_host_trial,
     run_host_trial,
     validate_whole_task,
@@ -282,6 +283,11 @@ def release_identity(tarball: Path) -> dict:
     return identity
 
 
+def _frozen_packages(freeze: Mapping, sha256, size) -> list[dict]:
+    """The frozen packages with exactly these bytes (an unread release has none)."""
+    return [p for p in freeze["packages"] if (p["sha256"], p["bytes"]) == (sha256, size)]
+
+
 def _check(name: str, passed: bool) -> dict:
     return dict(name=name, status="passed" if passed else "failed")
 
@@ -323,12 +329,7 @@ def preflight(
     """
     version, version_digest = host_version(host_command)
     identity = release_identity(tarball)
-    packages = [
-        p
-        for p in freeze["packages"]
-        if identity["sha256"] is not None
-        and (p["sha256"], p["bytes"]) == (identity["sha256"], identity["bytes"])
-    ]
+    packages = _frozen_packages(freeze, identity["sha256"], identity["bytes"])
     checks = [
         *(_check(name, passed) for name, passed in _environment_checks(environment, lock).items()),
         _check("host_version", _host_pinned(version, freeze)),
@@ -518,11 +519,7 @@ def verify_preflight(record, *, frozen: Mapping, environment: Mapping) -> dict:
         or not _release_shape(release)
     ):
         raise WholeTaskRejected("preflight_contradiction")
-    packages = [
-        p
-        for p in frozen["freeze"]["packages"]
-        if (p["sha256"], p["bytes"]) == (release["sha256"], release["bytes"])
-    ]
+    packages = _frozen_packages(frozen["freeze"], release["sha256"], release["bytes"])
     if (
         recorded != dict(environment)
         or len(packages) != 1
@@ -639,15 +636,13 @@ class _Bundle:
         self.refs: dict[str, dict] = {}
         source = frozen["root"]
         # Null paths are resolver-only originals: kept in the manifest, not copied.
-        paths = [d["path"] for d in self.manifest["documents"] if d.get("path")]
-        paths += [e["path"] for e in self.manifest["evidence"] if e.get("path")]
-        # Evidence originals keep their own 10 MiB limit (section 12.6.5).
         limits = {d["path"]: DOCUMENT_BYTES for d in self.manifest["documents"] if d.get("path")}
+        # Evidence originals keep their own 10 MiB limit (section 12.6.5).
         limits.update(
             {e["path"]: ORIGINAL_BYTES for e in self.manifest["evidence"] if e.get("path")}
         )
-        for path in dict.fromkeys(paths):
-            self.write(path, read_local(source, path, limits[path]))
+        for path, limit in limits.items():
+            self.write(path, read_local(source, path, limit))
 
     def write(self, path: str, payload: bytes) -> None:
         target = self.root / relative_path(path)
@@ -700,27 +695,6 @@ class _Bundle:
             if p.is_file() and p.name != "SHA256SUMS"
         ]
         _private_write(self.root / "SHA256SUMS", ("\n".join(lines) + "\n").encode("utf-8"))
-
-
-def _not_run(task_id: str, arm: str, reason: str) -> dict:
-    return dict(
-        task_id=task_id,
-        arm=arm,
-        status="not_run",
-        success=None,
-        attempts=[],
-        elapsed_ms=None,
-        active_ms=None,
-        human_wait_ms=None,
-        interactions=None,
-        local_turns=None,
-        cpu_ms=None,
-        peak_bytes=None,
-        recommendation_ids=[],
-        host_session_id=None,
-        evidence_ids=[],
-        reason=reason,
-    )
 
 
 _EVIDENCE_READ = {
@@ -838,7 +812,7 @@ def trial_run(
         raise ValueError("qualification")
     out, staging = real_path(bundle), None
     try:
-        if out.exists() or out.is_symlink():
+        if os.path.lexists(out):
             raise WholeTaskRejected("bundle_exists")
         frozen = load_frozen(inputs)
         tasks, freeze = frozen["tasks"], frozen["freeze"]
@@ -853,8 +827,7 @@ def trial_run(
         if tarball is not None:
             tarball = real_path(tarball)
             package_payload = read_local(tarball.parent, tarball.name, ORIGINAL_BYTES)
-            identity = (_sha256(package_payload), len(package_payload))
-            matched = [p for p in freeze["packages"] if (p["sha256"], p["bytes"]) == identity]
+            matched = _frozen_packages(freeze, _sha256(package_payload), len(package_payload))
             if len(matched) != 1 or package not in (None, matched[0]):
                 raise WholeTaskRejected("package_binding")
             package = matched[0]
@@ -915,7 +888,7 @@ def trial_run(
         atomic_bytes(staging / "report.json", json_bytes(report))
         code, result = _grade_bundle(staging, resolver)
         kit.write_sums()
-        if out.exists() or out.is_symlink():
+        if os.path.lexists(out):
             raise WholeTaskRejected("bundle_exists")
         os.rename(staging, out)
         staging = None

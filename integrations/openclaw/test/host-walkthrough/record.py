@@ -415,6 +415,10 @@ def _default_predicates() -> dict:
     )
 
 
+def _blocked_step(name: str) -> dict:
+    return dict(name=name, status="blocked", reason=BLOCKED[name]["reason"], evidence_ids=[])
+
+
 def _steps(capture: dict, shots: dict, passed: dict) -> list:
     failed_step = None
     if capture.get("ordinary_failure_step") == "ui_actions":
@@ -426,9 +430,7 @@ def _steps(capture: dict, shots: dict, passed: dict) -> list:
     for name in STEP_NAMES:
         ids = shots.get(name, [])
         if name in BLOCKED:
-            steps.append(
-                dict(name=name, status="blocked", reason=BLOCKED[name]["reason"], evidence_ids=[])
-            )
+            steps.append(_blocked_step(name))
             continue
         check = "ordinary_skill" if name == "select_skill" else "ordinary_actions"
         if passed[check]:
@@ -448,13 +450,12 @@ def _steps(capture: dict, shots: dict, passed: dict) -> list:
 
 
 def _present(base: Path, relative: str) -> bool:
-    target = base / relative
-    return target.is_symlink() or target.exists()
+    return os.path.lexists(base / relative)
 
 
 def _missing_steps(reason: str) -> list:
     return [
-        dict(name=name, status="blocked", reason=BLOCKED[name]["reason"], evidence_ids=[])
+        _blocked_step(name)
         if name in BLOCKED
         else dict(name=name, status="not_run", reason=reason, evidence_ids=[])
         for name in STEP_NAMES
@@ -754,7 +755,7 @@ def record(args) -> int:
             return _refused("walkthrough_font_dir")
     # Both must be new; an existing one is refused before either is created.
     for path, reason in ((work_root, "work_root_exists"), (out, "out_dir_exists")):
-        if path.exists() or path.is_symlink():
+        if os.path.lexists(path):
             return _refused(reason)
     try:
         work_root.mkdir(mode=0o700, parents=True, exist_ok=False)
