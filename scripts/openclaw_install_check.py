@@ -89,7 +89,7 @@ DEFAULT_MODEL = "<default-model>"
 # carry backslash escapes. Quoted values are scanned by `_quoted_end`, which
 # honours escaped quotes, so the whole value is replaced and JSON stays JSON.
 _DEFAULT_MODEL = re.compile(
-    r"""(?:(?P<kq>\\*["'`])|(?<![\w]))(?:default_model|defaultModel)"""
+    r"""(?:(?P<kq>\\*["'`])|(?<!\w))(?:default_model|defaultModel)"""
     r"""(?(kq)(?P=kq))\s*[:=]\s*(?:(?P<vq>\\*["'`])|(?P<bare>[^\s|\\"'`]+))"""
 )
 # A bare value after a quoted key is left alone when it is a JSON literal.
