@@ -436,6 +436,8 @@ _NOT_DISPATCHED = {"missing_credentials"}
 # A transport error: a connection failure before the request was sent, or a
 # read/protocol error after streaming began. It alone shows no dispatch.
 _TRANSPORT = {"provider_unreachable": "failed"}
+# Stops whose dispatch is evidenced only by a received token or reported usage.
+_UNPROVEN_DISPATCH = _GATEWAY_STOPS | _TRANSPORT
 
 
 def _received(payload: Mapping) -> bool:
@@ -461,10 +463,8 @@ def _outcome(finished: Mapping | None) -> tuple[str, int | None]:
     code = error["code"]
     if code in _NOT_DISPATCHED:
         return "failed", None
-    stops = _GATEWAY_STOPS | _TRANSPORT
-    if code in stops:
-        # Dispatch is evidenced only by a received token or reported usage.
-        return stops[code], 1 if _received(payload) else None
+    if code in _UNPROVEN_DISPATCH:
+        return _UNPROVEN_DISPATCH[code], 1 if _received(payload) else None
     if code == "provider_timeout":
         return "timeout", 1
     # A provider error or an invalid/incomplete response came from the provider.

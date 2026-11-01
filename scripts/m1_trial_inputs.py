@@ -94,6 +94,14 @@ def _read_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _drafting_calls() -> dict[str, Path]:
+    """Every kept drafting call, current and superseded, by its evidence ID."""
+    return {
+        p.name.removesuffix(".json").replace(".", "-"): p
+        for p in sorted((HERE / "machine/calls").glob("drafting.*.json"))
+    }
+
+
 # --- draft -----------------------------------------------------------------------
 
 STATEMENTS = {
@@ -185,16 +193,14 @@ def draft(root: Path) -> None:
     for name, text in STATEMENTS.items():
         add(name, name, f"evidence/{name}.txt", text.encode("utf-8"))
     # Include every rejected pair before labels bind the case document.
-    drafting_ids = []
-    for drafted in sorted((HERE / "machine/calls").glob("drafting.*.json")):
-        evidence_id = drafted.name.removesuffix(".json").replace(".", "-")
-        drafting_ids.append(evidence_id)
+    drafting = _drafting_calls()
+    for evidence_id, drafted in drafting.items():
         add(evidence_id, "authorship", "evidence/" + drafted.name, drafted.read_bytes())
     cases_path = inputs / "cases.json"
     if cases_path.exists():
         cases = _read_json(cases_path)
         for case in cases["cases"]:
-            case["authorship_evidence_ids"] = sorted(drafting_ids)
+            case["authorship_evidence_ids"] = sorted(drafting)
         _write(cases_path, _bytes(cases))
     records = _records(root)
     assets = []
@@ -365,10 +371,7 @@ def freeze(root: Path, cases_path: Path, labels_path: Path) -> None:
     cases, labels = _read_json(cases_path), _read_json(labels_path)
     if labels["cases_digest"] != canonical_digest(cases):
         raise SystemExit("labels do not bind these cases")
-    expected = {
-        p.name.removesuffix(".json").replace(".", "-"): p.read_bytes()
-        for p in (HERE / "machine/calls").glob("drafting.*.json")
-    }
+    expected = {key: p.read_bytes() for key, p in _drafting_calls().items()}
     actual = {e["id"]: e for e in catalog["evidence"] if e["id"].startswith("drafting-")}
     if (
         set(actual) != set(expected)
@@ -383,15 +386,11 @@ def freeze(root: Path, cases_path: Path, labels_path: Path) -> None:
         raise SystemExit("drafting_evidence_stale: repeat draft before labelling and freezing")
     manifest = _Manifest(out)
     for item in catalog["evidence"]:
-        manifest.add_evidence(
-            item["id"],
-            (inputs / item["path"]).read_bytes(),
-            kind=item["kind"],
-            access=item["access"],
-        )
+        payload = (inputs / item["path"]).read_bytes()
+        manifest.add_evidence(item["id"], payload, kind=item["kind"], access=item["access"])
         # The release verifier reads redistributable evidence at its declared path.
         manifest.evidence[item["id"]]["path"] = "release/" + item["path"]
-        _write(out / "release" / item["path"], (inputs / item["path"]).read_bytes())
+        _write(out / "release" / item["path"], payload)
     frozen_at = _now()
     lock = dict(
         schema_version=1,
@@ -608,12 +607,6 @@ def _preregistration(commit: str | None) -> dict | None:
     return dict(commit=sha, committed_at=when)
 
 
-def _first_dispatch(report: dict, root: Path | None = None) -> str | None:
-    from relaymind.evaluation.asset_qualification_record import first_host_dispatch
-
-    return first_host_dispatch(report, root)
-
-
 def _record_machine(environment: dict, build: str, hostname: str) -> dict:
     """The record machine of the M1 target (spec 12.6.6), from the environment lock."""
     return dict(
@@ -669,7 +662,7 @@ def record(bundle: Path, record_id: str, preregistration: str | None, owner_logi
     import socket
     import subprocess
 
-    from relaymind.evaluation.asset_qualification_record import class_kappa
+    from relaymind.evaluation.asset_qualification_record import class_kappa, first_host_dispatch
 
     _check_committed()
     target = REPO / "docs/evidence/m10" / f"{record_id}.json"
@@ -730,7 +723,7 @@ def record(bundle: Path, record_id: str, preregistration: str | None, owner_logi
         ),
         corpus_review=None,
         preregistration=_preregistration(preregistration),
-        runs_started_at=_first_dispatch(report, bundle),
+        runs_started_at=first_host_dispatch(report, bundle),
         machine=_record_machine(environment, build, socket.gethostname()),
         revisions=dict(
             repository_commit=commit,

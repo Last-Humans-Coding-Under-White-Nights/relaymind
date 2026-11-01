@@ -182,11 +182,9 @@ def check_effective(frozen, effective, expected_secrets=None, path=()) -> None:
         closed = SECRETS_KEY in frozen or path[-1:] == ("config",)
         if not secrets <= set(effective) or (closed and set(effective) != keys | secrets):
             raise FreezeMismatch("host_config_mismatch")
-        for key in secrets:
-            if expected_secrets is None or key not in expected_secrets:
-                raise FreezeMismatch("host_config_mismatch")
-            if effective[key] != expected_secrets[key]:
-                raise FreezeMismatch("host_config_mismatch")
+        expected = expected_secrets or {}
+        if any(key not in expected or effective[key] != expected[key] for key in secrets):
+            raise FreezeMismatch("host_config_mismatch")
         for key in keys:
             if key not in effective:
                 raise FreezeMismatch("host_config_mismatch")
@@ -232,12 +230,16 @@ class Budget:
     def can_start(self) -> bool:
         return self.spent() + self.row_budget <= self.cap
 
-    def reserve(self, key: str) -> str | None:
-        """Reserve the row's budget durably; the closed reason when it cannot start."""
+    def refusal(self, key: str) -> str | None:
+        """The closed reason the row cannot start, read-only; ``None`` when it can."""
         if key in self.data["rows"]:
             return "row_reserved"
-        if not self.can_start():
-            return "budget_cap"
+        return None if self.can_start() else "budget_cap"
+
+    def reserve(self, key: str) -> str | None:
+        """Reserve the row's budget durably; the closed reason when it cannot start."""
+        if (refused := self.refusal(key)) is not None:
+            return refused
         self.data["rows"][key] = dict(state="reserved", amount=self.row_budget)
         harness.durable_write(self.path, self.data)
         return None
@@ -737,9 +739,7 @@ class Run:
         if arm == "recommendations":
             return "person_choice_unavailable"
         self.arm_config(arm, config)
-        if f"{task['id']}-{arm}" in self.budget.data["rows"]:
-            return "row_reserved"
-        return None if self.budget.can_start() else "budget_cap"
+        return self.budget.refusal(f"{task['id']}-{arm}")
 
     def execute(self, task, arm, config):
         if arm == "recommendations":

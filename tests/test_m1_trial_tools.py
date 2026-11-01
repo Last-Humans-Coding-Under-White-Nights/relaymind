@@ -41,7 +41,9 @@ def observer(request):
     return module(path)
 
 
-def test_unknown_start_is_never_replaced_by_an_end(builder):
+def test_unknown_start_is_never_replaced_by_an_end():
+    from relaymind.evaluation.asset_qualification_record import first_host_dispatch
+
     report = dict(
         rows=[
             dict(
@@ -50,12 +52,12 @@ def test_unknown_start_is_never_replaced_by_an_end(builder):
             )
         ]
     )
-    assert builder._first_dispatch(report) is None
+    assert first_host_dispatch(report) is None
     # A later known dispatch does not repair an unknown first row.
     report["rows"].append(
         dict(status="completed", attempts=[dict(started_at="2026-11-01T10:00:20Z", ended_at=None)])
     )
-    assert builder._first_dispatch(report) is None
+    assert first_host_dispatch(report) is None
 
 
 @pytest.mark.parametrize("rerun", [False, True])
