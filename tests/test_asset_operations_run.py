@@ -865,3 +865,103 @@ def test_gateway_pid_and_allocations_are_measured(tmp_path, monkeypatch, control
             pytest.fail("gateway allocation did not reach the sampled process")
 
     asyncio.run(go())
+
+
+# --- review 264: job evidence collection is not a product refusal ----------------------
+
+
+class _JobStore:
+    """A job store whose reads fail on request (RM38/AC29 evidence collection)."""
+
+    def __init__(self, outcomes_fail_after=None, events_fail=False):
+        self.calls = 0
+        self.outcomes_fail_after = outcomes_fail_after
+        self.events_fail = events_fail
+
+    def job_outcomes(self):
+        self.calls += 1
+        if self.outcomes_fail_after is not None and self.calls > self.outcomes_fail_after:
+            raise OSError("database is locked")
+        if self.calls == 1:
+            return ()
+        return ({"job_id": "j1", "source_id": "s"},)
+
+    def job_events(self, job_id):
+        if self.events_fail:
+            raise OSError("database is locked")
+        return ()
+
+
+class _JobCatalog:
+    def __init__(self, store, refusal=None):
+        self.store = store
+        self.refusal = refusal
+
+    async def rescan(self, source_id):
+        from relaymind.store.asset_catalog import Publication
+
+        if self.refusal is not None:
+            raise self.refusal
+        return Publication(1, False, (), ())
+
+
+def _job_app(store, refusal=None):
+    return SimpleNamespace(state=SimpleNamespace(asset_catalog=_JobCatalog(store, refusal)))
+
+
+@pytest.mark.parametrize(
+    "store",
+    [
+        _JobStore(outcomes_fail_after=0),
+        _JobStore(outcomes_fail_after=1),
+        _JobStore(events_fail=True),
+    ],
+)
+def test_a_job_store_read_failure_is_a_closed_evidence_error(store):
+    """RM38/AC29: unavailable job evidence is not a refused rescan or rebuild."""
+    from relaymind.evaluation.asset_operations_child import handle
+
+    reply = asyncio.run(handle(_job_app(store), {"id": 7, "op": "rescan", "source_id": "s"}))
+    assert reply == {
+        "id": 7,
+        "ok": False,
+        "error": "job_evidence_unavailable",
+        "evidence_error": "OSError",
+    }
+
+
+def test_a_product_refusal_carries_no_evidence_error():
+    from relaymind.evaluation.asset_operations_child import handle
+
+    refusal = ValueError("refused")
+    reply = asyncio.run(
+        handle(_job_app(_JobStore(), refusal), {"id": 8, "op": "rescan", "source_id": "s"})
+    )
+    assert reply == {"id": 8, "ok": False, "error": "ValueError", "reason": None}
+
+
+def test_unavailable_job_evidence_is_a_harness_error_that_keeps_collected_jobs(tmp_path):
+    """RM38/AC29: the evidence failure reaches channel_errors; earlier jobs stay."""
+    job = {"job_id": "j0", "source_id": kit.IMPORT_SOURCE_ID, "events": []}
+    replies = [
+        {"id": 1, "ok": True, "revision": 1, "changed": True, "jobs": [job]},
+        {"id": 2, "ok": False, "error": "job_evidence_unavailable", "evidence_error": "OSError"},
+        {"id": 3, "ok": False, "error": "ValueError", "reason": None},
+    ]
+
+    async def control(op, **fields):
+        return replies.pop(0)
+
+    plan = kit.workload_plan(tmp_path / "imports", control)
+
+    async def go():
+        await plan.batches[0].rescan()
+        with pytest.raises(RuntimeError):
+            await plan.batches[1].rescan()
+        with pytest.raises(RuntimeError):
+            await plan.rebuild()
+
+    asyncio.run(go())
+    assert plan.channel_errors == ["rescan_job_evidence_unavailable"]
+    assert plan.job_evidence() == [job]
+    assert plan.identities()["batch_job_ids"] == {"batch-0": "j0"}
