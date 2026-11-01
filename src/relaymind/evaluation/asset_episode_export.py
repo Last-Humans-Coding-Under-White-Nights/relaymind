@@ -99,7 +99,7 @@ def episode_preregistration(episodes: Mapping, freeze: Mapping, release=None) ->
     reasons = []
     if len(rows) < ACCEPTANCE_EPISODES:
         reasons.append("below_minimum_episodes")
-    held_out = unlabelled = missing = None
+    not_held_out = unlabelled = missing = None
     if release is None:
         reasons.append("corpus_unverified")
     else:
@@ -117,7 +117,7 @@ def episode_preregistration(episodes: Mapping, freeze: Mapping, release=None) ->
             for key in ("paraphrase_case_ids", "control_case_ids", "reset_probe_case_ids")
             for case_id in e[key]
         ]
-        held_out = sum(splits[case_id] != "held_out" for case_id in probes)
+        not_held_out = sum(splits[case_id] != "held_out" for case_id in probes)
         unlabelled = sum(case_id not in labels for e in rows for _, case_id in probe_plan(e))
         missing = sum(c["target_asset_id"] not in assets for e in rows for c in e["corrections"])
         if unlabelled:
@@ -128,7 +128,7 @@ def episode_preregistration(episodes: Mapping, freeze: Mapping, release=None) ->
         plan_digest=canonical_digest([[e["id"], probe_plan(e)] for e in rows]),
         episodes=len(rows),
         planned_observations=sum(planned_observations(e) for e in rows),
-        probes_not_held_out=held_out,
+        probes_not_held_out=not_held_out,
         unlabelled_probes=unlabelled,
         missing_pool_targets=missing,
         acceptance_eligible=not reasons,
