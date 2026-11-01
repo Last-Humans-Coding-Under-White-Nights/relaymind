@@ -19,6 +19,7 @@ refuses to label its own output ``measured``.
 
 import asyncio
 import contextlib
+import csv
 import hashlib
 import json
 import os
@@ -55,7 +56,7 @@ def generate_catalog(root: Path, count: int, *, start: int = 0) -> list[Path]:
         name = f"{topic}-{n:04d}"
         description = english if n % 2 == 0 else chinese
         folder = root / name
-        folder.mkdir(parents=True, exist_ok=False)
+        folder.mkdir(parents=True, exist_ok=True)
         path = folder / "SKILL.md"
         path.write_text(
             f"---\nname: {name}\ndescription: {description}\n---\n{description}\n",
@@ -86,10 +87,13 @@ def rss_bytes(pid: int) -> int | None:
     text = result.stdout.strip()
     if sys.platform == "win32":
         # "image","pid","session","#","12,345 K"; no match prints an INFO line.
-        fields = [f.strip('"') for f in text.split('","')]
+        try:
+            fields = next(csv.reader([text], strict=True))
+        except (csv.Error, StopIteration):
+            return None
         if len(fields) < 5 or fields[1] != str(pid):
             return None
-        text = fields[-1].strip('"').removesuffix(" K").replace(",", "").replace(".", "")
+        text = "".join(c for c in fields[-1] if c in "0123456789")
     return int(text) * 1024 if text.isdigit() else None
 
 
@@ -99,17 +103,30 @@ def _free_port() -> int:
         return listener.getsockname()[1]
 
 
-def _relative_paths(value: object, key: str = "") -> list[str]:
-    """Keys whose string values look like relative filesystem paths."""
-    if isinstance(value, dict):
-        return [p for k, v in value.items() for p in _relative_paths(v, f"{key}.{k}".strip("."))]
-    if isinstance(value, list):
-        return [p for v in value for p in _relative_paths(v, key)]
-    if isinstance(value, str) and "://" not in value:
-        looks_like_path = "/" in value or "\\" in value or Path(value).suffix != ""
-        if looks_like_path and not Path(value).is_absolute():
-            return [key]
-    return []
+_PATH_FIELDS = {
+    "store": ("path",),
+    "sandbox": ("seed", "work_dir"),
+    "skills": ("roots",),
+    "local_model": ("manifest", "artifact"),
+    "user_actions": ("registrations_path",),
+    "asset_hybrid": ("manifest", "config"),
+    "asset_adaptation": ("config",),
+}
+
+
+def _relative_paths(config: Mapping[str, object]) -> list[str]:
+    """Known filesystem fields whose meaning would change on relocation."""
+    relative = []
+    for table, fields in _PATH_FIELDS.items():
+        values = config.get(table, {})
+        if not isinstance(values, dict):
+            continue  # The launcher owns configuration type validation.
+        for field in fields:
+            value = values.get(field)
+            paths = value if isinstance(value, list) else [value]
+            if any(isinstance(p, str) and not Path(p).is_absolute() for p in paths):
+                relative.append(f"{table}.{field}")
+    return relative
 
 
 def _config(work: Path, base_config: Path, catalog: Path, port: int) -> Path:
@@ -127,10 +144,10 @@ def _config(work: Path, base_config: Path, catalog: Path, port: int) -> Path:
     path.write_text(
         "\n".join(
             [
+                base.strip(),
                 "[server]",
                 'host = "127.0.0.1"',
                 f"port = {port}",
-                base.strip(),
                 "[recommendations]",
                 "enabled = true",
                 'user_id = "operations"',
@@ -168,20 +185,25 @@ def _child_env(extra: Mapping[str, str] | None) -> dict[str, str]:
     return env
 
 
-async def _read_token(process: asyncio.subprocess.Process, deadline: float) -> str:
-    while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise TimeoutError("gateway_token_unavailable")
-        try:
-            line = await asyncio.wait_for(process.stdout.readline(), remaining)
-        except TimeoutError:
-            raise TimeoutError("gateway_token_unavailable") from None
-        if not line:
-            raise TimeoutError("gateway_token_unavailable")
-        text = line.decode("utf-8", "replace")
-        if text.startswith(_TOKEN_PREFIX) and time.monotonic() < deadline:
-            return text.removeprefix(_TOKEN_PREFIX).strip()
+async def _read_token(process: asyncio.subprocess.Process, deadline: float, log: Path) -> str:
+    with log.open("ab") as target:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("gateway_token_unavailable")
+            try:
+                line = await asyncio.wait_for(process.stdout.readline(), remaining)
+            except TimeoutError:
+                raise TimeoutError("gateway_token_unavailable") from None
+            if not line:
+                raise TimeoutError("gateway_token_unavailable")
+            text = line.decode("utf-8", "replace")
+            if text.startswith(_TOKEN_PREFIX):
+                if time.monotonic() < deadline:
+                    return text.removeprefix(_TOKEN_PREFIX).strip()
+            else:
+                target.write(line)
+                target.flush()
 
 
 async def _drain(stream: asyncio.StreamReader, log: Path) -> None:
@@ -250,7 +272,7 @@ async def serve(
         )
     drain = None
     try:
-        token = await _read_token(process, deadline)
+        token = await _read_token(process, deadline, work / "stdout.log")
         drain = asyncio.create_task(_drain(process.stdout, work / "stdout.log"))
         async with httpx.AsyncClient(
             base_url=f"http://127.0.0.1:{port}",
