@@ -224,6 +224,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   catalog, and the closed qualification record with PR approval. A reviewed
   negative record closes the loaded-use or MCP-use gate on the pinned host with
   the operation disabled as a known host limitation (sections 7.6.1, 7.6.2).
+  `stop_point_absent` means no host point can fence the next model request as
+  section 7.6.1 requires (a stop-only point without fresh person authority,
+  session incarnation and pinned-byte re-verification does not count);
+  `exact_route_absent` means no supported route invokes an independent,
+  non-App MCP tool by its exact native identity (App view routes such as
+  `mcp.app.callTool` do not count).
   "Customer" wording about who runs trials becomes owner/operator. No metric,
   threshold or budget changes.
 - Specification 0.64 → 0.65 (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;
