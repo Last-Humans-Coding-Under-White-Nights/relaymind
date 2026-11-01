@@ -191,11 +191,17 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.66 with the LHCWN repository rename.
+            ("b5c3327b138e5bfedc3e9a5c3b5c1453509643a562f5ec6f324288672b9ca70d", 622172),
             # Reviewed 0.66 owner-run acceptance profile and qualification record
             # (with the 0.65 review clarifications of 7.6.2 and 14.5).
             ("a5893a7de59a796319ba96788f0d4002174413acc3049b34e88ce1ac8741f1cc", 622204),
+            # Reviewed 0.65 with the LHCWN repository rename.
+            ("9d50d4a079999d9eee98772f9916f1f61c1b0c84440b0ecf2b8106be7dd87095", 610440),
             # Reviewed 0.65 skill-use/MCP fences and native configuration evidence.
             ("a7e5e29b47223cc58037b438a57cf29c458dd4088258664e7401ed2110f07e16", 610472),
+            # Reviewed LHCWN repository rename of the installed public profile (5d564ed).
+            ("d42e3338869ef9b2b27def39d7a7b9c12da0a4aa79032814ed0314d564e03dfc", 584021),
             # Reviewed 0.64 reset evidence document for section 12.6.5.
             ("c97a1d103c4bcdb97ac8c27b4d756bee1567d90f47ad1a68514fc9f5294440c7", 584053),
             # Reviewed 0.63 expected-scope, native role and skill expiry rules.

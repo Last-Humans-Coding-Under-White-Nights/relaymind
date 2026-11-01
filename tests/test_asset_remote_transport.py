@@ -10,8 +10,8 @@ from helpers import FakeClock
 from relaymind.assets.sources import CaptureContext, SourceFailure
 from test_asset_remote_contracts import PROFILE
 
-API = "https://api.github.com/repos/Last-Humans-Coding-Under-White-Nights/relaymind"
-RAW = "https://raw.githubusercontent.com/Last-Humans-Coding-Under-White-Nights/relaymind"
+API = "https://api.github.com/repos/LHCWN/relaymind"
+RAW = "https://raw.githubusercontent.com/LHCWN/relaymind"
 
 
 def make(handler, *, secret_ref=None, lookup=lambda key: None):
@@ -74,7 +74,7 @@ def test_bad_credential_refuses_before_any_network(value):
     [
         API + "/../../elsewhere",
         API + "/contents/x",
-        "http://api.github.com/repos/Last-Humans-Coding-Under-White-Nights/relaymind/git/ref/heads/master",
+        "http://api.github.com/repos/LHCWN/relaymind/git/ref/heads/master",
         "https://evil.test/a",
         "https://u:p@api.github.com/a",
         RAW + "/master/skills/a/SKILL.md",
