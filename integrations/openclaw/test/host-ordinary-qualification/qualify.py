@@ -303,9 +303,11 @@ def ordinary_skill_pass(capture):
             or len(chosen) != 1
             or chosen[0]["selected_action"]["choice"]
             != dict(kind="asset", asset_id=asset_id, content_hash=mapping["contentHash"])
+            or "sourceVersion" not in mapping
             or not any(
                 item["asset"]["asset_id"] == asset_id
                 and item["asset"]["content_hash"] == mapping["contentHash"]
+                and item["asset"].get("source_version") == mapping["sourceVersion"]
                 for item in chosen[0]["displayed_candidates"]
             )
         ):

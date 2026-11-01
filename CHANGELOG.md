@@ -6,13 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Exact native Skill Library selection through the ordinary installed host
+  (#197; RM39, AC30): the qualification saves a skill with
+  `skills.library.save`, maps it to the chosen asset, selects it with
+  `relaymind.skill` and checks `skills.library.list`. The evidence predicate
+  binds skill ID, revision, asset ID, content hash and source version, and
+  requires the unmapped-skill, cross-session and own-session foreign-person
+  refusals with their exact error codes. Browser failures and the overall
+  deadline remain failures through skill selection.
+
 - Stabilize installed OpenClaw qualification on loaded runners (RM16/RM39;
   AC30): use bounded ten-second host-event waits, keep fixture holds alive
   through retirement observation, and capture only fixed ordinary substeps and
   error classes. Browser failures and the overall deadline now remain failures
-  through skill selection; the 570-second harness and 12-minute CI bounds and
-  all evidence predicates remain unchanged. Fresh evidence must bind the changed
-  harness sources.
+  through UI actions and finalization; the 570-second harness and 12-minute CI
+  bounds and all evidence predicates remain unchanged. Fresh evidence must bind
+  the changed harness sources.
 
 - Section 12.6.5 verifier closure and episode driver (#229, #202, #205, #207):
   - The frozen corpus is verified from the input manifest, and host tasks and episodes are bound to it.
