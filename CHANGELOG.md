@@ -76,6 +76,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Every original is bundled with `SHA256SUMS` and a companion manifest and
     graded offline with the unchanged grader.
   - Output is fixture or provisional only; no trial has been run.
+  - Review follow-ups: the bundle and copied originals are private (`0700`/`0600`)
+    and appear only when complete; the install record keeps closed inspect codes
+    and a diagnostics count, never host text; the provisional gate checks the
+    closed record shapes, recomputes the machine checks and binds the records to
+    the frozen package; output paths under a symlinked parent (macOS `/tmp`)
+    work; evidence keeps the 10 MiB original limit; `plan.json` names the lane
+    and prompt case.
 - Bilingual packaged walkthrough recorder (#238; RM39; AC30, AC35):
   `integrations/openclaw/test/host-walkthrough/record.py` runs the unchanged
   ordinary installed-host qualification in `en-US` and `zh-CN`.
@@ -85,6 +92,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     Loaded skill use, MCP use and host MCP approval are always `blocked`.
   - The tier is `functional_fixture`, it is not in CI, and no walkthrough has
     been recorded yet.
+  - Every partial screenshot is listed by digest, and a torn or unsafe media
+    set still writes an incomplete manifest with fixed `media_problems`.
 - Qualification assessment for the section 12.6.5 exports (#240; RM16, RM40,
   RM42, RM44; AC31, AC33, AC36, AC37): graded host, platform and adaptation
   results record the claimed label, the tier assessed from the resolved inputs
@@ -125,8 +134,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `relaymind.mcp` is not registered; the tests use injected fixture resolvers
   and routes only. The shipped direct-action/exact-selection entry is re-pinned
   to the new adapter revision `943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`; its evidence revision names
-  the fresh capture of this revision (CI run 41307043410, SHA-256
-  `babba902bb57…`). A release-artifact test now fails when the registry
+  the fresh capture of this revision (CI run 41318389858, SHA-256
+  `35436e519245…`). A release-artifact test now fails when the registry
   and the built adapter digest drift. After review, the ledger never writes a
   record recovery would reject and has `close()` (on gateway stop); a
   same-key request during preparation recovers that attempt's actual receipt;
@@ -190,8 +199,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   selection itself: its `session.sessionKey` is the authenticated target
   session and its `session.selections` are exactly the selected skill at the
   selected revision, both when the harness captures it and in the predicate,
-  so a no-op or wrong-session activation fails. The committed capture
-  satisfies this check; its recorded harness digest predates the change.
+  so a no-op or wrong-session activation fails. The committed capture is a
+  recapture with this harness (CI run 41317645014, SHA-256 `3a063ab37411…`),
+  which the registry's evidence revision names.
 
 - CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation or native-preparation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
 - CI: the shared asset benchmark fixture uses a deterministic recommendation
