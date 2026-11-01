@@ -107,13 +107,30 @@ def check_drafted_cases(cases, people: Mapping) -> None:
             raise AssetCorpusError("drafter_role")
 
 
-def check_owner_machine_pair(annotator_ids, people: Mapping) -> None:
-    """Spec 12.6.6: exactly the owner and one machine annotator, never both tuners."""
-    ids = set(annotator_ids)
+def check_owner_machine_pair(annotator_ids, people: Mapping) -> tuple[str, str]:
+    """Spec 12.6.6: exactly the owner and one machine annotator.
+
+    The machine holds the ``annotator`` role only (never a tuner); the other
+    annotator is the owner. Returns ``(owner_id, machine_id)``.
+    """
+    ids = sorted(set(annotator_ids))
     if len(ids) != 2:
         raise AssetCorpusError("raw_judgment_coverage")
-    if all("tuner" in people[i]["roles"] for i in ids):
+    machines = [i for i in ids if list(people[i]["roles"]) == ["annotator"]]
+    if len(machines) != 1:
         raise AssetCorpusError("role_conflict")
+    owner = next(i for i in ids if i != machines[0])
+    return owner, machines[0]
+
+
+def disagree(left: Mapping, right: Mapping) -> bool:
+    """Whether two raw judgments differ in any of the four answers."""
+    return (
+        left["class"] != right["class"]
+        or set(left["acceptable_asset_ids"]) != set(right["acceptable_asset_ids"])
+        or left["language_valid"] != right["language_valid"]
+        or left["independent_case"] != right["independent_case"]
+    )
 
 
 def validate_judgments(catalog: dict, cases: dict, labels: dict) -> dict:
@@ -152,7 +169,15 @@ def validate_judgments(catalog: dict, cases: dict, labels: dict) -> dict:
             check_person(author, people, "author")
     check_drafted_cases(case_map.values(), people)
     if owner_machine:
-        check_owner_machine_pair((j["annotator_id"] for j in labels["judgments"]), people)
+        owner, _ = check_owner_machine_pair(
+            (j["annotator_id"] for j in labels["judgments"]), people
+        )
+        for case_id, final in finals.items():
+            # The owner adjudicates, with a reason on every disagreement.
+            if final["adjudicator_id"] != owner:
+                raise AssetCorpusError("role_conflict")
+            if disagree(*rows[case_id]) and not final["reason"].strip():
+                raise AssetCorpusError("adjudication_reason_missing")
     if labels["agreement"]["method"] == MACHINE_DUAL:
         check_machine_dual(
             (j["annotator_id"] for j in labels["judgments"]),

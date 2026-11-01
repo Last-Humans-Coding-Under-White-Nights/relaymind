@@ -186,7 +186,9 @@ def test_raw_judgments_cannot_change_during_adjudication(tmp_path):
 # --- spec 0.66 section 12.6.6 owner_machine labelling (#251) -----------------------
 
 
-def _owner_machine(tmp_path, owner_roles=("annotator", "tuner"), machine_roles=("annotator",)):
+def _owner_machine(
+    tmp_path, owner_roles=("adjudicator", "annotator", "tuner"), machine_roles=("annotator",)
+):
     catalog, cases, labels = corpus(tmp_path)
     people = {p["id"]: p for p in catalog["people"]}
     people["judge-a"]["roles"] = sorted(owner_roles)
@@ -194,34 +196,62 @@ def _owner_machine(tmp_path, owner_roles=("annotator", "tuner"), machine_roles=(
     return catalog, cases, labels
 
 
+def _owner_adjudicated(worksheet, labels, adjudicator="judge-a", reason=None):
+    out = adjudicated(worksheet, labels)
+    for item in out["items"]:
+        item["adjudication"]["adjudicator_id"] = adjudicator
+        if reason is not None:
+            item["adjudication"]["reason"] = reason
+    return out
+
+
+def _owner_templates(catalog, cases, labels):
+    return [
+        filled(label_template(catalog, cases, a, labelling="owner_machine"), labels, a)
+        for a in ("judge-a", "judge-b")
+    ]
+
+
 def test_owner_machine_labelling_admits_the_owner_who_also_tunes(tmp_path):
     """Spec 12.6.6: the owner may hold the tuner role; the label says owner_machine."""
     catalog, cases, labels = _owner_machine(tmp_path)
     with pytest.raises(AssetCorpusError, match="role_conflict"):
         label_template(catalog, cases, "judge-a")
-    templates = [
-        filled(label_template(catalog, cases, a, labelling="owner_machine"), labels, a)
-        for a in ("judge-a", "judge-b")
-    ]
-    judgments = raw_judgments(catalog, cases, templates, labelling="owner_machine")
+    judgments = raw_judgments(
+        catalog, cases, _owner_templates(catalog, cases, labels), labelling="owner_machine"
+    )
     worksheet = adjudication_worksheet(catalog, cases, judgments, labelling="owner_machine")
     assert worksheet["agreement"]["method"] == "owner_machine.v1"
     frozen = freeze_labels(
-        catalog, cases, judgments, adjudicated(worksheet, labels), labelling="owner_machine"
+        catalog, cases, judgments, _owner_adjudicated(worksheet, labels), labelling="owner_machine"
     )
     assert frozen["agreement"]["method"] == "owner_machine.v1"
     assert frozen["agreement"]["groups"] == labels["agreement"]["groups"]
 
 
-def test_owner_machine_labelling_still_needs_one_non_tuner_annotator(tmp_path):
-    """The machine annotator never saw tuning results: it cannot be a tuner."""
-    catalog, cases, labels = _owner_machine(tmp_path, machine_roles=("annotator", "tuner"))
-    templates = [
-        filled(label_template(catalog, cases, a, labelling="owner_machine"), labels, a)
-        for a in ("judge-a", "judge-b")
-    ]
+@pytest.mark.parametrize(
+    ("owner_roles", "machine_roles"),
+    [
+        (("adjudicator", "annotator", "tuner"), ("annotator", "tuner")),
+        (("annotator",), ("annotator", "tuner")),
+        (("adjudicator", "annotator"), ("annotator", "reviewer")),
+    ],
+)
+def test_owner_machine_labelling_needs_a_machine_with_the_annotator_role_only(
+    tmp_path, owner_roles, machine_roles
+):
+    """The machine annotator holds annotator only and is never a tuner.
+
+    With the roles reversed, the annotator-only owner is taken as the machine,
+    so the owner's adjudication is by the wrong person and rejects at freeze.
+    """
+    catalog, cases, labels = _owner_machine(tmp_path, owner_roles, machine_roles)
+    templates = _owner_templates(catalog, cases, labels)
     with pytest.raises(AssetCorpusError, match="role_conflict"):
-        raw_judgments(catalog, cases, templates, labelling="owner_machine")
+        judgments = raw_judgments(catalog, cases, templates, labelling="owner_machine")
+        worksheet = adjudication_worksheet(catalog, cases, judgments, labelling="owner_machine")
+        adjudicated_ = _owner_adjudicated(worksheet, labels)
+        freeze_labels(catalog, cases, judgments, adjudicated_, labelling="owner_machine")
 
 
 # --- spec 0.66 section 12.6.6 machine_dual_owner_approved labelling (#260) ----------
@@ -347,3 +377,63 @@ def test_machine_drafted_cases_name_exactly_one_drafter(tmp_path):
     labels["cases_digest"] = canonical_digest(cases)
     with pytest.raises(AssetCorpusError, match="drafter_role"):
         _dual_round_trip(catalog, cases, labels)
+
+
+def _owner_labels(tmp_path, *, disagree=False):
+    catalog, cases, labels = _owner_machine(tmp_path)
+    templates = _owner_templates(catalog, cases, labels)
+    if disagree:
+        templates[1]["items"][0]["judgment"]["language_valid"] = False
+    judgments = raw_judgments(catalog, cases, templates, labelling="owner_machine")
+    worksheet = adjudication_worksheet(catalog, cases, judgments, labelling="owner_machine")
+    return catalog, cases, labels, judgments, worksheet
+
+
+def test_owner_machine_adjudication_is_by_the_owner(tmp_path):
+    catalog, cases, labels, judgments, worksheet = _owner_labels(tmp_path)
+    third_party = _owner_adjudicated(worksheet, labels, adjudicator="reviewer")
+    with pytest.raises(AssetCorpusError, match="role_conflict"):
+        freeze_labels(catalog, cases, judgments, third_party, labelling="owner_machine")
+
+
+def test_an_owner_machine_disagreement_needs_an_adjudication_reason(tmp_path):
+    """Spec 12.6.6: a nonempty reason on every disagreement; agreeing pairs need none."""
+    catalog, cases, labels, judgments, worksheet = _owner_labels(tmp_path, disagree=True)
+    for reason in ("", "  "):
+        with pytest.raises(AssetCorpusError, match="adjudication_reason_missing"):
+            freeze_labels(
+                catalog,
+                cases,
+                judgments,
+                _owner_adjudicated(worksheet, labels, reason=reason),
+                labelling="owner_machine",
+            )
+    explained = _owner_adjudicated(worksheet, labels, reason="")
+    explained["items"][0]["adjudication"]["reason"] = "owner: language is valid"
+    freeze_labels(catalog, cases, judgments, explained, labelling="owner_machine")
+
+
+def test_the_worksheet_needs_two_distinct_annotators_per_case(tmp_path):
+    """Review 4435556020: self-agreement of one annotator is not double annotation."""
+    catalog, cases, labels = corpus(tmp_path)
+    templates = [
+        filled(label_template(catalog, cases, a), labels, a) for a in ("judge-a", "judge-b")
+    ]
+    judgments = raw_judgments(catalog, cases, templates)
+    doubled = [dict(j, annotator_id="judge-a") for j in judgments]
+    with pytest.raises(AssetCorpusError, match="raw_judgment_coverage"):
+        adjudication_worksheet(catalog, cases, doubled)
+
+
+@pytest.mark.parametrize("item", [None, 3, "case-00", []])
+def test_a_non_object_worksheet_item_is_a_binding_error(tmp_path, item):
+    """Review 4435556027: a malformed worksheet rejects with a fixed reason."""
+    catalog, cases, labels = corpus(tmp_path)
+    templates = [
+        filled(label_template(catalog, cases, a), labels, a) for a in ("judge-a", "judge-b")
+    ]
+    judgments = raw_judgments(catalog, cases, templates)
+    worksheet = adjudicated(adjudication_worksheet(catalog, cases, judgments), labels)
+    worksheet["items"][0] = item
+    with pytest.raises(AssetCorpusError, match="worksheet_binding"):
+        freeze_labels(catalog, cases, judgments, worksheet)

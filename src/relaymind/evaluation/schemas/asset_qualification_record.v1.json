@@ -462,6 +462,7 @@
             "role",
             "os",
             "os_build",
+            "os_version",
             "architecture",
             "cpu_model",
             "ram_bytes",
@@ -483,6 +484,12 @@
               ]
             },
             "os_build": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxBytes": 256
+            },
+            "os_version": {
               "type": "string",
               "minLength": 1,
               "maxLength": 256,

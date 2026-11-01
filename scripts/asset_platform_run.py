@@ -38,7 +38,10 @@ for _path in (ROOT / "src", ROOT / "tests"):
 
 from relaymind.evaluation.asset_evidence import collect_benchmark_environment  # noqa: E402
 from relaymind.evaluation.asset_operations import summarize_operations  # noqa: E402
-from relaymind.evaluation.asset_operations_run import load_operations_report  # noqa: E402
+from relaymind.evaluation.asset_operations_run import (  # noqa: E402
+    load_operations_report,
+    ordinary_product_failure,
+)
 
 QUALIFY = ROOT / "integrations/openclaw/test/host-ordinary-qualification/qualify.py"
 KIT = ROOT / "scripts/asset_operations_run.py"
@@ -57,10 +60,15 @@ def _load(path: Path, name: str):
 
 
 def ordinary_exit(code: int, capture: Mapping | None, *, system: str, machine: str) -> int:
-    """0 for a passing run or a truthful off-Linux capture; 2 for a harness error."""
+    """0 for a passing run, a recorded product failure or a truthful off-Linux capture.
+
+    A product failure is a failed recommendation UI action after setup
+    completed (``ordinary_product_failure``); the platform report records it as
+    a failed step. Everything else nonzero is a harness error (2).
+    """
     if not isinstance(capture, Mapping):
         return 2
-    if code == 0:
+    if code == 0 or ordinary_product_failure(capture) is not None:
         return 0
     linux_x86 = system == "Linux" and machine.lower() in {"x86_64", "amd64"}
     if not linux_x86 and capture.get("reason") == "linux_runner_required":

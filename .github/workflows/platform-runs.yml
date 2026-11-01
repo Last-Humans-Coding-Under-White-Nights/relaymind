@@ -116,6 +116,8 @@ jobs:
       # Recommend, choose, feedback, delete and reset through the installed
       # host. Its person-ingress harness needs a Linux x86-64 runner; elsewhere
       # the truthful linux_runner_required capture is kept and the step passes.
+      # A recorded product failure of one UI action is kept as a failed platform
+      # step; setup failures and a missing capture fail the step.
       - name: Ordinary installed-host actions
         timeout-minutes: 15
         run: |
