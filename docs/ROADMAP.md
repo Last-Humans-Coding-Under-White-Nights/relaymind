@@ -1423,6 +1423,36 @@ direct-action profile above is qualified; exact selected skill/MCP use and
 post-approval currentness still require their own qualification. Missing genuine
 inputs do not block tooling implementation or explicitly unqualified fixture runs.
 
+#241/#235 platform runs on GitHub-hosted runners (RM38, RM39, RM44; AC29,
+AC37): the separate `Platform runs` workflow
+(`.github/workflows/platform-runs.yml`; manual, or on pull requests that change
+its files) runs on `macos-latest` (arm64), `windows-latest` (native x86-64) and
+`ubuntu-latest`. It runs the complete AC29 operations run
+(`scripts/asset_operations_run.py operations`): ten clean launches from a
+generated 300-skill catalog, a recommendations-disabled memory baseline, and
+the 60-second 2 req/s workload. The workload has four 25-record metadata-import
+batches and a derived rebuild, driven by the existing `run_workload` through an
+evaluation-only control channel (`asset_operations_child`). It then runs the
+packaged install-to-uninstall lifecycle, the ordinary installed-host actions
+(Linux x86-64 only; elsewhere the truthful `linux_runner_required` capture is
+kept) and the platform report, and verifies everything again with the existing
+graders (`scripts/asset_platform_run.py verify`). Only harness errors fail the
+job.
+
+Spec 0.65 section 12.6.5 excludes CI runners from the actual Apple Silicon macOS
+/ named native x86-64 Windows acceptance. Every report stays `fixture`, and the
+platform gate stays `not_applicable`. Skill use and MCP use stay `not_run`
+(loaded use and MCP use remain disabled, spec 7.6.1/7.6.2), as do restart and
+the interactive approvals. The committed 300-asset acceptance catalog does not
+exist yet, so #241 and #235 stay open. A local development run on an Apple M1
+8 GiB machine (not the acceptance session) showed what such reports look like:
+- all ten startups exceeded 1,000 ms before a first lexical answer;
+- 119 of 120 slots were useful (service p95 about 54 ms);
+- two of four batches were visible within 1,000 ms, the other two delayed
+  behind the default 30-second periodic scan of the 300-record directory.
+
+These are fixture observations, not measured results.
+
 #236/#237 run kit (tooling only): blind section 12.6.1 label templates, the
 adjudication worksheet and label freeze; host-task and episode preregistration
 checks that record the bound digests and acceptance-eligibility reasons; a

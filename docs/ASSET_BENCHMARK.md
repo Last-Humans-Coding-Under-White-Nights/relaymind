@@ -807,10 +807,43 @@ for it.
     token) and `stderr.log`.
   - **Completeness.** `complete` is true only when all ten startups were useful
     and every memory sample is known.
+- `operations` is the whole AC29 run on one machine (#241). It runs ten clean
+  startups from the generated `--assets` catalog (default 300), each with a new
+  empty store unless you give `--base-config`. It samples a gateway with
+  recommendations disabled as the memory baseline. It then runs the existing
+  60-second driver (`run_workload`): 120 slots at 2 requests per second,
+  concurrency one, a derived lexical rebuild at the start, and four 25-record
+  batches at 0, 15, 30 and 45 seconds.
+  - **Batches.** Each batch is an incremental `metadata_import` file
+    (`operations-import`) with 25 bilingual records and their original bytes,
+    written next to the 300-skill `local_directory` source. Five probes per
+    batch ask for its records by unique tokens. The expected identities are
+    fixed before the run.
+  - **Hooks.** The rescan and rebuild hooks reach the running gateway through
+    `relaymind.evaluation.asset_operations_child`. This is the unchanged
+    launcher plus one JSON command per standard-input line, which calls the
+    gateway's own `AssetCatalogService.rescan` / `rebuild`. Each reply carries
+    the stored job outcome and event chain. It is evaluation-only: it opens no
+    socket and adds no endpoint.
+  - **Memory.** Resident memory of the workload gateway is sampled every 250 ms.
+    Only the gateway process is covered. Lexical recommendations start no child
+    process or embedding device here, so the grader's memory increment stays
+    unknown; the raw gateway-only numbers are kept in `memory_samples`.
+  - **Report.** It holds every sample, the runner's environment
+    (`collect_benchmark_environment`: OS, architecture, CPU, RAM, Python) and
+    CI variables, the spec bounds for reading, and the unchanged
+    `summarize_operations` result. It is always `fixture` / `not_applicable`.
+  - **Exit codes.** A slow startup, a late batch or a failed request is a
+    recorded result (exit 0). Exit 2 means a harness error: no gateway, a
+    control call without a reply, or unavailable job evidence. The report is
+    still written in that case.
+  - **Default periodic scan.** The 30-second local scan stays at its default.
+    On a loaded machine it can delay an import batch past 1,000 ms; that is
+    recorded as observed.
 - `platform` turns an install-check record from
   `scripts/openclaw_install_check.py`, plus an optional ordinary installed-host
-  capture, into an `AssetPlatformReportV1` bound to the companion input manifest
-  given in `--inputs`:
+  capture and operations report, into an `AssetPlatformReportV1` bound to the
+  companion input manifest given in `--inputs`:
   - The input digest is the verified host-task digest from that manifest. Each
     original must be registered in it as `install-check` (or
     `ordinary-capture`) with matching bytes, and its registered path is used.
@@ -822,20 +855,103 @@ for it.
   - Recommend, choose, feedback, delete and reset pass only when the
     installed-host qualification's own `ordinary_pass` accepts the capture.
   - Skill use stays `not_run` (`skill_use_not_observed`): a selection receipt is
-    not observed instruction use (#239). Restart and MCP use stay `not_run`.
+    not observed instruction use (#239). MCP use stays `not_run`
+    (`mcp_use_disabled`; spec 7.6.2), and so does restart
+    (`restart_not_observed`): the lifecycle record has no restart step.
+  - A capture of the Linux-only person-ingress harness taken on another
+    platform (`linux_runner_required`) leaves the five ordinary actions
+    `not_run` with `ordinary_harness_linux_only`.
+  - An operations report registered as `operations-report` becomes the
+    dedicated `operations_evidence`.
 
 ```bash
 python scripts/asset_operations_run.py startup --base-config /abs/base.toml \
   --work /tmp/ops --output startup.json
+python scripts/asset_operations_run.py operations --work /tmp/ops-run \
+  --label "my machine" --output operations.json
 python scripts/asset_operations_run.py platform --install-check install-check.json \
-  --ordinary ordinary.json --inputs inputs.json --platform environment.json \
-  --output platform.json
+  --ordinary ordinary.json --operations operations.json --inputs inputs.json \
+  --platform environment.json --output platform.json
 ```
 
-The full 60-second mixed workload (`run_workload`) still needs rescan and
-rebuild hooks into a running process. The AC29 and AC37 numbers that count
-come only from the Apple M1 8 GiB macOS and native x86-64 Windows machines;
-those runs remain open in #241, #235 and #234.
+The AC29 and AC37 numbers that count come only from the Apple M1 8 GiB macOS
+and native x86-64 Windows machines; those runs remain open in #241, #235 and
+#234.
+
+### Platform runs on GitHub-hosted runners (#241, #235)
+
+The separate workflow `.github/workflows/platform-runs.yml` (`Platform runs`)
+runs the kit on `macos-latest` (Apple Silicon, arm64), `windows-latest` (native
+x86-64 Windows) and `ubuntu-latest`. It starts by hand (`workflow_dispatch`)
+or on a pull request that changes the workflow, its scripts or the kit modules,
+so ordinary pull requests stay fast. Each platform runs:
+
+1. `asset_operations_run.py operations`, the AC29 run above, first, while the
+   runner is quiet;
+2. the release artifact (`npm run pack:release`) and the pinned host's
+   install-to-uninstall lifecycle (`scripts/openclaw_install_check.py`). A failed
+   lifecycle step is kept in the export and its exit code in
+   `install-check.exit`. Only a missing or unreadable export fails this step.
+   The CI workflow's `openclaw-plugin` job still fails on it;
+3. `asset_platform_run.py ordinary`, the ordinary installed-host qualification
+   (recommend, choose, feedback, delete, reset). Its person-ingress harness
+   needs a Linux x86-64 runner. On macOS and Windows its truthful
+   `linux_runner_required` capture is kept, and the step passes;
+4. `asset_platform_run.py platform`, which writes the runner's `environment.json`,
+   a fixture companion bundle locked to it, and `platform.json`. The bundle is
+   built from the test fixtures of `tests/test_asset_whole_task_inputs.py`, not
+   genuine host tasks;
+5. `asset_platform_run.py verify`, which grades everything again with the
+   existing graders. Each operations summary is recomputed by
+   `summarize_operations` from the stored samples. Each platform report is
+   graded by `grade-platform` (it must be `not_applicable`), and its steps are
+   derived again from the registered originals. The result also goes to the
+   job summary.
+
+The job fails only on a harness error; it never uses `continue-on-error`. A
+slow runner, a late batch or a failed lifecycle step stays visible in the
+reports and is never turned into a pass. Skill use and MCP use stay `not_run`
+(spec 7.6.1/7.6.2: loaded use and MCP use remain disabled), and so does restart.
+
+**What a runner report is.** Spec 0.65 section 12.6.5 says WSL, CI and Linux
+do not satisfy the actual Apple Silicon macOS / named native x86-64 Windows
+acceptance. Every report stays `fixture`, every platform gate `not_applicable`,
+and #241 and #235 stay open. Two more limits apply. The catalog is the
+generated development catalog, because the committed 300-asset acceptance
+catalog (with 100 genuine MCP tools) does not exist yet. The interactive host
+approvals are not exercised. A runner report is functional evidence about the
+hosted platform only.
+
+**Run and record.**
+
+```bash
+gh workflow run platform-runs.yml --ref <branch>
+gh run watch <run-id>
+gh run download <run-id> -D docs/evidence/<date>-asset-platform-runs-github-runners/<run-id>
+python scripts/asset_platform_run.py verify \
+  docs/evidence/<date>-asset-platform-runs-github-runners/<run-id>
+```
+
+`verify` prints one line per report and exits 1 when any report fails a grader
+or none is found. Run it from a checkout at the run's commit
+(`runner.variables.GITHUB_SHA` in `operations.json`; for a pull request this is
+its merge commit). The inventory check compares the bundle with the running
+grader.
+
+**Committing evidence.** Each artifact is about 20 MB, mostly
+`platform/bundle/originals/`, a copy of the commit's `src/relaymind`,
+`pyproject.toml`, `scripts/asset_whole_task.py` and `docs/SPECIFICATION.md`.
+
+- Commit everything else unchanged, in one dated directory per run: the
+  reports, `install-check.exit`, `release.json`, `SHA256SUMS`, `verify.txt` and
+  the rest of `platform/bundle/`. Leave out `originals/` and the gateway
+  `*.log` files; the logs are uploaded only for diagnosis.
+- To verify a committed copy again, restore the originals from the commit:
+  `git archive <sha> src/relaymind pyproject.toml scripts/asset_whole_task.py docs/SPECIFICATION.md | tar -x -C <run>/platform/bundle/originals`.
+- Add a short README with the run ID, the commit, the runner images
+  (`runner.variables.ImageOS` / `ImageVersion`) and the `verify` output.
+  Label it "GitHub-hosted runner functional evidence (fixture; not an
+  acceptance platform)".
 
 ### Native loaded-skill observation tier (#239; RM39/AC30)
 

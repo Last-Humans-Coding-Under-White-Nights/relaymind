@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Platform runs on GitHub-hosted runners (#241, #235; RM38, RM39, RM44; AC29,
+  AC37): a separate `Platform runs` workflow on `macos-latest`,
+  `windows-latest` and `ubuntu-latest`.
+  - `scripts/asset_operations_run.py operations` runs the AC29 run: ten clean
+    startups, a recommendations-disabled memory baseline, and the 60-second
+    2 req/s workload with four 25-record metadata-import batches and a derived
+    rebuild. The workload goes through the existing `run_workload` and
+    `summarize_operations` over an evaluation-only gateway control channel
+    (`asset_operations_child`).
+  - `scripts/asset_platform_run.py` runs the ordinary host step (Linux-only
+    harness honestly recorded elsewhere) and builds the platform report over
+    fixture companion inputs locked to the runner. Its `verify` grades
+    downloaded artifacts again.
+  - Platform reports now name `mcp_use_disabled`, `restart_not_observed` and
+    `ordinary_harness_linux_only`, and can bind the operations report as
+    `operations_evidence`.
+  - Only harness errors fail the job. Reports stay `fixture`; CI runners are
+    not the acceptance platforms, and no gate is claimed.
 - Episode and host-task run kit (#236, #237; RM40–RM44; AC31–AC36): blind
   label templates, adjudication worksheet and `AssetLabelsV1` freeze;
   `preregister-host`/`preregister-episodes` checks; a resumable, crash-safe

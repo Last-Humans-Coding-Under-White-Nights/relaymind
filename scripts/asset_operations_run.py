@@ -1,10 +1,14 @@
 """Operations and platform run kit (#242; RM38, RM39, RM44; AC29, AC37).
 
-    startup   ten real ``relaymind serve`` startups over a generated catalog,
-              measured by the existing AC29 driver, with memory samples
-    platform  an AssetPlatformReportV1 from an install-check record and an
-              optional ordinary installed-host capture, bound to the
-              companion input manifest
+    startup     ten real ``relaymind serve`` startups over a generated catalog,
+                measured by the existing AC29 driver, with memory samples
+    operations  the AC29 run (#241): ten clean startups, the gateway without
+                recommendations as memory baseline, and the 60-second 2 req/s
+                workload with four 25-record import batches during a derived
+                rebuild, summarized by the unchanged ``summarize_operations``
+    platform    an AssetPlatformReportV1 from an install-check record and an
+                optional ordinary installed-host capture and operations
+                report, bound to the companion input manifest
 
 Development tooling only. Output is labeled ``fixture``; a developer machine
 or CI runner never satisfies the macOS / native Windows acceptance gates.
@@ -22,13 +26,28 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from relaymind.canonical import canonical_digest
-from relaymind.evaluation.asset_operations import StartupSample, measure_startups
+from relaymind.evaluation.asset_evidence import collect_benchmark_environment
+from relaymind.evaluation.asset_operations import (
+    MemoryObservation,
+    StartupSample,
+    WorkloadSamples,
+    measure_startups,
+)
 from relaymind.evaluation.asset_operations_run import (
+    UNUSED_KEY_ENV,
+    MemorySampler,
+    development_base_config,
     generate_catalog,
     memory_counter,
+    operations_report,
     platform_report,
     rss_bytes,
+    run_operations_workload,
+    runner_identity,
     serve,
+    serve_baseline,
+    serve_controlled,
+    write_import,
 )
 from relaymind.evaluation.asset_whole_task import (
     WholeTaskRejected,
@@ -81,11 +100,12 @@ def startup_report(
     )
 
 
-def _startup(args) -> dict:
-    work = Path(args.work).absolute()
-    catalog = work / "catalog"
-    generate_catalog(catalog, args.assets)
-    base = Path(args.base_config).absolute()
+async def _startup_samples(
+    work: Path,
+    catalog: Path,
+    base_for: Callable[[int], Path],
+    env: Mapping[str, str] | None = None,
+) -> tuple[list[StartupSample], list[int | None]]:
     samples: list[StartupSample] = []
     memory: list[int | None] = []
     counter = iter(range(1000))
@@ -94,13 +114,25 @@ def _startup(args) -> dict:
     async def launch():
         ordinal = next(counter)
         memory.append(None)  # Reserve the slot even if launch never yields.
-        async with serve(work / f"run-{ordinal}", catalog, base_config=base) as running:
+        extra = {} if env is None else {"env": env}
+        async with serve(
+            work / f"run-{ordinal}", catalog, base_config=base_for(ordinal), **extra
+        ) as running:
             try:
                 yield running
             finally:
                 memory[ordinal] = rss_bytes(running[0])
 
-    asyncio.run(measure_startups(launch, BODY, samples=samples))
+    await measure_startups(launch, BODY, samples=samples)
+    return samples, memory
+
+
+def _startup(args) -> dict:
+    work = Path(args.work).absolute()
+    catalog = work / "catalog"
+    generate_catalog(catalog, args.assets)
+    base = Path(args.base_config).absolute()
+    samples, memory = asyncio.run(_startup_samples(work, catalog, lambda _ordinal: base))
     return startup_report(
         samples,
         memory,
@@ -108,6 +140,106 @@ def _startup(args) -> dict:
         base_digest=hashlib.sha256(base.read_bytes()).hexdigest(),
         counter=memory_counter(),
     )
+
+
+_PHASES = ("startup", "rebuild", "import", "query")
+
+
+def _operations(args) -> tuple[dict, bool]:
+    """The AC29 run on this machine; returns the report and whether the harness held.
+
+    Without ``--base-config`` every launch gets a disposable development config
+    with its own empty store, so each of the ten startups is clean. Product
+    outcomes (a slow startup, a late batch, a failed request) are recorded in
+    the report; only a harness failure (no gateway, a broken control channel)
+    makes the run fail.
+    """
+    work = Path(args.work).absolute()
+    env = {UNUSED_KEY_ENV: "unused"}
+
+    def base_for(name: str) -> Path:
+        if args.base_config:
+            return Path(args.base_config).absolute()
+        return development_base_config(work / "config" / name, ROOT)
+
+    harness: list[str] = []
+    environment = collect_benchmark_environment()
+    catalog = work / "catalog"
+    generate_catalog(catalog, args.assets)
+    startups, startup_memory = asyncio.run(
+        _startup_samples(work / "startups", catalog, lambda n: base_for(f"startup-{n}"), env)
+    )
+
+    async def baseline() -> int | None:
+        async with serve_baseline(work / "baseline", base_config=base_for("baseline"), env=env) as (
+            pid,
+            _client,
+        ):
+            await asyncio.sleep(1.0)  # Settle after the first answer before sampling.
+            return rss_bytes(pid)
+
+    try:
+        baseline_bytes = asyncio.run(baseline())
+    except (OSError, TimeoutError) as error:
+        baseline_bytes = None
+        harness.append(f"baseline_{type(error).__name__}")
+
+    workload = WorkloadSamples(provenance="fixture", environment=environment)
+    imports = work / "imports"
+    write_import(imports, ())
+    sampler = None
+
+    async def run() -> list[str]:
+        nonlocal sampler
+        async with serve_controlled(
+            work / "workload", catalog, base_config=base_for("workload"), imports=imports, env=env
+        ) as gateway:
+            sampler = MemorySampler(gateway.pid)
+            async with sampler.running():
+                plan = await run_operations_workload(gateway, imports, workload)
+        return plan.channel_errors
+
+    try:
+        harness.extend(asyncio.run(run()))
+    except (OSError, TimeoutError) as error:
+        harness.append(f"workload_{type(error).__name__}")
+    harness.extend(
+        e for e in workload.errors if e in ("owned_task_failed", "job_evidence_unavailable")
+    )
+    peak = None if sampler is None else sampler.peak
+    memory = MemoryObservation(
+        baseline_bytes=baseline_bytes,
+        peak_bytes=peak,
+        counter_source=memory_counter(),
+        # Lexical recommendations start no child process or embedding device here;
+        # those coverages are not measured, so the grader leaves memory unknown.
+        coverage=("gateway",),
+        phases=_PHASES,
+        complete=baseline_bytes is not None and sampler is not None and sampler.complete,
+    )
+    report = operations_report(
+        startups,
+        workload,
+        memory,
+        environment=environment,
+        runner=runner_identity(args.label),
+        catalog=dict(
+            assets=args.assets,
+            generated=True,
+            committed_acceptance_catalog=False,
+            reason="committed_acceptance_catalog_unavailable",
+        ),
+        memory_samples=dict(
+            counter=memory_counter(),
+            baseline_bytes=baseline_bytes,
+            startup_bytes=startup_memory,
+            workload_bytes=[] if sampler is None else sampler.samples,
+            peak_bytes=peak,
+            increment_bytes=None if None in (peak, baseline_bytes) else peak - baseline_bytes,
+        ),
+        harness_errors=harness,
+    )
+    return report, not harness
 
 
 def _manifest_inputs(path: Path) -> tuple[dict, bytes, str, dict, dict]:
@@ -152,10 +284,15 @@ def _platform(args) -> dict:
     paths = {"install-check": _registered(registry, "install-check", Path(args.install_check))}
     if args.ordinary:
         paths["ordinary-capture"] = _registered(registry, "ordinary-capture", Path(args.ordinary))
+    if args.operations:
+        paths["operations-report"] = _registered(
+            registry, "operations-report", Path(args.operations)
+        )
     report = platform_report(
         install_check=Path(args.install_check),
         ordinary=Path(args.ordinary) if args.ordinary else None,
         ordinary_check=ordinary_check() if args.ordinary else None,
+        operations=Path(args.operations) if args.operations else None,
         evidence_paths=paths,
         input_digest=input_digest,
         input_manifest=dict(
@@ -175,9 +312,18 @@ def main(argv=None) -> int:
     startup.add_argument("--work", required=True)
     startup.add_argument("--assets", type=int, default=300, help="AC29 uses 300")
     startup.add_argument("--output", required=True)
+    operations = sub.add_parser("operations")
+    operations.add_argument(
+        "--base-config", help="TOML with absolute paths only; default: a disposable one per launch"
+    )
+    operations.add_argument("--work", required=True)
+    operations.add_argument("--assets", type=int, default=300, help="AC29 uses 300")
+    operations.add_argument("--label", help="names the machine, e.g. the CI runner image")
+    operations.add_argument("--output", required=True)
     platform = sub.add_parser("platform")
     platform.add_argument("--install-check", required=True)
     platform.add_argument("--ordinary")
+    platform.add_argument("--operations", help="an operations report registered as evidence")
     platform.add_argument(
         "--inputs",
         required=True,
@@ -186,12 +332,21 @@ def main(argv=None) -> int:
     platform.add_argument("--platform", required=True)
     platform.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    held = True
     try:
-        report = _startup(args) if args.command == "startup" else _platform(args)
+        if args.command == "startup":
+            report = _startup(args)
+        elif args.command == "operations":
+            report, held = _operations(args)
+        else:
+            report = _platform(args)
     except (OSError, ValueError, KeyError, TypeError, WholeTaskRejected) as error:
         print(f"asset_operations_run: {error}", file=sys.stderr)
         return 2
     Path(args.output).write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
+    if not held:
+        print(f"asset_operations_run: harness errors: {report['harness_errors']}", file=sys.stderr)
+        return 2
     return 0
 
 

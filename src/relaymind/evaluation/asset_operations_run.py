@@ -8,6 +8,14 @@ Development tooling around the existing AC29 startup driver and the section
 - ``generate_catalog`` writes a bilingual development catalog.
 - ``rss_bytes`` samples resident memory (POSIX ``ps``) or working set
   (Windows ``tasklist``).
+- ``serve_controlled`` adds the evaluation-only control channel of
+  ``asset_operations_child`` (source rescan and derived rebuild), and
+  ``workload_plan`` builds the 60-second AC29 workload over it (#241);
+  ``serve_baseline`` starts the gateway without recommendations for the
+  memory baseline.
+- ``operations_report`` keeps the samples next to the unchanged
+  ``summarize_operations`` result, and ``load_operations_report`` reads them
+  back so a downloaded report can be graded again.
 - ``platform_report`` turns an installed-plugin lifecycle record
   (``scripts/openclaw_install_check.py``) and an optional, independently
   checked ordinary installed-host capture into an ``AssetPlatformReportV1``.
@@ -20,7 +28,9 @@ refuses to label its own output ``measured``.
 import asyncio
 import contextlib
 import csv
+import dataclasses
 import hashlib
+import itertools
 import json
 import os
 import socket
@@ -28,11 +38,23 @@ import subprocess
 import sys
 import time
 import tomllib
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
 
+from relaymind.evaluation.asset_operations import (
+    BatchSample,
+    ImportBatch,
+    MemoryObservation,
+    RequestSample,
+    StartupSample,
+    VisibilityProbe,
+    WorkloadSamples,
+    run_workload,
+    summarize_operations,
+)
 from relaymind.evaluation.asset_platform_export import PLATFORM_STEPS, platform_gate
 
 _TOPICS = (
@@ -44,7 +66,12 @@ _TOPICS = (
     ("reminder", "Create a reminder.", "创建一个提醒。"),
 )
 _TOKEN_PREFIX = "Application token: "
+_CONTROL_PREFIX = b"Control-Reply: "
+_CONTROL_SECONDS = 60.0
 _GRACE_SECONDS = 10.0
+SOURCE_ID = "operations"
+IMPORT_SOURCE_ID = "operations-import"
+UNUSED_KEY_ENV = "RELAYMIND_OPERATIONS_UNUSED_KEY"
 
 
 def generate_catalog(root: Path, count: int, *, start: int = 0) -> list[Path]:
@@ -129,8 +156,20 @@ def _relative_paths(config: Mapping[str, object]) -> list[str]:
     return relative
 
 
-def _config(work: Path, base_config: Path, catalog: Path, port: int) -> Path:
-    """The operator's base config plus the kit's server, recommendation and source tables."""
+def _config(
+    work: Path,
+    base_config: Path,
+    catalog: Path | None,
+    port: int,
+    *,
+    recommendations=True,
+    imports: Path | None = None,
+) -> Path:
+    """The operator's base config plus the kit's server, recommendation and source tables.
+
+    Without recommendations (the AC29 memory baseline) the kit writes only its
+    server table and ``[recommendations] enabled = false``.
+    """
     base = Path(base_config).read_text(encoding="utf-8")
     parsed = tomllib.loads(base)
     if {"server", "recommendations"} & set(parsed) or "sources" in parsed.get("assets", {}):
@@ -141,26 +180,27 @@ def _config(work: Path, base_config: Path, catalog: Path, port: int) -> Path:
     if relative:
         raise ValueError("base_config_relative_path: " + ", ".join(relative))
     path = work / "relaymind.toml"
-    path.write_text(
-        "\n".join(
-            [
-                base.strip(),
-                "[server]",
-                'host = "127.0.0.1"',
-                f"port = {port}",
-                "[recommendations]",
-                "enabled = true",
-                'user_id = "operations"',
-                'workspace_id = "development"',
+    lines = [base.strip(), "[server]", 'host = "127.0.0.1"', f"port = {port}", "[recommendations]"]
+    if recommendations:
+        lines += [
+            "enabled = true",
+            'user_id = "operations"',
+            'workspace_id = "development"',
+            "[[assets.sources]]",
+            f'source_id = "{SOURCE_ID}"',
+            'kind = "local_directory"',
+            f"path = {json.dumps(str(catalog))}",
+        ]
+        if imports is not None:
+            lines += [
                 "[[assets.sources]]",
-                'source_id = "operations"',
-                'kind = "local_directory"',
-                f"path = {json.dumps(str(catalog))}",
-                "",
+                f'source_id = "{IMPORT_SOURCE_ID}"',
+                'kind = "metadata_import"',
+                f"path = {json.dumps(str(imports / 'import.json'))}",
             ]
-        ),
-        encoding="utf-8",
-    )
+    else:
+        lines.append("enabled = false")
+    path.write_text("\n".join([*lines, ""]), encoding="utf-8")
     return path
 
 
@@ -173,6 +213,11 @@ def _child_argv(config: Path) -> list[str]:
         "--config",
         str(config),
     ]
+
+
+def _controlled_argv(config: Path) -> list[str]:
+    entry = "from relaymind.evaluation.asset_operations_child import main; raise SystemExit(main())"
+    return [sys.executable, "-c", entry, "serve", "--config", str(config)]
 
 
 def _child_env(extra: Mapping[str, str] | None) -> dict[str, str]:
@@ -206,13 +251,30 @@ async def _read_token(process: asyncio.subprocess.Process, deadline: float, log:
                 target.flush()
 
 
-async def _drain(stream: asyncio.StreamReader, log: Path) -> None:
-    """Keep the child's stdout pipe from filling; the token line is never logged."""
-    with log.open("ab") as target:
-        while line := await stream.readline():
-            if not line.startswith(_TOKEN_PREFIX.encode()):
-                target.write(line)
-                target.flush()
+async def _drain(stream: asyncio.StreamReader, log: Path, replies: dict | None = None) -> None:
+    """Keep the child's stdout pipe from filling; the token line is never logged.
+
+    Control replies go to their waiting request, not to the log. When the
+    stream ends, a request still waiting fails instead of waiting forever.
+    """
+    try:
+        with log.open("ab") as target:
+            while line := await stream.readline():
+                if replies is not None and line.startswith(_CONTROL_PREFIX):
+                    try:
+                        reply = json.loads(line[len(_CONTROL_PREFIX) :])
+                        future = replies.get(reply.get("id"))
+                    except (ValueError, AttributeError, TypeError):
+                        future = None
+                    if future is not None and not future.done():
+                        future.set_result(reply)
+                elif not line.startswith(_TOKEN_PREFIX.encode()):
+                    target.write(line)
+                    target.flush()
+    finally:
+        for future in (replies or {}).values():
+            if not future.done():
+                future.set_exception(ConnectionError("control_closed"))
 
 
 async def _wait_ready(client: httpx.AsyncClient, deadline: float) -> None:
@@ -222,6 +284,19 @@ async def _wait_ready(client: httpx.AsyncClient, deadline: float) -> None:
             if response.status_code == 200 and response.json().get("state") == "ready":
                 return
         except (httpx.TransportError, ValueError):
+            pass
+        if time.monotonic() >= deadline:
+            raise TimeoutError("gateway_not_ready")
+        await asyncio.sleep(0.02)
+
+
+async def _wait_serving(client: httpx.AsyncClient, deadline: float) -> None:
+    """A gateway without recommendations is ready once it answers its model list."""
+    while True:
+        try:
+            if (await client.get("/v1/models")).status_code == 200:
+                return
+        except httpx.TransportError:
             pass
         if time.monotonic() >= deadline:
             raise TimeoutError("gateway_not_ready")
@@ -238,6 +313,87 @@ async def _stop(process: asyncio.subprocess.Process) -> None:
             with contextlib.suppress(ProcessLookupError):
                 process.kill()
     await process.wait()
+
+
+@dataclasses.dataclass(frozen=True)
+class Gateway:
+    """A running gateway child: its PID, an authenticated client and its control call."""
+
+    pid: int
+    client: httpx.AsyncClient
+    control: Callable[..., Awaitable[dict]]
+
+
+@contextlib.asynccontextmanager
+async def _gateway(
+    work: Path,
+    catalog: Path | None,
+    *,
+    base_config: Path,
+    env: Mapping[str, str] | None,
+    timeout: float,
+    controlled: bool = False,
+    recommendations: bool = True,
+    imports: Path | None = None,
+):
+    work = Path(work).absolute()
+    work.mkdir(parents=True, exist_ok=True)
+    port = _free_port()
+    catalog = None if catalog is None else Path(catalog).absolute()
+    imports = None if imports is None else Path(imports).absolute()
+    config = _config(
+        work, base_config, catalog, port, recommendations=recommendations, imports=imports
+    )
+    deadline = time.monotonic() + timeout
+    with (work / "stderr.log").open("ab") as stderr:
+        process = await asyncio.create_subprocess_exec(
+            *(_controlled_argv if controlled else _child_argv)(config),
+            stdin=asyncio.subprocess.PIPE if controlled else None,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=stderr,
+            env=_child_env(env),
+        )
+    drain = None
+    replies: dict[int, asyncio.Future] = {}
+    ordinals = itertools.count()
+
+    async def control(op: str, **fields) -> dict:
+        if not controlled:
+            raise RuntimeError("control_unavailable")
+        ordinal = next(ordinals)
+        future = asyncio.get_running_loop().create_future()
+        replies[ordinal] = future
+        try:
+            line = json.dumps(dict(fields, id=ordinal, op=op), ensure_ascii=True) + "\n"
+            process.stdin.write(line.encode("ascii"))
+            await process.stdin.drain()
+            return await asyncio.wait_for(future, _CONTROL_SECONDS)
+        finally:
+            replies.pop(ordinal, None)
+
+    try:
+        token = await _read_token(process, deadline, work / "stdout.log")
+        drain = asyncio.create_task(_drain(process.stdout, work / "stdout.log", replies))
+        async with httpx.AsyncClient(
+            base_url=f"http://127.0.0.1:{port}",
+            headers={"Authorization": "Bearer " + token},
+            timeout=10,
+        ) as client:
+            await (_wait_ready if recommendations else _wait_serving)(client, deadline)
+            yield Gateway(process.pid, client, control)
+    finally:
+        # Cleanup is owned: a cancellation arriving now still kills and reaps.
+        cleanup = asyncio.ensure_future(_stop(process))
+        try:
+            await asyncio.shield(cleanup)
+        except asyncio.CancelledError:
+            await cleanup
+            raise
+        finally:
+            if drain is not None:
+                drain.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await drain
 
 
 @contextlib.asynccontextmanager
@@ -258,42 +414,466 @@ async def serve(
     ``stderr.log`` in ``work``. On exit, or on cancellation at any point, the
     process is terminated, killed after a grace period, and reaped.
     """
-    work = Path(work).absolute()
+    async with _gateway(work, catalog, base_config=base_config, env=env, timeout=timeout) as gw:
+        yield gw.pid, gw.client
+
+
+@contextlib.asynccontextmanager
+async def serve_controlled(
+    work: Path,
+    catalog: Path,
+    *,
+    base_config: Path,
+    imports: Path | None = None,
+    env: Mapping[str, str] | None = None,
+    timeout: float = 60.0,
+):
+    """As ``serve``, through ``asset_operations_child``; yields a ``Gateway``.
+
+    ``imports`` adds the ``operations-import`` metadata import source over
+    ``imports/import.json`` (see ``write_import``).
+    ``await gateway.control("rescan", source_id=...)`` and
+    ``await gateway.control("rebuild")`` return the child's reply.
+    """
+    async with _gateway(
+        work,
+        catalog,
+        base_config=base_config,
+        env=env,
+        timeout=timeout,
+        controlled=True,
+        imports=imports,
+    ) as gateway:
+        yield gateway
+
+
+@contextlib.asynccontextmanager
+async def serve_baseline(
+    work: Path,
+    *,
+    base_config: Path,
+    env: Mapping[str, str] | None = None,
+    timeout: float = 60.0,
+):
+    """The same gateway with recommendations disabled; yields ``(pid, client)``."""
+    async with _gateway(
+        work, None, base_config=base_config, env=env, timeout=timeout, recommendations=False
+    ) as gateway:
+        yield gateway.pid, gateway.client
+
+
+# --- development configuration and runner identity ----------------------------------
+
+
+def development_base_config(work: Path, root: Path) -> Path:
+    """A disposable base config for runner runs: its own store, absolute paths only.
+
+    The external model table names an unused endpoint and the key variable
+    ``RELAYMIND_OPERATIONS_UNUSED_KEY``; lexical recommendations never call it.
+    """
+    work, root = Path(work).absolute(), Path(root).absolute()
     work.mkdir(parents=True, exist_ok=True)
-    port = _free_port()
-    config = _config(work, base_config, Path(catalog).absolute(), port)
-    deadline = time.monotonic() + timeout
-    with (work / "stderr.log").open("ab") as stderr:
-        process = await asyncio.create_subprocess_exec(
-            *_child_argv(config),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=stderr,
-            env=_child_env(env),
+    path = work / "base.toml"
+    lines = [
+        "[store]",
+        f"path = {json.dumps(str(work / 'runs.sqlite3'))}",
+        "[skills]",
+        f"roots = [{json.dumps(str(root / 'skills'))}]",
+        "[sandbox]",
+        f"seed = {json.dumps(str(root / 'tests/fixtures/sandbox/baseline.json'))}",
+        f"work_dir = {json.dumps(str(work / 'sandbox'))}",
+        "[external_model]",
+        'base_url = "https://example.invalid/v1"',
+        'model = "unused"',
+        "context_limit = 16000",
+        f'api_key_env = "{UNUSED_KEY_ENV}"',
+        "",
+    ]
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+_RUNNER_VARIABLES = (
+    "RUNNER_OS",
+    "RUNNER_ARCH",
+    "RUNNER_ENVIRONMENT",
+    "ImageOS",
+    "ImageVersion",
+    "GITHUB_RUN_ID",
+    "GITHUB_RUN_ATTEMPT",
+    "GITHUB_SHA",
+    "GITHUB_REF",
+)
+
+
+def runner_identity(label: str | None) -> dict:
+    """The operator's label and the CI runner's own variables, when present."""
+    return dict(label=label, variables={k: os.environ.get(k) for k in _RUNNER_VARIABLES})
+
+
+# --- the AC29 workload ------------------------------------------------------------------
+
+# Batch offsets (seconds after the workload origin); the first batch arrives
+# with the derived rebuild so their work can overlap.
+IMPORT_OFFSETS = (0.0, 15.0, 30.0, 45.0)
+_BATCH_RECORDS = 25
+_GROUP_RECORDS = 5  # Five records share one probe token; the candidate limit is 10.
+
+
+@dataclasses.dataclass(frozen=True)
+class ImportPackage:
+    name: str
+    token: str
+    language: str
+    description: str
+    payload: bytes
+    identity: tuple[str, str, None]
+
+    @property
+    def original_path(self) -> str:
+        return f"originals/{self.name}.md"
+
+
+def _token(batch: int, group: int) -> str:
+    return "opsvisibility" + "abcd"[batch] + "abcde"[group] + "marker"
+
+
+def import_batch_packages(batch: int) -> list[ImportPackage]:
+    """The 25 bilingual metadata records of one import batch, with fixed original bytes.
+
+    The identity is what the ``metadata_import`` source publishes: the record's
+    asset ID, the SHA-256 of its original bytes and no source version.
+    """
+    packages = []
+    for n in range(_BATCH_RECORDS):
+        token = _token(batch, n // _GROUP_RECORDS)
+        name = f"import-{batch}-{n:02d}"
+        english = n % 2 == 0
+        description = (
+            f"Imported operations record {token} number {n}."
+            if english
+            else f"导入的运营记录 {token} 第 {n} 号。"
         )
-    drain = None
-    try:
-        token = await _read_token(process, deadline, work / "stdout.log")
-        drain = asyncio.create_task(_drain(process.stdout, work / "stdout.log"))
-        async with httpx.AsyncClient(
-            base_url=f"http://127.0.0.1:{port}",
-            headers={"Authorization": "Bearer " + token},
-            timeout=10,
-        ) as client:
-            await _wait_ready(client, deadline)
-            yield process.pid, client
-    finally:
-        # Cleanup is owned: a cancellation arriving now still kills and reaps.
-        cleanup = asyncio.ensure_future(_stop(process))
+        data = f"---\nname: {name}\ndescription: {description}\n---\n{description}\n".encode()
+        identity = (f"skill:{IMPORT_SOURCE_ID}-{name}", hashlib.sha256(data).hexdigest(), None)
+        packages.append(
+            ImportPackage(name, token, "en" if english else "zh", description, data, identity)
+        )
+    return packages
+
+
+def _import_document(packages: Sequence[ImportPackage], captured_at: str) -> dict:
+    return dict(
+        schema_version=1,
+        source_id=IMPORT_SOURCE_ID,
+        source_version=None,
+        captured_at=captured_at,
+        complete=not packages,  # The empty start is complete; each batch only adds.
+        records=[
+            dict(
+                record=dict(
+                    asset_id=p.identity[0],
+                    kind="skill",
+                    source_locator=f"{IMPORT_SOURCE_ID}/{p.name}",
+                    source_version=None,
+                    captured_at=captured_at,
+                    content_hash=p.identity[1],
+                    description=p.description,
+                    language_tags=[p.language],
+                    dependencies=[],
+                    identity=dict(package_id=p.name, package_version=None),
+                ),
+                original_path=p.original_path,
+            )
+            for p in packages
+        ],
+        removed_asset_ids=[],
+    )
+
+
+def write_import(imports: Path, packages: Sequence[ImportPackage]) -> Path:
+    """Write the originals, then replace ``import.json`` in one step."""
+    imports = Path(imports)
+    (imports / "originals").mkdir(parents=True, exist_ok=True)
+    for package in packages:
+        (imports / package.original_path).write_bytes(package.payload)
+    captured = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    target, staged = imports / "import.json", imports / "import.json.tmp"
+    staged.write_text(json.dumps(_import_document(packages, captured)), encoding="utf-8")
+    os.replace(staged, target)
+    return target
+
+
+def workload_bodies() -> list[dict]:
+    """120 scheduled discovery requests over the generated catalog's topics."""
+    bodies = []
+    for n in range(120):
+        _topic, english, chinese = _TOPICS[n % len(_TOPICS)]
+        bodies.append(
+            dict(
+                schema_version=1,
+                task_text=english if n % 2 == 0 else chinese,
+                requested_kinds=["skill"],
+                selection_scope="discovery",
+            )
+        )
+    return bodies
+
+
+@dataclasses.dataclass
+class WorkloadPlan:
+    """The four import batches and the rebuild hook over one controlled gateway."""
+
+    batches: list[ImportBatch]
+    rebuild: Callable[[], Awaitable[object]]
+    batch_job_ids: dict[str, str]
+    jobs: list[dict]
+    channel_errors: list[str]
+    rebuild_job_id: list[str]
+
+    def job_evidence(self) -> list[dict]:
+        return list(self.jobs)
+
+    def identities(self) -> dict:
+        return dict(
+            rebuild_job_id=self.rebuild_job_id[0] if self.rebuild_job_id else None,
+            batch_job_ids=dict(self.batch_job_ids),
+        )
+
+
+def workload_plan(
+    imports: Path,
+    control: Callable[..., Awaitable[dict]],
+    *,
+    clock: Callable[[], float] = time.monotonic,
+) -> WorkloadPlan:
+    """Receive writes a batch as an incremental metadata import; rescan asks the gateway.
+
+    A refused rescan or rebuild is a product outcome and fails its batch or
+    rebuild in the driver. A control call that never gets a reply is a harness
+    error, recorded in ``channel_errors``.
+    """
+    imports = Path(imports)
+    batch_job_ids: dict[str, str] = {}
+    jobs: list[dict] = []
+    channel_errors: list[str] = []
+    rebuild_job_id: list[str] = []
+
+    async def call(op: str, **fields) -> dict:
         try:
-            await asyncio.shield(cleanup)
-        except asyncio.CancelledError:
-            await cleanup
+            reply = await control(op, **fields)
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as error:
+            channel_errors.append(f"{op}_{type(error).__name__}")
             raise
+        if not reply.get("ok"):
+            raise RuntimeError(f"{op}_refused")
+        jobs.extend(reply.get("jobs") or ())
+        return reply
+
+    def make(batch: int) -> ImportBatch:
+        batch_id = f"batch-{batch}"
+        packages = import_batch_packages(batch)
+        groups: dict[str, list[ImportPackage]] = {}
+        for package in packages:
+            groups.setdefault(package.token, []).append(package)
+        probes = tuple(
+            VisibilityProbe(
+                dict(
+                    schema_version=1,
+                    task_text=token,
+                    requested_kinds=["skill"],
+                    selection_scope="discovery",
+                ),
+                tuple(p.identity for p in members),
+            )
+            for token, members in groups.items()
+        )
+
+        async def receive() -> float:
+            write_import(imports, packages)
+            return clock()
+
+        async def rescan() -> None:
+            reply = await call("rescan", source_id=IMPORT_SOURCE_ID)
+            if reply.get("jobs"):
+                batch_job_ids[batch_id] = reply["jobs"][0]["job_id"]
+
+        return ImportBatch(batch_id, IMPORT_OFFSETS[batch], probes, receive, rescan)
+
+    async def rebuild() -> None:
+        reply = await call("rebuild")
+        if reply.get("jobs"):
+            rebuild_job_id[:] = [reply["jobs"][0]["job_id"]]
+
+    return WorkloadPlan(
+        [make(b) for b in range(4)], rebuild, batch_job_ids, jobs, channel_errors, rebuild_job_id
+    )
+
+
+async def run_operations_workload(
+    gateway: Gateway, imports: Path, samples: WorkloadSamples
+) -> WorkloadPlan:
+    """The fixed 60-second schedule of ``run_workload`` against a controlled gateway."""
+    plan = workload_plan(imports, gateway.control)
+    await run_workload(
+        gateway.client,
+        workload_bodies(),
+        batches=plan.batches,
+        rebuild=plan.rebuild,
+        job_evidence=plan.job_evidence,
+        samples=samples,
+    )
+    samples.identities = plan.identities()
+    return plan
+
+
+class MemorySampler:
+    """Periodic resident memory samples of one process; unknown stays None."""
+
+    def __init__(self, pid: int, *, interval: float = 0.25):
+        self.pid = pid
+        self.interval = interval
+        self.samples: list[int | None] = []
+
+    def sample(self) -> None:
+        self.samples.append(rss_bytes(self.pid))
+
+    @contextlib.asynccontextmanager
+    async def running(self):
+        async def loop():
+            while True:
+                await asyncio.to_thread(self.sample)
+                await asyncio.sleep(self.interval)
+
+        task = asyncio.create_task(loop())
+        try:
+            yield self
         finally:
-            if drain is not None:
-                drain.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await drain
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+            await asyncio.to_thread(self.sample)
+
+    @property
+    def peak(self) -> int | None:
+        known = [s for s in self.samples if s is not None]
+        return max(known) if known else None
+
+    @property
+    def complete(self) -> bool:
+        return bool(self.samples) and None not in self.samples
+
+
+# --- the operations report ----------------------------------------------------------------
+
+# Section 12.6 bounds, listed for reading next to the numbers. The grader's
+# ``passes`` fields decide; a fixture report never passes them.
+BOUNDS = dict(
+    launches=10,
+    startup_to_first_lexical_ms=1000,
+    batches=4,
+    batch_records=25,
+    receipt_to_visibility_ms=1000,
+    workload_seconds=60,
+    requests_per_second=2,
+    concurrency=1,
+    service_p95_ms=300,
+    scheduled_p95_ms=300,
+    slot_deadline_ms=500,
+    incremental_memory_bytes=1024**3,
+)
+
+
+def _workload_dict(workload: WorkloadSamples) -> dict:
+    value = dataclasses.asdict(workload)
+    if workload.origin_utc is not None:
+        value["origin_utc"] = workload.origin_utc.isoformat()
+    return value
+
+
+def operations_report(
+    startups: Sequence[StartupSample],
+    workload: WorkloadSamples,
+    memory: MemoryObservation | None,
+    *,
+    environment: Mapping,
+    runner: Mapping,
+    catalog: Mapping,
+    memory_samples: Mapping,
+    harness_errors: Sequence[str],
+) -> dict:
+    """The samples and the unchanged ``summarize_operations`` result, labeled fixture.
+
+    Spec 12.6.5: CI runners and developer machines never satisfy the AC29
+    platform gates, so the kit refuses a report its caller labeled measured.
+    """
+    if workload.provenance != "fixture" or any(s.provenance != "fixture" for s in startups):
+        raise ValueError("measured_requires_acceptance_platform")
+    return dict(
+        kind="asset-operations-run",
+        schema_version=1,
+        qualification="fixture",
+        acceptance="not_applicable",
+        acceptance_reason="not_an_acceptance_platform",
+        environment=dict(environment),
+        runner=dict(runner),
+        catalog=dict(catalog),
+        bounds=BOUNDS,
+        startups=[dataclasses.asdict(s) for s in startups],
+        workload=_workload_dict(workload),
+        memory=None if memory is None else dataclasses.asdict(memory),
+        memory_samples=dict(memory_samples),
+        harness_errors=list(harness_errors),
+        summary=summarize_operations(startups, workload, memory),
+    )
+
+
+def _request_sample(value: Mapping) -> RequestSample:
+    return RequestSample(**dict(value, events=tuple(value["events"])))
+
+
+def _startup_sample(value: Mapping) -> StartupSample:
+    attempts = tuple(_request_sample(a) for a in value["attempts"])
+    return StartupSample(**dict(value, attempts=attempts))
+
+
+def _batch_sample(value: Mapping) -> BatchSample:
+    return BatchSample(
+        **dict(
+            value,
+            probes=tuple(_request_sample(p) for p in value["probes"]),
+            expected=tuple(tuple(identity) for identity in value["expected"]),
+        )
+    )
+
+
+def load_operations_report(
+    report: Mapping,
+) -> tuple[list[StartupSample], WorkloadSamples, MemoryObservation | None]:
+    """The samples of a stored report, ready for ``summarize_operations`` again."""
+    raw = report["workload"]
+    origin_utc = raw["origin_utc"]
+    workload = WorkloadSamples(
+        provenance=raw["provenance"],
+        identities=raw["identities"],
+        environment=raw["environment"],
+        requests=[_request_sample(r) for r in raw["requests"]],
+        batches=[_batch_sample(b) for b in raw["batches"]],
+        rebuild=raw["rebuild"],
+        jobs=[
+            dict(job, events=tuple(job["events"])) if "events" in job else dict(job)
+            for job in raw["jobs"]
+        ],
+        errors=list(raw["errors"]),
+        origin_at=raw["origin_at"],
+        origin_utc=None if origin_utc is None else datetime.fromisoformat(origin_utc),
+    )
+    memory = report["memory"]
+    if memory is not None:
+        memory = MemoryObservation(
+            **dict(memory, coverage=tuple(memory["coverage"]), phases=tuple(memory["phases"]))
+        )
+    return [_startup_sample(s) for s in report["startups"]], workload, memory
 
 
 # --- platform report -----------------------------------------------------------------
@@ -343,16 +923,22 @@ def platform_report(
     input_manifest: Mapping,
     platform: Mapping,
     ordinary_check: Callable[[Mapping], bool] | None = None,
+    operations: Path | None = None,
     qualification: str = "fixture",
 ) -> dict:
     """An ``AssetPlatformReportV1`` from actual lifecycle records.
 
-    ``evidence_paths`` maps ``install-check`` (and ``ordinary-capture``) to the
-    path registered for that original in the companion input manifest. The
-    five ordinary actions pass only when ``ordinary_check`` (the installed-host
-    qualification's own ``ordinary_pass``) accepts the capture. Skill use,
-    restart and MCP use stay ``not_run``: a selection receipt is not observed
-    instruction use. The kit never emits ``measured``.
+    ``evidence_paths`` maps ``install-check`` (and ``ordinary-capture``,
+    ``operations-report``) to the path registered for that original in the
+    companion input manifest. The five ordinary actions pass only when
+    ``ordinary_check`` (the installed-host qualification's own
+    ``ordinary_pass``) accepts the capture; a capture of the Linux-only
+    person-ingress harness on another platform keeps them ``not_run`` with
+    ``ordinary_harness_linux_only``. Skill use, MCP use and restart stay
+    ``not_run``: a selection receipt is not observed instruction use, MCP use
+    remains disabled (spec 7.6.1/7.6.2), and the lifecycle record has no
+    restart. An operations report becomes ``operations_evidence``. The kit
+    never emits ``measured``.
     """
     if qualification != "fixture":
         raise ValueError("measured_requires_acceptance_platform")
@@ -362,11 +948,18 @@ def platform_report(
     if not isinstance(check, dict):
         raise ValueError("install_check_invalid")
     evidence = [_evidence(install_check, "install-check", evidence_paths["install-check"])]
-    ordinary_ok = False
+    ordinary_ok, linux_only = False, False
     if ordinary is not None:
         capture = json.loads(Path(ordinary).read_text(encoding="utf-8"))
         ordinary_ok = isinstance(capture, dict) and ordinary_check(capture) is True
+        linux_only = isinstance(capture, dict) and capture.get("reason") == "linux_runner_required"
         evidence.append(_evidence(ordinary, "ordinary-capture", evidence_paths["ordinary-capture"]))
+    operations_entry = None
+    if operations is not None:
+        operations_entry = _evidence(
+            operations, "operations-report", evidence_paths["operations-report"]
+        )
+        evidence.append(operations_entry)
     steps = []
     for name in PLATFORM_STEPS:
         status, ids, reason = "not_run", [], f"{name}_not_run"
@@ -377,10 +970,16 @@ def platform_report(
         elif name in _ORDINARY_ACTIONS:
             if ordinary_ok:
                 status, ids, reason = "passed", ["ordinary-capture"], None
+            elif linux_only:
+                reason = "ordinary_harness_linux_only"
             elif ordinary is not None:
                 reason = "ordinary_capture_unverified"
         elif name == "skill_use":
             reason = "skill_use_not_observed"
+        elif name == "mcp_use":
+            reason = "mcp_use_disabled"
+        elif name == "restart":
+            reason = "restart_not_observed"
         steps.append(dict(name=name, status=status, evidence_ids=ids, reason=reason))
     report = dict(
         schema_version=1,
@@ -390,7 +989,7 @@ def platform_report(
         platform=dict(platform),
         artifacts=[],
         steps=steps,
-        operations_evidence=None,
+        operations_evidence=None if operations_entry is None else dict(operations_entry),
         approvals_evidence=[],
         evidence=sorted(evidence, key=lambda e: e["id"].encode()),
         gate=None,
