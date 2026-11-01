@@ -121,7 +121,11 @@ def _admit(
     row, refs, planned, config, seen: set, evidence: Mapping, *, skipped: bool = False
 ) -> tuple[dict, list]:
     """Check one executor row before it is journaled; raise on any contradiction."""
-    if not isinstance(row, Mapping) or not isinstance(refs, list):
+    if (
+        not isinstance(row, Mapping)
+        or not isinstance(refs, list)
+        or not all(isinstance(r, Mapping) for r in refs)
+    ):
         raise WholeTaskRejected("executor_output")
     row = validate_whole_task("HostRow", copy.deepcopy(dict(row)))
     if (row["task_id"], row["arm"]) != (planned["task_id"], planned["arm"]):
@@ -314,9 +318,13 @@ def _run_program(argv: list[str], payload: bytes, timeout: float | None) -> byte
     def feed() -> None:
         try:
             process.stdin.write(payload)
-            process.stdin.close()
         except OSError:
             pass  # The program stopped reading; its exit status decides.
+        finally:
+            try:
+                process.stdin.close()
+            except OSError:
+                pass  # Flushing to a closed pipe fails; the descriptor is released.
 
     def drain() -> None:
         size = 0
@@ -447,6 +455,9 @@ def _outcome(finished: Mapping | None) -> tuple[str, int | None]:
     error = payload.get("error")
     if error is None:
         return "success", 1
+    if not isinstance(error, Mapping) or not isinstance(error.get("code"), str):
+        # The trace schema leaves the error shape open; a malformed one is no outcome.
+        raise ValueError("trace_error")
     code = error["code"]
     if code in _NOT_DISPATCHED:
         return "failed", None
