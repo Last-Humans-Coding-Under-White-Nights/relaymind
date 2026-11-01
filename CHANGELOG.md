@@ -26,6 +26,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `scripts/asset_whole_task.py trial-install` (and `trial`) failed on a fresh
+  OpenClaw 2026.10.7 host, which installs the plugin disabled until it is
+  configured (#269; RM39/RM44; AC30/AC36 tooling). The kit now follows the
+  operator guide's lifecycle: install, configure `baseUrl` (`--base-url`,
+  default `http://127.0.0.1:8080/v1`), enable, inspect. It records each step,
+  and inspect must report the plugin loaded and enabled. Verified with a host
+  double that models the disabled fresh install; not yet rerun on the
+  owner's M1 (#259).
 - Ordinary local skill discovery (#268; RM34/AC25; spec 0.66 section 4.6.1)
   admitted only 8 of OpenClaw 2026.10.7's 49 bundled skills: 32 bodies were
   rejected for `<placeholder>` text or HTML examples and 9 for more than three

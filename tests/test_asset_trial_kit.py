@@ -34,20 +34,43 @@ M1 = dict(
     cpu="Apple M1",
     ram_bytes=8 * 1024**3,
 )
+# Like the pinned 2026.10.7 host (#269): a fresh install is disabled until it is
+# configured and enabled; inspect then reports status "disabled".
 FAKE_HOST = r"""
-import json, sys
+import json, os, sys
 args = sys.argv[1:]
-mode = open(sys.argv[0] + ".mode").read().strip() if __import__("os").path.exists(
+mode = open(sys.argv[0] + ".mode").read().strip() if os.path.exists(
     sys.argv[0] + ".mode") else "ok"
 with open(sys.argv[0] + ".log", "a") as log:
     log.write(json.dumps(args) + "\n")
+path = sys.argv[0] + ".state"
+state = json.load(open(path)) if os.path.exists(path) else {}
+def save():
+    json.dump(state, open(path, "w"))
 if args == ["--version"]:
     print("OpenClaw 2026.10.7" if mode != "old" else "OpenClaw 2026.9.1")
 elif args[:2] == ["plugins", "install"]:
     print("installed relaymind")
-    sys.exit(1 if mode == "install-fails" else 0)
+    if mode == "install-fails":
+        sys.exit(1)
+    state.update(installed=True, enabled=False)
+    save()
+elif args[:3] == ["config", "set", "plugins.entries.relaymind.config.baseUrl"] and len(args) == 4:
+    if mode == "config-fails":
+        sys.exit(1)
+    if state.get("installed") and not state.get("enabled"):
+        print("plugin disabled (relaymind) but config is present")
+    state["base_url"] = args[3]
+    save()
+elif args == ["plugins", "enable", "relaymind"]:
+    if not state.get("installed") or "base_url" not in state:
+        sys.exit(1)
+    state["enabled"] = mode != "stays-disabled"
+    save()
 elif args[:2] == ["plugins", "inspect"]:
-    print(json.dumps({"plugin": {"status": "loaded", "enabled": False, "version": "1.0.0"},
+    enabled = bool(state.get("enabled"))
+    print(json.dumps({"plugin": {"status": "loaded" if enabled else "disabled",
+                                 "enabled": enabled, "version": "1.0.0"},
                       "diagnostics": []}))
 else:
     sys.exit(9)
@@ -220,20 +243,26 @@ def test_preflight_requires_the_frozen_package_bytes(tmp_path, bundle):
 
 
 def test_install_uses_the_pinned_cli_and_records_digests(tmp_path):
+    """#269: install, configure, enable, inspect, the operator guide's lifecycle."""
     tarball = release(tmp_path)
     work = tmp_path / "install"
     record = kit.install_plugin(fake_host(tmp_path), tarball, work)
     assert record["passed"] is True
     names = [s["name"] for s in record["steps"]]
-    assert names == ["install", "inspect"]
-    log = (tmp_path / "fake_openclaw.py.log").read_text().splitlines()
-    assert json.loads(log[0]) == [
-        "plugins",
-        "install",
-        "npm-pack:" + str(tarball),
-        "--force",
-        "--accept-capabilities",
+    assert names == ["install", "configure", "enable", "inspect"]
+    assert all(s["status"] == "passed" for s in record["steps"])
+    log = [
+        json.loads(line) for line in (tmp_path / "fake_openclaw.py.log").read_text().splitlines()
     ]
+    assert log == [
+        ["plugins", "install", "npm-pack:" + str(tarball), "--force", "--accept-capabilities"],
+        ["config", "set", "plugins.entries.relaymind.config.baseUrl", kit.DEFAULT_BASE_URL],
+        ["plugins", "enable", "relaymind"],
+        ["plugins", "inspect", "relaymind", "--runtime", "--json"],
+    ]
+    assert record["base_url"] == kit.DEFAULT_BASE_URL == "http://127.0.0.1:8080/v1"
+    assert record["steps"][-1]["inspect"]["enabled"] is True
+    assert record["steps"][-1]["inspect"]["status"] == "loaded"
     # The record never carries the private path, only placeholders and digests.
     assert str(tarball) not in json.dumps(record)
     assert record["archive"]["sha256"] == hashlib.sha256(b"ev-package").hexdigest()
@@ -246,7 +275,51 @@ def test_failed_install_is_recorded_and_not_passed(tmp_path):
     tarball = release(tmp_path)
     record = kit.install_plugin(fake_host(tmp_path, "install-fails"), tarball, tmp_path / "i")
     assert record["passed"] is False
-    assert [s["status"] for s in record["steps"]] == ["failed", "not_run"]
+    assert [s["status"] for s in record["steps"]] == ["failed", "not_run", "not_run", "not_run"]
+
+
+def test_install_configures_the_given_loopback_url(tmp_path):
+    """#269: the configure step sets the operator's gateway URL before enable."""
+    tarball = release(tmp_path)
+    url = "http://127.0.0.1:18080/v1"
+    record = kit.install_plugin(fake_host(tmp_path), tarball, tmp_path / "i", base_url=url)
+    assert record["passed"] is True and record["base_url"] == url
+    configure = next(s for s in record["steps"] if s["name"] == "configure")
+    assert configure["argv"] == [
+        "<openclaw>",
+        "config",
+        "set",
+        "plugins.entries.relaymind.config.baseUrl",
+        url,
+    ]
+    assert json.loads((tmp_path / "fake_openclaw.py.state").read_text())["base_url"] == url
+
+
+@pytest.mark.parametrize(
+    ("mode", "statuses"),
+    [
+        ("config-fails", ["passed", "failed", "not_run", "not_run"]),
+        ("stays-disabled", ["passed", "passed", "passed", "failed"]),
+    ],
+)
+def test_a_real_lifecycle_failure_is_recorded_and_not_passed(tmp_path, mode, statuses):
+    """#269: a refused configure, or a plugin still disabled after enable, fails."""
+    tarball = release(tmp_path)
+    record = kit.install_plugin(fake_host(tmp_path, mode), tarball, tmp_path / "i")
+    assert record["passed"] is False
+    assert [s["status"] for s in record["steps"]] == statuses
+
+
+def test_trial_install_command_takes_the_base_url(tmp_path):
+    """#269: ``trial-install --base-url`` reaches the configure step."""
+    tarball = release(tmp_path)
+    output = tmp_path / "install.json"
+    url = "http://localhost:9090/v1"
+    argv = ["trial-install", "--tarball", str(tarball), "--work", str(tmp_path / "w")]
+    argv += ["--output", str(output), "--base-url", url, "--", *fake_host(tmp_path)]
+    assert main(argv) == 0
+    record = json.loads(output.read_bytes())
+    assert record["passed"] is True and record["base_url"] == url
 
 
 # --- run, bundle and grade ----------------------------------------------------

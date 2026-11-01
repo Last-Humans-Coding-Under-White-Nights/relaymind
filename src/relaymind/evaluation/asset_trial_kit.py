@@ -7,7 +7,9 @@ existing host-trial driver and grader, never a replacement for them:
   frozen environment lock, the pinned OpenClaw host version and the packaged
   plugin release (tarball, ``SHA256SUMS`` and ``release.json`` from
   ``npm run pack:release``, and the frozen package bytes);
-- ``install_plugin`` installs that tarball with the pinned host CLI;
+- ``install_plugin`` installs that tarball with the pinned host CLI through the
+  operator guide's lifecycle: install, configure ``baseUrl``, enable, inspect
+  (the pinned host installs the plugin disabled until it is configured, #269);
 - ``trial_run`` executes the frozen early-trial plan through
   ``run_host_trial`` over operator-captured row observations, collects every
   original into a bundle with its SHA-256, writes the companion input
@@ -63,6 +65,10 @@ PREFLIGHT_CHECKS = (
 )
 QUALIFICATIONS = ("fixture", "provisional")
 HOST_TIMEOUT_SECONDS = 120
+PLUGIN_ID = "relaymind"
+# The gateway's default loopback listener (relaymind.example.toml) and the
+# operator guide's ``baseUrl``; the plugin refuses a non-loopback URL itself.
+DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1"
 _VERSION = re.compile(r"\b\d{4}\.\d{1,2}\.\d{1,2}\b")
 _OBSERVATION_KEYS = {"schema_version", "ordinal", "task_id", "arm", "row", "evidence"}
 _PROVENANCE = ("observed", "reported", "fixture")
@@ -229,25 +235,38 @@ def _inspect(output: bytes, version: str | None) -> dict:
         diagnostics=value.get("diagnostics") if isinstance(value, dict) else None,
     )
     check["passed"] = (
-        check["status"] == "loaded" and check["diagnostics"] == [] and check["version"] == version
+        check["status"] == "loaded"
+        and check["enabled"] is True
+        and check["diagnostics"] == []
+        and check["version"] == version
     )
     return check
 
 
-def install_plugin(host_command: Sequence[str], tarball: Path, work: Path) -> dict:
-    """Install the packaged plugin with the pinned host CLI and inspect it.
+def install_plugin(
+    host_command: Sequence[str], tarball: Path, work: Path, *, base_url: str = DEFAULT_BASE_URL
+) -> dict:
+    """Install, configure, enable and inspect the packaged plugin with the pinned host CLI.
 
-    The same command the operator guide and the ordinary installed-host
-    qualification use. Host output stays in private logs under ``work``; the
-    record keeps only placeholders, exit codes and SHA-256 digests.
+    The operator guide's lifecycle (``integrations/openclaw/README.md`` step 4)
+    and the install check's steps: the pinned host installs the plugin
+    disabled until it is configured, so ``plugins enable`` follows the
+    ``baseUrl`` configuration (#269). Each step is recorded; a step that fails
+    stops the rest (``not_run``). Host output stays in private logs under
+    ``work``; the record keeps only placeholders, exit codes and SHA-256
+    digests, and the configured loopback ``base_url``.
     """
+    if not isinstance(base_url, str) or not base_url or any(c.isspace() for c in base_url):
+        raise ValueError("invalid_base_url")
     tarball = Path(tarball).absolute()
     work = Path(work).absolute()
     work.mkdir(mode=0o700, parents=True, exist_ok=False)
     identity = release_identity(tarball)
     plan = (
         ("install", ["plugins", "install", "npm-pack:" + str(tarball), "--force"]),
-        ("inspect", ["plugins", "inspect", "relaymind", "--runtime", "--json"]),
+        ("configure", ["config", "set", f"plugins.entries.{PLUGIN_ID}.config.baseUrl", base_url]),
+        ("enable", ["plugins", "enable", PLUGIN_ID]),
+        ("inspect", ["plugins", "inspect", PLUGIN_ID, "--runtime", "--json"]),
     )
     steps, failed = [], False
     for name, args in plan:
@@ -281,6 +300,7 @@ def install_plugin(host_command: Sequence[str], tarball: Path, work: Path) -> di
         kind="asset-trial-install",
         pinned_openclaw=PINNED_OPENCLAW,
         archive={k: identity[k] for k in ("filename", "sha256", "bytes", "package", "version")},
+        base_url=base_url,
         steps=steps,
         passed=all(s["status"] == "passed" for s in steps),
     )

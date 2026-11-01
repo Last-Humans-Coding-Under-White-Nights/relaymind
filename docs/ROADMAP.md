@@ -1549,8 +1549,10 @@ is claimed.
 (`asset_trial_kit.py`) add the Apple M1 8 GiB / pinned host / release-checksum
 preflight, the pinned-CLI plugin install, and the frozen plan run through the
 existing driver over operator-captured row observations, bundled with
-SHA-256 digests and graded offline. They are verified over fixture bundles and a
-host double only. The owner-run trial itself (#259), its frozen inputs and genuine
+SHA-256 digests and graded offline. #269: the install follows the host's
+lifecycle (install, configure `baseUrl`, enable, inspect), because the pinned
+host installs the plugin disabled until it is configured. They are verified over
+fixture bundles and a host double only. The owner-run trial itself (#259), its frozen inputs and genuine
 native row observations remain open; no provisional cost has been recorded.
 
 #201 native benchmark contract checkpoint (spec 0.61): explicit local-cold
