@@ -65,3 +65,15 @@ catalog digest must match.
   prevalence makes chance agreement high); the acceptable-set agreement and
   the Jaccard sum are the informative numbers. No negatives or ambiguous
   prompts were drafted.
+
+## Preregistration history
+
+The first preregistration commit (`00276311de0594159bc61877bd736ac03d46c734`)
+named the corpus by the lock's own `digest` field instead of the canonical
+digest of the whole lock document, which the section 12.6.5 grader resolves
+(`corpus_unresolved`). It is superseded by the next commit, which changes only
+`corpus_lock_digest`/`dataset_lock_digest` (and so the freeze and input
+digests). Cases, labels, the lock and all configurations are unchanged. Runs
+made under the first preregistration (all 100 episodes and two host rows,
+`h001` native and provider_only) are kept privately as a pilot and are not
+part of any graded report; every graded run starts after the second commit.

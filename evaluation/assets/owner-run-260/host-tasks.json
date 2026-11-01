@@ -1,9 +1,9 @@
 {
  "schema_version": 1,
  "kind": "acceptance",
- "corpus_lock_digest": "bc215cc0c321a09f810b4476da1f7a2d5d19c44a349952b89680fca1bafac3d4",
+ "corpus_lock_digest": "f38971d99b45d9681d4c8199b94203dc842b09eb17c04e0d2921241ef972d865",
  "seed": 260,
- "freeze_digest": "5f72aeb2a0a48ac22a8c0b96cf760e124eac732d7a49fdeb11890627a7f739d2",
+ "freeze_digest": "5414274d8625d7a02351535cc3d31f98a4d0bfd833e2897f1a521dc90481b785",
  "tasks": [
   {
    "id": "h001",

@@ -312,7 +312,9 @@ class Run:
             prompt_total = completion_total = 0
             for n, item in enumerate(usages, 1):
                 u = item["usage"]
-                prompt_total += u.get("input") or 0
+                # The provider bills cached reads as prompt tokens; the host
+                # reports them apart from its input count.
+                prompt_total += (u.get("input") or 0) + (u.get("cacheRead") or 0)
                 completion_total += u.get("output") or 0
                 attempts.append(
                     dict(

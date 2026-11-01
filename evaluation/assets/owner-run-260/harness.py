@@ -836,7 +836,7 @@ def cmd_host(args) -> None:
     arms = ("native", "provider_only", "recommendations")
     freeze = dict(
         schema_version=1,
-        corpus_lock_digest=lock["digest"],
+        corpus_lock_digest=canonical_digest(lock),
         configurations=[
             dict(
                 arm=arm,
@@ -875,7 +875,7 @@ def cmd_host(args) -> None:
     document = dict(
         schema_version=1,
         kind="acceptance",
-        corpus_lock_digest=lock["digest"],
+        corpus_lock_digest=canonical_digest(lock),
         seed=args.seed,
         freeze_digest=canonical_digest(freeze),
         tasks=sorted(tasks, key=lambda t: t["id"].encode()),
@@ -918,7 +918,7 @@ def cmd_episodes(args) -> None:
         )
     document = dict(
         schema_version=1,
-        dataset_lock_digest=lock["digest"],
+        dataset_lock_digest=canonical_digest(lock),
         config_digest=canonical_digest(freeze),
         episodes=sorted(episodes, key=lambda e: e["id"].encode()),
     )
