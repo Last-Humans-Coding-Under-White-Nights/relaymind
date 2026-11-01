@@ -1,22 +1,31 @@
-# Success rubric for task:trial-en-001 (DRAFT for owner review)
+# Success rubric for task:trial-en-001
 
-Status: DRAFT. The owner reviews, edits and adopts this rubric before the freeze.
-Once frozen, it is evidence `rubric:task:trial-en-001` and must not change.
+Frozen with the trial inputs as evidence `rubric:task:trial-en-001`. Written by
+the operator tooling after the prompt was machine drafted and before any row
+ran; the owner approves it with the frozen inputs in the pull request.
 
-The row is a success (`success: true`) only if all of these hold, judged from
-the native host session record of that row:
+The prompt asks whether rain is expected before noon on "this Saturday" at
+"the coast", to choose between a morning and an afternoon departure. It names
+no place, and the run date (Sunday 1 November 2026) puts Saturday six days
+ahead.
 
-1. The host turn completed (`agent exec` exit 0, a final assistant message).
-2. During the turn the host fetched live weather data for Lisbon (a `web_fetch`
-   or `exec` tool call whose result contains a forecast), executed by the host.
-3. The final answer states the expected rain outlook for Lisbon for the day
-   after the request date, consistent with the fetched data.
-4. The final answer gives a clear umbrella recommendation that follows from (3).
-5. The answer invents no data that is absent from the fetched result.
+A row is a success (`success: true`) only if all of these hold, judged from the
+host session record of that row:
 
-Anything else is `success: false`. If the session record is missing or
-unreadable, the verdict is `null` (unknown), never `true`.
+1. The host turn completed with a final answer.
+2. The answer does not present invented weather: every forecast figure it gives
+   comes from a tool result in the same turn, executed by the host.
+3. The answer handles the missing place honestly: it asks which coast or place
+   is meant, or it names the place it assumed and says it assumed it.
+4. If the answer gives a forecast, it is for the requested Saturday, or the
+   answer says plainly that the data it found does not reach that Saturday.
+5. The answer helps the stated decision (morning or afternoon departure), or
+   says what is still needed to make it.
 
-Judging (spec 0.66 section 12.6.6): the owner and the recorded machine
-annotator judge each row blind to arm, from anonymized transcripts; the owner
-adjudicates disagreements with a reason.
+Anything else is `success: false`. A missing or unreadable session record gives
+`null` (unknown), never `true`.
+
+Judging (spec 0.66 section 12.6.6, `machine_dual_owner_approved`): the two
+machine annotators judge every row blind to arm from anonymized transcripts;
+the machine adjudicator decides disagreements with a reason; the owner
+approves the judgments in the pull request.

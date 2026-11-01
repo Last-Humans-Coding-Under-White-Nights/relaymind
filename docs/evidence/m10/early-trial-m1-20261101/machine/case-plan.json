@@ -1,0 +1,1 @@
+[{"case_id":"trial-en-001","lane":"en_to_en","task_family_ids":["task:travel-weather"],"target_asset_family_ids":["family:weather"],"requested_kinds":["skill"],"intended_class":"positive"}]

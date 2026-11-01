@@ -1,2 +1,3 @@
-DRAFT for owner review: all eight originals are written in English only; no
-translation or generated text was added.
+All eight originals are written in English only; no translation or generated
+text was added. Prompts are machine drafted in English (spec 0.66 12.6.6); the
+owner reviews them in the pull request that commits the lock.

@@ -1,2 +1,4 @@
-DRAFT for owner review: the owner adjudicates every case from the worksheet
-after both raw judgments are recorded, with a reason on every disagreement.
+The distinct machine adjudicator machine-adjudicator (template
+machine/adjudicator.md, temperature 0) completes the worksheet from the worksheet
+and the catalog projections only. The owner approves the frozen labels in the
+pull request that commits the label lock.

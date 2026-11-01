@@ -1,0 +1,1 @@
+{"api":"openai-completions","api_key_env":"RELAYMIND_EXTERNAL_API_KEY","base_url":"omitted: owner-confidential","context_limit":128000,"model":"glm-5.3-flash","native_entry":"host-native.json models.providers.external-direct","provider":"owner-external-openai-compatible","relaymind_entry":"gateway-*.toml [external_model]","schema_version":1}

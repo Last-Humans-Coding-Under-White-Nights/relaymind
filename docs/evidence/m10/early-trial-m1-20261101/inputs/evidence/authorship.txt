@@ -1,4 +1,6 @@
-DRAFT for owner review: the case prompt in cases.DRAFT.json was drafted during
-the agent session as an example and is marked authorship=generated. The owner
-replaces it with a prompt the owner writes, sets authorship=original and
-author_ids=[owner], and confirms this statement before freezing.
+Spec 0.66 section 12.6.6 machine_drafted_owner_approved. Every prompt was
+written by the recorded drafter machine-drafter (exact model ID in the drafting
+response, temperature 0, template machine/drafter.md) from the offered catalog
+projections and the case plan only. The drafting request and response bytes are
+evidence drafting-request and drafting-response. No draft was rejected. The
+owner approves the frozen cases in the pull request; until then they are pending.

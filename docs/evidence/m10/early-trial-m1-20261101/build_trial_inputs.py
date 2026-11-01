@@ -59,7 +59,9 @@ SKILLS = (
     "weather",
 )
 ARMS = ("native", "provider_only", "recommendations")
-OWNER, MACHINE = "owner", "machine-annotator"
+OWNER = "owner"
+DRAFTER, ADJUDICATOR = "machine-drafter", "machine-adjudicator"
+MACHINE_A, MACHINE_B = "machine-annotator-a", "machine-annotator-b"
 SEED = 259
 
 
@@ -97,31 +99,37 @@ STATEMENTS = {
         "permits acquisition, evaluation, retention and redistribution with the notice.\n"
     ),
     "language_review": (
-        "DRAFT for owner review: all eight originals are written in English only; no\n"
-        "translation or generated text was added.\n"
+        "All eight originals are written in English only; no translation or generated\n"
+        "text was added. Prompts are machine drafted in English (spec 0.66 12.6.6); the\n"
+        "owner reviews them in the pull request that commits the lock.\n"
     ),
     "authorship": (
-        "DRAFT for owner review: the case prompt in cases.DRAFT.json was drafted during\n"
-        "the agent session as an example and is marked authorship=generated. The owner\n"
-        "replaces it with a prompt the owner writes, sets authorship=original and\n"
-        "author_ids=[owner], and confirms this statement before freezing.\n"
+        "Spec 0.66 section 12.6.6 machine_drafted_owner_approved. Every prompt was\n"
+        "written by the recorded drafter machine-drafter (exact model ID in the drafting\n"
+        "response, temperature 0, template machine/drafter.md) from the offered catalog\n"
+        "projections and the case plan only. The drafting request and response bytes are\n"
+        "evidence drafting-request and drafting-response. No draft was rejected. The\n"
+        "owner approves the frozen cases in the pull request; until then they are pending.\n"
     ),
     "independence": (
-        "DRAFT for owner review: section 12.6.6 owner_machine profile. The owner and one\n"
-        "machine annotator each judge from their own blind label template; neither sees\n"
-        "the other's judgment, tuning results or arm outputs before both are recorded.\n"
+        "Spec 0.66 section 12.6.6 machine_dual_owner_approved, same_family: annotators\n"
+        "machine-annotator-a and machine-annotator-b (one provider family, glm) each judge\n"
+        "only their own blind label template and the catalog projections, with two\n"
+        "independently written templates (machine/annotator-a.md, annotator-b.md), at\n"
+        "temperature 0, before the worksheet exists. Neither sees the other's judgment,\n"
+        "tuning results, arm outputs or the drafter's plan.\n"
     ),
     "adjudication": (
-        "DRAFT for owner review: the owner adjudicates every case from the worksheet\n"
-        "after both raw judgments are recorded, with a reason on every disagreement.\n"
+        "The distinct machine adjudicator machine-adjudicator (template\n"
+        "machine/adjudicator.md, temperature 0) completes the worksheet from the worksheet\n"
+        "and the catalog projections only. The owner approves the frozen labels in the\n"
+        "pull request that commits the label lock.\n"
     ),
-    "split_review": (
-        "DRAFT for owner review: the early-trial case is held_out; no selector or\n"
-        "setting was tuned on it.\n"
-    ),
+    "split_review": ("The early-trial case is held_out; no selector or setting was tuned on it.\n"),
     "access_control": (
-        "DRAFT for owner review: the owner, as custodian, keeps the labels outside the\n"
-        "gateway and host runtime environments until the trial inputs are frozen.\n"
+        "The operator tooling keeps the labels outside the gateway and host runtime\n"
+        "directories until the trial inputs are frozen and committed. The owner is the\n"
+        "approver (role reviewer); no person authored, annotated or adjudicated.\n"
     ),
     "derivation": (
         "Derived by docs/evidence/m10/early-trial-m1-20261101/build_trial_inputs.py from\n"
@@ -168,6 +176,16 @@ def draft(root: Path) -> None:
     add("notice", "notice", "evidence/notice.txt", license_bytes)
     for name, text in STATEMENTS.items():
         add(name, name, f"evidence/{name}.txt", text.encode("utf-8"))
+    # The drafter's original request and response bytes (spec 12.6.6).
+    for part in ("request", "response"):
+        drafted = HERE / "machine/calls" / f"drafting.{part}.json"
+        if drafted.exists():
+            add(
+                "drafting-" + part,
+                "authorship",
+                f"evidence/drafting.{part}.json",
+                drafted.read_bytes(),
+            )
     records = _records(root)
     assets = []
     for skill in SKILLS:
@@ -208,21 +226,34 @@ def draft(root: Path) -> None:
         release=1,
         purpose="development",
         assets=assets,
-        people=[
-            dict(
-                id=MACHINE,
-                roles=["annotator"],
-                competencies=[],
-                evidence_ids=["independence"],
-            ),
-            # DRAFT: the owner confirms these roles and competencies.
-            dict(
-                id=OWNER,
-                roles=["adjudicator", "annotator", "author", "custodian"],
-                competencies=["proficient_en"],
-                evidence_ids=["access_control", "adjudication", "authorship", "independence"],
-            ),
-        ],
+        people=sorted(
+            [
+                dict(
+                    id=MACHINE_A,
+                    roles=["annotator"],
+                    competencies=[],
+                    evidence_ids=["independence"],
+                ),
+                dict(
+                    id=MACHINE_B,
+                    roles=["annotator"],
+                    competencies=[],
+                    evidence_ids=["independence"],
+                ),
+                dict(
+                    id=ADJUDICATOR,
+                    roles=["adjudicator"],
+                    competencies=[],
+                    evidence_ids=["adjudication"],
+                ),
+                dict(id=DRAFTER, roles=["author"], competencies=[], evidence_ids=["authorship"]),
+                # The owner approves by pull request review only.
+                dict(
+                    id=OWNER, roles=["reviewer"], competencies=[], evidence_ids=["access_control"]
+                ),
+            ],
+            key=lambda p: p["id"].encode(),
+        ),
         equivalent_pairs=[],
         exclusions=[
             dict(
@@ -236,36 +267,6 @@ def draft(root: Path) -> None:
         evidence=sorted(evidence, key=lambda e: e["id"].encode()),
     )
     _write(inputs / "catalog.json", _bytes(catalog))
-    weather = next(a for a in assets if a["record"]["identity"]["package_id"] == "weather")
-    cases = dict(
-        schema_version=1,
-        dataset_id=DATASET,
-        release=1,
-        cases=[
-            dict(
-                id="trial-en-001",
-                split="held_out",
-                task_family_ids=["task:travel-weather"],
-                target_asset_family_ids=list(weather["asset_family_ids"]),
-                lane="en_to_en",
-                task_text=(
-                    "I'm flying to Lisbon tomorrow morning. Will it rain there, "
-                    "and should I pack an umbrella?"
-                ),
-                conversation=[],
-                requested_kinds=["skill"],
-                language_tags=["en"],
-                code_switched=False,
-                author_ids=[],
-                authorship="generated",
-                authorship_evidence_ids=["authorship"],
-                derived_from_case_id=None,
-                source_case_evidence_id=None,
-            )
-        ],
-        split_review_evidence_ids=["split_review"],
-    )
-    _write(inputs / "cases.DRAFT.json", _bytes(cases))
     configs = inputs / "configs"
     for arm in ARMS:
         payload = (root / "host" / f"arm-{arm}.json").read_bytes()
@@ -547,7 +548,23 @@ def freeze(root: Path, cases_path: Path, labels_path: Path) -> None:
 # --- record ----------------------------------------------------------------------
 
 
-def record(bundle: Path, record_id: str, machine_model: str, prompt: Path) -> None:
+def _model(call: str) -> str:
+    """The exact model ID the provider returned for one recorded call."""
+    return _read_json(HERE / "machine/calls" / f"{call}.response.json")["model"]
+
+
+def _machine(annotator_id: str, call: str, template: str) -> dict:
+    return dict(
+        annotator_id=annotator_id,
+        model_id=_model(call),
+        prompt_sha256=_sha((HERE / "machine" / template).read_bytes()),
+        temperature=0,
+        saw_tuning_results=False,
+        saw_arm_outputs=False,
+    )
+
+
+def record(bundle: Path, record_id: str) -> None:
     import socket
     import subprocess
 
@@ -593,17 +610,19 @@ def record(bundle: Path, record_id: str, machine_model: str, prompt: Path) -> No
         profile="owner_run",
         outcome="positive",
         scope="host_trial",
-        labelling="owner_machine",
+        labelling="machine_dual_owner_approved",
         annotators=dict(
-            owner_annotator_id=OWNER,
-            machine=dict(
-                annotator_id=MACHINE,
-                model_id=machine_model,
-                prompt_sha256=_sha(prompt.read_bytes()),
-                temperature=0,
-                saw_tuning_results=False,
-                saw_arm_outputs=False,
-            ),
+            machine_a=_machine(MACHINE_A, "labels-annotator_a", "annotator-a.md"),
+            machine_b=_machine(MACHINE_B, "labels-annotator_b", "annotator-b.md"),
+            adjudicator=_machine(ADJUDICATOR, "adjudication", "adjudicator.md"),
+            family_relation="same_family",
+        ),
+        prompt_authorship="machine_drafted_owner_approved",
+        drafter=dict(
+            author_id=DRAFTER,
+            model_id=_model("drafting"),
+            prompt_sha256=_sha((HERE / "machine/drafter.md").read_bytes()),
+            temperature=0,
         ),
         agreement=dict(
             paired_cases=group["paired_cases"],
@@ -637,6 +656,7 @@ def record(bundle: Path, record_id: str, machine_model: str, prompt: Path) -> No
     _write(target, json.dumps(value, indent=1, ensure_ascii=False).encode("utf-8") + b"\n")
     checked = load_record(target)
     checked.check_labels(labels)
+    checked.check_cases(_read_json(bundle / by_kind["cases"]["path"]))
     print(f"record {target} loads; approved={checked.approved}")
 
 
@@ -652,15 +672,13 @@ def main(argv=None) -> int:
     r = sub.add_parser("record")
     r.add_argument("--bundle", type=Path, required=True)
     r.add_argument("--record-id", required=True)
-    r.add_argument("--machine-model", required=True, help="pinned, dated model ID")
-    r.add_argument("--machine-prompt", type=Path, required=True)
     args = parser.parse_args(argv)
     if args.command == "draft":
         draft(args.root.absolute())
     elif args.command == "freeze":
         freeze(args.root.absolute(), args.cases.absolute(), args.labels.absolute())
     else:
-        record(args.bundle.absolute(), args.record_id, args.machine_model, args.machine_prompt)
+        record(args.bundle.absolute(), args.record_id)
     return 0
 
 
