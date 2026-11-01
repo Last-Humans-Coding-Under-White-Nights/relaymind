@@ -19,13 +19,21 @@ The kit never executes a task, a tool or an approval: only the host does. A
 row without an observation is exported ``not_run``; nothing is inferred from a
 gateway trace or a selection receipt. Output is ``fixture`` or ``provisional``,
 never ``qualified``, so an early trial can never pass acceptance.
+
+The bundle and every copied original are private to the operator (directories
+``0700``, files ``0600``): the frozen evidence is ``access: restricted``. The
+bundle is built in a private staging directory beside the requested path and
+renamed into place only once it is complete, so a refused run leaves nothing.
 """
 
 import copy
 import hashlib
 import json
+import os
 import re
+import shutil
 import subprocess
+import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -39,6 +47,7 @@ from relaymind.evaluation.asset_benchmark_io import (
 )
 from relaymind.evaluation.asset_corpus_io import (
     DOCUMENT_BYTES,
+    ORIGINAL_BYTES,
     AssetCorpusError,
     read_local,
     relative_path,
@@ -73,6 +82,66 @@ DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1"
 _VERSION = re.compile(r"\b\d{4}\.\d{1,2}\.\d{1,2}\b")
 _OBSERVATION_KEYS = {"schema_version", "ordinal", "task_id", "arm", "row", "evidence"}
 _PROVENANCE = ("observed", "reported", "fixture")
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+# Host text the install record may keep: closed codes only, never free text.
+_STATUS_CODE = re.compile(r"[a-z][a-z0-9_-]{0,31}")
+_RELEASE_VERSION = re.compile(r"\d{1,9}\.\d{1,9}\.\d{1,9}(?:[-+][0-9A-Za-z.-]{1,64})?")
+_RELEASE_KEYS = ("filename", "sha256", "bytes", "package", "version")
+_PREFLIGHT_KEYS = {
+    "schema_version",
+    "kind",
+    "target",
+    "pinned_openclaw",
+    "checks",
+    "observed",
+    "passed",
+}
+_PREFLIGHT_OBSERVED = {
+    "environment",
+    "host_version",
+    "host_version_output_sha256",
+    "release",
+    "frozen_package_evidence_id",
+}
+_INSTALL_KEYS = {
+    "schema_version",
+    "kind",
+    "pinned_openclaw",
+    "archive",
+    "base_url",
+    "steps",
+    "passed",
+}
+_STEP_KEYS = {
+    "name",
+    "argv",
+    "exit_code",
+    "log",
+    "output_sha256",
+    "output_bytes",
+    "stderr_log",
+    "stderr_sha256",
+    "stderr_bytes",
+    "status",
+}
+_INSPECT_KEYS = {"status", "enabled", "version", "diagnostics_count", "passed"}
+
+
+def _install_plan(base_url: str) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """The operator guide's lifecycle: install, configure ``baseUrl``, enable, inspect (#269).
+
+    ``base_url`` is already in the plugin's normal form (``check_base_url``):
+    no credential, query or fragment, so it may appear in the recorded argv.
+    """
+    return (
+        (
+            "install",
+            ("plugins", "install", "npm-pack:<artifact>", "--force", "--accept-capabilities"),
+        ),
+        ("configure", ("config", "set", f"plugins.entries.{PLUGIN_ID}.config.baseUrl", base_url)),
+        ("enable", ("plugins", "enable", PLUGIN_ID)),
+        ("inspect", ("plugins", "inspect", PLUGIN_ID, "--runtime", "--json")),
+    )
 
 
 def observed_environment() -> dict:
@@ -103,6 +172,42 @@ def observation_name(ordinal: int) -> str:
 
 def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def real_path(path: Path) -> Path:
+    """An operator output path with its existing symlinked ancestors resolved once.
+
+    On macOS ``/tmp`` and ``/var`` are symlinks; the no-follow write fence then
+    applies to the real directory. The final component is not followed.
+    """
+    path = Path(path).absolute()
+    if path.name in ("", ".", ".."):
+        return path.resolve()
+    return path.parent.resolve() / path.name
+
+
+def _private_dirs(root: Path, directory: Path) -> None:
+    """Create the missing directories from ``root`` down to ``directory`` as ``0700``."""
+    current = root
+    for part in directory.relative_to(root).parts:
+        current = current / part
+        try:
+            current.mkdir(mode=0o700)
+        except FileExistsError:
+            if current.is_symlink() or not current.is_dir():
+                raise WholeTaskRejected("bundle_path_conflict") from None
+            continue
+        current.chmod(0o700)  # The umask may have narrowed it; never widened.
+
+
+def _private_write(path: Path, payload: bytes) -> None:
+    """Write one new ``0600`` file; an existing file or link is never replaced."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags | getattr(os, "O_BINARY", 0), 0o600)
+    with os.fdopen(fd, "wb") as handle:
+        if hasattr(os, "fchmod"):
+            os.fchmod(handle.fileno(), 0o600)
+        handle.write(payload)
 
 
 # --- preflight ------------------------------------------------------------------
@@ -178,6 +283,28 @@ def _check(name: str, passed: bool) -> dict:
     return dict(name=name, status="passed" if passed else "failed")
 
 
+def _environment_checks(environment: Mapping, lock: Mapping) -> dict[str, bool]:
+    """The target machine checks, recomputable from a recorded environment."""
+    return dict(
+        macos_arm64=environment.get("os") == TARGET_OS
+        and environment.get("architecture") == TARGET_ARCHITECTURE,
+        apple_m1=environment.get("cpu") == TARGET_CPU,
+        memory_8gib=environment.get("ram_bytes") == TARGET_RAM_BYTES,
+        environment_lock=all(
+            value is None or environment.get(key) == value for key, value in lock.items()
+        ),
+    )
+
+
+def _host_pinned(version, freeze: Mapping) -> bool:
+    host = freeze["host"]
+    return (
+        version == PINNED_OPENCLAW
+        and host["version"] == PINNED_OPENCLAW
+        and host["sdk_version"] == PINNED_OPENCLAW
+    )
+
+
 def preflight(
     *,
     environment: Mapping,
@@ -199,25 +326,9 @@ def preflight(
         if identity["sha256"] is not None
         and (p["sha256"], p["bytes"]) == (identity["sha256"], identity["bytes"])
     ]
-    host = freeze["host"]
     checks = [
-        _check(
-            "macos_arm64",
-            environment.get("os") == TARGET_OS
-            and environment.get("architecture") == TARGET_ARCHITECTURE,
-        ),
-        _check("apple_m1", environment.get("cpu") == TARGET_CPU),
-        _check("memory_8gib", environment.get("ram_bytes") == TARGET_RAM_BYTES),
-        _check(
-            "environment_lock",
-            all(value is None or environment.get(key) == value for key, value in lock.items()),
-        ),
-        _check(
-            "host_version",
-            version == PINNED_OPENCLAW
-            and host["version"] == PINNED_OPENCLAW
-            and host["sdk_version"] == PINNED_OPENCLAW,
-        ),
+        *(_check(name, passed) for name, passed in _environment_checks(environment, lock).items()),
+        _check("host_version", _host_pinned(version, freeze)),
         _check("release_checksum", identity["checksum_ok"]),
         _check(
             "frozen_package",
@@ -236,7 +347,7 @@ def preflight(
             environment=dict(environment),
             host_version=version,
             host_version_output_sha256=version_digest,
-            release={k: identity[k] for k in ("filename", "sha256", "bytes", "package", "version")},
+            release={k: identity[k] for k in _RELEASE_KEYS},
             frozen_package_evidence_id=packages[0]["evidence_id"] if len(packages) == 1 else None,
         ),
         passed=all(c["status"] == "passed" for c in checks),
@@ -246,23 +357,34 @@ def preflight(
 # --- install --------------------------------------------------------------------
 
 
+def _code(value, pattern: re.Pattern) -> str | None:
+    return value if isinstance(value, str) and pattern.fullmatch(value) else None
+
+
 def _inspect(output: bytes, version: str | None) -> dict:
+    """Closed codes and a count from ``plugins inspect``; no host free text.
+
+    Diagnostics can carry paths, user names or tokens: only their count is
+    recorded. The raw output stays in the private log, bound by its digest.
+    """
     try:
         value = json.loads(output)
     except ValueError:
         value = None
     plugin = value.get("plugin") if isinstance(value, dict) else None
     plugin = plugin if isinstance(plugin, dict) else {}
+    diagnostics = value.get("diagnostics") if isinstance(value, dict) else None
     check = dict(
-        status=plugin.get("status"),
-        enabled=plugin.get("enabled"),
-        version=plugin.get("version"),
-        diagnostics=value.get("diagnostics") if isinstance(value, dict) else None,
+        status=_code(plugin.get("status"), _STATUS_CODE),
+        enabled=plugin.get("enabled") if isinstance(plugin.get("enabled"), bool) else None,
+        version=_code(plugin.get("version"), _RELEASE_VERSION),
+        diagnostics_count=len(diagnostics) if isinstance(diagnostics, list) else None,
     )
     check["passed"] = (
         check["status"] == "loaded"
         and check["enabled"] is True
-        and check["diagnostics"] == []
+        and check["diagnostics_count"] == 0
+        and check["version"] is not None
         and check["version"] == version
     )
     return check
@@ -337,28 +459,21 @@ def install_plugin(
     """
     base_url = check_base_url(base_url)
     tarball = Path(tarball).absolute()
-    work = Path(work).absolute()
+    work = real_path(work)
     work.mkdir(mode=0o700, parents=True, exist_ok=False)
+    work.chmod(0o700)
     identity = release_identity(tarball)
-    plan = (
-        ("install", ["plugins", "install", "npm-pack:" + str(tarball), "--force"]),
-        ("configure", ["config", "set", f"plugins.entries.{PLUGIN_ID}.config.baseUrl", base_url]),
-        ("enable", ["plugins", "enable", PLUGIN_ID]),
-        ("inspect", ["plugins", "inspect", PLUGIN_ID, "--runtime", "--json"]),
-    )
     steps, failed = [], False
-    for name, args in plan:
-        if name == "install":
-            args = [*args, "--accept-capabilities"]
-        shown = ["<openclaw>", *(a.replace(str(tarball), "<artifact>") for a in args)]
+    for name, shown_args in _install_plan(base_url):
+        shown = ["<openclaw>", *shown_args]
+        args = [a.replace("<artifact>", str(tarball)) for a in shown_args]
         if failed:
             steps.append(dict(name=name, argv=shown, status="not_run", exit_code=None))
             continue
         code, output, errors = _run([*host_command, *args])
         log, error_log = work / (name + ".log"), work / (name + ".stderr.log")
         for path, payload in ((log, output), (error_log, errors)):
-            path.write_bytes(payload)
-            path.chmod(0o600)
+            _private_write(path, payload)
         step = dict(
             name=name,
             argv=shown,
@@ -382,11 +497,145 @@ def install_plugin(
         schema_version=1,
         kind="asset-trial-install",
         pinned_openclaw=PINNED_OPENCLAW,
-        archive={k: identity[k] for k in ("filename", "sha256", "bytes", "package", "version")},
+        archive={k: identity[k] for k in _RELEASE_KEYS},
         base_url=base_url,
         steps=steps,
         passed=all(s["status"] == "passed" for s in steps),
     )
+
+
+# --- the provisional gate --------------------------------------------------------
+
+
+def _closed(value, keys: set) -> bool:
+    return isinstance(value, Mapping) and set(value) == keys
+
+
+def _release_shape(release) -> bool:
+    return (
+        _closed(release, set(_RELEASE_KEYS))
+        and isinstance(release["sha256"], str)
+        and _SHA256.fullmatch(release["sha256"]) is not None
+        and type(release["bytes"]) is int
+        and all(isinstance(release[k], str) for k in ("filename", "package", "version"))
+    )
+
+
+def verify_preflight(record, *, frozen: Mapping, environment: Mapping) -> dict:
+    """The provisional preflight gate: closed shape, recomputed checks, bindings.
+
+    A record outside its closed shape rejects (``preflight_record``); a
+    well-formed failed preflight blocks (``preflight_failed``). A ``passed``
+    label is never trusted: the target machine checks are recomputed from the
+    recorded environment against the frozen lock (``preflight_contradiction``),
+    and the environment and release must be the report's environment and the
+    one frozen package (``preflight_binding``). Returns that frozen package.
+    """
+    checks = record.get("checks") if isinstance(record, Mapping) else None
+    observed = record.get("observed") if isinstance(record, Mapping) else None
+    if not (
+        _closed(record, _PREFLIGHT_KEYS)
+        and (record["schema_version"], record["kind"]) == (1, "asset-trial-preflight")
+        and (record["target"], record["pinned_openclaw"])
+        == ("apple_m1_8gib_macos", PINNED_OPENCLAW)
+        and isinstance(checks, list)
+        and all(_closed(c, {"name", "status"}) for c in checks)
+        and [c["name"] for c in checks] == list(PREFLIGHT_CHECKS)
+        and all(c["status"] in ("passed", "failed") for c in checks)
+        and isinstance(record["passed"], bool)
+        and record["passed"] == all(c["status"] == "passed" for c in checks)
+        and _closed(observed, _PREFLIGHT_OBSERVED)
+        and _code(observed["host_version_output_sha256"], _SHA256) is not None
+    ):
+        raise WholeTaskRejected("preflight_record")
+    if not record["passed"]:
+        raise WholeTaskBlocked("preflight_failed")
+    recorded = preflight_environment(record)
+    release = observed["release"]
+    if (
+        not all(_environment_checks(recorded, frozen["lock"]).values())
+        or not _host_pinned(observed["host_version"], frozen["freeze"])
+        or not _release_shape(release)
+    ):
+        raise WholeTaskRejected("preflight_contradiction")
+    packages = [
+        p
+        for p in frozen["freeze"]["packages"]
+        if (p["sha256"], p["bytes"]) == (release["sha256"], release["bytes"])
+    ]
+    if (
+        recorded != dict(environment)
+        or len(packages) != 1
+        or packages[0]["version"] != release["version"]
+        or observed["frozen_package_evidence_id"] != packages[0]["evidence_id"]
+    ):
+        raise WholeTaskRejected("preflight_binding")
+    return packages[0]
+
+
+def _step_shape(step, name: str, argv: list) -> bool:
+    if not isinstance(step, Mapping) or (step.get("name"), step.get("argv")) != (name, argv):
+        return False
+    if step.get("status") == "not_run":
+        return _closed(step, {"name", "argv", "status", "exit_code"}) and step["exit_code"] is None
+    keys = _STEP_KEYS | ({"inspect"} if name == "inspect" else set())
+    return (
+        _closed(step, keys)
+        and step["status"] in ("passed", "failed")
+        and (step["log"], step["stderr_log"]) == (name + ".log", name + ".stderr.log")
+        and all(_code(step[k], _SHA256) for k in ("output_sha256", "stderr_sha256"))
+        and all(type(step[k]) is int for k in ("output_bytes", "stderr_bytes"))
+        and (step["exit_code"] is None or type(step["exit_code"]) is int)
+    )
+
+
+def verify_install(record, release: Mapping) -> None:
+    """The provisional install gate over the preflight's verified release.
+
+    Closed shape over the four lifecycle steps for the recorded ``base_url``
+    (``install_record``), then a well-formed failed install blocks
+    (``install_failed``). A passed label must agree with its own steps and
+    inspection, loaded and enabled (``install_contradiction``), and name the
+    same archive as the preflight (``install_binding``).
+    """
+    steps = record.get("steps") if isinstance(record, Mapping) else None
+    base_url = record.get("base_url") if isinstance(record, Mapping) else None
+    try:
+        # The recorded baseUrl must already be the plugin's normal form (#269).
+        plan = _install_plan(base_url) if check_base_url(base_url) == base_url else None
+    except ValueError:
+        plan = None
+    if not (
+        plan is not None
+        and _closed(record, _INSTALL_KEYS)
+        and (record["schema_version"], record["kind"]) == (1, "asset-trial-install")
+        and record["pinned_openclaw"] == PINNED_OPENCLAW
+        and _closed(record["archive"], set(_RELEASE_KEYS))
+        and isinstance(steps, list)
+        and len(steps) == len(plan)
+        and all(
+            _step_shape(step, name, ["<openclaw>", *argv])
+            for step, (name, argv) in zip(steps, plan, strict=True)
+        )
+        and isinstance(record["passed"], bool)
+        and record["passed"] == all(step["status"] == "passed" for step in steps)
+    ):
+        raise WholeTaskRejected("install_record")
+    if not record["passed"]:
+        raise WholeTaskBlocked("install_failed")
+    inspect = steps[-1]["inspect"]
+    if not (
+        all(step["exit_code"] == 0 for step in steps)
+        and _closed(inspect, _INSPECT_KEYS)
+        and inspect["passed"] is True
+        and inspect["status"] == "loaded"
+        and inspect["enabled"] is True
+        and inspect["diagnostics_count"] == 0
+        and inspect["version"] == record["archive"]["version"]
+    ):
+        raise WholeTaskRejected("install_contradiction")
+    if dict(record["archive"]) != dict(release):
+        raise WholeTaskRejected("install_binding")
 
 
 # --- run, bundle, grade ---------------------------------------------------------
@@ -432,15 +681,21 @@ class _Bundle:
         # Null paths are resolver-only originals: kept in the manifest, not copied.
         paths = [d["path"] for d in self.manifest["documents"] if d.get("path")]
         paths += [e["path"] for e in self.manifest["evidence"] if e.get("path")]
+        # Evidence originals keep their own 10 MiB limit (section 12.6.5).
+        limits = {d["path"]: DOCUMENT_BYTES for d in self.manifest["documents"] if d.get("path")}
+        limits.update(
+            {e["path"]: ORIGINAL_BYTES for e in self.manifest["evidence"] if e.get("path")}
+        )
         for path in dict.fromkeys(paths):
-            self.write(path, read_local(source, path, DOCUMENT_BYTES))
+            self.write(path, read_local(source, path, limits[path]))
 
     def write(self, path: str, payload: bytes) -> None:
         target = self.root / relative_path(path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if target.exists():
-            raise WholeTaskRejected("bundle_path_conflict")
-        target.write_bytes(payload)
+        _private_dirs(self.root, target.parent)
+        try:
+            _private_write(target, payload)
+        except FileExistsError:
+            raise WholeTaskRejected("bundle_path_conflict") from None
 
     def add(self, evidence_id: str, payload: bytes, provenance: str) -> dict:
         digest = _sha256(payload)
@@ -484,7 +739,7 @@ class _Bundle:
             for p in sorted(self.root.rglob("*"), key=lambda p: p.relative_to(self.root).as_posix())
             if p.is_file() and p.name != "SHA256SUMS"
         ]
-        (self.root / "SHA256SUMS").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        _private_write(self.root / "SHA256SUMS", ("\n".join(lines) + "\n").encode("utf-8"))
 
 
 def _not_run(task_id: str, arm: str, reason: str) -> dict:
@@ -506,6 +761,12 @@ def _not_run(task_id: str, arm: str, reason: str) -> dict:
         evidence_ids=[],
         reason=reason,
     )
+
+
+_EVIDENCE_READ = {
+    "missing_file": "observation_evidence_missing",
+    "size_limit": "observation_evidence_too_large",
+}
 
 
 def _executor(
@@ -566,9 +827,10 @@ def _executor(
             except AssetCorpusError:
                 raise WholeTaskRejected("observation_path") from None
             try:
-                payload = read_local(observations, item["file"], DOCUMENT_BYTES)
-            except AssetCorpusError:
-                raise WholeTaskRejected("observation_evidence_missing") from None
+                payload = read_local(observations, item["file"], ORIGINAL_BYTES)
+            except AssetCorpusError as error:
+                reason = _EVIDENCE_READ.get(str(error), "observation_evidence_unsafe")
+                raise WholeTaskRejected(reason) from None
             refs.append(bundle.add(item["id"], payload, item["provenance"]))
         return row, refs
 
@@ -577,6 +839,17 @@ def _executor(
 
 def _blocked(reason: str) -> tuple[int, dict]:
     return 3, dict(status="blocked", gate="blocked", reason=reason)
+
+
+def _grade_bundle(root: Path, resolver: Path | None) -> tuple[int, dict]:
+    from relaymind.evaluation.asset_whole_task_cli import main as grade
+
+    argv = ["grade-host", "--report", str(root / "report.json"), "--inputs"]
+    argv += [str(root / "inputs.json"), "--output", str(root / "grade.json")]
+    if resolver is not None:
+        argv += ["--resolver", str(Path(resolver).absolute())]
+    code = grade(argv)
+    return code, json.loads((root / "grade.json").read_bytes())
 
 
 def trial_run(
@@ -596,34 +869,51 @@ def trial_run(
     """Run the frozen early-trial plan, bundle every original and grade it offline.
 
     Returns the grader's exit code and result: 0 pass, 1 fail, 2 rejected,
-    3 blocked. A fixture or provisional early trial is at best blocked.
+    3 blocked. A fixture or provisional early trial is at best blocked; a
+    provisional label over fixture inputs is rejected by the grader (#240).
+    The provisional gate (``verify_preflight``, ``verify_install``) runs before
+    anything is written; the bundle appears at ``bundle`` only when complete.
     """
     if qualification not in QUALIFICATIONS:
         raise ValueError("qualification")
-    out = Path(bundle).absolute()
+    out, staging = real_path(bundle), None
     try:
-        if out.exists():
+        if out.exists() or out.is_symlink():
             raise WholeTaskRejected("bundle_exists")
         frozen = load_frozen(inputs)
         tasks, freeze = frozen["tasks"], frozen["freeze"]
         if tasks["kind"] != "early_trial":
             raise WholeTaskRejected("early_trial_required")
+        package = package_payload = None
         if qualification == "provisional":
-            if preflight_record.get("passed") is not True:
-                return _blocked("preflight_failed")
-            if install_record is None or install_record.get("passed") is not True:
-                return _blocked("install_failed")
-        out.mkdir(parents=True)
-        kit = _Bundle(out, frozen)
+            package = verify_preflight(preflight_record, frozen=frozen, environment=environment)
+            if install_record is None:
+                raise WholeTaskBlocked("install_failed")
+            verify_install(install_record, preflight_record["observed"]["release"])
+        if tarball is not None:
+            tarball = Path(tarball).absolute()
+            package_payload = read_local(tarball.parent, tarball.name, ORIGINAL_BYTES)
+            identity = (_sha256(package_payload), len(package_payload))
+            matched = [p for p in freeze["packages"] if (p["sha256"], p["bytes"]) == identity]
+            if len(matched) != 1 or package not in (None, matched[0]):
+                raise WholeTaskRejected("package_binding")
+            package = matched[0]
+        out.parent.mkdir(parents=True, exist_ok=True)
+        staging = Path(tempfile.mkdtemp(prefix=f".{out.name}.partial-", dir=out.parent))
+        staging.chmod(0o700)
+        kit = _Bundle(staging, frozen)
         plan = plan_host_trial(tasks)
         configs = {c["arm"]: c for c in freeze["configurations"]}
+        by_id = {t["id"]: t for t in tasks["tasks"]}
         atomic_bytes(
-            out / "plan.json",
+            staging / "plan.json",
             json_bytes(
                 dict(
                     planned=[
                         dict(
                             p,
+                            lane=by_id[p["task_id"]]["lane"],
+                            prompt_case_id=by_id[p["task_id"]]["prompt_case_id"],
                             observation=observation_name(p["ordinal"]),
                             host_config_digest=configs[p["arm"]]["host_config_digest"],
                         )
@@ -640,18 +930,10 @@ def trial_run(
         ):
             if record is not None:
                 payload = json_bytes(record)
-                atomic_bytes(out / name, payload)
+                atomic_bytes(staging / name, payload)
                 extra.append(kit.add(evidence_id, payload, provenance))
-        if tarball is not None:
-            payload = Path(tarball).read_bytes()
-            package = [
-                p
-                for p in freeze["packages"]
-                if (p["sha256"], p["bytes"]) == (_sha256(payload), len(payload))
-            ]
-            if len(package) != 1:
-                raise WholeTaskRejected("package_binding")
-            extra.append(kit.add(package[0]["evidence_id"], payload, provenance))
+        if package_payload is not None:
+            extra.append(kit.add(package["evidence_id"], package_payload, provenance))
         ordinals = {(p["task_id"], p["arm"]): p["ordinal"] for p in plan}
         report = run_host_trial(
             tasks,
@@ -670,19 +952,20 @@ def trial_run(
         report["evidence"] = [evidence[i] for i in sorted(evidence, key=str.encode)]
         report["input_manifest"] = kit.write_manifest()
         validate_whole_task("AssetHostReportV1", report)
-        atomic_bytes(out / "report.json", json_bytes(report))
+        atomic_bytes(staging / "report.json", json_bytes(report))
+        code, result = _grade_bundle(staging, resolver)
+        kit.write_sums()
+        if out.exists() or out.is_symlink():
+            raise WholeTaskRejected("bundle_exists")
+        os.rename(staging, out)
+        staging = None
     except WholeTaskBlocked as error:
         return _blocked(error.reason)
     except (WholeTaskRejected, AssetCorpusError, OSError, KeyError, TypeError) as error:
         reason = str(error) if str(error).isidentifier() else "invalid_input"
         return 2, dict(status="rejected", gate=None, reason=reason)
-    from relaymind.evaluation.asset_whole_task_cli import main as grade
-
-    argv = ["grade-host", "--report", str(out / "report.json"), "--inputs"]
-    argv += [str(out / "inputs.json"), "--output", str(out / "grade.json")]
-    if resolver is not None:
-        argv += ["--resolver", str(Path(resolver).absolute())]
-    code = grade(argv)
-    kit.write_sums()
-    result = json.loads((out / "grade.json").read_bytes())
+    finally:
+        # A refused or interrupted run leaves no partial bundle behind.
+        if staging is not None:
+            shutil.rmtree(staging, ignore_errors=True)
     return code, dict(result, bundle=str(out))

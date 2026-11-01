@@ -121,7 +121,7 @@
   }
  ],
  "skill_loaded_use": {
-  "question": "A supported point that can stop or fence the next model request after skills_read, with fresh genuine host authority for that turn (spec 7.6.1 use-time fence).",
+  "question": "A supported host point that can fence the next model request after skills_read as spec 7.6.1 requires: at that boundary it must re-verify fresh person authority, the session incarnation and the pinned bytes. A point that can stop delivery but cannot re-verify them does not count (spec 0.66 section 12.6.6).",
   "surfaces": [
    {
     "name": "before_tool_call",
@@ -291,10 +291,10 @@
     "sha256": "2ec6dbe7ca39d393138aa4de63581b8e813fd972e03cd2a96e2082652bce8675"
    }
   ],
-  "conclusion": "Points that can stop the read or the next request exist, but none carries the fresh host person authority (or a qualified native delegation) that the 7.6.1 use-time fence must check at the final boundary. No point can fence the next model request: finding stop_point_absent; skill_loaded_use stays disabled."
+  "conclusion": "Points that can stop the read or the next request exist, but none can re-verify fresh person authority, the session incarnation and the pinned bytes at that boundary: none carries host person authority or a qualified native delegation, so each is a stop-only point and does not count. No host point can fence the next model request as section 7.6.1 requires: finding stop_point_absent (spec 0.66 section 12.6.6); skill_loaded_use stays disabled."
  },
  "mcp_use": {
-  "question": "A public route a plugin may use to invoke an exact MCP identity (server/original/exposed name/schema/currentness tuple) for an independent tool.",
+  "question": "A supported host route that invokes an independent, non-App MCP tool by its exact native identity (server/original/exposed name/schema/currentness tuple). MCP App view routes are App-scoped and do not count (spec 0.66 section 12.6.6; section 7.6.2 conditions 3 and 10).",
   "routes": [
    {
     "name": "tools.invoke",
@@ -324,7 +324,7 @@
      }
     ],
     "params": "sessionKey, viewId (required), toolName, arguments",
-    "verdict": "requires an active MCP App view bound to requester/session; independent tools have none; CI capture: mcp.app.listTools refused without a viewId; no legitimate selected-asset-to-view binding exists"
+    "verdict": "App-scoped: requires an active MCP App view bound to requester/session; independent tools have none, and no legitimate selected-asset-to-view binding exists in this composition. It does not count for exact_route_absent (spec 0.66 section 12.6.6; section 7.6.2 conditions 3 and 10); an App-specific trial would be a separate path, not tried here. Captures: mcp.app.listTools refused without a viewId."
    },
    {
     "name": "openclaw/plugin-sdk/agent-harness-tool-runtime (runAgentHarnessToolInvocation) and openclaw/plugin-sdk/codex-mcp-projection (materializeStaticMcpToolsForHarnessRun)",
@@ -356,9 +356,9 @@
       "sha256": "47836459dc2586ce35099773121ad3eb0a40eb7fd38f458272d613415d312ce3"
      }
     ],
-    "verdict": "read-only discovery; CI capture: ok with an empty tool list for the person session while both disposable stdio servers listed append"
+    "verdict": "read-only discovery; invokes nothing. The pinned host returns {groups: [{tools: [entry]}], notices?}, with MCP entries carrying the host's server/original mapping. The VPS3 capture (checkout bba0cf1, after mcp.app.discover started the person session's MCP runtime) lists both colliding append tools under distinct exposed names (alpha-one__append for alpha.one, alpha-one-2__append for alpha?one); no server call was made. The earlier CI and VPS2 captures show an empty list only because their probe read payload.tools instead of payload.groups[].tools (fixed in be67556), and those runs did not start the session's MCP runtime first; the empty list was a harness projection, not a host result."
    }
   ],
-  "conclusion": "No public route reaches an exact MCP identity on 2026.10.7: finding exact_route_absent; mcp_use stays disabled and relaymind.mcp is not registered."
+  "conclusion": "No supported host route invokes an independent, non-App MCP tool by its exact native identity on 2026.10.7: tools.invoke is name-only, the harness tool runtimes are documented private, and mcp.app.callTool is App-scoped and does not count. Finding exact_route_absent (spec 0.66 section 12.6.6); mcp_use stays disabled and relaymind.mcp is not registered."
  }
 }

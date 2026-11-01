@@ -304,11 +304,17 @@ def test_blocked_steps_stay_blocked_whatever_the_capture_claims(rec, tmp_path):
 
 def test_media_outside_the_output_is_refused(rec, tmp_path):
     base = language_dir(tmp_path, "en-US")
+    (tmp_path / "outside.png").write_bytes(b"outside")
     shots = json.loads((base / "screens.json").read_bytes())
     shots[0]["file"] = "../../outside.png"
     (base / "screens.json").write_text(json.dumps(shots), encoding="utf-8")
-    with pytest.raises(ValueError, match="walkthrough_media_path"):
-        build(rec, tmp_path, {"en-US": 0})
+    manifest = build(rec, tmp_path, {"en-US": 0})
+    entry = manifest["languages"][0]
+    # The unsafe reference is never followed; the manifest is still written.
+    assert all("outside" not in e["path"] for e in manifest["evidence"])
+    assert "screenshot_path" in entry["media_problems"]
+    assert {s["name"]: s for s in entry["steps"]}["open"]["evidence_ids"] == []
+    assert manifest["complete"] is False
 
 
 # --- fonts for the isolated browser home ---------------------------------------------
@@ -478,3 +484,90 @@ def test_record_writes_an_incomplete_manifest_when_a_child_fails(
     assert [e["language"] for e in manifest["languages"]] == list(rec.LANGUAGES)
     assert {e["reason"] for e in manifest["languages"]} == {reason}
     assert {e["exit_code"] for e in manifest["languages"]} == {None if outcome == "timeout" else 2}
+
+
+# --- second review follow-ups (PR #262) ---------------------------------------
+
+
+def test_unlisted_partial_screenshots_are_still_listed_by_digest(rec, tmp_path):
+    """A killed child never saved screens.json: every PNG is still evidence."""
+    base = language_dir(tmp_path, "en-US")
+    (base / "screens" / "9999-orphan.png").write_bytes(b"orphan")
+    manifest = build(rec, tmp_path, {"en-US": 0})
+    evidence = {e["id"]: e for e in manifest["evidence"]}
+    orphan = evidence["en-US/screens/9999-orphan.png"]
+    assert orphan["sha256"] == hashlib.sha256(b"orphan").hexdigest()
+    entry = manifest["languages"][0]
+    assert entry["media_problems"] == ["screenshot_unlisted"]
+    # An unlisted screenshot belongs to no step and never records one.
+    assert all("en-US/screens/9999-orphan.png" not in s["evidence_ids"] for s in entry["steps"])
+    assert manifest["complete"] is False
+
+
+def test_screenshots_without_screens_json_are_listed(rec, tmp_path):
+    base = tmp_path / "out" / "zh-CN" / "screens"
+    base.mkdir(parents=True)
+    (base / "0000-open.png").write_bytes(b"first")
+    manifest = rec.build_manifest(
+        tmp_path / "out", {"zh-CN": dict(exit_code=None, reason="child_timeout")}
+    )
+    assert [e["id"] for e in manifest["evidence"]] == ["zh-CN/screens/0000-open.png"]
+    assert manifest["languages"][0]["screens"] is None
+    assert manifest["complete"] is False
+
+
+def test_a_listed_screenshot_that_is_missing_still_writes_the_manifest(rec, tmp_path):
+    base = language_dir(tmp_path, "en-US")
+    (base / "screens" / "0002-choose.png").unlink()
+    manifest = build(rec, tmp_path, {"en-US": 0})
+    entry = manifest["languages"][0]
+    assert entry["media_problems"] == ["screenshot_missing"]
+    status = {s["name"]: s for s in entry["steps"]}
+    assert status["choose"] == dict(
+        name="choose", status="failed", reason="screenshot_missing", evidence_ids=[]
+    )
+    assert manifest["complete"] is False
+
+
+def test_a_torn_screens_list_still_writes_the_manifest(rec, tmp_path):
+    base = language_dir(tmp_path, "en-US")
+    (base / "screens.json").write_bytes(b'[{"step": "open", "fi')
+    manifest = build(rec, tmp_path, {"en-US": 0})
+    entry = manifest["languages"][0]
+    assert entry["screens"] == "en-US/screens"
+    assert set(entry["media_problems"]) == {"screens_invalid", "screenshot_unlisted"}
+    assert len([e for e in manifest["evidence"] if "/screens/" in e["id"]]) == len(rec_steps())
+    assert manifest["complete"] is False
+
+
+class FakeOrdinaryBase:
+    """The real ordinary methods replaced by doubles that record their inputs."""
+
+    received = []
+
+    def source_paths(self):
+        return [Path("ordinary.py")]
+
+    def select_library_skill(self, rpc, pages, sessions, ui_page, skill):
+        ui_page.get_by_role("button", name="Select for next turn").click()
+        FakeOrdinaryBase.received.append(ui_page)
+        return dict(selected=skill)
+
+
+def test_exact_skill_selection_is_localized_and_shot(rec, tmp_path, monkeypatch):
+    """RM39/AC30: the recorder's select_skill branch, through a page double."""
+    for name in ("source_paths", "select_library_skill"):
+        monkeypatch.setattr(rec.ORDINARY.OrdinaryComposition, name, getattr(FakeOrdinaryBase, name))
+    FakeOrdinaryBase.received = []
+    shooter = rec.Shooter(tmp_path)
+    composition = rec.walkthrough_composition("zh-CN", shooter)
+    assert issubclass(composition, rec.ORDINARY.OrdinaryComposition)
+    instance = object.__new__(composition)
+    page = FakePage()
+    assert instance.select_library_skill(None, [], [{}], page, "skill") == dict(selected="skill")
+    (received,) = FakeOrdinaryBase.received
+    assert isinstance(received, rec.LocalizedPage) and received._page is page
+    assert ("click", "供下一轮使用") in page.actions
+    assert {shot["step"] for shot in shooter.shots} == {"select_skill"}
+    assert [shot["label"] for shot in shooter.shots] == ["供下一轮使用", "settled"]
+    assert rec.HERE in instance.source_paths()
