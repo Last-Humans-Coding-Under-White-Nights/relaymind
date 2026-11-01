@@ -127,7 +127,9 @@ jobs:
             --out "$EVIDENCE/ordinary.json"
 
       # Also after an earlier failed step, so the evidence that exists is
-      # reported; the earlier failure still fails the job.
+      # reported; the earlier failure still fails the job. Without
+      # install-check.json the script writes platform/platform-not-built.json
+      # (install_check_missing) and exits 2; verify then reports it as FAIL.
       - name: Platform report
         if: always()
         timeout-minutes: 5

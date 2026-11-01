@@ -154,3 +154,27 @@ def test_an_interrupted_episode_is_kept_and_the_resumed_run_continues(tmp_path):
     grade_adaptation_report(
         report, episodes, freeze, release_labels(release), reset_preimages=reset_preimages(evidence)
     )
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        dict(environment=dict(ENVIRONMENT, os="Darwin")),
+        dict(input_manifest=dict(path="other.json", digest=H, bytes=1)),
+        dict(qualification="provisional"),
+    ],
+)
+def test_a_changed_execution_identity_cannot_resume_an_episode_journal(tmp_path, change):
+    release, freeze, episodes, arms = setup(tmp_path)
+    journal = tmp_path / "episodes.jsonl"
+    run(release, freeze, episodes, arms, journal)
+    arguments = dict(
+        environment=ENVIRONMENT,
+        qualification="fixture",
+        input_manifest=dict(path="inputs.json", digest=H, bytes=1),
+        interrupted=lambda: False,
+        journal=journal,
+    )
+    arguments.update(change)
+    with pytest.raises(JournalError, match="journal_binding"):
+        asyncio.run(run_adaptation_episodes(episodes, freeze, release, arms, **arguments))

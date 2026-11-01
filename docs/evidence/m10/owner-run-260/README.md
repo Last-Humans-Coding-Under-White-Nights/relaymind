@@ -104,6 +104,19 @@ bind.
   `bundle.py host` and `grade-host`. The VPS keeps `~/rm260` (repository copy,
   Python 3.12 venv, model files, release root) for the episode side; it holds
   no credentials.
+- **The run guards added after review.** `run_host.py` takes `--lock` and
+  `--release-root` instead of a cases file. It dispatches only prompts of the
+  verified release whose lock digest the tasks and freeze name, checked on
+  every start and resume. The external-token cap is enforced per row: a row
+  starts only if its whole `--row-budget` (default 250k) fits. A turn is
+  stopped as `cancelled`/`budget_cap` before another call (`--call-allowance`,
+  default 64k) could pass it. Unknown consumption is charged at its worst case.
+  The first run had none of these guards: it reserved 40k per row and charged
+  usage after the turn, so one row (h010 native) used 245k. `judge.py`
+  refuses to adjudicate or apply verdicts unless both judges gave a valid
+  verdict for every blind item and every final verdict is consistent with
+  them. The guards have deterministic tests only
+  (`tests/test_owner_run_260_scripts.py`).
 - **A person-driven recommendations arm.** Without it the final gate stays
   blocked: it needs a signed-in person in the native Control UI to choose, and
   qualified skill/MCP use, which is disabled on OpenClaw 2026.10.7 (the two

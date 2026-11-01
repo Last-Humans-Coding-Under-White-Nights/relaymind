@@ -2,11 +2,16 @@
 
 This invokes the pinned validator, not a gateway JSON Schema approximation.
 It does not authenticate captured evidence or establish qualified acceptance.
+Verdicts are closed: ``valid``/``invalid`` carry ``reason: null``;
+``unavailable`` carries ``validator_unavailable`` (no host verdict) or
+``plugin_schema_not_inspected`` (the host ran, but a referenced plugin's
+schema could not be inspected, so the config cannot be called valid).
 """
 
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from collections.abc import Mapping
@@ -16,19 +21,27 @@ from relaymind.evaluation.asset_benchmark_io import CONFIG_BYTES
 
 _PACKAGE = Path(__file__).resolve().parents[3] / "integrations/openclaw"
 _VALIDATOR_FILE = "dist/validation-ongxOmrj.mjs"
+# The packaged plugin files the host reads to discover RelayMind and its schema.
+_PLUGIN_FILES = ("package.json", "openclaw.plugin.json", "dist")
 
 
 def unavailable_verdict() -> dict:
-    return dict(status="unavailable", validator=None, issue_path=None)
+    return dict(
+        status="unavailable", validator=None, issue_path=None, reason="validator_unavailable"
+    )
 
 
 def validate_verdict(value: object) -> dict:
     """Reject malformed or extended checker output at the Python boundary."""
-    if not isinstance(value, dict) or set(value) != {"status", "validator", "issue_path"}:
+    if not isinstance(value, dict) or set(value) != {"status", "validator", "issue_path", "reason"}:
         raise ValueError("host_config_verdict")
     if value == unavailable_verdict():
         return value
-    if value["status"] not in ("valid", "invalid"):
+    expected_reason = "plugin_schema_not_inspected" if value["status"] == "unavailable" else None
+    if (
+        value["status"] not in ("valid", "invalid", "unavailable")
+        or value["reason"] != expected_reason
+    ):
         raise ValueError("host_config_verdict")
     identity = value["validator"]
     if (
@@ -49,18 +62,35 @@ def validate_verdict(value: object) -> dict:
     return value
 
 
-def check_host_config(config: Mapping, *, host_root: Path | None = None) -> dict:
+def check_host_config(
+    config: Mapping, *, host_root: Path | None = None, plugin_root: Path | None = None
+) -> dict:
     """Check this exact preimage in Node, with a 15-second process deadline.
 
     Host discovery is relative to the installed integration, never the caller's
     working directory. Missing host/Node, timeouts and malformed output are
-    unavailable. Child environment/state is isolated from operator secrets.
+    unavailable. Child environment/state is isolated from operator secrets: a
+    disposable state directory replaces HOME. When the config references the
+    ``relaymind`` plugin, that state's only installed plugin is the packaged
+    RelayMind plugin from ``plugin_root`` (default: this integration's built
+    package; pass the unpacked release the run uses), so ordinary
+    installed-plugin discovery validates its settings; an unbuilt package is
+    unavailable. Any other referenced non-bundled plugin stays undiscovered and
+    the verdict is unavailable.
     """
     try:
         payload = json.dumps(config, ensure_ascii=True, allow_nan=False).encode("utf-8")
         if len(payload) > CONFIG_BYTES:
             return unavailable_verdict()
+        plugin = (plugin_root or _PACKAGE) if _references_relaymind(config) else None
+        if plugin is not None and not all(
+            (plugin / name).is_file()
+            for name in ("package.json", "openclaw.plugin.json", "dist/index.js")
+        ):
+            return unavailable_verdict()
         with tempfile.TemporaryDirectory(prefix="relaymind-host-config-") as temporary:
+            if plugin is not None:
+                _install_plugin(plugin, Path(temporary) / "extensions/relaymind")
             env = {
                 key: value
                 for key, value in os.environ.items()
@@ -98,3 +128,31 @@ def check_host_config(config: Mapping, *, host_root: Path | None = None) -> dict
         return validate_verdict(json.loads(result.stdout))
     except (OSError, ValueError, TypeError, RecursionError, subprocess.TimeoutExpired):
         return unavailable_verdict()
+
+
+def _install_plugin(source: Path, target: Path) -> None:
+    """Copy only the packaged plugin files; nothing else from the source tree."""
+    target.mkdir(parents=True)
+    for name in _PLUGIN_FILES:
+        path = source / name
+        if path.is_dir():
+            shutil.copytree(path, target / name, symlinks=False)
+        elif path.is_file():
+            shutil.copyfile(path, target / name)
+
+
+def _references_relaymind(config: Mapping) -> bool:
+    """Whether plugins.entries/allow/deny/slots name the RelayMind plugin."""
+    plugins = config.get("plugins")
+    if not isinstance(plugins, Mapping):
+        return False
+    names: list[object] = []
+    for key in ("entries", "slots"):
+        value = plugins.get(key)
+        if isinstance(value, Mapping):
+            names.extend(value if key == "entries" else value.values())
+    for key in ("allow", "deny"):
+        value = plugins.get(key)
+        if isinstance(value, list):
+            names.extend(value)
+    return any(isinstance(name, str) and name.strip().lower() == "relaymind" for name in names)

@@ -15,9 +15,15 @@ with an in-process executor over the pinned OpenClaw 2026.10.7 host:
 Every row runs ``openclaw agent exec`` in a fresh sandbox and state directory.
 The native arm's usage is the host's own persisted per-message usage (the
 session transcript), and the provider arm's usage the gateway TraceEvents. The
-verdict stays null here: blind success judging is a later, separate step. A row
-that would pass the external-token cap is ``not_run`` with reason
-``budget_cap``. Credentials and the provider endpoint live only in private
+verdict stays null here: blind success judging is a later, separate step.
+
+Guards: prompts come only from the verified frozen corpus whose lock digest the
+tasks and freeze name (checked before setup, on every start and resume). The
+external-token cap is enforced per row: a row starts only if its whole
+reservation fits, the host turn is stopped (``cancelled``, ``budget_cap``)
+before another call could pass that reservation, and unknown consumption is
+charged at its worst case. A row that cannot start is ``not_run`` with
+reason ``budget_cap``. Credentials and the provider endpoint live only in private
 files of the run directory, which are deleted at the end, and in this process.
 """
 
@@ -58,6 +64,141 @@ def read(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+class CorpusMismatch(ValueError):
+    """The corpus on disk is not the one the preregistered tasks and freeze name."""
+
+
+def verified_prompts(tasks, freeze, lock_path: Path, evidence_root: Path) -> dict[str, str]:
+    """Prompt text by case ID, only from the verified frozen corpus the plan names.
+
+    The release verifier checks the lock and the exact catalog, cases and labels
+    it commits; the canonical digest of the lock document must equal the
+    ``corpus_lock_digest`` of both the tasks and the freeze, and every task must
+    bind to its frozen case. An edited cases file therefore rejects, whether or
+    not it was relocked, on the first start and on every resume.
+    """
+    from relaymind.canonical import canonical_digest
+    from relaymind.evaluation.asset_corpus import load_asset_release
+    from relaymind.evaluation.asset_whole_task_corpus import bind_host_tasks
+
+    lock_path = Path(lock_path).absolute()
+    digest = canonical_digest(read(lock_path))
+    if not (digest == tasks["corpus_lock_digest"] == freeze["corpus_lock_digest"]):
+        raise CorpusMismatch("corpus_lock_mismatch")
+    release = load_asset_release(
+        lock_path, evidence_root=Path(evidence_root).absolute(), related_roots={}
+    )
+    bind_host_tasks(tasks, release)
+    cases = {case["id"]: case for case in release.cases["cases"]}
+    return {
+        task["prompt_case_id"]: cases[task["prompt_case_id"]]["task_text"]
+        for task in tasks["tasks"]
+    }
+
+
+class Budget:
+    """The external-token cap, enforced before a row starts and while it runs.
+
+    A row starts only when ``spent + row_budget <= cap``. While it runs, the
+    host turn is stopped once ``row_used + call_allowance >= row_budget``, so a
+    call already in flight (at most ``call_allowance`` tokens: prompt plus
+    bounded output) still fits in the reservation. Unknown consumption is
+    charged at its worst case: ``call_allowance`` per dispatched call without
+    reported usage, and the whole ``row_budget`` for a started row with no
+    usage evidence at all.
+    """
+
+    def __init__(self, ledger: Path, *, cap: int, row_budget: int, call_allowance: int):
+        if not 0 < call_allowance < row_budget:
+            raise ValueError("budget_allowances")
+        self.path, self.cap = Path(ledger), cap
+        self.row_budget, self.call_allowance = row_budget, call_allowance
+        self.data = read(self.path)
+
+    def spent(self) -> int:
+        d = self.data
+        return d["total_input"] + d["total_output"] + d.get("unlogged_estimate", 0)
+
+    def can_start(self) -> bool:
+        return self.spent() + self.row_budget <= self.cap
+
+    def row_limit_reached(self, used: int) -> bool:
+        return used + self.call_allowance >= self.row_budget
+
+    def settle(self, arm: str, *, prompt: int, completion: int, unknown_calls: int, evidence: bool):
+        reserve = 0 if evidence else max(self.row_budget - prompt - completion, 0)
+        extra = unknown_calls * self.call_allowance + reserve
+        d = self.data
+        d["total_input"] += prompt + extra
+        d["total_output"] += completion
+        row = d.setdefault("stages", {}).setdefault(f"host_{arm}", {})
+        for key in ("input", "output", "conservative", "calls"):
+            row.setdefault(key, 0)
+        row["input"] += prompt
+        row["output"] += completion
+        row["conservative"] += extra
+        row["calls"] += 1
+        self.path.write_text(json.dumps(d, indent=1), encoding="utf-8")
+
+
+def run_bounded(command, *, env, timeout, usage, limit_reached, poll=1.0) -> dict:
+    """Run one host turn; stop it when the row's observed usage reaches its limit.
+
+    Returns the same fields as the M9 ``Host.run`` plus ``row_tokens_at_stop``.
+    ``status`` is ``completed``, ``failed``, ``timed_out`` or ``budget_stopped``.
+    """
+    import subprocess
+    import tempfile
+
+    started = time.monotonic()
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        try:
+            # Own process group: stopping the turn also stops the host's children.
+            process = subprocess.Popen(
+                command, env=env, stdout=out, stderr=err, start_new_session=True
+            )
+        except OSError as error:
+            return dict(
+                argv=list(command),
+                status="not_run",
+                exit_code=None,
+                elapsed_ms=0,
+                stdout="",
+                stderr=str(error),
+                row_tokens_at_stop=None,
+            )
+        status, stopped_at = None, None
+        while process.poll() is None:
+            used = usage()
+            if limit_reached(used):
+                status, stopped_at = "budget_stopped", used
+            elif time.monotonic() - started > timeout:
+                status = "timed_out"
+            if status is not None:
+                os.killpg(process.pid, signal.SIGTERM)
+                try:
+                    process.wait(10)
+                except subprocess.TimeoutExpired:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.wait()
+                break
+            time.sleep(poll)
+        code = process.returncode
+        if status is None:
+            status = "completed" if code == 0 else "failed"
+        out.seek(0)
+        err.seek(0)
+        return dict(
+            argv=list(command),
+            status=status,
+            exit_code=code,
+            elapsed_ms=round((time.monotonic() - started) * 1000),
+            stdout=out.read().decode("utf-8", "replace"),
+            stderr=err.read().decode("utf-8", "replace"),
+            row_tokens_at_stop=stopped_at,
+        )
+
+
 def write_bytes(path: Path, payload: bytes) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(payload)
@@ -73,28 +214,24 @@ class Run:
         self.args = args
         self.work = args.work.absolute()
         self.evidence_root = args.evidence.absolute()
-        self.cases = {c["id"]: c for c in read(args.cases)["cases"]}
+        # Only prompts of the verified frozen corpus the plan names are dispatched.
+        self.prompts = verified_prompts(
+            read(args.tasks), read(args.freeze), args.lock, args.release_root
+        )
         self.secrets = [
             os.environ["RELAYMIND_EXTERNAL_API_KEY"],
             os.environ["RELAYMIND_EXTERNAL_BASE_URL"],
         ]
-        self.ledger = read(args.ledger)
+        self.budget = Budget(
+            args.ledger,
+            cap=args.cap,
+            row_budget=args.row_budget,
+            call_allowance=args.call_allowance,
+        )
         self.gateway = None
 
-    # -- ledger ------------------------------------------------------------------
     def spent(self) -> int:
-        d = self.ledger
-        return d["total_input"] + d["total_output"] + d.get("unlogged_estimate", 0)
-
-    def charge(self, arm: str, prompt: int, completion: int) -> None:
-        d = self.ledger
-        d["total_input"] += prompt
-        d["total_output"] += completion
-        row = d["stages"].setdefault(f"host_{arm}", dict(input=0, output=0, calls=0))
-        row["input"] += prompt
-        row["output"] += completion
-        row["calls"] += 1
-        Path(self.args.ledger).write_text(json.dumps(d, indent=1), encoding="utf-8")
+        return self.budget.spent()
 
     # -- setup -------------------------------------------------------------------
     def host(self, name: str, provider_network: bool):
@@ -237,6 +374,32 @@ class Run:
                 unique.append(item)
         return unique
 
+    def native_used(self, state: Path) -> int:
+        """Provider tokens of the row so far, from the host's persisted usage."""
+        total = 0
+        for item in self.transcript_usage(state):
+            u = item["usage"]
+            total += (u.get("input") or 0) + (u.get("cacheRead") or 0) + (u.get("output") or 0)
+        return total
+
+    def gateway_events(self, before: set) -> list:
+        window = [i for i in self.run_ids() if i not in before]
+        traces = live_acceptance._traces(self.store, window)
+        return [e for i in window for e in traces[i]]
+
+    def provider_used(self, before: set) -> int:
+        """Reported tokens of the row so far; a finished call without usage counts in full."""
+        total = 0
+        for event in self.gateway_events(before):
+            if event["event_type"] != "model.finished" or event["actor"] != "external":
+                continue
+            usage = event["payload"].get("usage") or {}
+            if usage.get("input_tokens") is None:
+                total += self.budget.call_allowance
+            else:
+                total += usage["input_tokens"] + (usage.get("output_tokens") or 0)
+        return total
+
     def not_run(self, task, arm, reason):
         return dict(
             task_id=task["id"],
@@ -260,7 +423,7 @@ class Run:
     def execute(self, task, arm, config):
         if arm == "recommendations":
             return self.not_run(task, arm, "person_choice_unavailable")
-        if self.spent() + self.args.row_estimate > self.args.cap:
+        if not self.budget.can_start():
             return self.not_run(task, arm, "budget_cap")
         key = f"{task['id']}-{arm}"
         host = self.native if arm == "native" else self.relay
@@ -271,10 +434,15 @@ class Run:
             shutil.rmtree(path, ignore_errors=True)
             path.mkdir(parents=True)
         before = set(self.run_ids()) if arm != "native" else set()
-        prompt = self.cases[task["prompt_case_id"]]["task_text"]
+        prompt = self.prompts[task["prompt_case_id"]]
         started = now()
-        result = host.run(
+        if arm == "native":
+            usage = lambda: self.native_used(state)  # noqa: E731
+        else:
+            usage = lambda: self.provider_used(before)  # noqa: E731
+        result = run_bounded(
             [
+                *host.command,
                 "agent",
                 "exec",
                 prompt,
@@ -288,7 +456,10 @@ class Run:
                 "--state-dir",
                 str(state),
             ],
+            env=host.env,
             timeout=TIMEOUT,
+            usage=usage,
+            limit_reached=self.budget.row_limit_reached,
         )
         ended = now()
         refs: list = []
@@ -311,6 +482,7 @@ class Run:
                 status=result["status"],
                 exit_code=result["exit_code"],
                 elapsed_ms=result["elapsed_ms"],
+                row_tokens_at_stop=result["row_tokens_at_stop"],
                 report=report,
                 stderr_tail=result["stderr"][-4000:],
                 started_at=started,
@@ -352,25 +524,37 @@ class Run:
                     )
                 )
             local_turns = 0
-            self.charge(arm, prompt_total, completion_total)
+            # A turn that ended early may have lost one in-flight call's usage.
+            interrupted = result["status"] != "completed"
+            self.budget.settle(
+                arm,
+                prompt=prompt_total,
+                completion=completion_total,
+                unknown_calls=int(interrupted),
+                evidence=bool(usages),
+            )
         else:
             time.sleep(1.0)
-            window = [i for i in self.run_ids() if i not in before]
-            traces = live_acceptance._traces(self.store, window)
-            events = [e for i in window for e in traces[i]]
+            events = self.gateway_events(before)
             trace_id = self.evidence(key, "gateway-trace.json", events, refs)
             attempts = attempts_from_trace(
                 events, provider=PROVIDER, attempt_prefix=f"{key}-", evidence_id=trace_id
             )
-            self.charge(
+            self.budget.settle(
                 arm,
-                sum(a["input_tokens"] or 0 for a in attempts),
-                sum(a["output_tokens"] or 0 for a in attempts),
+                prompt=sum(a["input_tokens"] or 0 for a in attempts),
+                completion=sum(a["output_tokens"] or 0 for a in attempts),
+                unknown_calls=sum(a["input_tokens"] is None for a in attempts),
+                evidence=bool(events),
             )
             local_turns = sum(
                 1 for e in events if e["event_type"] == "model.started" and e["actor"] == "local"
             )
-        status = {"completed": "completed", "timed_out": "timeout"}.get(result["status"], "failed")
+        status = {
+            "completed": "completed",
+            "timed_out": "timeout",
+            "budget_stopped": "cancelled",
+        }.get(result["status"], "failed")
         if status == "completed" and not (isinstance(report, dict) and report.get("ok")):
             status = "failed"
         row = dict(
@@ -389,7 +573,7 @@ class Run:
             recommendation_ids=[],
             host_session_id=(report or {}).get("sessionId") if isinstance(report, dict) else None,
             evidence_ids=sorted({host_id, *(i for a in attempts for i in a["evidence_ids"])}),
-            reason=None if status == "completed" else "host_failed",
+            reason={"completed": None, "cancelled": "budget_cap"}.get(status, "host_failed"),
         )
         return row, refs
 
@@ -399,7 +583,8 @@ def main():
     for name in (
         "tasks",
         "freeze",
-        "cases",
+        "lock",
+        "release-root",
         "journal",
         "environment",
         "ledger",
@@ -413,7 +598,10 @@ def main():
     parser.add_argument("--model", required=True)
     parser.add_argument("--context-limit", type=int, default=128000)
     parser.add_argument("--cap", type=int, default=5_000_000)
-    parser.add_argument("--row-estimate", type=int, default=40000)
+    # Observed rows reached 245k tokens; one call stays below 64k (context plus
+    # bounded output). A row is stopped before another call could pass its budget.
+    parser.add_argument("--row-budget", type=int, default=250_000)
+    parser.add_argument("--call-allowance", type=int, default=64_000)
     args = parser.parse_args()
     run = Run(args)
     stop = False
