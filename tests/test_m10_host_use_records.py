@@ -11,7 +11,9 @@ borrow) that a provider check might use as the section 7.6.1 fence, so
 lists either operation.
 """
 
+import collections
 import copy
+import functools
 import hashlib
 import importlib.util
 import json
@@ -69,29 +71,39 @@ def _module(name, relative):
     return value
 
 
+@functools.cache
 def _capture(name):
+    """One parsed evidence file, read once per session; callers must not mutate it."""
     return json.loads((EVIDENCE / name).read_text())
+
+
+def _inventory():
+    return _capture(INVENTORY.name)
 
 
 def cited_source_mismatches(inventory):
     """Cited host sources whose path or SHA-256 differ from the inventory files table."""
-    rows = inventory["files"]
-    files = {row["path"]: row["sha256"] for row in rows}
-    problems = [("duplicate", path) for path in files if sum(r["path"] == path for r in rows) > 1]
-    for section in (inventory["skill_loaded_use"]["surfaces"], inventory["mcp_use"]["routes"]):
-        for row in section:
-            for source in row["source"]:
-                if files.get(source["path"]) != source["sha256"]:
-                    problems.append((row["name"], source["path"]))
-    for source in inventory["skill_loaded_use"]["reset_policy_source"]:
-        if files.get(source["path"]) != source["sha256"]:
-            problems.append(("reset_policy_source", source["path"]))
+    counts = collections.Counter(row["path"] for row in inventory["files"])
+    files = {row["path"]: row["sha256"] for row in inventory["files"]}
+    problems = [("duplicate", path) for path, count in counts.items() if count > 1]
+    loaded = inventory["skill_loaded_use"]
+    cited = [
+        (row["name"], row["source"])
+        for row in (*loaded["surfaces"], *inventory["mcp_use"]["routes"])
+    ]
+    cited.append(("reset_policy_source", loaded["reset_policy_source"]))
+    for name, sources in cited:
+        problems += [
+            (name, source["path"])
+            for source in sources
+            if files.get(source["path"]) != source["sha256"]
+        ]
     return problems
 
 
 def test_inventory_concludes_each_finding_and_binds_host_files():
     """Every cited host file names the exact (path, SHA-256) of the files table (#255)."""
-    inventory = json.loads(INVENTORY.read_text())
+    inventory = _inventory()
     assert inventory["host"]["version"] == "2026.10.7"
     assert inventory["skill_loaded_use"]["finding"] == "not_established"
     assert inventory["mcp_use"]["finding"] == "exact_route_absent"
@@ -101,7 +113,7 @@ def test_inventory_concludes_each_finding_and_binds_host_files():
 
 
 def test_a_changed_cited_host_hash_is_detected():
-    inventory = json.loads(INVENTORY.read_text())
+    inventory = _inventory()
     changed = copy.deepcopy(inventory)
     changed["mcp_use"]["routes"][0]["source"][0]["sha256"] = "0" * 64
     assert cited_source_mismatches(changed) == [
@@ -119,7 +131,7 @@ def test_a_changed_cited_host_hash_is_detected():
 
 def test_inventory_states_the_spec_0_66_finding_scope():
     """Spec 0.66 section 12.6.6: stop-only points and App view routes do not count."""
-    inventory = json.loads(INVENTORY.read_text())
+    inventory = _inventory()
     loaded, mcp = inventory["skill_loaded_use"], inventory["mcp_use"]
     assert "stop or fence" not in loaded["question"]
     for text in (loaded["question"], loaded["conclusion"]):
@@ -149,7 +161,7 @@ def test_inventory_records_the_retained_borrow_as_a_fence_candidate():
     aborts its signal on revocation. The inventory cites that implementation and
     leaves the finding open instead of claiming stop_point_absent.
     """
-    inventory = json.loads(INVENTORY.read_text())
+    inventory = _inventory()
     retained = _surface(inventory, "GatewaySessionAccessAuthority.retain()")
     paths = {source["path"] for source in retained["source"]}
     assert HOST + "dist/request-authorization-DsdcZTZi.mjs" in paths
@@ -161,7 +173,7 @@ def test_inventory_records_the_retained_borrow_as_a_fence_candidate():
 
 def test_inventory_lists_before_prompt_build_and_tool_authority():
     """Spec 7.6.1: before_prompt_build and ctx.toolAuthority are not person authority."""
-    inventory = json.loads(INVENTORY.read_text())
+    inventory = _inventory()
     row = _surface(inventory, "before_prompt_build (requiresToolAuthority, ctx.toolAuthority)")
     paths = {source["path"] for source in row["source"]}
     assert HOST + "docs/plugins/hooks/prompt-and-session.md" in paths
@@ -192,7 +204,7 @@ def attempted_route_mismatches(inventory, load=_capture):
 
 def test_inventory_lists_the_attempted_routes_from_the_captures():
     """Spec 12.6.6: the search captures name the attempted routes, and what was not tried."""
-    inventory = json.loads(INVENTORY.read_text())
+    inventory = _inventory()
     assert attempted_route_mismatches(inventory) == []
     attempted = inventory["attempted_routes"]
     assert {row["method"] for row in attempted["mcp_use"]} == {
