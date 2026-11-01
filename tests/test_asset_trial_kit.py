@@ -1011,6 +1011,11 @@ def _argv_off_base_url(install):
     install["steps"][1]["argv"][-1] = "http://127.0.0.1:9999/v1"
 
 
+def _non_normal_base_url(install):
+    install["base_url"] = "http://127.1:8080/v1"
+    install["steps"][1]["argv"][-1] = install["base_url"]
+
+
 def _disabled_but_passed(install):
     install["steps"][-1]["inspect"]["enabled"] = False
 
@@ -1021,11 +1026,12 @@ def _disabled_but_passed(install):
         (_two_step, "install_record"),
         (_foreign_base_url, "install_record"),
         (_argv_off_base_url, "install_record"),
+        (_non_normal_base_url, "install_record"),
         (_disabled_but_passed, "install_contradiction"),
     ],
 )
 def test_provisional_install_gate_follows_the_host_lifecycle(tmp_path, bundle, tamper, reason):
-    """#262 gate over the #269 lifecycle: install, configure baseUrl, enable, inspect.
+    """RM39/RM44; AC30/AC36 tooling: the #262 gate over the #269 lifecycle.
 
     The recorded base_url must be the plugin's normal form and match the
     configure argv, and a passed inspection must report the plugin enabled.
