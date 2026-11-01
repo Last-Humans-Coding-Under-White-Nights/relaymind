@@ -468,3 +468,21 @@ def test_a_driver_knows_it_is_the_entry_point_on_every_supported_platform(driver
     source = driver.read_text("utf-8")
     assert "file://${process.argv[1]}" not in source
     assert "import.meta.url === pathToFileURL(process.argv[1]).href" in source
+
+
+def test_ci_reruns_the_matrix_when_a_stacked_pr_is_retargeted():
+    """RM33/AC24: a stacked PR retargeted to master gets the full matrix before merge.
+
+    Retargeting sends a pull_request ``edited`` event; only base changes may
+    start the jobs, and a title or body edit must not cancel a running check.
+    """
+    import yaml
+
+    workflow = yaml.safe_load(CI_FILE.read_text("utf-8"))
+    triggers = workflow.get("on", workflow.get(True))
+    assert set(triggers["pull_request"]["types"]) == {"opened", "synchronize", "reopened", "edited"}
+    plan_if = workflow["jobs"]["plan"]["if"]
+    assert "github.event.action != 'edited'" in plan_if
+    assert "github.event.changes.base" in plan_if
+    group = workflow["concurrency"]["group"]
+    assert "github.event.changes.base" in group and "-edit" in group

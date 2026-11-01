@@ -7,7 +7,10 @@ on:
   # No base-branch filter: stacked PRs must get CI too, on Linux only to
   # conserve CI capacity. Every PR must target master and pass the full
   # Linux/macOS/Windows matrix before merge; pushes also run all platforms.
+  # Retargeting a stacked PR to master is an "edited" event, so the matrix is
+  # planned again without a new commit; other edits start no jobs.
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
 permissions:
@@ -16,7 +19,8 @@ permissions:
 # A newer push to the same pull request replaces its older run; branch and tag
 # runs always finish.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # A title or body edit gets its own group, so it never cancels a real run.
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ github.event.action == 'edited' && !github.event.changes.base && '-edit' || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -24,6 +28,8 @@ jobs:
   # PR to master, pushes and manual runs use all platforms, so every PR gets the
   # full matrix before it merges. The decision is printed in this job's log.
   plan:
+    # Only a base-branch change re-plans an edited pull request.
+    if: github.event.action != 'edited' || github.event.changes.base
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
