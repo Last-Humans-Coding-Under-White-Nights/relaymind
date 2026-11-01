@@ -5,6 +5,8 @@
   "outcome": "positive",
   "scope": "platform",
   "labelling": "not_applicable",
+  "prompt_authorship": "not_applicable",
+  "drafter": null,
   "annotators": null,
   "agreement": null,
   "corpus_review": null,
@@ -15,7 +17,8 @@
     "architecture": "AMD64",
     "hostname_sha256": "c48c0692ec414d327d1d04a6b81573a989a6a6315074d3d76ee4756c8fa9125f",
     "os_build": "10.0.26300",
-    "cpu_model": "AMD Ryzen 5 3600 6-Core Processor              ",
+    "os_version": "Windows 10.0.26300",
+    "cpu_model": "AMD Ryzen 5 3600 6-Core Processor",
     "role": "target_windows_x64",
     "os": "Windows"
   },

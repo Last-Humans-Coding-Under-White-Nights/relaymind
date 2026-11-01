@@ -645,23 +645,29 @@ cannot change that.
 `docs/evidence/m10/`. It binds by SHA-256 the report, freeze, tasks or
 episodes, labels, captures and media it covers (paths relative to the record),
 names the machine (`target_macos_m1_8gib`, `target_windows_x64` or
-`linux_host`; OS build, CPU, RAM and a hostname digest), the repository commit
+`linux_host`; OS build, the tooling's `os_version`, CPU, RAM and a hostname digest), the repository commit
 and harness/adapter revisions, and the preregistration commit. It is approved
 by a pull request review by at least one organization member other than the
 owner; the PR number, reviewer logins and approval time are added after the
 merge. Only an approved record that binds the report's exact bytes removes
-`qualified_evidence_review`; a changed byte, another report or scope, a machine
-other than the report's platform, or a labelling/agreement that differs from
-the frozen labels rejects (exit 2). Its `labelling` (`owner_machine` or
+`qualified_evidence_review`. It rejects (exit 2) on a changed byte, another
+report or scope (`host_trial` only for an `early_trial` task document,
+`host_acceptance` only for `acceptance`), a freeze/tasks/episodes/labels
+subject that is not the resolved input, a platform field (OS, architecture,
+`os_version`, CPU, RAM) that contradicts the report (a null report field leaves
+`machine_identity_unverified`), or labelling, people or agreement that differ
+from the frozen labels. Its `labelling` (`owner_machine` or
 `independent`) is reported next to the tier. A fixture input or any other
 unverified input still keeps the report below `qualified`. The label commands
 take `--labelling owner_machine` for the owner plus one recorded machine
 annotator (`owner_machine.v1`; the owner may also be the tuner, the machine
-annotator never). `--labelling machine_dual_owner_approved` (`machine_dual.v1`)
-is for two machine annotators and a distinct machine adjudicator (each holds
-only its one role); the owner approves the frozen labels by PR review. Cases
-may then use `machine_drafted_owner_approved` authorship, and the record names
-the drafter. The output reports the record's `prompt_authorship`. A `negative` record with scope `host_operation` closes the
+annotator holds the annotator role only, the owner adjudicates every case and
+every disagreement needs a nonempty reason). `--labelling machine_dual_owner_approved`
+(`machine_dual.v1`) is for two machine annotators and a distinct machine
+adjudicator (each holds only its one role); the owner approves the frozen labels
+by PR review. Cases may then use `machine_drafted_owner_approved` authorship, and
+the record names the drafter. The output reports the record's
+`prompt_authorship`. A `negative` record with scope `host_operation` closes the
 `skill_loaded_use` or `mcp_use` gate with the operation disabled
 (`known_host_limitations`). The module is
 `relaymind.evaluation.asset_qualification_record`.
@@ -752,10 +758,12 @@ and `grade-adaptation`, which are already the one-command final grade.
 | `label-freeze --catalog K --cases C --judgments T1 T2 … --worksheet W --output L` | Assembles `AssetLabelsV1` from the raw judgments and the completed adjudications. Raw judgments cannot change in the worksheet, agreement is recomputed, and the unchanged release validator checks roles, coverage and inclusion |
 | `preregister-host --tasks T --freeze F --output P` | Verifies the task set against its freeze and records the input, freeze and plan digests, task and lane counts, and acceptance eligibility (`kind_not_acceptance`, `below_minimum_tasks`). Missing required lanes are listed only: the spec states no per-lane host-task minimum |
 | `preregister-episodes --episodes E --freeze F [--lock L --evidence-root R] --output P` | The same for `AssetEpisodesV1`. With the corpus it also binds the episodes to it and counts probes outside the `held_out` split, probes with no included adjudication and correction targets missing from the pool. Reasons include `below_minimum_episodes`, `corpus_not_acceptance`, `corpus_not_frozen`, `unlabelled_probes` and, without the corpus, `corpus_unverified` |
-| `run-host --tasks T --freeze F --journal J --inputs M --environment E [--artifacts A] --qualification fixture\|provisional --output R -- PROGRAM ARGS…` | Executes the frozen plan through your host executor program and writes the `AssetHostReportV1` (see below). Exit `0` when every planned row has an outcome, `3` after an interruption |
+| `run-host --tasks T --freeze F --journal J --inputs M --environment E [--artifacts A] [--executor-timeout S] --qualification fixture\|provisional --output R -- PROGRAM ARGS…` | Executes the frozen plan through your host executor program and writes the `AssetHostReportV1` (see below). Exit `0` when every planned row has an outcome, `3` after an interruption |
 | `capture-costs --events V --provider P --attempt-prefix X --evidence-id I [--token-relationship R --relationship-evidence I2] [--first-ordinal N] --output O` | Turns RelayMind trace events (a JSON array of TraceEvent objects) into `HostAttempt` objects for the external model calls of the provider arms |
 
-Other exits: `2` rejected input, with a fixed reason on standard error.
+Other exits: `2` rejected input, with a fixed reason on standard error. This
+includes an output path that cannot be written safely, and `--evidence-root`
+given without `--lock`.
 
 **Blinding is a process.** Give each annotator only their own template and the
 catalog. Only the adjudicator sees the worksheet. Separate files make blind,
@@ -795,6 +803,12 @@ recorded as `failed` with reason `executor_invalid_row` or `executor_error`,
 with no attempts and a null verdict. The host's output is never repaired.
 Only the host executes tools and grants approvals.
 
+`--executor-timeout S` is optional and off by default. It is a harness bound,
+not a task budget: a program still running after `S` seconds is killed and its
+row is `failed` (`executor_error`) with unknown consumption, never a host
+`timeout`. Set it above the frozen task budgets. Only the direct child process
+is killed, so the program must stop its own children.
+
 **External cost capture.** For the `provider_only` and `recommendations` arms,
 the RelayMind gateway records each external model call
 (`model.started`/`model.finished`, actor `external`). `capture-costs` makes
@@ -806,6 +820,9 @@ one attempt per call:
   never reached the provider (`provider_unreachable`), has null calls.
 - The relationship between counts is `unknown` unless you name evidence for
   it with `--relationship-evidence`.
+- A finish without an earlier start of the same call (`trace_order`), or a
+  repeated start or finish of one call (`trace_duplicate_call`), rejects the
+  trace: a repeated receipt is never a new attempt.
 
 Local model calls are not attempts. The native arm calls its provider
 directly, so its usage must come from the host itself: this kit has no capture
@@ -855,17 +872,28 @@ for it.
     the stored job outcome and event chain. It is evaluation-only: it opens no
     socket and adds no endpoint.
   - **Memory.** Resident memory of the workload gateway is sampled every 250 ms.
-    Only the gateway process is covered. Lexical recommendations start no child
-    process or embedding device here, so the grader's memory increment stays
-    unknown; the raw gateway-only numbers are kept in `memory_samples`.
+    The sampled PID is the one the gateway reports for itself at startup
+    (`Gateway-Pid:`), not the launcher's: on a native Windows venv the launcher
+    is a separate process. `memory_samples` records `baseline_pid` and
+    `workload_pid`. Only the gateway process is covered. Lexical
+    recommendations start no child process or embedding device here, so the
+    grader's memory increment stays unknown; the raw gateway-only numbers are
+    kept in `memory_samples`.
+  - **Phases.** `memory.phases` names only what was sampled. The workload
+    samples cover rebuild, import and query. Startup is listed, and its samples
+    join the peak, only when all ten startup samples are known; a startup that
+    missed its deadline has none. `memory.complete` also needs the baseline and
+    known workload samples.
   - **Report.** It holds every sample, the runner's environment
     (`collect_benchmark_environment`: OS, architecture, CPU, RAM, Python) and
     CI variables, the spec bounds for reading, and the unchanged
     `summarize_operations` result. It is always `fixture` / `not_applicable`.
   - **Exit codes.** A slow startup, a late batch or a failed request is a
-    recorded result (exit 0). Exit 2 means a harness error: no gateway, a
-    control call without a reply, or unavailable job evidence. The report is
-    still written in that case.
+    recorded result (exit 0). Exit 2 means a harness error: a baseline or
+    workload gateway that does not start or exits before readiness (for
+    example `workload_gateway_exited`), a control call without a reply, or
+    unavailable job evidence. The report, with every sample already collected,
+    is still written in that case.
   - **Default periodic scan.** The 30-second local scan stays at its default.
     On a loaded machine it can delay an import batch past 1,000 ms; that is
     recorded as observed.
@@ -891,6 +919,11 @@ for it.
   - A capture of the Linux-only person-ingress harness taken on another
     platform (`linux_runner_required`) leaves the five ordinary actions
     `not_run` with `ordinary_harness_linux_only`.
+  - A recorded ordinary product failure (`ordinary_product_failure`: the
+    capture failed inside a recommendation UI action after setup completed,
+    with a value or browser-timeout error) makes that action's step `failed`
+    with reason `ordinary_<action>_failed`. `correct` and `inspect` map to
+    feedback. The other ordinary steps stay `not_run`.
   - An operations report registered as `operations-report` becomes the
     dedicated `operations_evidence`.
 
@@ -929,7 +962,10 @@ so ordinary pull requests stay fast. Each platform runs:
 3. `asset_platform_run.py ordinary`, the ordinary installed-host qualification
    (recommend, choose, feedback, delete, reset). Its person-ingress harness
    needs a Linux x86-64 runner. On macOS and Windows its truthful
-   `linux_runner_required` capture is kept, and the step passes;
+   `linux_runner_required` capture is kept, and the step passes. A recorded
+   product failure of one UI action also passes the step; it becomes a failed
+   platform step. A setup failure, a closed browser or a missing capture fails
+   it;
 4. `asset_platform_run.py platform`, which writes the runner's `environment.json`,
    a fixture companion bundle locked to it, and `platform.json`. The bundle is
    built from the test fixtures of `tests/test_asset_whole_task_inputs.py`, not
@@ -1111,13 +1147,17 @@ install, configure, enable, inspect. The pinned host installs the plugin
 disabled until it is configured, so the kit sets `baseUrl` (`--base-url`,
 default `http://127.0.0.1:8080/v1`, the gateway's default loopback listener)
 and then runs `plugins enable relaymind` (#269). Each step is recorded with
-its exit code; a failed step stops the rest, which are `not_run`. Host output
-stays in private `install.log`, `configure.log`, `enable.log` and
-`inspect.log` under the work directory. The record keeps only placeholders
+its exit code; a failed step stops the rest, which are `not_run`. Each step's
+host standard output and standard error stay in separate private logs
+(`<step>.log` and `<step>.stderr.log`, for `install`, `configure`, `enable`
+and `inspect`) under the work directory. The record keeps only placeholders
 (`<openclaw>`, `<artifact>`), the configured `base_url`, exit codes and
-SHA-256 digests. Inspect passes when the plugin is `loaded` and enabled at
-the release version with no diagnostics. The gateway token is not stored
-here (operator guide step 5).
+SHA-256 digests and sizes. Inspect passes when the JSON on standard output
+(warnings on standard error are ignored) shows the plugin `loaded` and enabled
+at the release version with no diagnostics. The gateway token is not stored
+here (operator guide step 5). A missing or unreadable tarball fails
+`release_checksum` and `frozen_package` in the preflight record; it does not
+stop the preflight.
 Configuring each arm's frozen host configuration is the operator's step;
 see the operator guide in `integrations/openclaw/README.md`.
 
@@ -1135,7 +1175,9 @@ observations directory. The rules:
   row/arm, or changed bytes under an already registered ID rejects (exit `2`).
 - A row without an observation is exported `not_run` with reason
   `observation_missing`. With `--interactive` the kit asks first, and `skip`
-  gives `operator_skipped`. Ctrl-C (then Enter, at a prompt) exports the
+  gives `operator_skipped`. If standard input closes, the kit stops asking:
+  that row and every later row without a saved observation stay
+  `observation_missing`. Ctrl-C (then Enter, at a prompt) exports the
   remaining rows `not_run` (`interrupted`).
 - A provisional run refuses `fixture` evidence. Producing these observations
   from native session/run records is the operator's evidence obligation; the
@@ -1154,6 +1196,12 @@ observations directory. The rules:
 - `SHA256SUMS` over every file, which `shasum -a 256 -c SHA256SUMS` can check.
 
 The bundle grades again on its own with `grade-host --inputs B/inputs.json`.
+`trial-run` may run on another machine: the report's environment is the one
+recorded in `--preflight` (a preflight without one is rejected), never the
+machine running the command. Manifest documents and evidence with a null path
+are resolver-only: they stay in `inputs.json` as they are and are not copied.
+A root document (tasks, freeze or environment lock) with a null path blocks
+(`input_unresolved`).
 
 **Qualification.** `--qualification provisional` requires a passed preflight
 and a passed install, otherwise it is blocked (`preflight_failed`,
@@ -1227,8 +1275,13 @@ the steps in order, the harness and recorder source digests, and `complete`.
 
 If the predicate fails, the step named by the harness failure is `failed` with
 the harness reason. Earlier steps with screenshots are `not_verified`, and
-later ones are `not_run`. A screenshot alone never makes a step recorded. The
-command exits `0` only when both languages are complete.
+later ones are `not_run`. A screenshot alone never makes a step recorded. If a
+language's child fails or times out (15 minutes), the recorder still writes
+`manifest.json` with `complete: false`. It sets the language `reason` to
+`child_failed` or `child_timeout`, and every outcome-dependent step to
+`not_run` with `capture_missing`, or `capture_invalid` for a torn capture.
+Any partial files are still listed by digest. The command exits `0` only when
+both languages are complete.
 
 The tier is `functional_fixture`, with a deterministic gateway and disposable
 fixture accounts. It is not an owner, human or live-model walkthrough and

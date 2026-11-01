@@ -191,13 +191,21 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.66 merged: machine-drafted prompts, machine_dual labelling and
+            # the #266 record input, scope and identity rules.
+            ("089ac28256320b916d0305efe4b307cdd836a9e6eb79947f06b2380de47d2a76", 629593),
             # Reviewed 0.66 with machine-drafted prompts, machine_dual labelling,
             # the #268 amendment and the LHCWN rename.
             ("6e84ff5a1df955fa81be5b23ad9d7ea9dd6ac9fbd8bf5757dc37f47b559a7889", 628842),
             # Reviewed 0.66 machine-drafted prompts and machine_dual labelling.
             ("e7d32fbff7848920acf30dbf6a91e3ba86231e10eb50b5d0c5ba670edc0907d5", 626858),
+            # Reviewed 0.66 with the #268 amendment, the #266 record input, scope and
+            # identity rules and the LHCWN repository rename (merged stack).
+            ("3393af66c79f18922d8493f56f81d41d1fd1e4ae52c2cc5c1ce56b764e6d7421", 624939),
             # Reviewed 0.66 with the #268 amendment and the LHCWN repository rename.
             ("72d3815fe8c304c04ece8f4a3ec2a669c2a4d2a119f882036617f7e3c15749f2", 624188),
+            # Reviewed 0.66 with the #266 record input, scope and identity rules.
+            ("f4f70b0640207baf78442bd8c7596f23461c9319920adfd37effa29e1148ed51", 622923),
             # Reviewed 0.66 with the LHCWN repository rename.
             ("b5c3327b138e5bfedc3e9a5c3b5c1453509643a562f5ec6f324288672b9ca70d", 622172),
             # Reviewed 0.66 owner-run acceptance profile and qualification record

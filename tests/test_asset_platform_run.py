@@ -38,7 +38,9 @@ from relaymind.evaluation.asset_operations_run import (
     generate_catalog,
     import_batch_packages,
     load_operations_report,
+    memory_observation,
     operations_report,
+    ordinary_product_failure,
     platform_report,
     rss_bytes,
     serve_baseline,
@@ -558,3 +560,104 @@ def test_the_scripts_run_with_the_interpreter_on_path():
     assert "python scripts/asset_platform_run.py platform" in text
     assert "python scripts/asset_platform_run.py verify" in text
     assert sys.executable  # the tests themselves run under one
+
+
+# --- review findings (PR #264) --------------------------------------------------------
+
+
+def _exiting_gateway(tmp_path, monkeypatch):
+    """A child that reports its PID and token, then exits before readiness."""
+    import relaymind.evaluation.asset_operations_run as kit
+
+    script = tmp_path / "exiting_gateway.py"
+    script.write_text(
+        "import os\n"
+        "print('Gateway-Pid: ' + str(os.getpid()), flush=True)\n"
+        "print('Application token: t', flush=True)\n"
+    )
+    for name in ("_child_argv", "_controlled_argv"):
+        monkeypatch.setattr(kit, name, lambda config: [sys.executable, str(script)])
+
+
+def test_a_gateway_exit_after_the_token_still_writes_the_operations_report(tmp_path, monkeypatch):
+    """RM38/AC29: a harness failure keeps the collected evidence and exits 2."""
+    from helpers import load_script_module
+
+    _exiting_gateway(tmp_path, monkeypatch)
+    out = tmp_path / "out" / "operations.json"
+    code = load_script_module("asset_operations_run").main(
+        ["operations", "--work", str(tmp_path / "w"), "--assets", "2", "--output", str(out)]
+    )
+    assert code == 2
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert "baseline_gateway_exited" in report["harness_errors"]
+    assert "workload_gateway_exited" in report["harness_errors"]
+    assert len(report["startups"]) == 10
+    assert all(s["outcome"] == "failed" for s in report["startups"])
+
+
+def test_memory_phases_exclude_startup_without_its_samples():
+    """RM38/AC29 (spec 12.6): phase coverage names only what was sampled."""
+    memory = memory_observation(100, [None] * 10, [150, 300])
+    assert memory.phases == ("rebuild", "import", "query")
+    assert memory.complete is False and memory.peak_bytes == 300
+
+
+def test_memory_phases_include_startup_and_its_peak_when_all_ten_are_known():
+    memory = memory_observation(100, [500] + [120] * 9, [150, 300])
+    assert memory.phases == ("startup", "rebuild", "import", "query")
+    assert memory.complete is True and memory.peak_bytes == 500
+    assert memory.coverage == ("gateway",)
+
+
+def test_memory_is_incomplete_without_a_baseline_or_workload_samples():
+    assert memory_observation(None, [120] * 10, [150]).complete is False
+    assert memory_observation(100, [120] * 10, [150, None]).complete is False
+    empty = memory_observation(100, [120] * 10, [])
+    assert empty.complete is False and empty.phases == ("startup",)
+
+
+_PRODUCT_FAILURE = {
+    "status": "failed",
+    "reason": "ordinary_ui_timeout",
+    "ordinary_failure_step": "ui_actions",
+    "ordinary_ui_action": "recommend",
+    "ordinary_error_class": "value_error",
+    "checks": {},
+}
+
+
+@pytest.mark.parametrize(
+    ("changes", "expected"),
+    [
+        ({}, "recommend"),
+        ({"ordinary_ui_action": "reset"}, "reset"),
+        ({"ordinary_error_class": "playwright_timeout"}, "recommend"),
+        # A browser crash or another setup step is not a product observation.
+        ({"ordinary_error_class": "playwright_target_closed"}, None),
+        ({"ordinary_failure_step": "install"}, None),
+        ({"ordinary_ui_action": "open"}, None),
+        ({"status": "passed"}, None),
+    ],
+)
+def test_an_ordinary_product_failure_is_classified_by_its_action(changes, expected):
+    assert ordinary_product_failure(dict(_PRODUCT_FAILURE, **changes)) == expected
+
+
+def test_a_recorded_ordinary_product_failure_does_not_fail_the_harness():
+    """The workflow fails on harness errors only; the failed action is evidence."""
+    assert _script().ordinary_exit(2, _PRODUCT_FAILURE, system="Linux", machine="x86_64") == 0
+    setup = dict(_PRODUCT_FAILURE, ordinary_failure_step="install")
+    assert _script().ordinary_exit(2, setup, system="Linux", machine="x86_64") == 2
+
+
+def test_the_failed_ordinary_action_is_a_failed_platform_step(tmp_path):
+    steps = _steps(
+        _platform(tmp_path, ordinary=dict(_PRODUCT_FAILURE, ordinary_ui_action="correct"))
+    )
+    assert steps["feedback"]["status"] == "failed"
+    assert steps["feedback"]["evidence_ids"] == ["ordinary-capture"]
+    assert steps["feedback"]["reason"] == "ordinary_correct_failed"
+    for name in ("recommend", "choose", "delete", "reset"):
+        assert steps[name]["status"] == "not_run"
+        assert steps[name]["reason"] == "ordinary_capture_unverified"

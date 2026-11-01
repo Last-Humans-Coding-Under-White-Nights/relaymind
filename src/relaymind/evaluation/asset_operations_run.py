@@ -74,6 +74,24 @@ _GRACE_SECONDS = 10.0
 SOURCE_ID = "operations"
 IMPORT_SOURCE_ID = "operations-import"
 UNUSED_KEY_ENV = "RELAYMIND_OPERATIONS_UNUSED_KEY"
+# Fixed reasons a gateway launch raises; anything else is named by its type.
+_LAUNCH_REASONS = frozenset(
+    {
+        "gateway_exited",
+        "gateway_not_ready",
+        "gateway_token_unavailable",
+        "gateway_pid_invalid",
+        "gateway_pid_missing",
+        "control_closed",
+    }
+)
+LAUNCH_ERRORS = (OSError, TimeoutError, RuntimeError, ValueError)
+
+
+def launch_failure(phase: str, error: BaseException) -> str:
+    """A fixed harness-error name for a gateway that did not start or answer."""
+    reason = str(error) if str(error) in _LAUNCH_REASONS else type(error).__name__
+    return f"{phase}_{reason}"
 
 
 def generate_catalog(root: Path, count: int, *, start: int = 0) -> list[Path]:
@@ -260,10 +278,11 @@ async def _read_token(
                     raise ValueError("gateway_pid_invalid")
                 pid = int(value)
             elif text.startswith(_TOKEN_PREFIX):
-                if time.monotonic() < deadline:
-                    if pid is None:
-                        raise ValueError("gateway_pid_missing")
-                    return text.removeprefix(_TOKEN_PREFIX).strip(), pid
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("gateway_token_unavailable")
+                if pid is None:
+                    raise ValueError("gateway_pid_missing")
+                return text.removeprefix(_TOKEN_PREFIX).strip(), pid
             else:
                 target.write(line)
                 target.flush()
@@ -378,8 +397,9 @@ async def _gateway(
     work.mkdir(parents=True, exist_ok=True)
     # Both logs start clean on every launch, so a reused work directory never
     # mixes two launches.
-    (work / "stdout.log").unlink(missing_ok=True)
-    (work / "stderr.log").unlink(missing_ok=True)
+    stdout_log, stderr_log = work / "stdout.log", work / "stderr.log"
+    stdout_log.unlink(missing_ok=True)
+    stderr_log.unlink(missing_ok=True)
     port = _free_port()
     catalog = None if catalog is None else Path(catalog).absolute()
     imports = None if imports is None else Path(imports).absolute()
@@ -387,7 +407,7 @@ async def _gateway(
         work, base_config, catalog, port, recommendations=recommendations, imports=imports
     )
     deadline = time.monotonic() + timeout
-    with (work / "stderr.log").open("ab") as stderr:
+    with stderr_log.open("ab") as stderr:
         process = await asyncio.create_subprocess_exec(
             *(_controlled_argv if controlled else _child_argv)(config),
             stdin=asyncio.subprocess.PIPE if controlled else None,
@@ -414,8 +434,8 @@ async def _gateway(
             replies.pop(ordinal, None)
 
     try:
-        token, pid = await _read_token(process, deadline, work / "stdout.log")
-        drain = asyncio.create_task(_drain(process.stdout, work / "stdout.log", replies))
+        token, pid = await _read_token(process, deadline, stdout_log)
+        drain = asyncio.create_task(_drain(process.stdout, stdout_log, replies))
         async with httpx.AsyncClient(
             base_url=f"http://127.0.0.1:{port}",
             headers={"Authorization": "Bearer " + token},
@@ -809,6 +829,39 @@ class MemorySampler:
         return bool(self.samples) and None not in self.samples
 
 
+_WORKLOAD_PHASES = ("rebuild", "import", "query")
+
+
+def memory_observation(
+    baseline_bytes: int | None,
+    startup_bytes: Sequence[int | None],
+    workload_bytes: Sequence[int | None],
+) -> MemoryObservation:
+    """Gateway-only memory with the phases that were actually sampled.
+
+    Startup counts only when all ten startup samples are known, and then its
+    samples join the peak. The workload samples cover rebuild, import and
+    query, which overlap in the 60-second run. Complete needs the baseline,
+    every startup sample and at least one known workload sample, all known.
+    """
+    startup_known = len(startup_bytes) == 10 and None not in startup_bytes
+    workload_known = bool(workload_bytes) and None not in workload_bytes
+    phases = (("startup",) if startup_known else ()) + (_WORKLOAD_PHASES if workload_bytes else ())
+    known = [
+        b for b in (*workload_bytes, *(startup_bytes if startup_known else ())) if b is not None
+    ]
+    return MemoryObservation(
+        baseline_bytes=baseline_bytes,
+        peak_bytes=max(known) if known else None,
+        counter_source=memory_counter(),
+        # Lexical recommendations start no child process or embedding device here;
+        # those coverages are not measured, so the grader leaves memory unknown.
+        coverage=("gateway",),
+        phases=phases,
+        complete=baseline_bytes is not None and startup_known and workload_known,
+    )
+
+
 # --- the operations report ----------------------------------------------------------------
 
 # Section 12.6 bounds, listed for reading next to the numbers. The grader's
@@ -924,8 +977,13 @@ def load_operations_report(
 # --- platform report -----------------------------------------------------------------
 
 
-def _evidence(path: Path, evidence_id: str, served_path: str) -> dict:
+def _read_json(path: Path) -> tuple[object, bytes]:
+    """The parsed document and the exact bytes it was parsed from (one read)."""
     payload = Path(path).read_bytes()
+    return json.loads(payload.decode("utf-8")), payload
+
+
+def _evidence(payload: bytes, evidence_id: str, served_path: str) -> dict:
     return dict(
         id=evidence_id,
         path=served_path,
@@ -943,14 +1001,51 @@ _LIFECYCLE = {
     "uninstall": ("disable", "uninstall", "remove-config", "remove-credential"),
 }
 _ORDINARY_ACTIONS = ("recommend", "choose", "feedback", "delete", "reset")
+# Native UI action of the ordinary harness -> platform step it exercises.
+_UI_STEPS = {
+    "recommend": "recommend",
+    "choose": "choose",
+    "correct": "feedback",
+    "inspect": "feedback",
+    "delete": "delete",
+    "reset": "reset",
+}
+# Error classes that mean the UI action itself did not complete; a closed
+# browser or an unclassified error is a harness failure.
+_PRODUCT_ERROR_CLASSES = frozenset({"value_error", "playwright_timeout"})
+
+
+def ordinary_product_failure(capture: Mapping) -> str | None:
+    """The UI action of a recorded ordinary product failure, or None.
+
+    A product failure is a failed capture whose setup completed and whose
+    failure happened inside one of the recommendation UI actions (the harness
+    records ``ordinary_failure_step == "ui_actions"`` and the action). Anything
+    else (setup, a browser crash, an unreadable capture) is not one.
+    """
+    if not isinstance(capture, Mapping) or capture.get("status") != "failed":
+        return None
+    action = capture.get("ordinary_ui_action")
+    if (
+        capture.get("ordinary_failure_step") == "ui_actions"
+        and action in _UI_STEPS
+        and capture.get("ordinary_error_class") in _PRODUCT_ERROR_CLASSES
+    ):
+        return action
+    return None
+
+
 _FAILED = ("failed", "timed_out")
 
 
-def _lifecycle_status(check: Mapping, names: tuple[str, ...]) -> str:
+def _lifecycle_statuses(check: Mapping) -> dict:
     steps = check.get("steps")
     if not isinstance(steps, list) or not all(isinstance(s, dict) for s in steps):
         raise ValueError("install_check_invalid")
-    statuses = {s.get("name"): s.get("status") for s in steps}
+    return {s.get("name"): s.get("status") for s in steps}
+
+
+def _lifecycle_status(statuses: Mapping, names: tuple[str, ...]) -> str:
     observed = [statuses.get(name, "not_run") for name in names]
     if any(status in _FAILED for status in observed):
         return "failed"
@@ -989,32 +1084,37 @@ def platform_report(
         raise ValueError("measured_requires_acceptance_platform")
     if ordinary is not None and ordinary_check is None:
         raise ValueError("ordinary_check_required")
-    check = json.loads(Path(install_check).read_text(encoding="utf-8"))
+    check, payload = _read_json(install_check)
     if not isinstance(check, dict):
         raise ValueError("install_check_invalid")
-    evidence = [_evidence(install_check, "install-check", evidence_paths["install-check"])]
-    ordinary_ok, linux_only = False, False
+    evidence = [_evidence(payload, "install-check", evidence_paths["install-check"])]
+    ordinary_ok, linux_only, failed_action = False, False, None
     if ordinary is not None:
-        capture = json.loads(Path(ordinary).read_text(encoding="utf-8"))
+        capture, payload = _read_json(ordinary)
         ordinary_ok = isinstance(capture, dict) and ordinary_check(capture) is True
         linux_only = isinstance(capture, dict) and capture.get("reason") == "linux_runner_required"
-        evidence.append(_evidence(ordinary, "ordinary-capture", evidence_paths["ordinary-capture"]))
+        failed_action = None if ordinary_ok else ordinary_product_failure(capture)
+        evidence.append(_evidence(payload, "ordinary-capture", evidence_paths["ordinary-capture"]))
     operations_entry = None
     if operations is not None:
         operations_entry = _evidence(
-            operations, "operations-report", evidence_paths["operations-report"]
+            Path(operations).read_bytes(), "operations-report", evidence_paths["operations-report"]
         )
         evidence.append(operations_entry)
+    statuses = _lifecycle_statuses(check)
     steps = []
     for name in PLATFORM_STEPS:
         status, ids, reason = "not_run", [], f"{name}_not_run"
         if name in _LIFECYCLE:
-            status = _lifecycle_status(check, _LIFECYCLE[name])
+            status = _lifecycle_status(statuses, _LIFECYCLE[name])
             ids = [] if status == "not_run" else ["install-check"]
             reason = None if status == "passed" else f"{name}_{status}"
         elif name in _ORDINARY_ACTIONS:
             if ordinary_ok:
                 status, ids, reason = "passed", ["ordinary-capture"], None
+            elif failed_action is not None and _UI_STEPS[failed_action] == name:
+                status, ids = "failed", ["ordinary-capture"]
+                reason = f"ordinary_{failed_action}_failed"
             elif linux_only:
                 reason = "ordinary_harness_linux_only"
             elif ordinary is not None:
