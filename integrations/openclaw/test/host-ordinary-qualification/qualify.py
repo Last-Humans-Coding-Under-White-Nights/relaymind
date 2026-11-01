@@ -269,16 +269,34 @@ _SKILL_NEGATIVES = {
 }
 
 
-def library_revision_listed(listed, skill_id, revision):
-    """Require a successful native listing with the exact saved, not removed, revision."""
+def library_revision_selected(listed, skill_id, revision, session_key):
+    """Require a successful native listing that proves the selection took effect.
+
+    The library must hold the exact saved, not removed, revision, and the
+    listed session must be the authenticated target session whose selections
+    are exactly that skill at that revision. A listing that only proves the
+    revision exists cannot show a no-op or wrong-session activation.
+    """
     try:
-        return listed["ok"] is True and any(
-            entry["skillId"] == skill_id
-            and entry["revision"] == revision
-            and entry.get("removed") is not True
-            for entry in listed["payload"]["entries"]
+        payload = listed["payload"]
+        session = payload["session"]
+        selections = session["selections"]
+        return (
+            listed["ok"] is True
+            and isinstance(session_key, str)
+            and session["sessionKey"] == session_key
+            and isinstance(selections, list)
+            and len(selections) == 1
+            and selections[0]["skillId"] == skill_id
+            and selections[0]["revision"] == revision
+            and any(
+                entry["skillId"] == skill_id
+                and entry["revision"] == revision
+                and entry.get("removed") is not True
+                for entry in payload["entries"]
+            )
         )
-    except (KeyError, TypeError):
+    except (KeyError, TypeError, IndexError):
         return False
 
 
@@ -288,8 +306,10 @@ def ordinary_skill_pass(capture):
     Requires the ordinary channel proof plus a saved library revision, the
     operator mapping binding that exact revision to the offered asset bytes,
     the closed bridge receipt that claims selection only (never instruction
-    use), the official UI status, and refusals for an unmapped skill and for
-    another person. Loaded instruction use is a separate, unclaimed gate.
+    use), the official UI status, a native listing whose authenticated target
+    session holds exactly that revision as its selection, and refusals for an
+    unmapped skill and for another person. Loaded instruction use is a
+    separate, unclaimed gate.
     """
     try:
         if not ordinary_pass(capture):
@@ -340,7 +360,9 @@ def ordinary_skill_pass(capture):
             return False
         if value["ui_status"] != "selected":
             return False
-        if not library_revision_listed(value["library_list"], skill_id, revision):
+        if not library_revision_selected(
+            value["library_list"], skill_id, revision, capture["accounts"][0]["session_key"]
+        ):
             return False
         if len(value["negatives"]) != len(_SKILL_NEGATIVES):
             return False
@@ -1540,8 +1562,11 @@ class OrdinaryComposition(BASE.ActionComposition):
         skill["library_list"] = dict(
             ok=listed["frame"].get("ok") is True, payload=listed["frame"].get("payload")
         )
-        if not library_revision_listed(
-            skill["library_list"], mapping["skillId"], mapping["revision"]
+        if not library_revision_selected(
+            skill["library_list"],
+            mapping["skillId"],
+            mapping["revision"],
+            sessions[0]["sessionKey"],
         ):
             raise ValueError("ordinary_skill_selection_failed")
 
