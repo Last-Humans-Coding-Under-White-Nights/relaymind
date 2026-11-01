@@ -76,9 +76,9 @@ class RunJournal:
             fd = os.open(self._lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         except FileExistsError:
             raise JournalError("journal_locked") from None
-        with os.fdopen(fd, "w", encoding="utf-8") as lock:
-            lock.write(str(os.getpid()))
         try:
+            with os.fdopen(fd, "w", encoding="utf-8") as lock:
+                lock.write(str(os.getpid()))
             self._open()
         except BaseException:
             self.close()  # Closes a file already opened, then removes the lock.

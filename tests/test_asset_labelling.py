@@ -249,3 +249,13 @@ def test_freezing_needs_two_distinct_annotators_per_case(tmp_path, annotators):
         item["judgments"] = by_case[item["case_id"]]
     with pytest.raises(AssetCorpusError, match="raw_judgment_coverage"):
         freeze_labels(catalog, cases, kept, worksheet)
+
+
+def test_a_template_with_a_deleted_case_is_a_binding_error(tmp_path):
+    """Review 4437319318: every template covers exactly the frozen cases."""
+    catalog, cases, labels = corpus(tmp_path)
+    a = filled(label_template(catalog, cases, "judge-a"), labels, "judge-a")
+    b = filled(label_template(catalog, cases, "judge-b"), labels, "judge-b")
+    del a["items"][0]
+    with pytest.raises(AssetCorpusError, match="template_binding"):
+        raw_judgments(catalog, cases, [a, b])

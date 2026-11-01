@@ -561,6 +561,22 @@ def _signal_group(group: int, signum: int) -> bool:
     return True
 
 
+def _stop_tree_windows(process: subprocess.Popen) -> None:
+    """Windows has no process groups to signal: end the child's whole tree."""
+    if process.poll() is None:
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                capture_output=True,
+                check=False,
+            )
+        except OSError:
+            pass
+        if process.poll() is None:
+            process.kill()
+    process.wait()
+
+
 def _stop_group(process: subprocess.Popen, grace: float) -> None:
     """Stop the child's whole process group: SIGTERM, a bounded wait, then SIGKILL.
 
@@ -570,6 +586,9 @@ def _stop_group(process: subprocess.Popen, grace: float) -> None:
     ``finally`` block; SIGTERM lets it do so, and SIGKILL leaves nothing behind
     if it cannot within ``grace`` seconds.
     """
+    if sys.platform == "win32":
+        _stop_tree_windows(process)
+        return
     group = process.pid
     deadline = time.monotonic() + grace
     if _signal_group(group, signal.SIGTERM):
@@ -593,7 +612,10 @@ def run_child(command: list[str], timeout: float, grace: float = STOP_GRACE_SECO
     exits on its own (including a crash) any member it left in its group is
     stopped too. No gateway or proxy the harness started outlives it.
     """
-    process = subprocess.Popen(command, start_new_session=True)
+    if sys.platform == "win32":
+        process = subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+    else:
+        process = subprocess.Popen(command, start_new_session=True)
     try:
         return process.wait(timeout=timeout)
     finally:
