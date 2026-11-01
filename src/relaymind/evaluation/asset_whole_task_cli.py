@@ -37,6 +37,9 @@ from relaymind.evaluation.asset_episode_export import (
 )
 from relaymind.evaluation.asset_evidence import OfflineResolver
 from relaymind.evaluation.asset_platform_export import grade_platform_report
+from relaymind.evaluation.asset_run_kit_cli import COMMANDS as RUN_KIT_COMMANDS
+from relaymind.evaluation.asset_run_kit_cli import add_commands as add_run_kit_commands
+from relaymind.evaluation.asset_run_kit_cli import run as run_kit
 from relaymind.evaluation.asset_whole_task import (
     WholeTaskRejected,
     grade_host_report,
@@ -302,9 +305,12 @@ def main(argv: list[str] | None = None) -> int:
         )
         grade.add_argument("--output", type=Path, required=True)
     _trial_parsers(sub)
+    add_run_kit_commands(sub)
     args = parser.parse_args(argv)
     if args.command.startswith("trial"):
         return _trial(args)
+    if args.command in RUN_KIT_COMMANDS:
+        return run_kit(args)
     try:
         if args.command in _PLANS:
             atomic_bytes(args.output, json_bytes(_PLANS[args.command](args)))

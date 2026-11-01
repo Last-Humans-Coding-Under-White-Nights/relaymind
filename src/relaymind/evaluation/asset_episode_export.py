@@ -81,6 +81,65 @@ def probe_plan(episode: Mapping) -> list[tuple[str, str]]:
     return sorted(pairs, key=lambda p: (_utf8(p[0]), _utf8(p[1])))
 
 
+def episode_preregistration(episodes: Mapping, freeze: Mapping, release=None) -> dict:
+    """The digests an adaptation run is bound to, and its acceptance eligibility (#236).
+
+    ``release`` is the verified frozen corpus (or None when it was not
+    supplied, which can never be eligible). Section 12.6.5 requires at least
+    100 independent episodes and section 12.6.1 an acceptance release frozen
+    with custodian-reviewed labels; this check states only what the documents
+    show, never that labels are independent. Section 12.6.5 requires
+    held-out paraphrase/control/reset sets, so a probe case outside the
+    ``held_out`` split makes the set ineligible, as does a probe with no
+    included adjudication. Correction targets missing from the pool are
+    counted only: they are retained and graded incorrect.
+    """
+    from relaymind.evaluation.asset_whole_task_corpus import bind_episodes, release_labels
+
+    input_digest = verify_episodes(episodes, freeze)
+    rows = episodes["episodes"]
+    reasons = []
+    if len(rows) < ACCEPTANCE_EPISODES:
+        reasons.append("below_minimum_episodes")
+    not_held_out = unlabelled = missing = None
+    if release is None:
+        reasons.append("corpus_unverified")
+    else:
+        bind_episodes(episodes, release)
+        if release.lock["purpose"] != "acceptance":
+            reasons.append("corpus_not_acceptance")
+        if release.lock["state"] != "frozen":
+            reasons.append("corpus_not_frozen")
+        splits = {case["id"]: case["split"] for case in release.cases["cases"]}
+        labels = release_labels(release)
+        assets = {a["record"]["asset_id"] for a in release.catalog["assets"]}
+        probes = [
+            case_id
+            for e in rows
+            for key in ("paraphrase_case_ids", "control_case_ids", "reset_probe_case_ids")
+            for case_id in e[key]
+        ]
+        not_held_out = sum(splits[case_id] != "held_out" for case_id in probes)
+        unlabelled = sum(case_id not in labels for e in rows for _, case_id in probe_plan(e))
+        missing = sum(c["target_asset_id"] not in assets for e in rows for c in e["corrections"])
+        if not_held_out:
+            reasons.append("probes_not_held_out")
+        if unlabelled:
+            reasons.append("unlabelled_probes")
+    return dict(
+        input_digest=input_digest,
+        freeze_digest=episodes["config_digest"],
+        plan_digest=canonical_digest([[e["id"], probe_plan(e)] for e in rows]),
+        episodes=len(rows),
+        planned_observations=sum(planned_observations(e) for e in rows),
+        probes_not_held_out=not_held_out,
+        unlabelled_probes=unlabelled,
+        missing_pool_targets=missing,
+        acceptance_eligible=not reasons,
+        reasons=reasons,
+    )
+
+
 def reset_preimage_digest(preimage: Sequence[Mapping]) -> str:
     """canonical_digest of the ordered closed reset semantic array."""
     return canonical_digest([dict(item) for item in preimage])

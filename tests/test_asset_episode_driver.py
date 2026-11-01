@@ -532,3 +532,47 @@ def test_a_refused_reset_keeps_its_own_reason(tmp_path, monkeypatch):
     assert result["status"] == "failed" and result["reason"] == "reset_refused"
     assert [c["status"] for c in result["corrections"]] == ["accepted"] * 3
     assert result["reset_equal"] is None
+
+
+def _item(**change):
+    """A well-formed journaled reset evidence item for episode e1."""
+    import hashlib
+
+    payload = change.pop("text", "{}")
+    item = dict(
+        id="reset:e1",
+        payload=payload,
+        sha256=hashlib.sha256(payload.encode()).hexdigest(),
+        bytes=len(payload.encode()),
+    )
+    item.update(change)
+    return item
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {},
+        dict(result=dict(episode_id="e1")),
+        dict(evidence=[]),
+        dict(evidence=None, result=dict(episode_id="e1")),
+        dict(evidence=[3], result=dict(episode_id="e1")),
+        dict(evidence=[], result=None),
+        dict(evidence=[], result=[]),
+        # Review 4437319303: each evidence item is checked before its fields are used.
+        dict(evidence=[{}], result=dict(episode_id="e1")),
+        dict(evidence=[_item(payload=None)], result=dict(episode_id="e1")),
+        dict(evidence=[_item(payload=3)], result=dict(episode_id="e1")),
+        dict(evidence=[_item(id=None)], result=dict(episode_id="e1")),
+        dict(evidence=[_item(sha256=None)], result=dict(episode_id="e1")),
+        dict(evidence=[_item(bytes="2")], result=dict(episode_id="e1")),
+        dict(evidence=[_item(text="x", bytes=True)], result=dict(episode_id="e1")),
+        dict(evidence=[{k: v for k, v in _item().items() if k != "bytes"}], result={}),
+    ],
+)
+def test_a_malformed_journaled_episode_rejects_with_a_fixed_reason(value):
+    """Review 4436631723: a malformed journal entry is journal_evidence, never a raw error."""
+    from relaymind.evaluation.asset_episode_driver import _restored
+
+    with pytest.raises(WholeTaskRejected, match="journal_evidence"):
+        _restored(value, "e1", {})

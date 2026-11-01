@@ -710,6 +710,121 @@ grader and the actual Apple Silicon macOS / native Windows review. Genuine
 episodes, paired host tasks and platform runs need real independent corpora,
 hosts and hardware; fixture runs establish no measured result.
 
+## Episode and host-task run kit (#236, #237)
+
+These commands of `scripts/asset_whole_task.py` cover the operator steps
+before and during the real adaptation-episode (#236; RM42/AC33) and paired
+host-task (#237; RM40–RM44; AC31–AC36) runs. They do not supply genuine
+people, labels, hosts or corrections, and every run they write is `fixture` or
+`provisional`: there is no `qualified` option. Grading stays with `grade-host`
+and `grade-adaptation`, which are already the one-command final grade.
+
+| Command | What it does |
+| --- | --- |
+| `label-template --catalog K --cases C --annotator A --output T` | One annotator's blind template (section 12.6.1): only each case's prompt (`lane`, `task_text`, `conversation`, `requested_kinds`, `language_tags`, `code_switched`), bound to the cases and catalog digests. No labels, families, splits, authors, other judgments or algorithm outputs. The annotator must be a declared `annotator` who is not a `tuner`. |
+| `label-worksheet --catalog K --cases C --judgments T1 T2 … --output W` | Checks the returned templates (unchanged binding and prompts, every case judged, exactly two distinct annotators per case) and writes the adjudicator's worksheet: both raw judgments, per-answer agreement and the recomputed agreement groups |
+| `label-freeze --catalog K --cases C --judgments T1 T2 … --worksheet W --output L` | Assembles `AssetLabelsV1` from the raw judgments and the completed adjudications. Raw judgments cannot change in the worksheet, agreement is recomputed, and the unchanged release validator checks roles, coverage and inclusion |
+| `preregister-host --tasks T --freeze F --output P` | Verifies the task set against its freeze and records the input, freeze and plan digests, task and lane counts, and acceptance eligibility (`kind_not_acceptance`, `below_minimum_tasks`, `missing_required_lanes`). AC36 pairs the whole tasks with the five required lanes, so a set without at least one task in each is not eligible; the spec states no larger per-lane host-task count |
+| `preregister-episodes --episodes E --freeze F [--lock L --evidence-root R] --output P` | The same for `AssetEpisodesV1`. With the corpus it also binds the episodes to it and counts probes outside the `held_out` split, probes with no included adjudication and correction targets missing from the pool. Section 12.6.5 requires held-out probe sets, so any probe outside `held_out` makes the set ineligible. Reasons include `below_minimum_episodes`, `corpus_not_acceptance`, `corpus_not_frozen`, `probes_not_held_out`, `unlabelled_probes` and, without the corpus, `corpus_unverified` |
+| `run-host --tasks T --freeze F --journal J --inputs M --environment E [--artifacts A] [--executor-timeout S] --qualification fixture\|provisional --output R -- PROGRAM ARGS…` | Executes the frozen plan through your host executor program and writes the `AssetHostReportV1` (see below). Exit `0` when every planned row has an outcome, `3` after an interruption |
+| `capture-costs --events V --provider P --attempt-prefix X --evidence-id I [--token-relationship R --relationship-evidence I2] [--first-ordinal N] --output O` | Turns RelayMind trace events (a JSON array of TraceEvent objects) into `HostAttempt` objects for the external model calls of the provider arms |
+
+Other exits: `2` rejected input, with a fixed reason on standard error. This
+includes an output path that cannot be written safely, and `--evidence-root`
+given without `--lock`.
+
+**Blinding is a process.** Give each annotator only their own template and the
+catalog. Only the adjudicator sees the worksheet. Separate files make blind,
+independent judgment possible; they do not prove it. Custodian review of the
+people, their competence and independence is still required (section 12.6.1).
+
+**Run journal.** `run-host` (and `run_adaptation_episodes(..., journal=PATH)`
+in Python) keeps progress in a private JSON-lines journal. It is not evidence,
+but it holds rows and reset evidence, so it is created owner-only (`0600`, in a
+new `0700` directory) and set back to `0600` on resume. Its header binds the
+preregistered input, freeze and plan digests and the digest of the run's
+execution identity: environment, artifacts, input manifest and qualification
+label (for episodes, the corpus release lock instead of artifacts). A journal cannot resume with changed inputs or under another identity
+(`journal_binding`), so rows run on one machine or package are never reported
+under another; start a new journal for a new identity. Each row is recorded as
+`started` before work begins and `finished` with its outcome, flushed to disk
+each time.
+
+- A rerun restores finished rows and never executes them again.
+- A row that started but was never recorded (a crash) is exported as
+  `cancelled` with reason `interrupted_unrecorded`. It has no attempts and a
+  null verdict. It is not rerun, because its consumption is unknown, so the
+  cost coverage of that arm stays unknown and the gate blocks.
+- After SIGINT/SIGTERM, rows that never started are `not_run` (`interrupted`)
+  and a later run executes them. A second signal stops at once, even inside a
+  hung executor: its process group is killed, no report is written (exit `3`),
+  and the started row is exported as `cancelled` (`interrupted_unrecorded`) on
+  the next run.
+- A journal with no complete record (a crash while its header was written)
+  holds no started row and is initialized again.
+- Only one runner can hold a journal at a time (`journal_locked`). A killed
+  runner leaves `J.lock` behind. Check that no runner is still alive, then
+  remove the lock.
+
+For episodes, a finished episode is restored in whatever status it ended,
+together with its reset evidence. An episode that started but was never
+recorded is `cancelled` with reason `interrupted_unrecorded`.
+
+**Executor program.** `run-host` calls the program once per planned row. On
+standard input it gets
+`{format:"relaymind.host_executor_request.v1",ordinal,task,arm,arm_config}`.
+On standard output it must write `{row,evidence}`: one `HostRow` and its
+`EvidenceRef`s. Each row is checked before it is recorded: plan identity,
+evidence closure and conflicts, report-wide attempt IDs and the row rules
+above. The row was recorded as started before the program ran, so a `not_run`
+row is invalid. A row that fails these checks, or a nonzero exit or unusable output, is
+recorded as `failed` with reason `executor_invalid_row` or `executor_error`,
+with no attempts and a null verdict. The host's output is never repaired.
+Only the host executes tools and grants approvals.
+
+`--executor-timeout S` is optional and off by default. It is a harness bound,
+not a task budget: a program still running after `S` seconds is killed and its
+row is `failed` (`executor_error`) with unknown consumption, never a host
+`timeout`. Set it above the frozen task budgets. The program leads its own
+process group, and the whole group is killed; a descendant that leaves the
+group (for example with `setsid`) is not, and a descendant still holding
+standard output after the program exits makes the output unusable. Standard output is read
+in bounded chunks; a program that writes more than the 256 MiB report bound is
+killed and its row fails with `executor_error`.
+
+**External cost capture.** For the `provider_only` and `recommendations` arms,
+the RelayMind gateway records each external model call
+(`model.started`/`model.finished`, actor `external`). `capture-costs` makes
+one attempt per call:
+
+- The provider-reported counts are copied with `usage_provenance: reported`.
+  A missing count stays null, never zero, and `total_tokens` stays null.
+- Each call keeps its own outcome. `cancelled` stays `cancelled`; the
+  gateway's own bounds (`deadline_exceeded`, `time_budget`) and
+  `provider_timeout` are `timeout`; other errors are `failed`.
+- `calls` is `1` only when dispatch is evidenced: a successful call, a
+  provider error or response, or `provider_timeout`. A gateway-side stop
+  (`cancelled`, `deadline_exceeded`, `time_budget`, `interrupted`) or a
+  transport error (`provider_unreachable`, which also covers a read error after
+  streaming began) counts only if a token or at least one known usage count
+  arrived. An unfinished call, or one never sent (`missing_credentials`), has
+  null calls.
+- `--events` and `--artifacts` are read with the same bounded strict reader as
+  every other input: a symlink, an oversized file, duplicate keys or
+  non-finite numbers reject.
+- The relationship between counts is `unknown` unless you name it with
+  `--token-relationship` and its evidence with `--relationship-evidence`.
+  Each needs the other: a relationship without evidence rejects
+  (`relationship_evidence`), and evidence under an `unknown` relationship
+  rejects (`token_relationship`).
+- A finish without an earlier start of the same call (`trace_order`), or a
+  repeated start or finish of one call (`trace_duplicate_call`), rejects the
+  trace: a repeated receipt is never a new attempt.
+
+Local model calls are not attempts. The native arm calls its provider
+directly, so its usage must come from the host itself: this kit has no capture
+for it.
+
 ## Operations and platform run kit (#242)
 
 `scripts/asset_operations_run.py` prepares the real-world AC29 and AC37 runs
