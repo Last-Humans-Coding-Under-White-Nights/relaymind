@@ -29,6 +29,6 @@ export const NATIVE_QUALIFICATIONS: readonly NativeQualification[] =
       hostVersion: "2026.10.7" as const,
       adapterRevision: "653902615edfd3b6bd1074f9d50d560e3a9eaf4318a39e96feb85e512e06441f",
       operations: Object.freeze(["direct_actions", "exact_skill_selection"] as const),
-      evidenceRevision: "3fa0614ba5127e0e08182e40293dbc3c5f15854e2cc474f53e8c0098ce408dc3",
+      evidenceRevision: "933fb4e7c8b3057305fae165561825984a63325275b821be84b008dd574589f7",
     }),
   ]);
