@@ -76,8 +76,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `relaymind.mcp` is not registered; the tests use injected fixture resolvers
   and routes only. The shipped direct-action/exact-selection entry is re-pinned
   to the new adapter revision `943e1f0e2ba6e9e8dad45456e6eb8122a475c91ced0c9e1e3f8d249471fe240f`; its evidence revision names
-  the fresh capture of this revision (CI run 41307043410, SHA-256
-  `babba902bb57…`). A release-artifact test now fails when the registry
+  the fresh capture of this revision (CI run 41318389858, SHA-256
+  `35436e519245…`). A release-artifact test now fails when the registry
   and the built adapter digest drift. After review, the ledger never writes a
   record recovery would reject and has `close()` (on gateway stop); a
   same-key request during preparation recovers that attempt's actual receipt;
@@ -141,8 +141,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   selection itself: its `session.sessionKey` is the authenticated target
   session and its `session.selections` are exactly the selected skill at the
   selected revision, both when the harness captures it and in the predicate,
-  so a no-op or wrong-session activation fails. The committed capture
-  satisfies this check; its recorded harness digest predates the change.
+  so a no-op or wrong-session activation fails. The committed capture is a
+  recapture with this harness (CI run 41317645014, SHA-256 `3a063ab37411…`),
+  which the registry's evidence revision names.
 
 - CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation or native-preparation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
 - CI: the shared asset benchmark fixture uses a deterministic recommendation
