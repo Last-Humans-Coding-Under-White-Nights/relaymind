@@ -822,6 +822,33 @@ def test_a_bundle_under_a_symlinked_parent_is_written_to_the_real_path(tmp_path,
     assert result["bundle"] == str(real / "bundle")
 
 
+def test_inputs_tarball_and_observations_under_a_symlinked_parent_are_read(tmp_path, bundle):
+    """macOS /tmp is a symlink: an input directly under it is read, not refused as unsafe.
+
+    The input's own directory is the read root, which must not be a symlink; the
+    kit resolves the input's parent once (``real_path``), never the final name.
+    """
+    inputs = frozen_manifest(bundle)
+    tarball = release(tmp_path)
+    observed = observations(tmp_path, bundle)
+    links = tmp_path / "links"
+    links.mkdir()
+    for name, target in (("bundle", inputs.parent), ("release", tarball.parent)):
+        (links / name).symlink_to(target, target_is_directory=True)
+    (links / "parent").symlink_to(observed.parent, target_is_directory=True)
+    code, result = kit.trial_run(
+        inputs=links / "bundle" / inputs.name,
+        observations=links / "parent" / observed.name,
+        bundle=tmp_path / "out",
+        resolver=bundle.resolver,
+        qualification="fixture",
+        environment=ENVIRONMENT,
+        preflight_record=preflight_record(tmp_path, bundle, ENVIRONMENT),
+        tarball=links / "release" / tarball.name,
+    )
+    assert (code, result["status"]) == (3, "graded")
+
+
 def test_a_rejected_run_leaves_no_partial_bundle(tmp_path, bundle):
     observed = observations(tmp_path, bundle)
     first = observed / kit.observation_name(3)
@@ -881,3 +908,13 @@ def test_absent_observation_evidence_is_reported_missing(tmp_path, bundle):
     (observed / document["evidence"][0]["file"]).unlink()
     code, result = run(tmp_path, bundle, observed=observed)
     assert (code, result["reason"]) == (2, "observation_evidence_missing")
+
+
+def test_trial_dispatch_refuses_an_unknown_command():
+    """Only the four trial commands dispatch; nothing falls through to trial-run."""
+    import argparse
+
+    from relaymind.evaluation import asset_whole_task_cli as cli
+
+    with pytest.raises(ValueError, match="trial_command"):
+        cli._trial(argparse.Namespace(command="trial-bogus"))
