@@ -333,6 +333,8 @@ def test_exact_skill_selection_evidence_passes():
         "ui_unavailable",
         "negative_admitted",
         "negative_missing",
+        "mapping_missing_source_version",
+        "mapping_other_source_version",
     ],
 )
 def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
@@ -348,6 +350,10 @@ def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
         value["library_list"]["payload"]["entries"][0]["skillId"] = bad_id
     elif change == "mapping_missing_asset":
         value["mapping"].pop("assetId")
+    elif change == "mapping_missing_source_version":
+        value["mapping"].pop("sourceVersion")
+    elif change == "mapping_other_source_version":
+        value["mapping"]["sourceVersion"] = "v2"
     elif change.startswith("mapping_") and change.endswith("_asset"):
         value["mapping"]["assetId"] = {
             "mapping_empty_asset": "",
