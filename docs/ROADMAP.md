@@ -1302,13 +1302,17 @@ Exact skill selection is now qualified for the same pinned host and adapter
 revision: a Skill Library entry saved through `skills.library.save` is mapped
 to the RelayMind recommendation and selected for the next turn through the
 native `relaymind.skill` receipt and the Control UI. Unmapped and foreign-person
-selections are refused. The ordinary installed-host run (OpenClaw 2026.10.7,
-Ubuntu runner, CI run 41252580699, commit 303b700, after the runner
-stabilization) passed both the
+selections are refused: an unmapped skill (`INVALID_REQUEST`), a cross-session
+foreign person (`FORBIDDEN`) and a foreign person on its own session, refused by
+RelayMind's own authority check (`INVALID_REQUEST`). The predicate also binds
+the asset ID, content hash and source version, and requires the saved revision
+in `skills.library.list`. The ordinary installed-host run (OpenClaw 2026.10.7,
+Ubuntu runner, CI run 41284482576, commit f866b66, PR merge checkout
+960f340) passed both the
 ordinary-pass and ordinary-skill-pass predicates, with all 15 harness sources
 matching. Its unmodified capture is
 [openclaw-native-actions-20261101-skill.json](evidence/m10/openclaw-native-actions-20261101-skill.json)
-(SHA-256 `cc5bb786dcf2417539bee72ed81e913d2805cb1f5812a96a514a279a60822e79`), which the registry's evidence revision now names for the
+(SHA-256 `3fa0614ba5127e0e08182e40293dbc3c5f15854e2cc474f53e8c0098ce408dc3`), which the registry's evidence revision now names for the
 operations `direct_actions` and `exact_skill_selection`. The receipt records
 `sessionActivation: next-turn` and `instructions: not_observed`: selection is
 not observed loaded instruction use, which stays open as HOST-EXACT-SKILL-USE in
