@@ -191,15 +191,21 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 本节是摘要；各项检查的规范性完整说明以英文版 [ASSET_BENCHMARK.md](ASSET_BENCHMARK.md#whole-host-trials-adaptation-episodes-and-platform-exports-spec-060064065-section-1265) 为准。
 所有汇总都从经过验证的行重新计算，存储的汇总与之不符时报告被拒绝。`plan-host` 先依据 `HostFreezeV1` 校验
 `AssetHostTasksV1`，并按 `{seed,task_id,arm}` 的 SHA-256 排列各组；评分命令的输出文件总是记录 `status`、`gate`
-和固定的安全 `reason`，`plan-host` 只写出计划，被拒绝时不写文件并把原因输出到标准错误。引用的配置为严格 JSON 或 TOML
+和固定的安全 `reason`，`plan-host` 与 `plan-episodes` 只写出计划，被拒绝时不写文件并把原因输出到标准错误。引用的配置为严格 JSON 或 TOML
 （不超过 4 MiB）；尚不支持关联锁（related locks），遇到时阻塞。重置证据必须是规范化（canonical）JSON 原始字节，
 非规范字节或重复键会被拒绝。
 规范 0.65（#240）要求提供并验证第 12.6.5 节规定的固定版本原生校验证据及适用的 schema／提取证据；
 在此之前，宿主、提供方、采样和预算配置文档保持未验证状态，不能据此通过正式验收。
+评分结果还记录 `qualification`（#240）：报告声明的标签 `claimed`、根据已解析输入评估的等级 `assessed`
+（`fixture`、`provisional` 或 `qualified`；平台报告的 `qualified` 即 `measured`）及固定的安全原因 `reasons`。
+夹具语料或夹具来源的证据使等级为 `fixture`；在夹具输入上声明 `provisional`、`qualified` 或 `measured`
+会被拒绝（`qualification_contradiction`）。规范尚未定义经审查的 S3 资格记录，也未启用原生配置校验器，
+因此始终列出 `qualified_evidence_review`，目前没有报告能被评估为 `qualified`。
 
 | 命令 | 作用 |
 | --- | --- |
-| `python scripts/asset_whole_task.py plan-host --tasks T --freeze F --output P` | 按冻结的任务顺序写出三组（native、provider_only、recommendations）执行计划 |
+| `python scripts/asset_whole_task.py plan-host --tasks T --freeze F --output P` | 按冻结的任务顺序写出三组（native、provider_only、recommendations）执行计划，并记录预注册的 `input_digest` 与 `freeze_digest` |
+| `python scripts/asset_whole_task.py plan-episodes --episodes E --freeze F --output P` | 依据 `EpisodeFreezeV1` 校验 `AssetEpisodesV1`，写出 `input_digest`、`config_digest`，以及每个回合按时间顺序的三次纠正、按 `(kind,case_id)` 排序并从一编号的成对探测和重置探测 |
 | `python scripts/asset_whole_task.py grade-host --report R --inputs M [--resolver X] --output O` | 解析配套输入清单，校验并重新评分宿主报告 |
 | `python scripts/asset_whole_task.py grade-platform --report R --inputs M [--resolver X] --output O` | 校验平台报告的十一个生命周期步骤 |
 | `python scripts/asset_whole_task.py grade-adaptation --report R --inputs M [--resolver X] --output O` | 校验并重新评分适配报告；探测标签来自清单中经过验证的语料 |
