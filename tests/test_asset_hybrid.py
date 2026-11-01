@@ -2,6 +2,7 @@
 
 import json
 
+from helpers import FakeClock
 from test_asset_catalog import record
 from test_asset_selection import request
 from test_embedding_config import hybrid
@@ -233,7 +234,7 @@ def test_valid_large_offer_allows_peer_cancellation_during_real_selector_ranking
     )
 
     async def run():
-        budget = SelectionBudget(500)
+        budget = SelectionBudget(500, clock=FakeClock())
         selector = api().HybridAssetSelector(
             config, index, EmbeddingEngine(config.manifest, NativeDouble())
         )

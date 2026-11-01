@@ -38,6 +38,7 @@ from relaymind.evaluation.asset_episode_export import (
 from relaymind.evaluation.asset_metrics import grade_asset_result
 from relaymind.evaluation.asset_whole_task import WholeTaskRejected
 from relaymind.evaluation.asset_whole_task_corpus import release_labels
+from relaymind.store import TraceClock
 
 _ADAPTER = "relaymind-evaluation-episodes"
 _CONTRACT = "relaymind-evaluation-episodes.v1"
@@ -83,11 +84,13 @@ def locked_episode_arms(
     work_dir: Path,
     *,
     adaptation_stage: Callable[[Any], Any],
+    clock: TraceClock | None = None,
 ):
     """Disposable in-process arms over the locked corpus projection.
 
     ``effective`` maps ``off``/``on`` to the verified effective configurations;
     ``adaptation_stage(feedback_store)`` builds the on arm's adaptation stage.
+    ``clock`` optionally supplies the shared store and recommendation clock.
     """
     from relaymind.recommendations.registrations import (
         ActionRegistrations,
@@ -105,7 +108,7 @@ def locked_episode_arms(
         config = effective[arm]
         work_dir.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix=f"episode-{arm}-", dir=work_dir) as directory:
-            runs = RunStore(Path(directory) / "episode.sqlite3")
+            runs = RunStore(Path(directory) / "episode.sqlite3", clock=clock)
             provider = _LockedProjectionProvider(release, config)
             service = RecommendationService.for_provider(runs, provider, settings)
             feedback = action = None
