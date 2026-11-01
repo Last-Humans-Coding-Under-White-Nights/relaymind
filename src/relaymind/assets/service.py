@@ -581,6 +581,9 @@ class AssetCatalogService:
         future: "asyncio.Future[Publication] | None",
         failure: SourceFailure,
     ) -> None:
+        # Spec 0.66 section 4.6.1: keep candidate rejections recorded before a
+        # scan-level failure, including one raised after capture returned.
+        failure.keep_rejections(context.rejections)
         self.store.record_failure(
             source_id, rejected_count=failure.rejected_count, exclusions=failure.exclusions
         )

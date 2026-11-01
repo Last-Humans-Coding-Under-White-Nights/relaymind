@@ -401,6 +401,19 @@ function boundedPattern(pattern: string): boolean {
   }
   return true;
 }
+// One compiled pattern per schema node (no global flag, so test() is
+// stateless), reused only for the identical pattern text; the schema object
+// lives only as long as its operation.
+const PATTERNS = new WeakMap<object, { text: string; regex: RegExp }>();
+function compiled(schema: Record<string, any>): RegExp {
+  const text: string = schema.pattern;
+  let entry = PATTERNS.get(schema);
+  if (entry === undefined || entry.text !== text) {
+    entry = { text, regex: new RegExp(text, "u") };
+    PATTERNS.set(schema, entry);
+  }
+  return entry.regex;
+}
 /**
  * Validates arguments against the exact exposed schema. An object field that
  * the schema does not declare is refused unless additionalProperties is
@@ -457,7 +470,7 @@ function conforms(value: unknown, schema: Record<string, any>): boolean {
       return false;
     if (schema.pattern !== undefined) {
       if (length > MAX_PATTERN_INPUT) refuse("unavailable");
-      if (!new RegExp(schema.pattern, "u").test(value)) return false;
+      if (!compiled(schema).test(value)) return false;
     }
   }
   if (Array.isArray(value)) {
@@ -590,9 +603,16 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         key !== key.trim() ||
         !/^[\x20-\x7e]{1,255}$/.test(key) ||
         !plainObject(params.arguments) ||
-        canonicalText(params.arguments, false) === undefined
+        typeof params.sessionKey !== "string" ||
+        typeof params.expectedSessionId !== "string" ||
+        typeof params.expectedLifecycleRevision !== "string" ||
+        ("agentId" in params && typeof params.agentId !== "string")
       )
         return closed("invalid_request");
+      // The whole request must have one canonical text: an explicit
+      // undefined property or an unpaired surrogate is malformed.
+      const canonical = canonicalText(params, false);
+      if (canonical === undefined) return closed("invalid_request");
       const args = params.arguments;
       // 9/10. Only a reviewed mcp_use entry naming this exact route qualifies.
       const qualified = dependencies.qualification("mcp_use");
@@ -681,7 +701,7 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         target.lifecycleRevision,
         key,
       ]);
-      const digest = sha256(canonicalText(params, false)!);
+      const digest = sha256(canonical);
       let previous: ReturnType<NativeUseLedger["lookup"]>;
       try {
         previous = history.lookup(scopeKey);
@@ -692,6 +712,13 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
         // Recover only the historical receipt, after current authorization;
         // never dispatch again.
         await registered();
+        // The registration check awaited: an in-flight attempt may have
+        // dispatched or settled meanwhile, so read the history again.
+        try {
+          previous = history.lookup(scopeKey) ?? previous;
+        } catch {
+          return closed("unavailable");
+        }
         if (previous.digest !== digest)
           return options.respond(
             true,
@@ -731,7 +758,7 @@ export function createNativeMcpHandler(dependencies: Dependencies) {
           current();
           if (outcome === ABORTED || outcome === undefined)
             return closed("unavailable");
-          await registered();
+          // Registration was already checked above, before this wait.
           return options.respond(true, outcome, undefined);
         }
         // Bound before a restart and provably never dispatched: that lost

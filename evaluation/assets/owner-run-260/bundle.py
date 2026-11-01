@@ -167,6 +167,20 @@ class Bundle:
         )
 
 
+def add_extra_evidence(bundle: Bundle, extra: dict) -> None:
+    """Further evidence files; one kept out of the published bundle is restricted."""
+    for evidence_id, item in extra.items():
+        publish = item.get("publish", True)
+        bundle.file(
+            evidence_id,
+            item.get("kind", "original"),
+            "redistributable" if publish else "restricted",
+            Path(item["path"]).read_bytes(),
+            publish=publish,
+            relative=item.get("relative"),
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("kind", choices=("host", "adaptation"))
@@ -184,7 +198,7 @@ def main() -> None:
     parser.add_argument(
         "--extra-evidence",
         type=Path,
-        help="JSON {evidence_id: {path, kind}} of further evidence files",
+        help="JSON {evidence_id: {path, kind, publish, relative}} of further evidence files",
     )
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--private", type=Path, required=True)
@@ -210,16 +224,7 @@ def main() -> None:
             ref["id"], "original", "redistributable", data, publish=True, relative=ref["path"]
         )
     if args.extra_evidence:
-        for evidence_id, item in read(args.extra_evidence).items():
-            data = Path(item["path"]).read_bytes()
-            bundle.file(
-                evidence_id,
-                item.get("kind", "original"),
-                "redistributable",
-                data,
-                publish=item.get("publish", True),
-                relative=item.get("relative"),
-            )
+        add_extra_evidence(bundle, read(args.extra_evidence))
     bundle.write(args.out / "report.json", report)
     print(json.dumps(dict(documents=len(bundle.documents), evidence=len(bundle.evidence))))
 

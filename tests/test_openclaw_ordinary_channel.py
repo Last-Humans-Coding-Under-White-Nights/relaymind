@@ -17,6 +17,15 @@ CONTENT = "---\nname: Hello World\ndescription: Greeting skill\n---\nSay hello."
 CONTENT_HASH = hashlib.sha256(CONTENT.encode("utf-8")).hexdigest()
 
 
+def write_records(path, text):
+    """Write observer records byte for byte, as the Node observers append them.
+
+    Text mode would turn each newline into os.linesep, so on Windows the file
+    would hold CRLF while the tests count byte offsets with LF records.
+    """
+    path.write_bytes(text.encode("utf-8"))
+
+
 def module():
     path = ROOT / "integrations/openclaw/test/host-ordinary-qualification/qualify.py"
     spec = importlib.util.spec_from_file_location("ordinary_native_fixture", path)
@@ -1298,9 +1307,9 @@ def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(
         skill_asset={},
     )
     extension.event_file = tmp_path / "events.jsonl"
-    extension.event_file.write_text("")
+    write_records(extension.event_file, "")
     extension.provider_attempt_file = tmp_path / "attempts.jsonl"
-    extension.provider_attempt_file.write_text("")
+    write_records(extension.provider_attempt_file, "")
     records = []
     extension.observation = SimpleNamespace(requests=records, begin=lambda selected, task: None)
     terminal = {}
@@ -1318,12 +1327,13 @@ def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(
             run_id = params["idempotencyKey"]
             tool = copy.deepcopy(case["tools"][0])
             tool["context"]["runId"] = tool["event"]["runId"] = run_id
-            extension.event_file.write_text(
-                json.dumps(dict(kind="native_skill_tool", **tool)) + "\n"
+            write_records(
+                extension.event_file, json.dumps(dict(kind="native_skill_tool", **tool)) + "\n"
             )
             records.extend(copy.deepcopy(case["requests"]))
-            extension.provider_attempt_file.write_text(
-                "".join(json.dumps(a) + "\n" for a in case["provider_attempts"])
+            write_records(
+                extension.provider_attempt_file,
+                "".join(json.dumps(a) + "\n" for a in case["provider_attempts"]),
             )
             terminal.update(case["terminal"], runId=run_id)
             return dict(socket_id="socket", frame=dict(ok=True, payload=dict(runId=run_id)))
@@ -1369,7 +1379,7 @@ def test_native_turn_wait_is_bounded(tmp_path):
         skill_asset={},
     )
     extension.event_file = tmp_path / "events.jsonl"
-    extension.event_file.write_text("")
+    write_records(extension.event_file, "")
     extension.observation = SimpleNamespace(requests=[], begin=lambda *args: None)
     case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
     with pytest.raises(ValueError, match="ordinary_skill_turn_timeout"):
@@ -1454,9 +1464,9 @@ def test_timeout_retains_received_gateway_attempts(tmp_path):
         skill_asset={},
     )
     extension.event_file = tmp_path / "events.jsonl"
-    extension.event_file.write_text("")
+    write_records(extension.event_file, "")
     extension.provider_attempt_file = tmp_path / "attempts.jsonl"
-    extension.provider_attempt_file.write_text("")
+    write_records(extension.provider_attempt_file, "")
     requests = []
     extension.observation = SimpleNamespace(requests=requests, begin=lambda *args: None)
     case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
@@ -1472,8 +1482,8 @@ def test_timeout_retains_received_gateway_attempts(tmp_path):
             "idempotencyKey"
         ]
         requests.append(dict(request_id="retained-attempt"))
-        extension.event_file.write_text(
-            json.dumps(dict(kind="native_skill_tool", **observed_tool)) + "\n"
+        write_records(
+            extension.event_file, json.dumps(dict(kind="native_skill_tool", **observed_tool)) + "\n"
         )
         return dict(
             socket_id="socket", frame=dict(ok=True, payload=dict(runId=params["idempotencyKey"]))
@@ -1514,7 +1524,7 @@ def test_native_turn_refuses_to_run_when_session_subscription_is_denied(tmp_path
         skill_asset={},
     )
     extension.event_file = tmp_path / "events.jsonl"
-    extension.event_file.write_text("")
+    write_records(extension.event_file, "")
     extension.observation = SimpleNamespace(requests=[], begin=lambda *args: None)
     calls = []
 
@@ -1707,7 +1717,7 @@ def test_retirement_wait_allows_loaded_runner_but_stays_bounded(tmp_path, monkey
     extension = extension_fixture(api, tmp_path)
     retirement = fixture(api)["ordinary_actions"]["retirement"]
     extension.event_file = tmp_path / "events.jsonl"
-    extension.event_file.write_text("")
+    write_records(extension.event_file, "")
     extension.retirement_start = 0
     extension.held_attempt = retirement["attempt"]
     extension.held_request = "held"
@@ -1723,7 +1733,7 @@ def test_retirement_wait_allows_loaded_runner_but_stays_bounded(tmp_path, monkey
     def sleep(seconds):
         clock[0] += seconds
         if missing != "fetch_abort" and clock[0] >= 4:
-            extension.event_file.write_text(json.dumps(retirement["fetch_failures"][0]) + "\n")
+            write_records(extension.event_file, json.dumps(retirement["fetch_failures"][0]) + "\n")
 
     monkeypatch.setattr(api.time, "sleep", sleep)
     monkeypatch.setattr(
@@ -1772,13 +1782,12 @@ def test_retirement_holds_backend_until_ui_abort_is_observed(tmp_path, monkeypat
         retirement["ui_guard_events"][0],
     ]
     prefix = "".join(json.dumps(event) + "\n" for event in base_events)
-    native.write_text(prefix)
+    write_records(native, prefix)
     extension.event_file = tmp_path / "ordinary-events.jsonl"
     # Earlier requests must not be attributed to the held request.
     prior = json.dumps(dict(retirement["fetch_failures"][0], attempt_id="prior")) + "\n"
-    extension.event_file.write_text(prior)
-    # The observer uses byte offsets; Windows text writes translate LF to CRLF.
-    extension.retirement_start = extension.event_file.stat().st_size
+    write_records(extension.event_file, prior)
+    extension.retirement_start = len(prior.encode())
     extension.held_attempt = retirement["attempt"]
     extension.held_request = "held"
     extension.ui_guard_request = retirement["ui_guard_request"]
@@ -1798,15 +1807,15 @@ def test_retirement_holds_backend_until_ui_abort_is_observed(tmp_path, monkeypat
             event = dict(
                 kind="http", path="/relay/v1/feedback", status=200, attempt_id="physical-1"
             )
-            extension.event_file.write_text(prior + json.dumps(event) + "\n")
+            write_records(extension.event_file, prior + json.dumps(event) + "\n")
         elif clock[0] >= 4:
             line = json.dumps(retirement["fetch_failures"][0]) + "\n"
-            extension.event_file.write_text(
-                prior + (line[:30] if partial and clock[0] < 5 else line)
+            write_records(
+                extension.event_file, prior + (line[:30] if partial and clock[0] < 5 else line)
             )
         if clock[0] >= 2:
             line = json.dumps(retirement["ui_retired"]) + "\n"
-            native.write_text(prefix + (line[:30] if partial and clock[0] < 3 else line))
+            write_records(native, prefix + (line[:30] if partial and clock[0] < 3 else line))
 
     monkeypatch.setattr(api.time, "sleep", sleep)
     capture = {"ordinary_actions": {}}
@@ -1853,7 +1862,7 @@ def test_retirement_preparation_waits_for_original_host_events(
     api = module()
     extension = extension_fixture(api, tmp_path)
     extension.event_file = tmp_path / "events.jsonl"
-    extension.event_file.write_text("")
+    write_records(extension.event_file, "")
     clock = [0.0]
     monkeypatch.setattr(api.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(api.time, "sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds))
@@ -1879,7 +1888,8 @@ def test_retirement_preparation_waits_for_original_host_events(
                 clock[0] += min(4, timeout) if arrives else timeout
                 if not arrives or timeout < 4:
                     return False
-            extension.event_file.write_text(
+            write_records(
+                extension.event_file,
                 json.dumps(
                     {
                         "kind": "http_attempt",
@@ -1887,7 +1897,7 @@ def test_retirement_preparation_waits_for_original_host_events(
                         "attempt_id": "original",
                     }
                 )
-                + "\n"
+                + "\n",
             )
             return True
 
@@ -1945,7 +1955,8 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
     extension.installation = {}
     extension.origin = "https://fixture.test"
     extension.event_file = tmp_path / "events.jsonl"
-    extension.event_file.write_text(
+    write_records(
+        extension.event_file,
         "\n".join(
             json.dumps(e)
             for e in [
@@ -1953,7 +1964,7 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
                 {"kind": "http", "attempt_id": "entry", "status": 200},
             ]
         )
-        + "\n"
+        + "\n",
     )
     monkeypatch.setattr(
         extension,
@@ -2205,9 +2216,9 @@ def turn_fixture(api, tmp_path, monkeypatch, *, deliver):
 
     extension = extension_fixture(api, tmp_path)
     extension.event_file = tmp_path / "events.jsonl"
-    extension.event_file.write_text("")
+    write_records(extension.event_file, "")
     extension.provider_attempt_file = tmp_path / "attempts.jsonl"
-    extension.provider_attempt_file.write_text("")
+    write_records(extension.provider_attempt_file, "")
     case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
     expected = copy.deepcopy(case)
     observation = api.LoadedUseGatewayObservation()
@@ -2228,15 +2239,16 @@ def turn_fixture(api, tmp_path, monkeypatch, *, deliver):
         expected["tools"][0]["event"]["runId"] = host_id
         expected["tools"][0]["context"]["runId"] = host_id
         observation.requests.extend(expected["requests"])
-        extension.provider_attempt_file.write_text(
-            "".join(json.dumps(a) + "\n" for a in expected["provider_attempts"])
+        write_records(
+            extension.provider_attempt_file,
+            "".join(json.dumps(a) + "\n" for a in expected["provider_attempts"]),
         )
         foreign = copy.deepcopy(expected["tools"][0])
         foreign["context"]["runId"] = "previous-case"
         events = [dict(kind="native_skill_tool", **foreign)]
         if deliver:
             events.append(dict(kind="native_skill_tool", **expected["tools"][0]))
-        extension.event_file.write_text("".join(json.dumps(e) + "\n" for e in events))
+        write_records(extension.event_file, "".join(json.dumps(e) + "\n" for e in events))
         return dict(socket_id="socket", frame=dict(ok=True, payload=dict(runId=host_id)))
 
     def wait(ms):
@@ -2301,11 +2313,11 @@ def test_refused_send_retains_and_rejects_partial_dispatch(tmp_path, monkeypatch
     def dispatched(page, method, params):
         reply = rpc(page, method, params)
         if method == "chat.send" and activity == "request":
-            extension.event_file.write_text("")
-            extension.provider_attempt_file.write_text("")
+            write_records(extension.event_file, "")
+            write_records(extension.provider_attempt_file, "")
             del extension.observation.requests[1:]
         elif method == "chat.send" and activity == "tool":
-            extension.provider_attempt_file.write_text("")
+            write_records(extension.provider_attempt_file, "")
             extension.observation.requests.clear()
         return reply
 
@@ -3405,7 +3417,7 @@ def test_loaded_turn_malformed_tool_record_is_closed(tmp_path, monkeypatch, fiel
         if method == "chat.send":
             records = [json.loads(line) for line in extension.event_file.read_text().splitlines()]
             records[-1][field] = value
-            extension.event_file.write_text("".join(json.dumps(r) + "\n" for r in records))
+            write_records(extension.event_file, "".join(json.dumps(r) + "\n" for r in records))
         return reply
 
     if not terminal:
@@ -3684,10 +3696,10 @@ def drained_turn(api, tmp_path, case, *, frame_ok=True, on_send=None, on_wait=No
     extension.turn_drain_seconds = 0.3
     extension.turn_settle_seconds = 0.05
     extension.event_file = tmp_path / "events.jsonl"
-    extension.event_file.write_text("")
+    write_records(extension.event_file, "")
     extension.provider_attempt_file = tmp_path / "attempts.jsonl"
     # A record of an earlier turn precedes this turn's window.
-    extension.provider_attempt_file.write_text(json.dumps(pre_http_failure("earlier")) + "\n")
+    write_records(extension.provider_attempt_file, json.dumps(pre_http_failure("earlier")) + "\n")
     requests = []
     extension.observation = SimpleNamespace(requests=requests, begin=lambda *args: None)
     terminal = {}

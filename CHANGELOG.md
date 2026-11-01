@@ -12,9 +12,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   RM16, RM44; AC36): 14 of the 100 preregistered tasks ran on the MacBook
   through `run_host_plan` with an in-process OpenClaw 2026.10.7 executor
   (`evaluation/assets/owner-run-260/run_host.py`). Native: 11 completed, 2
-  failed, 1 timeout; provider_only: 3 completed, 11 failed (mostly the
-  gateway's default 30 s `external_seconds`); recommendations: `not_run`
-  (`person_choice_unavailable`). The private run directory was deleted during
+  failed, 1 timeout; provider_only: 3 completed, 11 failed (reason
+  `host_failed`; the cause is not in the surviving evidence);
+  recommendations: 13 `not_run` (`person_choice_unavailable`, h001–h013) and
+  87 `not_run` (`interrupted`); the other 86 rows of each executed arm are
+  `not_run` (`interrupted`). The private run directory was deleted during
   the run, so per-row evidence and final answers are lost; only the in-memory
   report survives, nothing was judged or graded, and no host record exists.
   About 3.18M of the 5M external-token budget was used.
@@ -25,8 +27,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `qualified_evidence_review`). Corrected paraphrase top-1 was 51/200 (0.255;
   the target is 0.90), control top-1 38/100 off and 36/100 on (loss 0.02), and
   100/100 resets were byte-identical. Corrections used the driver's
-  evaluation-only registration, not the native feedback RPC. The pending record
+  evaluation-only registration, not the native feedback RPC. The run used a
+  run-local ONNX manifest (another runtime build and device) that was not
+  recorded; the report binds the preregistered adaptation config, so the
+  on-arm numbers are diagnostic only. The pending record
   `m10-owner-run-260-adaptation` lifts nothing until it is reviewed.
+- Third #278 review fixes for the #260 scripts (RM03, RM12, RM16, RM40, RM42,
+  RM44; AC31, AC33, AC36): `run_host.py` closes the gate, gateway and private
+  credential files when setup fails, bounds only the output field the client
+  sent and reports a reservation already held as `row_reserved`;
+  `harness.py` rejects repeated prompts within one item and judgments with an
+  unknown handle instead of storing them as negative; `judge.py adjudicate`
+  survives a malformed reply, writes after every batch and resumes without
+  paying twice; `bundle.py` marks unpublished extra evidence `restricted`;
+  `run_episodes.py` runs only recommendation settings that project to the
+  frozen off document and releases the verified embedding files on failure.
+- #260 review fixes: the pending adaptation record gains the
+  `machine.os_version` its schema requires and now loads (test over every
+  committed #260 record); `run_episodes.py` executes only the frozen
+  adaptation config and manifest; `run_host.py` enforces the host freeze's
+  model and config digests, configures each host from its frozen document,
+  starts on a fresh ledger, redacts truncated run-directory paths and never
+  leaves a host turn running when a usage read fails; `judge.py apply` marks
+  cancelled rows as not successful. One scratch-path fragment stays in the
+  digest-bound h014 capture (documented in the README). Deterministic tests
+  only.
 - Owner-run #260 cohort, frozen and preregistered
   (`evaluation/assets/owner-run-260/`; RM40, RM42, RM44; AC31, AC33, AC36;
   spec 0.66 section 12.6.6): 600 held-out machine-drafted cases over the
@@ -37,6 +62,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   451/600), the frozen lock, the episode and host freezes and both
   preregistration outputs. The corpus stays `development`, so nothing graded
   over it can qualify.
+  Five of the 11 class disagreements come from a parsing defect, not from the
+  annotators: positive answers with unpadded handles (`A54`) were stored as
+  negative (see the cohort README); the labels are kept as recorded.
 - #259 early installed-skill trial on the owner's Apple M1 8 GiB MacBook (RM16,
   RM39, RM40, RM44; AC30, AC31, AC36; spec 0.66 sections 12.6.5, 12.6.6) in
   `docs/evidence/m10/early-trial-m1-20261101/`: frozen inputs (one
@@ -56,7 +84,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   label commands, the `machine_drafted_owner_approved` case authorship counted
   without the author competence rule, and the record's checks against the
   frozen labels and cases. Graded output reports `prompt_authorship`.
-  Fixture-tested only.
+  Fixture-tested only. Review of #276: drafted cases count only when an owner-run
+  record declares `machine_drafted_owner_approved` (without one they fill no
+  lane); a drafted release is drafted throughout (`drafted_authorship_mixed`);
+  an `original` record rejects drafted cases but allows translated or generated
+  validation cases. The trial's `record` step now matches the current checker,
+  and a repeated machine pass keeps the earlier call bytes.
 - #261 MacBook and Ubuntu VPS platform evidence (RM38, RM39, RM40, RM44; AC29,
   AC31, AC37; spec 0.66 sections 12.6.5, 12.6.6) in
   `docs/evidence/m10/owner-platform-runs-2026-11-01/`, with two pending
@@ -131,7 +164,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and inspect must report the plugin loaded and enabled. `--base-url` must meet
   the plugin's `baseUrl` rules (loopback http/https `/v1` root, no
   credentials, query or fragment); any other value is refused before any host
-  command runs and is never written out. Verified with a host
+  command runs and is never written out. The kit parses the value with the
+  plugin's WHATWG URL rules (`src/relaymind/evaluation/plugin_base_url.py`), so
+  it accepts and refuses what the plugin does and configures the plugin's
+  normal form (`http://127.1:8080/v1` becomes `http://127.0.0.1:8080/v1`);
+  `tests/test_openclaw_pinned_package.py` compares it case by case with the
+  plugin's own `config.ts` under Node. Verified with a host
   double that models the disabled fresh install; not yet rerun on the
   owner's M1 (#259).
 - Ordinary local skill discovery (#268; RM34/AC25; spec 0.66 section 4.6.1)
@@ -139,9 +177,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   rejected for `<placeholder>` text or HTML examples and 9 for more than three
   code-fence lines, and one rejected file failed the whole folder. Bodies now
   keep only the encoding, control and size checks, and a rejected candidate is
-  excluded on its own with a fixed reason. All 49 bundled skills are admitted
-  by a local scan of the pinned package. Five verbatim copies are test
-  fixtures (`tests/fixtures/openclaw-bundled-skills/`, MIT).
+  excluded on its own with a fixed reason. Five verbatim copies are test
+  fixtures (`tests/fixtures/openclaw-bundled-skills/`, MIT) in the default
+  suite. `tests/test_openclaw_pinned_package.py` scans a copy of the pinned
+  package's `skills/` directory installed by `npm ci` and checks that all 49
+  bundled skills are admitted; it runs in the `openclaw-plugin` CI job and
+  skips elsewhere without `node_modules`. This is a developer check of the
+  bundled files, not an AC25 live host subcase. A rejected root `SKILL.md`
+  after an earlier child generation is now a partial generation (the child
+  records stay, stale) instead of a whole-scan failure, and a scan that fails
+  after a candidate rejection keeps that rejection in its recorded exclusions
+  and rejected count (spec 0.66 section 4.6.1).
 - The loaded-use observation harness records the exact person-scope
   `sessions.reset` refusal (`operator.admin` required on the pinned host) as
   `control_refused`, with no turn, instead of raising
@@ -160,28 +206,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   output reports its `labelling`. Label commands take `--labelling
   owner_machine` (`owner_machine.v1`: the owner may also tune, the machine
   annotator never); the record's Cohen's kappa is recomputed from the labels.
-  Negative `host_operation` records list disabled operations as known host
-  limitations. Fixture-tested only; no record exists and no gate has passed.
+  Every bound freeze, tasks, episodes or labels subject must be the report's
+  resolved input, platform records included; a platform record may carry the
+  corpus review; Time fields must be real UTC instants
+  (`invalid_record_time`). Under `owner_machine` only the owner custodian may
+  also tune. `known_host_limitations` returns approved negative
+  `host_operation` records for the roadmap, docs and reports to list; nothing
+  consumes it until such a record is approved. Fixture-tested only; no
+  record exists and no gate has passed.
 
 - Native host configuration preflight (#250; RM16/RM39/RM40/RM44;
   AC31/AC35/AC36/AC37): a bounded Node checker uses pinned OpenClaw 2026.10.7
   validation, including defaults, strict refinements and plugin schemas, and
-  returns a closed verdict with the validator file digest. The Python wrapper
-  enforces a timeout; input resolution rejects invalid native preflights and
+  returns a closed verdict with the SHA-256 of every pinned host entry point it
+  imports. The Python wrapper enforces a timeout and accepts only that pinned
+  validator identity; input resolution rejects invalid native preflights and
   retains validator identities by config digest. Offline resolution can consume
   captured verdicts without Node; native fixture tests run in the OpenClaw CI job.
   The isolated state (no operator HOME or credentials) installs the packaged
   RelayMind plugin when the config names `relaymind`, so ordinary installed
   discovery validates its settings without `plugins.load.paths`. A referenced
-  plugin whose schema the host did not inspect (undiscovered, or a discovery
-  owner the host preserved uninspected) is `unavailable` with reason
+  plugin (in `plugins.entries` or `plugins.allow`) whose schema the host did
+  not inspect (undiscovered, or a discovery owner the host preserved
+  uninspected) is `unavailable` with reason
   `plugin_schema_not_inspected`, never `valid`; every verdict carries a closed
   `reason`.
   Qualified captured-evidence verification remains open in #240.
 - Platform runs on GitHub-hosted runners (#241, #235; RM38, RM39, RM44; AC29,
   AC37): a separate `Platform runs` workflow on `macos-latest`,
   `windows-latest` and `ubuntu-latest`.
-  - `scripts/asset_operations_run.py operations` runs the AC29 run: ten clean
+  - `scripts/asset_operations_run.py operations` runs the lexical portion of
+    the AC29 protocol as a fixture (it does not close AC29): ten clean
     startups, a recommendations-disabled memory baseline, and the 60-second
     2 req/s workload with four 25-record metadata-import batches and a derived
     rebuild. The workload goes through the existing `run_workload` and
@@ -205,6 +260,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `asset_platform_run.py` exits 2 with a reason on input errors and on an
     ordinary-step timeout. The gateway control child answers every command
     even when its job store fails, and its reader ignores a closed loop.
+  - Second review fixes: a startup launch that fails before readiness is a
+    harness error (`startup_<n>_<reason>`, exit 2) in `operations` and
+    `startup`; `verify` fails an operations report with harness errors, and a
+    platform report without its bundle or a bundle without its report. The
+    control child binds the job the request awaited (`job_id`), never the
+    newest listed job, and reports an unbindable job as a harness error. The
+    bundle registers `platform-runner-files`, the digests of the driver
+    scripts, workflow, ordinary harness and test helpers the run executes,
+    and `verify` checks them against the checkout. The workflow's path filter
+    covers the run's dependency closure, and every step has a time limit that
+    fits inside the job's. A non-object environment lock exits 2, and a
+    reused `--work` starts from the requested catalog and new stores. The
+    docs call the run the lexical AC29 fixture portion and no longer quote
+    uncommitted local numbers.
+  - Third review fixes: an operations harness error no longer skips the
+    release and lifecycle steps; its exit code is kept in `operations.exit`
+    and a final `Harness result` step fails the job on it. The ordinary step
+    passes `--timeout 780`, so its own `ordinary_timeout` fires before the
+    step limit. The test files and workflow the run binds check out with LF
+    line endings on Windows, so a `windows-latest` report verifies on another
+    checkout. The control channel reads lines up to 16 MiB, a control call
+    after the reply stream ended fails at once with `control_closed`, a job
+    reported in two replies is kept once in its latest state, and memory
+    phases are listed only when a workload sample is known.
 - Episode and host-task run kit (#236, #237; RM40–RM44; AC31–AC36): blind
   label templates, adjudication worksheet and `AssetLabelsV1` freeze;
   `preregister-host`/`preregister-episodes` checks; a resumable, crash-safe
@@ -220,7 +299,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   gateway-bounded calls keep their own outcome, with dispatch counted only
   when evidenced; `--events`/`--artifacts` use the bounded strict reader;
   executor output is capped while read; host task sets missing a required
-  lane are not acceptance-eligible.
+  lane are not acceptance-eligible. Third review: episode probes outside the
+  `held_out` split make the set ineligible (`probes_not_held_out`); the
+  episode journal also binds the corpus release lock; an executor `not_run`
+  row is invalid; a journal with only a torn header starts again; a second
+  signal stops `run-host` at once and kills the executor's group; dispatch
+  needs a received token or a known usage count, also for
+  `provider_unreachable`.
 - Early installed-skill trial kit (#234; RM39, RM44; AC30, AC36; spec 0.65
   section 12.6.5): `scripts/asset_whole_task.py trial-preflight`,
   `trial-install`, `trial-run` and `trial`.
@@ -309,7 +394,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   removing a live owner's lock) and made each ledger record complete across
   short writes before it is acknowledged; the shipped entry is re-pinned to
   adapter revision `b49d94d8267076516430fb2e4fb64d41fad2961fc8009c84e60921cf43e9e98e`,
-  whose evidence must be recaptured from CI.
+  whose evidence revision names its fresh capture (CI run 41322540111, SHA-256
+  `6b8947df711e…`). A fourth review rejects malformed request text and
+  non-string session fields as `invalid_request`, drops a duplicate
+  registration check and keeps the native deadline live, and the ledger cuts
+  a torn final record through a separate read-write handle (a Windows append
+  handle cannot truncate); the entry was re-pinned to adapter revision
+  `a29cac121c5e01932b6b3ee75e9bab2214e5e9e72cbc36d8f802f62b917c7cfe`. A fifth
+  review rereads a same-key MCP request's history after its registration
+  check (a receipt settled meanwhile is recovered, never reported as
+  `not_dispatched`), keeps a host `UNAVAILABLE` exact-read result from
+  blocking a conversation, digests the adapter bytes once per resolver, takes
+  over a stale ledger lock naming this process's PID that this process did
+  not create (PID 1 in a container), reserves exact room for each binding's
+  marker and longest receipt under the byte cap and compiles each host schema
+  pattern once per operation; the entry is re-pinned to adapter revision
+  `37f9b415c47260065d42453b5d85474375a796b8a7416af78732668863357f2d`, whose
+  capture is taken from CI before merge.
 
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,
@@ -431,7 +532,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   session incarnation and pinned-byte re-verification does not count);
   `exact_route_absent` means no supported route invokes an independent,
   non-App MCP tool by its exact native identity (App view routes such as
-  `mcp.app.callTool` do not count).
+  `mcp.app.callTool` do not count). The record's `corpus_review` is allowed
+  on host, adaptation and platform records (a platform report resolves the same
+  frozen corpus) and is null on walkthrough and host_operation records; under
+  `owner_machine` the tuner exclusion is waived for the owner custodian only.
   "Customer" wording about who runs trials becomes owner/operator. No metric,
   threshold or budget changes.
   A later 0.66 addition (#260) adds `machine_drafted_owner_approved` prompt

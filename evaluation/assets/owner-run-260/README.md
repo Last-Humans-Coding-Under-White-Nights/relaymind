@@ -65,6 +65,17 @@ catalog digest must match.
   prevalence makes chance agreement high); the acceptable-set agreement and
   the Jaccard sum are the informative numbers. No negatives or ambiguous
   prompts were drafted.
+- Five raw judgments in `labels.json` are not what the annotator answered.
+  `harness.py` then stored a positive judgment whose handles did not resolve as
+  negative with no acceptable assets. Annotator A answered positive with `A54`
+  (e016-c1, e016-p2) and `A52` (e094-c1), annotator B with `A82` (e055-c1) and
+  `A53` (e058-p1): handles without zero padding (raw replies in
+  `logs/annotator-a/machine-annotator-a-012.response.json` and
+  `logs/annotator-b/machine-annotator-b-007.response.json`). So 5 of the 11
+  recorded class disagreements, and the matching acceptable-set disagreements,
+  come from this parsing, not from the annotators; the adjudicator resolved all
+  five as positive. The recorded labels and agreement figures are kept as
+  recorded. `harness.py` now rejects such a row and leaves it for retry.
 
 ## Preregistration history
 

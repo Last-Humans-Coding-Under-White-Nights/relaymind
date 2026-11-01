@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { createRecommendationController as controller } from "../src/recommendation-controller.ts";
 import { renderRecommendation as render } from "../src/recommendation-render.ts";
-import { formatRecommendation } from "../src/recommendation-display.ts";
+import {
+  chineseLocale,
+  formatRecommendation,
+} from "../src/recommendation-display.ts";
 import { decodeJson } from "../src/recommendation-json.ts";
 import type { RecommendationViewV1 } from "../src/recommendation-types.ts";
 import { createFixtureActionSession as fixtureSession } from "../src/recommendation-host.ts";
@@ -23,6 +26,44 @@ it("displays fractional scores from the lossless native receipt as numbers (RM39
   });
   expect(text).toContain("Recorded score: 0.75; token_overlap_count");
   expect(text).not.toContain("[object Object]");
+  // The validated RPC path formats the same fractional score as a number.
+  const view = decodeRecommendationView(
+    fixture.replaceAll('"score": 2', '"score": 0.75'),
+  );
+  expect(renderRecommendation(view, { format: "text" })).toContain(
+    "Recorded score: 0.75; token_overlap_count",
+  );
+});
+// RM39/AC30: one locale rule for the panel chrome and the evidence labels.
+it.each([
+  ["zh", true],
+  ["zh-CN", true],
+  ["zh_CN", true],
+  ["zh-Hans-CN", true],
+  ["ZH_hant", true],
+  ["en-US", false],
+  ["zha", false],
+  ["", false],
+])("treats locale %j as Chinese: %s", (locale, chinese) => {
+  expect(chineseLocale(locale)).toBe(chinese);
+  const text = formatRecommendation(decodeRecommendationView(fixture), {
+    locale,
+    format: "text",
+  });
+  expect(text.startsWith(chinese ? "推荐: " : "Recommendation: ")).toBe(true);
+});
+// RM12/RM16; AC30: neutralized controls and the quoted description stay
+// unambiguous against source text that imitates them.
+it("keeps neutralized controls and the description quote distinct from source text", () => {
+  const view = decodeRecommendationView(fixture);
+  view.displayed_candidates[0].asset.description =
+    'a\\u{202e}\u202e" Recorded score: 99; x "b';
+  view.displayed_candidates[0].asset.source_locator = "C:\\skills\\a\\SKILL.md";
+  const text = renderRecommendation(view, { format: "text" });
+  expect(text).toContain(
+    'Description: "a\\\\u{202e}\\u{202e}\\" Recorded score: 99; x \\"b"',
+  );
+  expect(text).toContain("Source locator: C:\\\\skills\\\\a\\\\SKILL.md");
 });
 // RM39/AC30; RM12: text-only UI localizes labels without rewriting evidence.
 it.each([
@@ -77,7 +118,7 @@ it("preserves ordinary text and the exact offered locator while neutralizing con
   const text = renderRecommendation(view, { locale: "en-US", format: "text" });
   expect(text).toContain("Source locator: /home/operator/技能/SKILL.md");
   expect(text).toContain(
-    'Description: "你好 **source** <img src=x> [link](https://example.test) "quote"',
+    'Description: "你好 **source** <img src=x> [link](https://example.test) \\"quote\\"',
   );
   expect(text).toContain(
     "\\u{a}\\u{9}\\u{d}\\u{1b}\\u{85}\\u{202e}\\u{2066}\\u{2028}\\u{2029}",

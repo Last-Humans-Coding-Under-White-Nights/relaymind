@@ -379,6 +379,17 @@ def test_machine_drafted_cases_name_exactly_one_drafter(tmp_path):
         _dual_round_trip(catalog, cases, labels)
 
 
+def test_a_drafted_release_is_drafted_throughout(tmp_path):
+    """Spec 12.6.6 (RM40/AC31; review of #276): the drafter writes every prompt of the
+    release, so a release never mixes drafted cases with other authorship."""
+    catalog, cases, labels = _drafted(tmp_path)
+    original = next(p for p in catalog["people"] if "author" in p["roles"] and p["competencies"])
+    cases["cases"][0].update(authorship="original", author_ids=[original["id"]])
+    labels["cases_digest"] = canonical_digest(cases)
+    with pytest.raises(AssetCorpusError, match="drafted_authorship_mixed"):
+        _dual_round_trip(catalog, cases, labels)
+
+
 def _owner_labels(tmp_path, *, disagree=False):
     catalog, cases, labels = _owner_machine(tmp_path)
     templates = _owner_templates(catalog, cases, labels)
@@ -457,3 +468,78 @@ def test_a_worksheet_for_other_documents_is_a_binding_error(tmp_path, field):
     worksheet[field] = 9 if field == "release" else "a" * 64
     with pytest.raises(AssetCorpusError, match="worksheet_binding"):
         freeze_labels(catalog, cases, judgments, worksheet)
+
+
+# --- spec 0.66 section 12.6.6 machine_dual adjudication reasons (review of #276) ----
+
+
+def _dual_disagreement(tmp_path, reason):
+    """machine_dual labels where judge-b says negative to judge-a's positive."""
+    catalog, cases, labels = _machine_dual(tmp_path)
+    templates = [
+        filled(
+            label_template(catalog, cases, a, labelling="machine_dual_owner_approved"), labels, a
+        )
+        for a in ("judge-a", "judge-b")
+    ]
+    templates[1]["items"][0]["judgment"].update({"class": "negative", "acceptable_asset_ids": []})
+    judgments = raw_judgments(catalog, cases, templates, labelling="machine_dual_owner_approved")
+    worksheet = adjudicated(
+        adjudication_worksheet(catalog, cases, judgments, labelling="machine_dual_owner_approved"),
+        labels,
+    )
+    worksheet["items"][0]["adjudication"]["reason"] = reason
+    return catalog, cases, judgments, worksheet
+
+
+@pytest.mark.parametrize("reason", ["", " ", "\t\n "])
+def test_a_machine_dual_disagreement_needs_an_adjudication_reason(tmp_path, reason):
+    """Spec 12.6.6: the machine adjudicator gives a nonempty reason on every disagreement."""
+    catalog, cases, judgments, worksheet = _dual_disagreement(tmp_path, reason)
+    with pytest.raises(AssetCorpusError, match="adjudication_reason_missing"):
+        freeze_labels(catalog, cases, judgments, worksheet, labelling="machine_dual_owner_approved")
+
+
+def test_a_machine_dual_agreement_needs_no_adjudication_reason(tmp_path):
+    catalog, cases, labels = _machine_dual(tmp_path)
+    for row in labels["adjudications"]:
+        row["reason"] = ""
+    frozen = _dual_round_trip(catalog, cases, labels)
+    assert frozen["agreement"]["method"] == "machine_dual.v1"
+
+
+def test_release_validation_rejects_a_machine_dual_disagreement_without_a_reason(tmp_path):
+    """The same check runs when a committed release is loaded, not only at freeze."""
+    from relaymind.evaluation.asset_corpus import load_asset_release
+
+    catalog, cases, judgments, worksheet = _dual_disagreement(tmp_path, "adjudicator: positive")
+    frozen = freeze_labels(
+        catalog, cases, judgments, worksheet, labelling="machine_dual_owner_approved"
+    )
+    root = tmp_path / "release"
+
+    def write(name, document):
+        (root / f"{name}.json").write_text(json.dumps(document, indent=2), encoding="utf-8")
+
+    def relock():
+        lock = json.loads((root / "lock.json").read_text(encoding="utf-8"))
+        for name in ("catalog", "cases", "labels"):
+            lock[name]["digest"] = canonical_digest(
+                json.loads((root / f"{name}.json").read_text(encoding="utf-8"))
+            )
+        lock.pop("digest")
+        lock["digest"] = canonical_digest(lock)
+        write("lock", lock)
+
+    def load():
+        return load_asset_release(root / "lock.json", evidence_root=root, related_roots={})
+
+    write("catalog", catalog)
+    write("labels", frozen)
+    relock()
+    assert load().labels["agreement"]["method"] == "machine_dual.v1"
+    frozen["adjudications"][0]["reason"] = "  "
+    write("labels", frozen)
+    relock()
+    with pytest.raises(AssetCorpusError, match="adjudication_reason_missing"):
+        load()

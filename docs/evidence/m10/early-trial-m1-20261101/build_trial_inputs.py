@@ -21,7 +21,8 @@ Commands (run from the repository root with the project's Python):
     companion manifest ``frozen/inputs.json`` and a private resolver for the
     inventory preimages under ``R/resolver``.
 ``record --bundle B --record-id ID``
-    Write a pending QualificationRecordV1 (scope host_trial, owner_machine)
+    Write a pending QualificationRecordV1 (scope host_trial,
+    machine_dual_owner_approved labelling, machine_drafted_owner_approved prompts)
     binding the bundle's report, freeze, tasks, corpus lock, labels and
     environment lock, and check it with ``load_record``.
 """
@@ -577,11 +578,52 @@ def _preregistration(commit: str | None) -> dict | None:
     return dict(commit=sha, committed_at=when)
 
 
+def _first_dispatch(report: dict) -> str | None:
+    """The earliest recorded attempt time of the report, ordered as times.
+
+    RelayMind attempts carry their dispatch time (``started_at``). Native
+    attempts carry only the host's assistant-message time (``ended_at``),
+    which is later than their dispatch, so for a native first attempt the
+    value is an upper bound on the first dispatch, not the dispatch itself.
+    """
+    times = [
+        a["started_at"] or a["ended_at"]
+        for row in report["rows"]
+        for a in row["attempts"]
+        if (a["started_at"] or a["ended_at"]) is not None
+    ]
+    return min(times, key=datetime.fromisoformat) if times else None
+
+
+def _record_machine(environment: dict, build: str, hostname: str) -> dict:
+    """The record machine of the M1 target (spec 12.6.6), from the environment lock."""
+    return dict(
+        role="target_macos_m1_8gib",
+        os=environment["os"],
+        os_build=f"{environment['os_version']} {build}",
+        os_version=environment["os_version"],
+        architecture=environment["architecture"],
+        cpu_model=environment["cpu"],
+        ram_bytes=environment["ram_bytes"],
+        hostname_sha256=_sha(hostname.encode("utf-8")),
+    )
+
+
+def check_written(target: Path, labels: dict, catalog: dict, cases: dict):
+    """Load the written record and check it against the frozen labels and cases."""
+    from relaymind.evaluation.asset_qualification_record import load_record
+
+    checked = load_record(target)
+    checked.check_labels(labels, {p["id"]: p for p in catalog["people"]})
+    checked.check_cases(cases)
+    return checked
+
+
 def record(bundle: Path, record_id: str, preregistration: str | None) -> None:
     import socket
     import subprocess
 
-    from relaymind.evaluation.asset_qualification_record import class_kappa, load_record
+    from relaymind.evaluation.asset_qualification_record import class_kappa
 
     target = REPO / "docs/evidence/m10" / f"{record_id}.json"
     manifest = _read_json(bundle / "inputs.json")
@@ -589,13 +631,6 @@ def record(bundle: Path, record_id: str, preregistration: str | None) -> None:
     labels = _read_json(bundle / by_kind["labels"]["path"])
     group = next(g for g in labels["agreement"]["groups"] if g["lane"] == "all")
     report = _read_json(bundle / "report.json")
-    # The first dispatch: native attempts carry only the host's message time.
-    started = sorted(
-        a["started_at"] or a["ended_at"]
-        for row in report["rows"]
-        for a in row["attempts"]
-        if (a["started_at"] or a["ended_at"]) is not None
-    )
 
     def subject(role: str, path: Path) -> dict:
         payload = path.read_bytes()
@@ -644,16 +679,8 @@ def record(bundle: Path, record_id: str, preregistration: str | None) -> None:
         ),
         corpus_review=None,
         preregistration=_preregistration(preregistration),
-        runs_started_at=started[0] if started else None,
-        machine=dict(
-            role="target_macos_m1_8gib",
-            os=environment["os"],
-            os_build=f"{environment['os_version']} {build}",
-            architecture=environment["architecture"],
-            cpu_model=environment["cpu"],
-            ram_bytes=environment["ram_bytes"],
-            hostname_sha256=_sha(socket.gethostname().encode("utf-8")),
-        ),
+        runs_started_at=_first_dispatch(report),
+        machine=_record_machine(environment, build, socket.gethostname()),
         revisions=dict(
             repository_commit=commit,
             adapter_revision=None,
@@ -667,9 +694,12 @@ def record(bundle: Path, record_id: str, preregistration: str | None) -> None:
         recorded_at=_now(),
     )
     _write(target, json.dumps(value, indent=1, ensure_ascii=False).encode("utf-8") + b"\n")
-    checked = load_record(target)
-    checked.check_labels(labels)
-    checked.check_cases(_read_json(bundle / by_kind["cases"]["path"]))
+    checked = check_written(
+        target,
+        labels,
+        _read_json(bundle / by_kind["catalog"]["path"]),
+        _read_json(bundle / by_kind["cases"]["path"]),
+    )
     print(f"record {target} loads; approved={checked.approved}")
 
 

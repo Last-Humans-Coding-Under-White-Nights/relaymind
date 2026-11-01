@@ -132,7 +132,7 @@ export function createSkillLoadedUseFence(dependencies: Dependencies) {
         refuse("unauthorized");
       }
       const live = authority;
-      const { binding, signal, deadlineMs } = live;
+      const { binding, signal } = live;
       const target = options.sessionAccessAuthority!.target;
       const cancelled = () =>
         options.signal?.aborted === true ||
@@ -166,24 +166,32 @@ export function createSkillLoadedUseFence(dependencies: Dependencies) {
       )
         refuse("unauthorized");
       attributed = true;
-      const read: ReadOptions = { signal, deadlineMs, assertCurrent: current };
+      // The deadline is read live: an excluded wait may extend it.
+      const read = (): ReadOptions => ({
+        signal,
+        deadlineMs: live.deadline(),
+        assertCurrent: current,
+      });
       // Registration, retained unexpired choice, eligible asset and the live
       // operator association: checked before the native read and again after
       // it, at the final boundary before content is released for delivery.
       const state = async () => {
         try {
-          const actions = await dependencies.actionClient(binding, read);
+          const actions = await dependencies.actionClient(binding, read());
           current();
-          await actions.listFeedback({ limit: 1 }, read);
+          await actions.listFeedback({ limit: 1 }, read());
         } catch (error) {
           gatewayFailed(error, false);
         }
         current();
         let view: Awaited<ReturnType<RecommendationClient["get"]>>;
         try {
-          const client = await dependencies.recommendationClient(binding, read);
+          const client = await dependencies.recommendationClient(
+            binding,
+            read(),
+          );
           current();
-          view = await client.get(use.recommendationId, read);
+          view = await client.get(use.recommendationId, read());
         } catch (error) {
           gatewayFailed(error, true);
         }
@@ -256,7 +264,7 @@ export function createSkillLoadedUseFence(dependencies: Dependencies) {
               1,
               Math.min(
                 3000,
-                Math.floor(deadlineMs - dependencies.monotonicNow()),
+                Math.floor(live.deadline() - dependencies.monotonicNow()),
               ),
             ),
           },
@@ -266,6 +274,11 @@ export function createSkillLoadedUseFence(dependencies: Dependencies) {
       }
       current();
       unexpired();
+      // RM16: the host's generic retryable failure (UNAVAILABLE) refuses this
+      // attempt only; a library refusal (missing/foreign revision, removed
+      // entry, changed session) or any other result blocks.
+      if (!result.ok && (result as any).error?.code === "UNAVAILABLE")
+        transient();
       const loaded = result.ok ? (result.payload as any) : undefined;
       if (!loaded) refuse("binding_changed");
       if (

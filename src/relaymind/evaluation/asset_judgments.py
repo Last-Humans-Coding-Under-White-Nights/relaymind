@@ -87,15 +87,18 @@ DRAFTED = "machine_drafted_owner_approved"
 
 
 def check_drafted_cases(cases, people: Mapping) -> None:
-    """Spec 12.6.6: one recorded drafter writes every drafted prompt of the release.
+    """Spec 12.6.6: one recorded drafter writes every prompt of a drafted release.
 
     The drafter is a Person with role ``author`` only and empty competencies,
     never an annotator, adjudicator or tuner; each drafted case names it alone.
     """
+    cases = list(cases)
+    drafted = [case for case in cases if case["authorship"] == DRAFTED]
+    if drafted and len(drafted) != len(cases):
+        # The drafter writes every prompt of the release, or none.
+        raise AssetCorpusError("drafted_authorship_mixed")
     drafters = set()
-    for case in cases:
-        if case["authorship"] != DRAFTED:
-            continue
+    for case in drafted:
         if len(case["author_ids"]) != 1:
             raise AssetCorpusError("drafter_role")
         drafters.update(case["author_ids"])
@@ -172,18 +175,21 @@ def validate_judgments(catalog: dict, cases: dict, labels: dict) -> dict:
         owner, _ = check_owner_machine_pair(
             (j["annotator_id"] for j in labels["judgments"]), people
         )
-        for case_id, final in finals.items():
-            # The owner adjudicates, with a reason on every disagreement.
+        for final in finals.values():
+            # The owner adjudicates.
             if final["adjudicator_id"] != owner:
                 raise AssetCorpusError("role_conflict")
-            if disagree(*rows[case_id]) and not final["reason"].strip():
-                raise AssetCorpusError("adjudication_reason_missing")
     if labels["agreement"]["method"] == MACHINE_DUAL:
         check_machine_dual(
             (j["annotator_id"] for j in labels["judgments"]),
             (a["adjudicator_id"] for a in labels["adjudications"]),
             people,
         )
+    if labels["agreement"]["method"] in (OWNER_MACHINE, MACHINE_DUAL):
+        # Spec 12.6.6: a nonempty reason on every disagreement, for both profiles.
+        for case_id, final in finals.items():
+            if disagree(*rows[case_id]) and not final["reason"].strip():
+                raise AssetCorpusError("adjudication_reason_missing")
     actual = agreement(case_map, rows)
     recorded = id_map(labels["agreement"]["groups"], "lane")
     if set(recorded) != set(actual):

@@ -54,6 +54,7 @@
   "role": "linux_host",
   "os": "Linux",
   "os_build": "Ubuntu 26.04.1 LTS 7.0.0-38-generic",
+  "os_version": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
   "architecture": "x86_64",
   "cpu_model": "Intel Xeon Processor (Skylake, IBRS)",
   "ram_bytes": 11998482432,
@@ -115,5 +116,5 @@
   "reviewer_logins": [],
   "approved_at": null
  },
- "recorded_at": "2026-11-01T10:15:16Z"
+ "recorded_at": "2026-11-01T15:50:59Z"
 }
