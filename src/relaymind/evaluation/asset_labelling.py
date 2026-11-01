@@ -31,6 +31,7 @@ from relaymind.evaluation.asset_judgments import (
     METHODS,
     _answer,
     agreement,
+    check_machine_dual,
     check_object_order,
     check_owner_machine_pair,
     check_person,
@@ -106,8 +107,10 @@ def label_template(
 ) -> dict:
     """One annotator's blind template over every frozen case.
 
-    ``labelling`` is ``independent`` (section 12.6.1) or the spec 0.66
-    section 12.6.6 ``owner_machine`` profile, where the owner may also tune.
+    ``labelling`` is ``independent`` (section 12.6.1) or a spec 0.66
+    section 12.6.6 profile: ``owner_machine``, where the owner may also tune,
+    or ``machine_dual_owner_approved``, two machine annotators and a distinct
+    machine adjudicator whose frozen labels the owner approves.
     """
     owner_machine = _method(labelling) == METHODS["owner_machine"]
     people, case_map = _documents(catalog, cases)
@@ -179,6 +182,8 @@ def raw_judgments(
         raise AssetCorpusError("raw_judgment_coverage")
     if owner_machine:
         check_owner_machine_pair((j["annotator_id"] for j in judgments), people)
+    if _method(labelling) == METHODS["machine_dual_owner_approved"]:
+        check_machine_dual((j["annotator_id"] for j in judgments), (), people)
     return judgments
 
 

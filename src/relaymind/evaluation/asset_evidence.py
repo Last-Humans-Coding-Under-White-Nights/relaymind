@@ -191,6 +191,8 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.66 machine-drafted prompts and machine_dual labelling.
+            ("e7d32fbff7848920acf30dbf6a91e3ba86231e10eb50b5d0c5ba670edc0907d5", 626858),
             # Reviewed 0.66 owner-run acceptance profile and qualification record
             # (with the 0.65 review clarifications of 7.6.2 and 14.5).
             ("a5893a7de59a796319ba96788f0d4002174413acc3049b34e88ce1ac8741f1cc", 622204),

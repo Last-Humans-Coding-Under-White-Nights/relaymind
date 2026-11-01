@@ -824,3 +824,25 @@ def test_rm40_ac31_complete_fixture_cannot_be_upgraded_by_custodian_assertions(f
     assert "external_review_missing" not in result.reasons
     assert "asset_cohort_incomplete" not in result.reasons
     assert "case_cohort_incomplete" not in result.reasons
+
+
+def test_rm40_ac31_machine_drafted_owner_approved_cases_count_without_competence(
+    full_cohort_pair,
+):
+    """Spec 0.66 section 12.6.6: drafted cases replace the author competence rule."""
+    _, root = full_cohort_pair
+    cases, catalog = read(root, "cases"), read(root, "catalog")
+    for row in cases["cases"]:
+        row["authorship"] = "machine_drafted_owner_approved"
+    authors = {a for row in cases["cases"] for a in row["author_ids"]}
+    for person in catalog["people"]:
+        if person["id"] in authors:
+            person["competencies"] = []
+    write(root, "cases", cases)
+    write(root, "catalog", catalog)
+    relock(root)
+    result = assessment_api()(*verified_pair(full_cohort_pair))
+    assert result.counts["lanes"]["en_to_en"]["positive"] == 200
+    assert "author_competence_unqualified" not in result.reasons
+    assert "case_cohort_incomplete" not in result.reasons
+    assert result.status == "fixture"

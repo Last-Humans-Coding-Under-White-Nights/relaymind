@@ -7,6 +7,8 @@
  "labelling": "not_applicable",
  "annotators": null,
  "agreement": null,
+ "prompt_authorship": "not_applicable",
+ "drafter": null,
  "corpus_review": null,
  "preregistration": null,
  "runs_started_at": null,

@@ -64,6 +64,8 @@ def host_record(root, **overrides) -> dict:
             ),
         ),
         agreement=dict(paired_cases=10, class_agreements=8, cohen_kappa=0.6),
+        prompt_authorship="original",
+        drafter=None,
         corpus_review=None,
         preregistration=dict(commit=COMMIT, committed_at="2026-11-02T00:00:00Z"),
         runs_started_at="2026-11-03T00:00:00Z",
@@ -105,6 +107,7 @@ def platform_record(root, machine, **overrides) -> dict:
         labelling="not_applicable",
         annotators=None,
         agreement=None,
+        prompt_authorship="not_applicable",
         preregistration=None,
         runs_started_at=None,
         machine=machine,
@@ -122,6 +125,7 @@ def negative_record(root, **overrides) -> dict:
         labelling="not_applicable",
         annotators=None,
         agreement=None,
+        prompt_authorship="not_applicable",
         preregistration=None,
         runs_started_at=None,
         machine=dict(
@@ -413,3 +417,137 @@ def test_an_approved_record_carries_the_corpus_custodian_review(tmp_path):
     pending = host_record(tmp_path, corpus_review=review)
     pending["review"].update(pull_request=None, reviewer_logins=[], approved_at=None)
     assert load_record(save(tmp_path, pending)).custodian_review() is None
+
+
+# --- spec 0.66 section 12.6.6 machine-drafted prompts and machine_dual labels (#260) --
+
+
+def _machine(annotator_id, prompt_sha256=H, model_id="example-model-2026-10-01"):
+    return dict(
+        annotator_id=annotator_id,
+        model_id=model_id,
+        prompt_sha256=prompt_sha256,
+        temperature=0,
+        saw_tuning_results=False,
+        saw_arm_outputs=False,
+    )
+
+
+def dual_record(root, **overrides) -> dict:
+    values = dict(
+        labelling="machine_dual_owner_approved",
+        annotators=dict(
+            machine_a=_machine("machine-a", "1" * 64),
+            machine_b=_machine("machine-b", "2" * 64),
+            adjudicator=_machine("machine-adjudicator", "3" * 64),
+            family_relation="same_family",
+        ),
+        prompt_authorship="machine_drafted_owner_approved",
+        drafter=dict(
+            author_id="machine-drafter",
+            model_id="example-model-2026-10-01",
+            prompt_sha256="4" * 64,
+            temperature=0,
+        ),
+    )
+    values.update(overrides)
+    return host_record(root, **values)
+
+
+def test_a_machine_dual_record_with_drafted_prompts_loads(tmp_path):
+    record = load_record(save(tmp_path, dual_record(tmp_path)))
+    assert record.labelling == "machine_dual_owner_approved"
+    assert record.prompt_authorship == "machine_drafted_owner_approved"
+    assessment = _assess(record, REPORT_SHA)
+    assert assessment.as_output()["labelling"] == "machine_dual_owner_approved"
+    assert assessment.as_output()["prompt_authorship"] == "machine_drafted_owner_approved"
+
+
+@pytest.mark.parametrize(
+    ("mutate", "reason"),
+    [
+        # Same model and same template is one annotator, not two.
+        (
+            lambda r: r["annotators"]["machine_b"].update(prompt_sha256="1" * 64),
+            "labelling_profile",
+        ),
+        # One model ID cannot be two model families.
+        (lambda r: r["annotators"].update(family_relation="different_family"), "labelling_profile"),
+        (
+            lambda r: r["annotators"]["adjudicator"].update(annotator_id="machine-a"),
+            "labelling_profile",
+        ),
+        (lambda r: r["annotators"]["machine_b"].update(temperature=1), "invalid_qualification"),
+        # The owner/machine shape does not describe machine_dual labels.
+        (
+            lambda r: r.update(
+                annotators=dict(owner_annotator_id="owner", machine=_machine("machine-a"))
+            ),
+            "labelling_profile",
+        ),
+        (lambda r: r.update(drafter=None), "prompt_authorship"),
+        (lambda r: r["drafter"].update(author_id="machine-b"), "prompt_authorship"),
+        (lambda r: r.update(prompt_authorship="not_applicable"), "prompt_authorship"),
+    ],
+)
+def test_contradictory_machine_dual_records_reject(tmp_path, mutate, reason):
+    record = dual_record(tmp_path)
+    mutate(record)
+    with pytest.raises(WholeTaskRejected, match=reason):
+        load_record(save(tmp_path, record))
+
+
+def test_owner_machine_shape_cannot_carry_machine_dual_annotators(tmp_path):
+    record = host_record(
+        tmp_path,
+        annotators=dual_record(tmp_path)["annotators"],
+    )
+    with pytest.raises(WholeTaskRejected, match="labelling_profile"):
+        load_record(save(tmp_path, record))
+
+
+def test_original_prompts_have_no_drafter(tmp_path):
+    record = host_record(tmp_path, drafter=dual_record(tmp_path)["drafter"])
+    with pytest.raises(WholeTaskRejected, match="prompt_authorship"):
+        load_record(save(tmp_path, record))
+
+
+def _dual_labels(adjudicator="machine-adjudicator"):
+    pairs = [("positive", "positive")] * 6 + [("negative", "negative")] * 2
+    pairs += [("positive", "negative"), ("negative", "positive")]
+    labels = _labels(pairs, method="machine_dual.v1")
+    for row in labels["judgments"]:
+        row["annotator_id"] = {"owner": "machine-a", "machine": "machine-b"}[row["annotator_id"]]
+    labels["judgments"].sort(key=lambda r: (r["case_id"], r["annotator_id"]))
+    labels["adjudications"] = [
+        dict(case_id=f"case-{n:02d}", adjudicator_id=adjudicator) for n in range(10)
+    ]
+    labels["agreement"]["groups"] = [dict(lane="all", paired_cases=10, class_agreements=8)]
+    return labels
+
+
+def test_machine_dual_record_matches_the_frozen_annotators_and_adjudicator(tmp_path):
+    document = dual_record(tmp_path)
+    document["agreement"]["cohen_kappa"] = round(0.22 / 0.42, 12)
+    record = load_record(save(tmp_path, document))
+    record.check_labels(_dual_labels())
+    with pytest.raises(WholeTaskRejected, match="labelling_mismatch"):
+        record.check_labels(_dual_labels(adjudicator="machine-a"))
+
+
+def _cases(authorship, author="machine-drafter"):
+    return dict(
+        cases=[dict(id="case-00", authorship=authorship, author_ids=[author])],
+    )
+
+
+def test_record_prompt_authorship_must_match_the_frozen_cases(tmp_path):
+    drafted = load_record(save(tmp_path, dual_record(tmp_path)))
+    drafted.check_cases(_cases("machine_drafted_owner_approved"))
+    for cases in (_cases("original"), _cases("machine_drafted_owner_approved", "someone")):
+        with pytest.raises(WholeTaskRejected, match="prompt_authorship_mismatch"):
+            drafted.check_cases(cases)
+    original = load_record(save(tmp_path, host_record(tmp_path), "original.json"))
+    original.check_cases(_cases("original", "author"))
+    with pytest.raises(WholeTaskRejected, match="prompt_authorship_mismatch"):
+        original.check_cases(_cases("machine_drafted_owner_approved"))

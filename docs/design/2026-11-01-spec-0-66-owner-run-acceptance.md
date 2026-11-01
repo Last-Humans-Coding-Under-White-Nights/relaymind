@@ -28,6 +28,25 @@ machines and reviews changes, and every report says so.
   requires recorded agreement, not a pass level. The owner adjudicates with a
   recorded reason. The owner is also the tuner, so the label is
   `owner_machine`, never `independent`.
+- **Machine-drafted prompts (`machine_drafted_owner_approved`).** The owner
+  chose model drafting from the catalog with owner approval (#260). Pinning the
+  drafter (model ID, template digest, temperature 0) and keeping the request and
+  response bytes makes the cohort reproducible and auditable. Drafting each
+  prompt directly in its lane avoids translation artefacts. A distinct label
+  keeps the reports honest: they never say original, native or human-authored.
+  Known risk: drafted prompts can be easier than real requests and can share
+  the drafter's wording habits, so results are a lower bound on difficulty, not
+  a claim about real users.
+- **Two machine annotators (`machine_dual_owner_approved`).** With no human
+  labeller, two blind machine raters plus a third adjudication pass follow the
+  usual LLM-as-judge practice: temperature 0, pinned IDs and template digests,
+  and raters blind to each other and to outputs. Different model families
+  reduce correlated errors; when the provider offers one family, two
+  independently written templates are the fallback and the record says
+  `same_family`, because same-family raters share biases and kappa overstates
+  their independence. Cohen's kappa is still reported before adjudication. The
+  owner's PR approval of the frozen labels is the human check. None of the
+  raters is a tuner, and the label is never `independent`.
 - **Author competence unchanged.** Native Chinese authorship cannot be
   replaced by machine translation without breaking the originality rule. A lane
   without a competent author stays uncovered and blocks. This is the main
@@ -85,6 +104,9 @@ The verifier support: the record schema and check
 (`relaymind.evaluation.asset_qualification_record`), `--qualification-record`
 on the `grade-*` commands, `--labelling owner_machine` on the label commands,
 the `owner_machine.v1` agreement method and Cohen's kappa recomputation, and
-`known_host_limitations` for negative records. The rank 4–10 choice receipt,
+`known_host_limitations` for negative records. The later 0.66 addition adds
+`--labelling machine_dual_owner_approved` (`machine_dual.v1`), the
+`machine_drafted_owner_approved` case authorship, and the record's
+`prompt_authorship`, `drafter` and machine annotators shape with their checks. The rank 4–10 choice receipt,
 the ledger location and retention, blind judging and native-RPC episode
 corrections are specification decisions for the run issues to implement.

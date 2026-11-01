@@ -164,7 +164,8 @@
             "enum": [
               "original",
               "translated",
-              "generated"
+              "generated",
+              "machine_drafted_owner_approved"
             ]
           },
           "authorship_evidence_ids": {

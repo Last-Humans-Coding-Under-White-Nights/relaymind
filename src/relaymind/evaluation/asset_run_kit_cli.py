@@ -40,9 +40,9 @@ def add_commands(sub) -> None:
         parser.add_argument("--output", type=Path, required=True)
         parser.add_argument(
             "--labelling",
-            choices=("independent", "owner_machine"),
+            choices=("independent", "owner_machine", "machine_dual_owner_approved"),
             default="independent",
-            help="spec 12.6.1 independent or 12.6.6 owner_machine labelling",
+            help="spec 12.6.1 independent or a 12.6.6 owner-run labelling profile",
         )
     template.add_argument("--annotator", required=True)
     for parser in (worksheet, freeze):

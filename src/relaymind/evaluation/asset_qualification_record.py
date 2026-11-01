@@ -36,7 +36,7 @@ from relaymind.evaluation.asset_benchmark_io import (
 )
 from relaymind.evaluation.asset_corpus_io import DOCUMENT_BYTES, read_local
 from relaymind.evaluation.asset_judgments import METHODS
-from relaymind.evaluation.asset_qualification import CustodianReview
+from relaymind.evaluation.asset_qualification import DRAFTED, CustodianReview
 from relaymind.evaluation.asset_whole_task import WholeTaskRejected
 from relaymind.schema_util import load_packaged_schema
 
@@ -62,6 +62,7 @@ _PREREGISTERED = ("host_acceptance", "adaptation")
 _MACHINE_SCOPES = ("platform", "walkthrough", "host_operation")
 _NEGATIVE_FINDINGS = {"skill_loaded_use": "stop_point_absent", "mcp_use": "exact_route_absent"}
 _KAPPA_TOLERANCE = 1e-9
+MACHINE_DUAL_PROFILE = "machine_dual_owner_approved"
 
 
 def _time(value: str) -> datetime:
@@ -98,7 +99,8 @@ def _check_rules(record: Mapping) -> None:
         _reject("record_subjects")
     if any(roles[role] < 1 for role in _REQUIRED_SUBJECTS[scope]) or roles["report"] > 1:
         _reject("record_subjects")
-    # Labelling: owner_machine names both annotators and the raw agreement.
+    # Labelling: owner_machine and machine_dual name their annotators and the
+    # raw agreement; independent human labels carry no machine annotators.
     annotators, agreement = record["annotators"], record["agreement"]
     if scope in _LABELLED and labelling == "not_applicable":
         _reject("labelling_profile")
@@ -106,14 +108,22 @@ def _check_rules(record: Mapping) -> None:
         _reject("labelling_profile")
     if labelling == "owner_machine" and (
         annotators is None
+        or "owner_annotator_id" not in annotators
         or agreement is None
         or annotators["owner_annotator_id"] == annotators["machine"]["annotator_id"]
     ):
         _reject("labelling_profile")
-    if labelling != "owner_machine" and annotators is not None:
+    if labelling == MACHINE_DUAL_PROFILE and (
+        annotators is None or "machine_a" not in annotators or agreement is None
+    ):
+        _reject("labelling_profile")
+    if labelling == MACHINE_DUAL_PROFILE:
+        _check_machine_dual(annotators)
+    if labelling not in ("owner_machine", MACHINE_DUAL_PROFILE) and annotators is not None:
         _reject("labelling_profile")
     if labelling == "not_applicable" and (agreement or record["corpus_review"]):
         _reject("labelling_profile")
+    _check_prompt_authorship(record, scope)
     # Preregistration: a commit and its time before any run.
     prereg, started = record["preregistration"], record["runs_started_at"]
     if scope in _PREREGISTERED and (prereg is None or started is None):
@@ -154,6 +164,36 @@ def _check_rules(record: Mapping) -> None:
             _reject("invalid_qualification_record")
 
 
+def _label_ids(annotators: Mapping | None) -> set[str]:
+    if annotators is None:
+        return set()
+    if "owner_annotator_id" in annotators:
+        return {annotators["owner_annotator_id"], annotators["machine"]["annotator_id"]}
+    return {annotators[k]["annotator_id"] for k in ("machine_a", "machine_b", "adjudicator")}
+
+
+def _check_machine_dual(annotators: Mapping) -> None:
+    """Spec 12.6.6: three distinct machine IDs; one model is one family, two templates."""
+    a, b = annotators["machine_a"], annotators["machine_b"]
+    if len(_label_ids(annotators)) != 3:
+        _reject("labelling_profile")
+    if a["model_id"] == b["model_id"] and (
+        annotators["family_relation"] != "same_family" or a["prompt_sha256"] == b["prompt_sha256"]
+    ):
+        _reject("labelling_profile")
+
+
+def _check_prompt_authorship(record: Mapping, scope: str) -> None:
+    """Spec 12.6.6: labelled scopes name their prompt authorship; drafted ones a drafter."""
+    authorship, drafter = record["prompt_authorship"], record["drafter"]
+    if (scope in _LABELLED) == (authorship == "not_applicable"):
+        _reject("prompt_authorship")
+    if (authorship == DRAFTED) != (drafter is not None):
+        _reject("prompt_authorship")
+    if drafter is not None and drafter["author_id"] in _label_ids(record["annotators"]):
+        _reject("prompt_authorship")
+
+
 @dataclass(frozen=True)
 class QualificationRecord:
     """A structurally valid record whose bound digests all matched."""
@@ -176,6 +216,10 @@ class QualificationRecord:
     @property
     def labelling(self) -> str:
         return self.document["labelling"]
+
+    @property
+    def prompt_authorship(self) -> str:
+        return self.document["prompt_authorship"]
 
     @property
     def machine(self) -> Mapping | None:
@@ -217,10 +261,17 @@ class QualificationRecord:
         agreement = self.document["agreement"]
         if agreement is None:
             return
+        annotators = self.document["annotators"]
         if self.labelling == "owner_machine":
-            annotators = self.document["annotators"]
             expected = {annotators["owner_annotator_id"], annotators["machine"]["annotator_id"]}
             if {row["annotator_id"] for row in labels["judgments"]} != expected:
+                _reject("labelling_mismatch")
+        if self.labelling == MACHINE_DUAL_PROFILE:
+            expected = {annotators[k]["annotator_id"] for k in ("machine_a", "machine_b")}
+            adjudicator = annotators["adjudicator"]["annotator_id"]
+            if {row["annotator_id"] for row in labels["judgments"]} != expected or any(
+                row["adjudicator_id"] != adjudicator for row in labels["adjudications"]
+            ):
                 _reject("labelling_mismatch")
         group = next((g for g in labels["agreement"]["groups"] if g["lane"] == "all"), None)
         kappa = class_kappa(labels)
@@ -233,6 +284,18 @@ class QualificationRecord:
             or (kappa is not None and abs(kappa - stored) > _KAPPA_TOLERANCE)
         ):
             _reject("record_agreement_mismatch")
+
+    def check_cases(self, cases: Mapping) -> None:
+        """Every frozen case has the record's prompt authorship; drafted ones its drafter."""
+        authorship = self.prompt_authorship
+        if authorship == "not_applicable":
+            return
+        drafter = self.document["drafter"]
+        for case in cases["cases"]:
+            if case["authorship"] != authorship or (
+                drafter is not None and case["author_ids"] != [drafter["author_id"]]
+            ):
+                _reject("prompt_authorship_mismatch")
 
 
 def load_record(path: Path) -> QualificationRecord:

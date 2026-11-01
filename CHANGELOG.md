@@ -8,6 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Verifier support for the 0.66 machine-drafted prompts and `machine_dual`
+  labels (#260; RM40, RM42, RM44; AC31, AC33, AC36): `machine_dual.v1` in
+  AssetLabelsV1 with role checks (two annotator-only machines, one distinct
+  adjudicator-only machine), `--labelling machine_dual_owner_approved` on the
+  label commands, the `machine_drafted_owner_approved` case authorship counted
+  without the author competence rule, and the record's checks against the
+  frozen labels and cases. Graded output reports `prompt_authorship`.
+  Fixture-tested only.
 - #255 host use settlement (RM16/RM37/RM39; AC30/AC35; spec 0.66 sections
   7.6.1, 7.6.2, 12.6.6) adds two pending negative `host_operation` records for
   OpenClaw 2026.10.7, with the VPS host surface inventory and the CI/VPS
@@ -221,6 +229,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the operation disabled as a known host limitation (sections 7.6.1, 7.6.2).
   "Customer" wording about who runs trials becomes owner/operator. No metric,
   threshold or budget changes.
+  A later 0.66 addition (#260) adds `machine_drafted_owner_approved` prompt
+  authorship (one pinned drafting model, owner approval by PR review) and
+  `machine_dual_owner_approved` labelling (two blind machine annotators,
+  `same_family` when only one model family is available, Cohen's kappa before
+  a third machine adjudication pass, owner approval of the frozen labels). The
+  record gains `prompt_authorship`, `drafter` and a machine annotators shape;
+  reports never say `independent` for these labels.
 - Specification 0.64 → 0.65 (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;
   AC25/AC28/AC30/AC31/AC35–AC37): defines native skill loaded-byte delivery,
   immutable-pin versus removal semantics and the later-use authority fence;

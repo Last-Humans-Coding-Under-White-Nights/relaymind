@@ -212,7 +212,8 @@
         "method": {
           "enum": [
             "double_annotation.v1",
-            "owner_machine.v1"
+            "owner_machine.v1",
+            "machine_dual.v1"
           ]
         },
         "groups": {

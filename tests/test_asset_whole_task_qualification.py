@@ -57,6 +57,7 @@ def test_fixture_host_report_names_its_assessed_qualification(bundle):
             "qualified_evidence_review",
         ],
         labelling=None,
+        prompt_authorship=None,
     )
 
 

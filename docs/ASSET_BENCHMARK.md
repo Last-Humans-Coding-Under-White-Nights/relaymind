@@ -657,7 +657,11 @@ the frozen labels rejects (exit 2). Its `labelling` (`owner_machine` or
 unverified input still keeps the report below `qualified`. The label commands
 take `--labelling owner_machine` for the owner plus one recorded machine
 annotator (`owner_machine.v1`; the owner may also be the tuner, the machine
-annotator never). A `negative` record with scope `host_operation` closes the
+annotator never). `--labelling machine_dual_owner_approved` (`machine_dual.v1`)
+is for two machine annotators and a distinct machine adjudicator (each holds
+only its one role); the owner approves the frozen labels by PR review. Cases
+may then use `machine_drafted_owner_approved` authorship, and the record names
+the drafter. The output reports the record's `prompt_authorship`. A `negative` record with scope `host_operation` closes the
 `skill_loaded_use` or `mcp_use` gate with the operation disabled
 (`known_host_limitations`). The module is
 `relaymind.evaluation.asset_qualification_record`.
