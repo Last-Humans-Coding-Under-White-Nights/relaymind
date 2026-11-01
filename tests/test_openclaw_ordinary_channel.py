@@ -1,5 +1,6 @@
 """RM37/RM39 AC28/AC30: ordinary proof needs original entry/UI/scope/abort evidence."""
 
+import hashlib
 import importlib.util
 import threading
 from pathlib import Path
@@ -9,6 +10,10 @@ import pytest
 from test_openclaw_person_ingress import complete_capture
 
 ROOT = Path(__file__).resolve().parents[1]
+SKILL_ID = "0b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a"
+REVISION = "a" * 64
+CONTENT = "---\nname: Hello World\ndescription: Greeting skill\n---\nSay hello."
+CONTENT_HASH = hashlib.sha256(CONTENT.encode("utf-8")).hexdigest()
 
 
 def module():
@@ -38,6 +43,10 @@ def test_startup_has_no_companion_constructor_or_fabricated_mapping(tmp_path):
         *[threading.Event() for _ in range(3)],
         archive=tmp_path / "archive.tgz",
         runs=None,
+        skill_text=CONTENT,
+        skill_asset=dict(
+            asset_id="example:hello-world", content_hash=CONTENT_HASH, source_version=None
+        ),
     )
     config = dict(
         plugins=dict(allow=[], load=dict(paths=[]), entries={}),
@@ -229,9 +238,210 @@ def test_relative_release_archive_is_fixed_before_native_cli_changes_working_dir
         *[threading.Event() for _ in range(3)],
         archive=archive,
         runs=None,
+        skill_text=CONTENT,
+        skill_asset=dict(
+            asset_id="example:hello-world", content_hash=CONTENT_HASH, source_version=None
+        ),
     )
     assert extension.archive == tmp_path / "release.tgz"
     assert extension.archive.is_absolute()
+
+
+# --- #197 exact Skill Library selection (RM39/AC30; spec 7.6.1) -----------------
+
+
+def skill_fixture(api):
+    capture = fixture(api)
+    digest = CONTENT_HASH
+    view = capture["ordinary_actions"]["ui"]["snapshots"]["choice"]["views"][0]
+    view["selected_action"]["choice"] = dict(
+        kind="asset", asset_id="example:hello-world", content_hash=digest
+    )
+    view["displayed_candidates"] = [
+        dict(asset=dict(asset_id="example:hello-world", content_hash=digest, source_version=None))
+    ]
+    capture["ordinary_skill"] = dict(
+        library_save=dict(ok=True, skill_id=SKILL_ID, revision=REVISION),
+        content_sha256=digest,
+        mapping=dict(
+            assetId="example:hello-world",
+            contentHash=digest,
+            sourceVersion=None,
+            skillId=SKILL_ID,
+            revision=REVISION,
+        ),
+        receipt=dict(
+            ok=True,
+            payload=dict(
+                skillId=SKILL_ID,
+                revision=REVISION,
+                sessionActivation="next-turn",
+                instructions="not_observed",
+            ),
+        ),
+        library_list=dict(
+            ok=True, payload=dict(entries=[dict(skillId=SKILL_ID, revision=REVISION)])
+        ),
+        ui_status="selected",
+        negatives=[
+            dict(case="unmapped_skill", ok=False, error_code="INVALID_REQUEST"),
+            dict(case="foreign_person", ok=False, error_code="FORBIDDEN"),
+            dict(case="foreign_person_own_session", ok=False, error_code="INVALID_REQUEST"),
+        ],
+    )
+    return capture
+
+
+def test_exact_skill_selection_evidence_passes():
+    api = module()
+    assert api.ordinary_skill_pass(skill_fixture(api))
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "no_skill",
+        "uuid_hyphens",
+        "uuid_wrong_groups",
+        "mapping_missing_asset",
+        "mapping_empty_asset",
+        "mapping_invalid_asset",
+        "mapping_other_asset",
+        "offered_other_asset",
+        "receipt_immediate",
+        "receipt_other_skill",
+        "receipt_other_revision",
+        "duplicate_admitted_negative",
+        "duplicate_negative",
+        "negative_missing_ok",
+        "negative_missing_code",
+        "negative_null_code",
+        "negative_wrong_code",
+        "list_missing",
+        "list_failed",
+        "list_empty",
+        "list_other_skill",
+        "list_other_revision",
+        "no_ordinary",
+        "save_failed",
+        "bad_skill_id",
+        "bad_revision",
+        "mapping_other_skill",
+        "hash_mismatch",
+        "receipt_claims_use",
+        "receipt_failed",
+        "ui_unavailable",
+        "negative_admitted",
+        "negative_missing",
+        "mapping_missing_source_version",
+        "mapping_other_source_version",
+        "library_entry_removed",
+    ],
+)
+def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
+    api = module()
+    capture = skill_fixture(api)
+    value = capture["ordinary_skill"]
+    if change == "no_skill":
+        capture.pop("ordinary_skill")
+    elif change in {"uuid_hyphens", "uuid_wrong_groups"}:
+        bad_id = "-" * 36 if change == "uuid_hyphens" else "a" * 36
+        value["library_save"]["skill_id"] = value["mapping"]["skillId"] = bad_id
+        value["receipt"]["payload"]["skillId"] = bad_id
+        value["library_list"]["payload"]["entries"][0]["skillId"] = bad_id
+    elif change == "mapping_missing_asset":
+        value["mapping"].pop("assetId")
+    elif change == "mapping_missing_source_version":
+        value["mapping"].pop("sourceVersion")
+    elif change == "mapping_other_source_version":
+        value["mapping"]["sourceVersion"] = "v2"
+    elif change == "library_entry_removed":
+        value["library_list"]["payload"]["entries"][0]["removed"] = True
+    elif change.startswith("mapping_") and change.endswith("_asset"):
+        value["mapping"]["assetId"] = {
+            "mapping_empty_asset": "",
+            "mapping_invalid_asset": 42,
+            "mapping_other_asset": "example:other",
+        }[change]
+    elif change == "offered_other_asset":
+        capture["ordinary_actions"]["ui"]["snapshots"]["choice"]["views"][0][
+            "displayed_candidates"
+        ][0]["asset"]["asset_id"] = "example:other"
+    elif change.startswith("receipt_other_") or change == "receipt_immediate":
+        key, replacement = {
+            "receipt_immediate": ("sessionActivation", "immediate"),
+            "receipt_other_skill": ("skillId", "1b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a"),
+            "receipt_other_revision": ("revision", "b" * 64),
+        }[change]
+        value["receipt"]["payload"][key] = replacement
+    elif change in {"duplicate_admitted_negative", "duplicate_negative"}:
+        value["negatives"].insert(
+            0, dict(value["negatives"][0], ok=change == "duplicate_admitted_negative")
+        )
+    elif change == "negative_missing_ok":
+        value["negatives"][0].pop("ok")
+    elif change == "negative_missing_code":
+        value["negatives"][0].pop("error_code")
+    elif change in {"negative_null_code", "negative_wrong_code"}:
+        value["negatives"][0]["error_code"] = (
+            None if change == "negative_null_code" else "INTERNAL_ERROR"
+        )
+    elif change == "list_missing":
+        value.pop("library_list")
+    elif change == "list_failed":
+        value["library_list"]["ok"] = False
+    elif change == "list_empty":
+        value["library_list"]["payload"]["entries"] = []
+    elif change in {"list_other_skill", "list_other_revision"}:
+        key = "skillId" if change == "list_other_skill" else "revision"
+        value["library_list"]["payload"]["entries"][0][key] = "b" * 64
+    elif change == "no_ordinary":
+        capture["checks"]["person_composition"] = False
+        capture.pop("ordinary_actions")
+    elif change == "save_failed":
+        value["library_save"]["ok"] = False
+    elif change == "bad_skill_id":
+        value["library_save"]["skill_id"] = value["mapping"]["skillId"] = "not-an-id"
+    elif change == "bad_revision":
+        value["library_save"]["revision"] = value["mapping"]["revision"] = "b" * 10
+    elif change == "mapping_other_skill":
+        value["mapping"]["skillId"] = "1b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a"
+    elif change == "hash_mismatch":
+        value["mapping"]["contentHash"] = "0" * 64
+    elif change == "receipt_claims_use":
+        value["receipt"]["payload"]["instructions"] = "observed"
+    elif change == "receipt_failed":
+        value["receipt"]["ok"] = False
+    elif change == "ui_unavailable":
+        value["ui_status"] = "unavailable"
+    elif change == "negative_admitted":
+        value["negatives"][0]["ok"] = True
+    elif change == "negative_missing":
+        value["negatives"].pop()
+    assert not api.ordinary_skill_pass(capture)
+
+
+def test_the_browser_observer_allows_every_method_the_ordinary_run_calls():
+    """#197: a method missing from the observer allowlist never reaches the host."""
+    import re
+
+    root = Path(__file__).resolve().parents[1] / "integrations/openclaw/test"
+    ordinary = (root / "host-ordinary-qualification/qualify.py").read_text(encoding="utf-8")
+    person = (root / "host-person-qualification/qualify.py").read_text(encoding="utf-8")
+    wire = (root / "host-person-qualification/browser-wire.mjs").read_text(encoding="utf-8")
+    called = set(re.findall(r'rpc\(\s*[^,]+,\s*"([a-z.]+)"', ordinary))
+    assert {
+        "skills.library.save",
+        "skills.library.list",
+        "relaymind.recommendations",
+        "relaymind.skill",
+    } <= called
+    requested = re.search(r"installNativeSocketObserver\(window, \[(.*?)\]\)", person, re.S)
+    extras = set(re.findall(r'"([a-z.]+)"', requested.group(1)))
+    base = {"rmqualification.person", "sessions.create", "sessions.reset"}
+    assert called <= base | extras
+    allowed = re.search(r"some\(method => !\[(.*?)\]\.includes", wire).group(1)
+    assert extras <= set(re.findall(r'"([a-z.]+)"', allowed))
 
 
 FAILURE_STEPS = {
@@ -239,8 +449,10 @@ FAILURE_STEPS = {
     "install",
     "sources",
     "persons_ready",
+    "save_library_skill",
     "entry_read",
     "ui_actions",
+    "select_library_skill",
     "negative_actions",
     "retirement_prepared",
     "retirement_attempt",
@@ -259,6 +471,12 @@ def extension_fixture(api, tmp_path):
         *[threading.Event() for _ in range(3)],
         archive=archive,
         runs=None,
+        skill_text=CONTENT,
+        skill_asset=dict(
+            asset_id="example:hello-world",
+            content_hash=CONTENT_HASH,
+            source_version=None,
+        ),
     )
 
 
@@ -308,15 +526,15 @@ def test_ordinary_deadline_is_never_reclassified_or_swallowed(tmp_path):
     extension = extension_fixture(api, tmp_path)
     with pytest.raises(TimeoutError, match="^overall_deadline_exceeded$"):
         with extension.step("persons_ready"):
-            with extension.step("ui_actions"):
+            with extension.step("select_library_skill"):
                 raise TimeoutError("overall_deadline_exceeded")
     assert extension.failure_diagnostics() == {
-        "ordinary_failure_step": "ui_actions",
+        "ordinary_failure_step": "select_library_skill",
         "ordinary_error_class": "other",
     }
 
 
-def test_entry_rpc_reports_the_actual_substep(tmp_path):
+def test_library_save_reports_the_actual_substep(tmp_path):
     """RM12/RM39 AC30: RPC exception translation retains the original browser class."""
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
@@ -328,12 +546,71 @@ def test_entry_rpc_reports_the_actual_substep(tmp_path):
             raise PlaywrightTimeout("private browser URL and credential")
 
     with pytest.raises(ValueError, match="^ordinary_playwright_timeout$"):
-        with extension.step("entry_read"):
-            api.BASE.person_module().native_rpc(Page(), "relaymind.recommendations", {})
+        extension.save_library_skill(api.BASE.person_module().native_rpc, Page())
     assert extension.failure_diagnostics() == {
-        "ordinary_failure_step": "entry_read",
+        "ordinary_failure_step": "save_library_skill",
         "ordinary_error_class": "playwright_timeout",
     }
+
+
+@pytest.mark.parametrize("error_kind", ["deadline", "timeout", "closed"])
+def test_library_selection_wait_cannot_swallow_browser_failure(tmp_path, monkeypatch, error_kind):
+    """RM16/RM39 AC30: an unobserved UI selection fails at its original substep."""
+    from playwright._impl._errors import TargetClosedError
+    from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    monkeypatch.setattr(
+        extension,
+        "observe_backend",
+        lambda: {
+            "views": [{"state": "chosen", "recommendation_id": "r"}],
+        },
+    )
+    errors = dict(
+        deadline=TimeoutError("overall_deadline_exceeded"),
+        timeout=PlaywrightTimeout("private"),
+        closed=TargetClosedError("private"),
+    )
+
+    class Page:
+        def get_by_role(self, *args, **kwargs):
+            return self
+
+        def get_by_text(self, *args, **kwargs):
+            return self
+
+        def click(self):
+            pass
+
+        def select_option(self, **kwargs):
+            pass
+
+        def wait_for(self, **kwargs):
+            raise errors[error_kind]
+
+    pages = [Page(), Page()]
+
+    def rpc(page, method, params):
+        if method == "relaymind.skill" and (page is pages[1] or params.get("skillId") != SKILL_ID):
+            # The refusal cases are refused, as on the real host.
+            return {"frame": {"ok": False, "error": {"code": "INVALID_REQUEST"}}}
+        return {"frame": {"ok": True, "payload": {}}}
+
+    skill = skill_fixture(api)["ordinary_skill"]
+    expected = (
+        "overall_deadline_exceeded"
+        if error_kind == "deadline"
+        else (
+            "ordinary_playwright_timeout"
+            if error_kind == "timeout"
+            else "ordinary_playwright_target_closed"
+        )
+    )
+    with pytest.raises((ValueError, TimeoutError), match="^" + expected + "$"):
+        extension.select_library_skill(rpc, pages, [{"sessionKey": "s"}, {}], Page(), skill)
+    assert extension.failure_diagnostics()["ordinary_failure_step"] == "select_library_skill"
 
 
 @pytest.mark.parametrize("arrives", [True, False])
@@ -458,8 +735,10 @@ def test_retirement_preparation_waits_for_original_host_events(
 @pytest.mark.parametrize(
     "stage",
     [
+        "save_library_skill",
         "entry_read",
         "ui_actions",
+        "select_library_skill",
         "negative_actions",
         "cleanup_deadline",
     ],
@@ -532,8 +811,29 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
                 raise TimeoutError("overall_deadline_exceeded")
             fail()  # Cleanup must not replace the original failure's class/step.
 
+        def get_by_role(self, *args, **kwargs):
+            if stage == "select_library_skill":
+                fail()
+            return self
+
+        def get_by_text(self, *args, **kwargs):
+            return self
+
+        def click(self):
+            pass
+
+        def select_option(self, **kwargs):
+            pass
+
+        def wait_for(self, **kwargs):
+            pass
+
     def rpc(page, method, params):
-        if method == "relaymind.recommendations":
+        if method == "skills.library.save":
+            if stage == "save_library_skill":
+                fail()
+            payload = {"skillId": SKILL_ID, "revision": REVISION}
+        elif method == "relaymind.recommendations":
             if stage == "entry_read" or (
                 stage == "negative_actions" and params["idempotencyKey"] != "ordinary-entry-read"
             ):
@@ -541,17 +841,25 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
             payload = {}
         elif method == "rmqualification.person":
             payload = person
+        elif method == "skills.library.list":
+            payload = dict(entries=[dict(skillId=SKILL_ID, revision=REVISION)])
+        elif method == "relaymind.skill" and (
+            page is pages[1] or params.get("skillId") != SKILL_ID
+        ):
+            # The refusal cases are refused, as on the real host.
+            return {"frame": {"ok": False, "error": {"code": "INVALID_REQUEST"}}}
         else:
             payload = {}
         return {"frame": {"ok": True, "payload": payload}}
 
     monkeypatch.setattr(api, "run_ui", lambda *args: {})
+    pages = [Page(), Page()]
     sessions = [{"sessionKey": "agent:main:person-a"}, {"sessionKey": "agent:main:person-b"}]
     expected = (
         "overall_deadline_exceeded" if stage == "cleanup_deadline" else "ordinary_playwright_error"
     )
     with pytest.raises((ValueError, TimeoutError), match="^" + expected + "$"):
-        extension.persons_ready(rpc, [Page(), Page()], sessions, capture)
+        extension.persons_ready(rpc, pages, sessions, capture)
     assert extension.failure_diagnostics() == {
         "ordinary_failure_step": "ui_actions" if stage == "cleanup_deadline" else stage,
         "ordinary_error_class": "other" if stage == "cleanup_deadline" else "playwright_error",
@@ -791,3 +1099,153 @@ def test_real_dom_run_ui_accepts_the_native_reset_dialog():
             ]
         finally:
             browser.close()
+
+
+class SelectionPage:
+    """No browser process is needed to exercise the harness's RPC decisions."""
+
+    def get_by_role(self, *args, **kwargs):
+        return self
+
+    def get_by_text(self, *args, **kwargs):
+        return self
+
+    def click(self):
+        pass
+
+    def select_option(self, **kwargs):
+        pass
+
+    def wait_for(self, **kwargs):
+        pass
+
+
+def selection_fixture(api, tmp_path, monkeypatch):
+    extension = extension_fixture(api, tmp_path)
+    capture = skill_fixture(api)
+    monkeypatch.setattr(
+        extension,
+        "observe_backend",
+        lambda: capture["ordinary_actions"]["ui"]["snapshots"]["choice"],
+    )
+    pages = [SelectionPage(), SelectionPage()]
+    sessions = [
+        dict(sessionKey="person-a", expectedSessionId="id-a", expectedLifecycleRevision="rev-a"),
+        dict(sessionKey="person-b", expectedSessionId="id-b", expectedLifecycleRevision="rev-b"),
+    ]
+    return extension, capture["ordinary_skill"], pages, sessions
+
+
+def test_library_selection_stops_after_primary_rpc_refusal(tmp_path, monkeypatch):
+    """RM16/RM39 AC30: a refused primary selection cannot proceed to UI or negatives."""
+    api = module()
+    extension, skill, pages, sessions = selection_fixture(api, tmp_path, monkeypatch)
+    calls = []
+
+    def rpc(page, method, params):
+        calls.append((page, method, params))
+        return dict(frame=dict(ok=False, error=dict(code="INVALID_REQUEST")))
+
+    with pytest.raises(ValueError, match="^ordinary_skill_selection_failed$"):
+        extension.select_library_skill(rpc, pages, sessions, pages[0], skill)
+    assert len(calls) == 1
+    assert skill["receipt"]["ok"] is False
+
+
+@pytest.mark.parametrize("listing", ["failed", "empty", "other_revision", "removed", "saved"])
+def test_library_selection_requires_the_saved_revision_in_listing(tmp_path, monkeypatch, listing):
+    """RM16/RM39 AC30: record selection only with a successful exact native listing."""
+    api = module()
+    extension, skill, pages, sessions = selection_fixture(api, tmp_path, monkeypatch)
+
+    def rpc(page, method, params):
+        if method == "skills.library.list":
+            return dict(
+                frame=dict(
+                    ok=listing != "failed",
+                    payload=dict(
+                        entries=[]
+                        if listing == "empty"
+                        else [
+                            dict(
+                                skillId=SKILL_ID,
+                                revision="b" * 64 if listing == "other_revision" else REVISION,
+                                removed=listing == "removed",
+                            )
+                        ]
+                    ),
+                )
+            )
+        if page is pages[1] or params.get("skillId") != SKILL_ID:
+            return dict(frame=dict(ok=False, error=dict(code="INVALID_REQUEST")))
+        return dict(frame=dict(ok=True, payload=skill["receipt"]["payload"]))
+
+    if listing == "saved":
+        extension.select_library_skill(rpc, pages, sessions, pages[0], skill)
+        assert skill["library_list"]["ok"] is True
+    else:
+        with pytest.raises(ValueError, match="^ordinary_skill_selection_failed$"):
+            extension.select_library_skill(rpc, pages, sessions, pages[0], skill)
+
+
+@pytest.mark.parametrize(
+    "admitted", ["unmapped_skill", "foreign_person", "foreign_person_own_session"]
+)
+def test_library_selection_stops_when_a_negative_is_admitted(tmp_path, monkeypatch, admitted):
+    """RM37/RM39 AC28/AC30: an admitted refusal case fails before any UI or listing step."""
+    api = module()
+    extension, skill, pages, sessions = selection_fixture(api, tmp_path, monkeypatch)
+    calls = []
+
+    def rpc(page, method, params):
+        calls.append(method)
+        if method != "relaymind.skill":
+            raise AssertionError(method)
+        index = calls.count("relaymind.skill") - 1
+        case = [None, "unmapped_skill", "foreign_person", "foreign_person_own_session"][index]
+        if case is None or case == admitted:
+            return dict(frame=dict(ok=True, payload=skill["receipt"]["payload"]))
+        return dict(frame=dict(ok=False, error=dict(code="INVALID_REQUEST")))
+
+    clicks = []
+    monkeypatch.setattr(SelectionPage, "click", lambda self: clicks.append(True))
+    with pytest.raises(ValueError, match="^ordinary_skill_selection_failed$"):
+        extension.select_library_skill(rpc, pages, sessions, pages[0], skill)
+    assert "skills.library.list" not in calls and clicks == []
+
+
+def test_library_selection_checks_foreign_person_with_their_own_session(tmp_path, monkeypatch):
+    """RM37/RM39 AC28/AC30: test binding refusal beyond cross-session routing refusal."""
+    api = module()
+    extension, skill, pages, sessions = selection_fixture(api, tmp_path, monkeypatch)
+    foreign_targets = []
+
+    def rpc(page, method, params):
+        if method == "skills.library.list":
+            return dict(frame=skill["library_list"])
+        if page is pages[1]:
+            foreign_targets.append(params)
+            code = "FORBIDDEN" if params["sessionKey"] == "person-a" else "INVALID_REQUEST"
+            return dict(frame=dict(ok=False, error=dict(code=code)))
+        if params["skillId"] != SKILL_ID:
+            return dict(frame=dict(ok=False, error=dict(code="INVALID_REQUEST")))
+        return dict(frame=skill["receipt"])
+
+    extension.select_library_skill(rpc, pages, sessions, pages[0], skill)
+    assert [{key: params[key] for key in sessions[0]} for params in foreign_targets] == sessions
+    assert (
+        dict(case="foreign_person_own_session", ok=False, error_code="INVALID_REQUEST")
+        in skill["negatives"]
+    )
+
+
+def test_skill_evidence_requires_foreign_person_own_session_refusal():
+    """RM37/RM39 AC28/AC30: the cross-session refusal alone is insufficient."""
+    api = module()
+    capture = skill_fixture(api)
+    capture["ordinary_skill"]["negatives"] = [
+        item
+        for item in capture["ordinary_skill"]["negatives"]
+        if item["case"] != "foreign_person_own_session"
+    ]
+    assert not api.ordinary_skill_pass(capture)

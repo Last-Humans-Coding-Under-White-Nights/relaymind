@@ -115,3 +115,13 @@ it("#228 ignores null and non-object frames instead of throwing", async () => {
   }
   expect(errors).toEqual([]);
 });
+
+it("#197 permits the Skill Library methods the ordinary qualification calls", async () => {
+  const f = await fixture(["relaymind.recommendations", "relaymind.skill", "skills.library.save", "skills.library.list"]);
+  for (const method of ["skills.library.save", "skills.library.list"]) {
+    const result = await f.target.__rmPersonWire.rpc(method, {});
+    expect(result.frame.payload.method).toBe(method);
+  }
+  await expect(f.target.__rmPersonWire.rpc("skills.library.delete", {})).rejects.toThrow();
+  expect(() => installNativeSocketObserver(f.target, ["skills.library.delete"])).toThrow("invalid_fixture_method");
+});

@@ -4,11 +4,13 @@ import asyncio
 import hashlib
 import importlib.util
 import json
+import re
 import secrets
 import subprocess
 import sys
 import threading
 import time
+import uuid
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
@@ -42,8 +44,10 @@ ORDINARY_FAILURE_STEPS = frozenset(
         "install",
         "sources",
         "persons_ready",
+        "save_library_skill",
         "entry_read",
         "ui_actions",
+        "select_library_skill",
         "negative_actions",
         "retirement_prepared",
         "retirement_attempt",
@@ -244,10 +248,107 @@ def ordinary_pass(capture):
         return False
 
 
+SELECTED_LABEL = (
+    "Exact native revision selected for the next turn; instruction use is not yet observed."
+)
+_SKILL_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+_REVISION = re.compile(r"[a-f0-9]{64}")
+_SKILL_NEGATIVES = {
+    "unmapped_skill": "INVALID_REQUEST",
+    "foreign_person": "FORBIDDEN",
+    "foreign_person_own_session": "INVALID_REQUEST",
+}
+
+
+def library_revision_listed(listed, skill_id, revision):
+    """Require a successful native listing with the exact saved, not removed, revision."""
+    try:
+        return listed["ok"] is True and any(
+            entry["skillId"] == skill_id
+            and entry["revision"] == revision
+            and entry.get("removed") is not True
+            for entry in listed["payload"]["entries"]
+        )
+    except (KeyError, TypeError):
+        return False
+
+
+def ordinary_skill_pass(capture):
+    """#197 (RM39/AC30; spec 7.6.1): exact native Skill Library selection.
+
+    Requires the ordinary channel proof plus a saved library revision, the
+    operator mapping binding that exact revision to the offered asset bytes,
+    the closed bridge receipt that claims selection only (never instruction
+    use), the official UI status, and refusals for an unmapped skill and for
+    another person. Loaded instruction use is a separate, unclaimed gate.
+    """
+    try:
+        if not ordinary_pass(capture):
+            return False
+        value = capture["ordinary_skill"]
+        saved, mapping = value["library_save"], value["mapping"]
+        skill_id, revision = saved["skill_id"], saved["revision"]
+        if (
+            saved["ok"] is not True
+            or not isinstance(skill_id, str)
+            or not _SKILL_ID.fullmatch(skill_id)
+            or not isinstance(revision, str)
+            or not _REVISION.fullmatch(revision)
+        ):
+            return False
+        asset_id = mapping["assetId"]
+        views = capture["ordinary_actions"]["ui"]["snapshots"]["choice"]["views"]
+        chosen = [view for view in views if view["state"] == "chosen"]
+        if (
+            not isinstance(asset_id, str)
+            or not asset_id.strip()
+            or len(chosen) != 1
+            or chosen[0]["selected_action"]["choice"]
+            != dict(kind="asset", asset_id=asset_id, content_hash=mapping["contentHash"])
+            or "sourceVersion" not in mapping
+            or not any(
+                item["asset"]["asset_id"] == asset_id
+                and item["asset"]["content_hash"] == mapping["contentHash"]
+                and item["asset"].get("source_version") == mapping["sourceVersion"]
+                for item in chosen[0]["displayed_candidates"]
+            )
+        ):
+            return False
+        if (
+            mapping["skillId"] != skill_id
+            or mapping["revision"] != revision
+            or mapping["contentHash"] != value["content_sha256"]
+            or not _REVISION.fullmatch(value["content_sha256"])
+        ):
+            return False
+        receipt = value["receipt"]
+        if receipt["ok"] is not True or receipt["payload"] != dict(
+            skillId=skill_id,
+            revision=revision,
+            sessionActivation="next-turn",
+            instructions="not_observed",
+        ):
+            return False
+        if value["ui_status"] != "selected":
+            return False
+        if not library_revision_listed(value["library_list"], skill_id, revision):
+            return False
+        if len(value["negatives"]) != len(_SKILL_NEGATIVES):
+            return False
+        negatives = {item["case"]: item for item in value["negatives"]}
+        return negatives.keys() == _SKILL_NEGATIVES.keys() and all(
+            item["ok"] is False and item["error_code"] == _SKILL_NEGATIVES[item["case"]]
+            for item in value["negatives"]
+        )
+    except (KeyError, TypeError):
+        return False
+
+
 class OrdinaryComposition(BASE.ActionComposition):
-    def __init__(self, *args, archive, runs, **kwargs):
+    def __init__(self, *args, archive, runs, skill_text, skill_asset, **kwargs):
         super().__init__(*args, **kwargs)
         self.archive, self.runs = archive.resolve(strict=True), runs
+        self.skill_text, self.skill_asset = skill_text, skill_asset
         self._failure = {}
         self._ui_action = None
 
@@ -350,6 +451,8 @@ class OrdinaryComposition(BASE.ActionComposition):
             "ordinary_zero_http_failed",
             "ordinary_abort_unobserved",
             "ordinary_observer_blind",
+            "ordinary_skill_save_failed",
+            "ordinary_skill_selection_failed",
         }
 
     def observe_backend(self):
@@ -426,7 +529,10 @@ class OrdinaryComposition(BASE.ActionComposition):
         self.host_config["plugins"]["allow"] = list(
             dict.fromkeys([*self.host_config["plugins"]["allow"], "relaymind"])
         )
+        skill = self.save_library_skill(rpc, pages[0])
         with self.step("entry_read"):
+            capture["ordinary_skill"] = skill
+            self.config["recommendations"]["skills"] = [skill["mapping"]]
             self.host_config["plugins"]["entries"]["relaymind"] = dict(
                 enabled=True, config=self.config
             )
@@ -533,6 +639,7 @@ class OrdinaryComposition(BASE.ActionComposition):
                     raise ValueError("ordinary_guard_refused")
                 value["ui_person"] = ui_person
                 value["ui"] = run_ui(ui_page, sessions[0], self.observe_backend, self.set_ui_action)
+                self.select_library_skill(rpc, pages, sessions, ui_page, capture["ordinary_skill"])
             except Exception:
                 try:
                     ui_page.close()
@@ -568,6 +675,103 @@ class OrdinaryComposition(BASE.ActionComposition):
                 event["kind"] == "http_attempt" for event in value["negative_events"]
             ):
                 raise ValueError("ordinary_zero_http_failed")
+
+    @ordinary_step("save_library_skill")
+    def save_library_skill(self, rpc, page):
+        """Save the gateway's exact fixture SKILL.md into this person's library."""
+        saved = rpc(
+            page,
+            "skills.library.save",
+            dict(
+                expectedRevision=None,
+                slug="relaymind-qualification-" + secrets.token_hex(4),
+                content=self.skill_text,
+            ),
+        )
+        payload = saved["frame"].get("payload") if saved["frame"].get("ok") is True else None
+        entry = None
+        if isinstance(payload, dict):
+            entry = payload.get("entry") if isinstance(payload.get("entry"), dict) else payload
+        if not isinstance(entry, dict) or not isinstance(entry.get("skillId"), str):
+            raise ValueError("ordinary_skill_save_failed")
+        skill_id, revision = entry["skillId"], entry.get("revision")
+        if not isinstance(revision, str):
+            raise ValueError("ordinary_skill_save_failed")
+        asset = self.skill_asset
+        return dict(
+            library_save=dict(ok=True, skill_id=skill_id, revision=revision),
+            content_sha256=hashlib.sha256(self.skill_text.encode("utf-8")).hexdigest(),
+            mapping=dict(
+                assetId=asset["asset_id"],
+                contentHash=asset["content_hash"],
+                sourceVersion=asset["source_version"],
+                skillId=skill_id,
+                revision=revision,
+            ),
+        )
+
+    @ordinary_step("select_library_skill")
+    def select_library_skill(self, rpc, pages, sessions, ui_page, skill):
+        """Exact selection through the bridge, UI, and routing/binding refusals."""
+        views = self.observe_backend()["views"]
+        chosen = [v for v in views if v["state"] == "chosen"]
+        if len(chosen) != 1:
+            raise ValueError("ordinary_skill_selection_failed")
+        mapping = skill["mapping"]
+        params = dict(
+            sessions[0],
+            recommendationId=chosen[0]["recommendation_id"],
+            assetId=mapping["assetId"],
+            contentHash=mapping["contentHash"],
+            skillId=mapping["skillId"],
+            revision=mapping["revision"],
+        )
+        receipt = rpc(pages[0], "relaymind.skill", params)
+        skill["receipt"] = dict(
+            ok=receipt["frame"].get("ok") is True, payload=receipt["frame"].get("payload")
+        )
+        if skill["receipt"]["ok"] is not True:
+            raise ValueError("ordinary_skill_selection_failed")
+        negatives = []
+        for case, page, change in (
+            ("unmapped_skill", pages[0], dict(skillId=str(uuid.uuid4()))),
+            ("foreign_person", pages[1], {}),
+            ("foreign_person_own_session", pages[1], sessions[1]),
+        ):
+            observed = rpc(page, "relaymind.skill", dict(params, **change))
+            negatives.append(
+                dict(
+                    case=case,
+                    ok=observed["frame"].get("ok") is True,
+                    error_code=BASE.person_module().native_error_code(observed["frame"]),
+                )
+            )
+        skill["negatives"] = negatives
+        if any(item["ok"] is not False for item in negatives):
+            # An admitted refusal case ends the step before any UI or listing call.
+            raise ValueError("ordinary_skill_selection_failed")
+        ui_page.get_by_role("button", name="Select native skill", exact=True).click()
+        ui_page.get_by_role("combobox", name="Select native skill").select_option(
+            value=json.dumps(
+                dict(skillId=mapping["skillId"], revision=mapping["revision"]),
+                separators=(",", ":"),
+            )
+        )
+        ui_page.get_by_role("button", name="Select for next turn", exact=True).click()
+        try:
+            ui_page.get_by_text(SELECTED_LABEL, exact=True).wait_for(timeout=15000)
+            skill["ui_status"] = "selected"
+        except Exception:
+            skill["ui_status"] = "unavailable"
+            raise
+        listed = rpc(pages[0], "skills.library.list", dict(sessionKey=sessions[0]["sessionKey"]))
+        skill["library_list"] = dict(
+            ok=listed["frame"].get("ok") is True, payload=listed["frame"].get("payload")
+        )
+        if not library_revision_listed(
+            skill["library_list"], mapping["skillId"], mapping["revision"]
+        ):
+            raise ValueError("ordinary_skill_selection_failed")
 
     def native_events(self):
         path = self.work / "native-events.jsonl"
@@ -758,6 +962,9 @@ def main(argv=None):
         return await call_next(request)
 
     asyncio.run(service.refresh_catalog())
+    # The exact offered fixture asset and its original SKILL.md bytes (#197).
+    record = service.provider.store.snapshot().assets[0]
+    skill_text = (backend / "source" / "SKILL.md").read_text(encoding="utf-8")
     try:
         with RunningServer(app) as server:
             extension = OrdinaryComposition(
@@ -769,14 +976,22 @@ def main(argv=None):
                 release,
                 archive=args.tarball,
                 runs=runs,
+                skill_text=skill_text,
+                skill_asset=dict(
+                    asset_id=record.asset_id,
+                    content_hash=record.content_hash,
+                    source_version=record.source_version,
+                ),
             )
             code = BASE.person_module().run_qualification(
                 args.work_dir, args.out, extension=extension
             )
         capture = json.loads(args.out.read_bytes())
         capture["checks"]["ordinary_actions"] = ordinary_pass(capture)
+        capture["checks"]["ordinary_skill"] = ordinary_skill_pass(capture)
         BASE.person_module().write_capture(args.out, capture)
-        return 0 if code == 0 and capture["checks"]["ordinary_actions"] else 2
+        passed = capture["checks"]["ordinary_actions"] and capture["checks"]["ordinary_skill"]
+        return 0 if code == 0 and passed else 2
     finally:
         release.set()
         asyncio.run(service.stop())

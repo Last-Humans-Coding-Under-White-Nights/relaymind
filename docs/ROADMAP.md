@@ -1290,9 +1290,27 @@ package includes dormant recommendation/action clients, closed lossless protocol
 validation, inert evidence rendering and an unregistered controller whose host
 boundary denies unsupported operations by default. Those clients are reused by
 the separately qualified spec0.62 direct-action entry described under #195.
-Exact skill selection/loaded use and MCP use are not enabled by that profile;
-HOST-EXACT-SKILL-USE and later approval/currentness gates remain open. Full
-#197/AC30 is not complete.
+Exact skill selection is now qualified for the same pinned host and adapter
+revision: a Skill Library entry saved through `skills.library.save` is mapped
+to the RelayMind recommendation and selected for the next turn through the
+native `relaymind.skill` receipt and the Control UI. Unmapped and foreign-person
+selections are refused: an unmapped skill (`INVALID_REQUEST`), a cross-session
+foreign person (`FORBIDDEN`) and a foreign person on its own session, refused by
+RelayMind's own authority check (`INVALID_REQUEST`). The predicate also binds
+the asset ID, content hash and source version, and requires the saved revision
+in `skills.library.list`. The ordinary installed-host run (OpenClaw 2026.10.7,
+Ubuntu runner, CI run 41295359455, commit de6d5d9, PR merge checkout
+f5e3e39) passed both the
+ordinary-pass and ordinary-skill-pass predicates, with all 15 harness sources
+matching. Its unmodified capture is
+[openclaw-native-actions-20261101-skill.json](evidence/m10/openclaw-native-actions-20261101-skill.json)
+(SHA-256 `06d7e42aa1ea407136c66e1a6d8862cf552f2c88a1b2794391622175f8828793`), which the registry's evidence revision now names for the
+operations `direct_actions` and `exact_skill_selection`. The receipt records
+`sessionActivation: next-turn` and `instructions: not_observed`: selection is
+not observed loaded instruction use, which stays open as HOST-EXACT-SKILL-USE in
+#239. MCP use and real interactive approvals remain open (#204). As before, this
+is Linux functional evidence with disposable accounts, not macOS/Windows or
+customer acceptance.
 
 #198/#202/#204/#205/#206 evaluation contract checkpoint (spec 0.60): closed
 adaptation episode, whole-task and platform exports authorize the independent
