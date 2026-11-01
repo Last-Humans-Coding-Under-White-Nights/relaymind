@@ -1194,8 +1194,17 @@ pass predicates. For each language it:
 playwright install --with-deps --only-shell chromium
 python integrations/openclaw/test/host-walkthrough/record.py record \
   --tarball /abs/relaymind-openclaw-provider-0.1.0.tgz \
-  --work-root /abs/new-private-work --out-dir /abs/new-walkthrough
+  --work-root /abs/new-private-work --out-dir /abs/new-walkthrough \
+  [--font-dir /abs/cjk-fonts]
 ```
+
+The harness starts the browser with `HOME` inside the work directory, so it
+sees only system fonts. On a host without a CJK font, the Chinese labels still
+match but render as empty boxes. `--font-dir` copies the `.otf`, `.ttf` and
+`.ttc` files of a directory into that isolated home before the host is
+installed. The manifest lists their names and digests under `fonts`. Use a
+work root whose path holds no user name, because the source locator and the
+capture show it.
 
 The output directory holds, per language, `capture.json` (the harness's
 sanitized capture), `screens/`, `screens.json` and `video/`. `manifest.json`
@@ -1219,8 +1228,11 @@ The tier is `functional_fixture`, with a deterministic gateway and disposable
 fixture accounts. It is not an owner, human or live-model walkthrough and
 not platform acceptance. Blocked steps are never attempted. Screenshots and
 video can show fixture account names; keep them private until reviewed, and
-never publish the work directory. Whether the pinned host's Control UI
-follows the browser locale has not been observed yet; if it does not, the
-Chinese run fails on its first label rather than recording English screens.
+never publish the work directory. On the owner's VPS (1 November 2026), the
+pinned host's Control UI and the plugin's controls followed the `zh-CN` browser
+locale. The recommendation detail block and the identity provider's sign-in
+pages stayed in English, and the host's community banner stays visible because
+the harness never dismisses it. An unknown label still fails the Chinese run
+on that label rather than recording English screens.
 The recorder is not part of CI. Its fixture tests
 (`tests/test_openclaw_walkthrough.py`) run in the default `pytest`.

@@ -1848,8 +1848,12 @@ def main(argv=None):
     app, service, runs, _ = setup(backend)
     gateway, observation = None, None
     if args.observe_loaded_use:
+        # create_app issues its own fresh random application token and checks
+        # requests against it (section 7.1); replacing it would reject the
+        # plugin's model requests.
         app, gateway, observation = loaded_use_gateway(backend / "inference", service)
-    app.state.application_token = secrets.token_urlsafe(48)
+    else:
+        app.state.application_token = secrets.token_urlsafe(48)
     action_token = secrets.token_urlsafe(48)
     registration = ActionRegistrations(runs)  # Actual DEFAULT production resolver.
     registration.replace(
