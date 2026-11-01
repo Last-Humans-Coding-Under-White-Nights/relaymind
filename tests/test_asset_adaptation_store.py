@@ -52,8 +52,18 @@ def test_snapshot_is_latest_twenty_eligible_under_one_recorded_revision(tmp_path
 
 
 def test_scope_reset_invalidates_all_registered_private_owners_before_receipt(tmp_path):
+    from helpers import FakeClock
+
     async def run():
-        async with action_client(tmp_path) as (client, app, service, runs, catalog, _):
+        # A frozen clock keeps the real selection inside the budget under load.
+        async with action_client(tmp_path, clock=FakeClock()) as (
+            client,
+            app,
+            service,
+            runs,
+            catalog,
+            _,
+        ):
             parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
             await correct(client, parent, 0, "one")
             invalidated = []

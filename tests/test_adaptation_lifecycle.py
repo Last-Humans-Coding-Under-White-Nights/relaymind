@@ -1,8 +1,14 @@
-"""RM37/RM41/RM42 AC28/AC32/AC33: store-ordered actual finish/applied/terminal evidence."""
+"""RM37/RM41/RM42 AC28/AC32/AC33: store-ordered actual finish/applied/terminal evidence.
+
+Every test here runs a real selection under the recommendation deadline, so the
+fixture uses a frozen clock: a runner descheduled for longer than the 500 ms
+budget would receive a 504 with no result before the evidence is recorded.
+"""
 
 import asyncio
 import threading
 
+from helpers import FakeClock
 from recommendation_helpers import BODY
 from relaymind.assets.embedding_backends import EmbeddingEngine
 from relaymind.selection.adaptation_stage import AdaptationStage
@@ -14,7 +20,14 @@ from test_embedding_backend import NativeDouble
 
 def test_ready_persists_actual_stage_evidence_then_applied_then_ready(tmp_path):
     async def run():
-        async with action_client(tmp_path) as (client, app, service, runs, catalog, _):
+        async with action_client(tmp_path, clock=FakeClock()) as (
+            client,
+            app,
+            service,
+            runs,
+            catalog,
+            _,
+        ):
             parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
             await correct(client, parent, 0, "first")
             semantic = config(tmp_path)
@@ -52,7 +65,14 @@ def test_failed_similarity_keeps_primary_success_and_cost_before_failed(tmp_path
             return [[0, 0] for _ in tokens]
 
     async def run():
-        async with action_client(tmp_path) as (client, app, service, runs, catalog, _):
+        async with action_client(tmp_path, clock=FakeClock()) as (
+            client,
+            app,
+            service,
+            runs,
+            catalog,
+            _,
+        ):
             parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
             await correct(client, parent, 0, "first")
             semantic = config(tmp_path)
@@ -90,7 +110,14 @@ def test_disconnect_flushes_live_stage_cost_before_cancel_without_relabeling_pri
             self.release.set()
 
     async def run():
-        async with action_client(tmp_path) as (client, app, service, runs, catalog, _):
+        async with action_client(tmp_path, clock=FakeClock()) as (
+            client,
+            app,
+            service,
+            runs,
+            catalog,
+            _,
+        ):
             parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
             await correct(client, parent, 0, "first")
             semantic = config(tmp_path)
@@ -142,7 +169,14 @@ def test_reset_during_similarity_fences_private_work_and_restores_baseline(tmp_p
             self.release.set()
 
     async def run():
-        async with action_client(tmp_path) as (client, app, service, runs, catalog, _):
+        async with action_client(tmp_path, clock=FakeClock()) as (
+            client,
+            app,
+            service,
+            runs,
+            catalog,
+            _,
+        ):
             parent = (await client.post("/relay/v1/recommendations", json=BODY)).json()
             await correct(client, parent, 0, "first")
             semantic = config(tmp_path)
@@ -202,7 +236,14 @@ def test_admission_infrastructure_failure_retains_inferred_primary_cost_before_f
             return super().infer(tokens, invoked)
 
     async def run():
-        async with action_client(tmp_path) as (client, app, service, runs, catalog, _):
+        async with action_client(tmp_path, clock=FakeClock()) as (
+            client,
+            app,
+            service,
+            runs,
+            catalog,
+            _,
+        ):
             config, index = setup(tmp_path)
             offer = service.provider.pin(("skill", "mcp_tool"))
             index.publish_batch(offer.catalog, [(0.6, 0.8)] * len(offer.catalog))
