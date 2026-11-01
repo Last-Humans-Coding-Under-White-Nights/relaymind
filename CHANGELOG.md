@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Early installed-skill trial kit (#234; RM39, RM44; AC30, AC36; spec 0.65
+  section 12.6.5): `scripts/asset_whole_task.py trial-preflight`,
+  `trial-install`, `trial-run` and `trial`.
+  - Preflight checks macOS arm64, Apple M1, 8 GiB, the environment lock, the
+    pinned OpenClaw 2026.10.7 host and the plugin release checksum against the
+    frozen package.
+  - The plugin is installed with the pinned host CLI.
+  - The frozen plan runs through the existing driver over operator-captured row
+    observations. Missing rows stay `not_run`.
+  - Every original is bundled with `SHA256SUMS` and a companion manifest and
+    graded offline with the unchanged grader.
+  - Output is fixture or provisional only; no trial has been run.
+- Bilingual packaged walkthrough recorder (#238; RM39; AC30, AC35):
+  `integrations/openclaw/test/host-walkthrough/record.py` runs the unchanged
+  ordinary installed-host qualification in `en-US` and `zh-CN`.
+  - It uses the plugin's own labels, with screenshots, video and a digest
+    manifest.
+  - A step is recorded only when the harness predicate accepts the capture.
+    Loaded skill use, MCP use and host MCP approval are always `blocked`.
+  - The tier is `functional_fixture`, it is not in CI, and no walkthrough has
+    been recorded yet.
 - Qualification assessment for the section 12.6.5 exports (#240; RM16, RM40,
   RM42, RM44; AC31, AC33, AC36, AC37): graded host, platform and adaptation
   results record the claimed label, the tier assessed from the resolved inputs

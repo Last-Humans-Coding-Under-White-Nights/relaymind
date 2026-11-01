@@ -1050,6 +1050,13 @@ workflows, explicit stdout-only choice receipts, and a focused
 M10 skill/MCP, real approval and correction walkthrough still requires the final
 qualified host contract/artifact and actual installed-host exercises. These
 repository guides do not claim that remaining walkthrough or close #207.
+The #238 recorder (`integrations/openclaw/test/host-walkthrough/record.py`)
+now drives the unchanged ordinary installed-host qualification in `en-US` and
+`zh-CN` through the plugin's own labels, with screenshots, video and a digest
+manifest. Loaded skill use, MCP use and host MCP approval are recorded as
+`blocked`. No walkthrough has been recorded with it yet, and its
+`functional_fixture` tier does not satisfy the qualified-host walkthrough of
+#238.
 
 The #192 implementation supplies independent catalog discovery: closed records
 and snapshots, ordinary local SKILL.md readers, explicit hash-verified metadata
@@ -1415,6 +1422,14 @@ enable runtime snapshots or further host operations. The separate spec0.62
 direct-action profile above is qualified; exact selected skill/MCP use and
 post-approval currentness still require their own qualification. Missing genuine
 inputs do not block tooling implementation or explicitly unqualified fixture runs.
+
+#234 early-trial kit: the `trial-*` commands of `scripts/asset_whole_task.py`
+(`asset_trial_kit.py`) add the Apple M1 8 GiB / pinned host / release-checksum
+preflight, the pinned-CLI plugin install, and the frozen plan run through the
+existing driver over operator-captured row observations, bundled with
+SHA-256 digests and graded offline. They are verified over fixture bundles and a
+host double only. The customer trial itself, its frozen inputs and genuine
+native row observations remain open; no provisional cost has been recorded.
 
 #201 native benchmark contract checkpoint (spec 0.61): explicit local-cold
 preparation records actual gateway worker jobs/readiness, setup and owned cleanup
