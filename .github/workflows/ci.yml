@@ -65,6 +65,9 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Host-use records verify source bytes at their historical commit.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -137,6 +140,9 @@ jobs:
       RELAYMIND_OPENCLAW_NODE: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Rebuild the adapter revision named by the host-use record.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -216,6 +222,7 @@ jobs:
           tests/test_openclaw_request_size.py tests/test_openclaw_install.py
           tests/test_openclaw_install_check.py tests/test_openclaw_mac_qualification.py
           tests/test_openclaw_mcp_use_qualification.py
+          tests/test_m10_host_use_records.py
           tests/test_openclaw_vps_functional.py tests/test_openclaw_vps_functional_round_trips.py
           tests/test_openclaw_vps_functional_cancel_errors.py
           tests/test_openclaw_vps_functional_install.py tests/test_openclaw_ci_runner_install.py
