@@ -292,6 +292,45 @@ def test_a_gateway_that_exits_after_the_token_fails_before_the_deadline(tmp_path
     assert time.monotonic() - began < 10
 
 
+def test_a_gateway_that_exits_before_the_token_is_an_exit_not_a_timeout(tmp_path, monkeypatch):
+    """RM38/AC29 (review 264, 4436728748): EOF from an exited child is gateway_exited."""
+    script = _fake_python(tmp_path, "raise SystemExit(3)\n")
+    _patch_child(monkeypatch, script)
+    base = _empty_base(tmp_path)
+
+    async def go():
+        async with serve(tmp_path / "w", tmp_path, base_config=base, timeout=60):
+            pass
+
+    began = time.monotonic()
+    with pytest.raises(RuntimeError, match="gateway_exited"):
+        asyncio.run(go())
+    assert time.monotonic() - began < 10
+
+
+def test_a_closed_parent_pipe_ends_the_child_reply_quietly(monkeypatch):
+    """RM38/AC29 (review 264, 4436728752): a reply to a gone parent never raises,
+    so a detached answer task leaves no 'Task exception was never retrieved'."""
+    from relaymind.evaluation import asset_operations_child as child
+
+    class ClosedPipe:
+        def write(self, text):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        def flush(self):
+            raise BrokenPipeError(32, "Broken pipe")
+
+    monkeypatch.setattr(child.sys, "stdout", ClosedPipe())
+    child._write({"id": 1, "ok": True})  # must not raise
+
+    class ClosedFile(ClosedPipe):
+        def write(self, text):
+            raise OSError(9, "Bad file descriptor")
+
+    monkeypatch.setattr(child.sys, "stdout", ClosedFile())
+    child._write({"id": 2, "ok": True})
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM handling is POSIX only")
 def test_cancellation_during_shutdown_still_kills_and_reaps(tmp_path, monkeypatch):
     pid_file = tmp_path / "pid"
@@ -797,7 +836,8 @@ def test_stdout_before_token_is_preserved_even_if_startup_fails(tmp_path, monkey
     if token:
         asyncio.run(go())
     else:
-        with pytest.raises(TimeoutError, match="gateway_token_unavailable"):
+        # The child exited without a token (review 264, 4436728748).
+        with pytest.raises(RuntimeError, match="gateway_exited"):
             asyncio.run(go())
     assert (tmp_path / "w" / "stdout.log").read_text() == "startup diagnostic\n"
 

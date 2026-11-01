@@ -668,8 +668,9 @@ tasks or labels it binds must be the resolved inputs. Every Time field must be
 a real UTC instant (`invalid_record_time`). Under spec 12.6.6 an approved
 `negative` record with scope `host_operation` closes the `skill_loaded_use`
 or `mcp_use` gate with the operation disabled; `known_host_limitations`
-returns those records for the roadmap, docs and reports to list. No approved
-negative record exists yet, so none is listed. The module is
+returns those records for the roadmap, docs and reports to list. A pending
+record lifts nothing. No approved negative record exists yet, so none is
+listed. The module is
 `relaymind.evaluation.asset_qualification_record`.
 
 **Native configuration validation (spec 0.65; #240).** Host, provider, sampling
@@ -844,8 +845,11 @@ one attempt per call:
 - `--events` and `--artifacts` are read with the same bounded strict reader as
   every other input: a symlink, an oversized file, duplicate keys or
   non-finite numbers reject.
-- The relationship between counts is `unknown` unless you name evidence for
-  it with `--relationship-evidence`.
+- The relationship between counts is `unknown` unless you name it with
+  `--token-relationship` and its evidence with `--relationship-evidence`.
+  Each needs the other: a relationship without evidence rejects
+  (`relationship_evidence`), and evidence under an `unknown` relationship
+  rejects (`token_relationship`).
 - A finish without an earlier start of the same call (`trace_order`), or a
   repeated start or finish of one call (`trace_duplicate_call`), rejects the
   trace: a repeated receipt is never a new attempt.
@@ -1034,7 +1038,7 @@ specification. Other pull requests stay fast. Each platform runs:
    closed to `src/relaymind`, `pyproject.toml` and
    `scripts/asset_whole_task.py`. The other files the platform run executes or
    loads are bound by the registered evidence `platform-runner-files` (path,
-   SHA-256 and size of each): the workflow, `asset_operations_run.py`,
+   SHA-256 and size of each tracked file): the workflow, `asset_operations_run.py`,
    `asset_platform_run.py`, `openclaw_install_check.py`, the ordinary
    installed-host harness with the action and person harnesses it is built on,
    and the test helpers the bundle and the harness import. The release tarball

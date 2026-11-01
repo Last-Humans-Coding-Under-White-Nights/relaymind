@@ -332,3 +332,25 @@ def test_a_worksheet_for_other_documents_is_a_binding_error(tmp_path, field):
     worksheet[field] = 9 if field == "release" else "a" * 64
     with pytest.raises(AssetCorpusError, match="worksheet_binding"):
         freeze_labels(catalog, cases, judgments, worksheet)
+
+
+@pytest.mark.parametrize("annotators", [("judge-a",), ("judge-a", "judge-a")])
+def test_freezing_needs_two_distinct_annotators_per_case(tmp_path, annotators):
+    """Review 4436631728: freeze_labels applies the worksheet's coverage rule."""
+    catalog, cases, labels = corpus(tmp_path)
+    templates = [
+        filled(label_template(catalog, cases, a), labels, a) for a in ("judge-a", "judge-b")
+    ]
+    judgments = raw_judgments(catalog, cases, templates)
+    worksheet = adjudicated(adjudication_worksheet(catalog, cases, judgments), labels)
+    if len(annotators) == 1:
+        kept = [j for j in judgments if j["annotator_id"] == "judge-a"]
+    else:
+        kept = [dict(j, annotator_id="judge-a") for j in judgments]
+    by_case = {}
+    for j in kept:
+        by_case.setdefault(j["case_id"], []).append(j)
+    for item in worksheet["items"]:
+        item["judgments"] = by_case[item["case_id"]]
+    with pytest.raises(AssetCorpusError, match="raw_judgment_coverage"):
+        freeze_labels(catalog, cases, kept, worksheet)

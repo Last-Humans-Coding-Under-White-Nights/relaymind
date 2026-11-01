@@ -391,6 +391,13 @@ async def _run_episode(episode, cases, labels, open_arm, evidence, interrupted):
 
 def _restored(value: Mapping, episode_id: str, evidence: dict) -> dict:
     """A journaled episode result and its reset evidence, bytes rechecked."""
+    if (
+        not isinstance(value, Mapping)
+        or not isinstance(value.get("evidence"), list)
+        or not all(isinstance(item, Mapping) for item in value["evidence"])
+        or not isinstance(value.get("result"), Mapping)
+    ):
+        raise WholeTaskRejected("journal_evidence")
     for item in value["evidence"]:
         payload = item["payload"].encode("utf-8")
         if (
