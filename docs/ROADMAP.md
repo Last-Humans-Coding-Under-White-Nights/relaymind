@@ -1338,6 +1338,31 @@ actual Apple M1/macOS and native Windows, and whole-task gates remain open.
 No adapter/registry activation or host-use measurement is supplied by this
 revision; its only code change adds the reviewed specification evidence anchor.
 
+#239/#204 adapter checkpoint (spec 0.65; RM16/RM37/RM39; AC28/AC30/AC35): the
+OpenClaw adapter now carries the loaded-use fence
+(`src/recommendation-native-use.ts`) and the conditional `relaymind.mcp` handler
+(`src/recommendation-native-mcp.ts`), both behind their own registry operations
+(`src/recommendation-native-registry.ts`). The fence checks fresh native
+authority for the same session incarnation, registration, the unexpired
+choice, the eligible asset and operator association, a nonremoved library
+entry and the immutable selected bytes at every boundary, and blocks the
+conversation after a failure. The MCP handler implements the closed request,
+the 512 KiB native row, the 60-second deadline with the separately bounded
+approval wait, the exact binding with a recomputed canonical schema hash,
+approval binding and single use, the closed receipt and idempotency. Only
+deterministic tests with injected fixture resolvers and routes exercise the
+admitted paths. Neither `skill_loaded_use` nor `mcp_use` is in the shipped
+registry, no production MCP route exists (the pinned host has no qualified
+exact-use route), and the adapter wires the fence to no host delivery boundary:
+spec 0.65 names no qualified native boundary that can stop the next model
+request. HOST-EXACT-SKILL-USE (#239) and MCP use with real approvals (#204)
+remain open. The changed adapter bytes have a new exact revision
+(`c618b8c267663c2bfe2480ce8b60b07cfdae27acc6404e8bb1d249200acb3e76`). The
+shipped `direct_actions`/`exact_skill_selection` entry still names the earlier
+revision and its capture, so the native RPCs stay unregistered (fail-safe)
+until the entry is re-pinned together with a fresh ordinary installed-host
+capture of these bytes, as for the spec 0.63 scope fix.
+
 #240 host_config evidence must validate with the pinned host's own validator
 and captured schema/validator identities, including the native regex dialect.
 The pinned config validate command is recorded in the

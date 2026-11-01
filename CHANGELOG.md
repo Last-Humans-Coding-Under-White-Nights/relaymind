@@ -16,6 +16,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `plan-host` records the preregistered input and freeze digests, and the new
   `plan-episodes` command verifies frozen episodes and writes their probe plan
   (#236, #237). No measured or qualified result is claimed.
+- Native loaded-use fence and conditional MCP use path in the OpenClaw adapter
+  (#239/#204; spec 0.65 sections 7.6.1, 7.6.2 and 14.5; RM16/RM37/RM39;
+  AC28/AC30/AC35). The reviewed registry now names `skill_loaded_use` and
+  `mcp_use` as separate operations; an `mcp_use` entry must declare its exact
+  route, transport, tool class and finite maximum approval wait, and a
+  malformed entry qualifies nothing. The loaded-use fence rechecks fresh
+  native authority for the same session incarnation, registration, the
+  unexpired choice, the eligible asset and operator association, a nonremoved
+  library entry and the immutable selected bytes before loading, after the
+  exact read and immediately before delivery, keeps R0 across a library head
+  update and blocks the conversation after any failure. The `relaymind.mcp`
+  handler implements the closed request, the 60-second preparation/dispatch
+  deadline with the separately bounded approval wait, exact native binding with
+  a recomputed canonical schema hash, closed argument validation, approval
+  binding and single use, the closed receipt and same-scope idempotency. All
+  native RPC requests are now capped at 512 KiB. Neither operation is in the
+  shipped registry, no production MCP route exists, and `relaymind.mcp` is not
+  registered; the tests use injected fixture resolvers and routes only. The
+  changed adapter bytes have a new exact revision, so the shipped
+  direct-action/exact-selection entry no longer matches until a fresh CI
+  capture re-pins it.
+
 - Native loaded-skill observation harness (#239; RM39/AC30): retain native
   `skills_read` bytes, their receiving gateway request and host/run correlation,
   with isolated stale/deleted/reset observations over deterministic inference.

@@ -32,3 +32,56 @@ it("keeps the optional feature absent without changing provider registration", (
     } as any),
   ).not.toThrow();
 });
+
+// Spec 0.65 7.6.1/7.6.2: each RPC is registered only for its own operation;
+// relaymind.mcp stays reserved without a reviewed mcp_use entry and exact route.
+import { registerQualifiedNativeMethods } from "../src/recommendation-native.js";
+const SCOPE = {
+  route: "fixture.exact-use",
+  transport: "stdio",
+  toolScope: "independent-tool",
+  maxApprovalWaitMs: 30000,
+};
+function registered(operations: string[], route?: object) {
+  const names: string[] = [];
+  const api: any = {
+    registerGatewayMethod: (name: string) => names.push(name),
+    logger: { warn: () => {} },
+  };
+  const dependencies: any = () => ({ bindings: [], skills: [] });
+  registerQualifiedNativeMethods(
+    api,
+    dependencies,
+    (operation) =>
+      operations.includes(operation)
+        ? ({ mcp: operations.includes("mcp_use") ? SCOPE : undefined } as any)
+        : undefined,
+    { mcpRoute: route as any },
+  );
+  return names;
+}
+it("registers relaymind.mcp only for a qualified mcp_use entry and its exact route", () => {
+  const route = {
+    route: SCOPE.route,
+    transport: SCOPE.transport,
+    toolScope: SCOPE.toolScope,
+  };
+  expect(
+    registered(["direct_actions", "exact_skill_selection"], route),
+  ).toEqual(["relaymind.recommendations", "relaymind.skill"]);
+  expect(registered(["direct_actions", "mcp_use"])).toEqual([
+    "relaymind.recommendations",
+  ]);
+  expect(
+    registered(["direct_actions", "mcp_use"], { ...route, transport: "http" }),
+  ).toEqual(["relaymind.recommendations"]);
+  expect(registered(["direct_actions", "mcp_use"], route)).toEqual([
+    "relaymind.recommendations",
+    "relaymind.mcp",
+  ]);
+  // skill_loaded_use defines no RPC; the fence enforces it.
+  expect(registered(["direct_actions", "skill_loaded_use"])).toEqual([
+    "relaymind.recommendations",
+  ]);
+  expect(registered(["mcp_use", "exact_skill_selection"], route)).toEqual([]);
+});

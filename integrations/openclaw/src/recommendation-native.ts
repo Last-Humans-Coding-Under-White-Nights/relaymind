@@ -5,15 +5,17 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import type { RelayMindPluginConfig } from "./config.ts";
-import { PINNED_OPENCLAW } from "./compat.ts";
 import {
   createRecommendationClient,
   createUserActionClient,
 } from "./recommendations.ts";
 import { createNativeActionHandler } from "./recommendation-native-actions.ts";
 import { createNativeSkillHandler } from "./recommendation-native-skill.ts";
+import { createNativeMcpHandler } from "./recommendation-native-mcp.ts";
+import type { NativeMcpRoute } from "./recommendation-native-mcp.ts";
 import { NATIVE_QUALIFICATIONS } from "./recommendation-native-qualification.ts";
-import type { NativeOperation } from "./recommendation-native-qualification.ts";
+import { registryResolver } from "./recommendation-native-registry.ts";
+import type { QualificationResolver } from "./recommendation-native-registry.ts";
 import type { NativeActionBinding } from "./recommendation-native-authority.ts";
 
 /** Exact shipped JavaScript, excluding only the separate reviewed registry data. */
@@ -52,22 +54,6 @@ export function nativeAdapterRevision(): string {
       .update(bytes);
   }
   return digest.digest("hex");
-}
-function qualified(operation: NativeOperation, version: string): boolean {
-  if (version !== PINNED_OPENCLAW || NATIVE_QUALIFICATIONS.length === 0)
-    return false;
-  let revision: string;
-  try {
-    revision = nativeAdapterRevision();
-  } catch {
-    return false;
-  }
-  return NATIVE_QUALIFICATIONS.some(
-    (entry) =>
-      entry.hostVersion === version &&
-      entry.adapterRevision === revision &&
-      entry.operations.includes(operation),
-  );
 }
 function environment(name: string): string {
   const value = process.env[name];
@@ -130,18 +116,47 @@ export function nativeRecommendationDependencies(
     },
   };
 }
+/** The shipped composition: only the reviewed built-in registry and these exact bytes. */
+export function shippedQualification(
+  hostVersion: string,
+): QualificationResolver {
+  return registryResolver(
+    NATIVE_QUALIFICATIONS,
+    hostVersion,
+    nativeAdapterRevision,
+  );
+}
 export function registerNativeRecommendations(
   api: OpenClawPluginApi,
   config: RelayMindPluginConfig,
 ): void {
   if (!config.recommendations) return;
-  if (!qualified("direct_actions", api.runtime.version)) {
+  // No qualified exact MCP route exists for the pinned host, so none is supplied.
+  registerQualifiedNativeMethods(
+    api,
+    () => nativeRecommendationDependencies(api, config),
+    shippedQualification(api.runtime.version),
+    {},
+  );
+}
+/**
+ * Registers each native RPC only when its own operation is qualified. Spec 0.65:
+ * `relaymind.mcp` is reserved until mcp_use is qualified for the exact route;
+ * skill_loaded_use defines no RPC and is enforced by the loaded-use fence.
+ */
+export function registerQualifiedNativeMethods(
+  api: OpenClawPluginApi,
+  dependencies: () => ReturnType<typeof nativeRecommendationDependencies>,
+  qualification: QualificationResolver,
+  host: { mcpRoute?: NativeMcpRoute },
+): void {
+  if (!qualification("direct_actions")) {
     api.logger.warn(
       "Native recommendation actions unavailable: qualification pending",
     );
     return;
   }
-  const dependencies = nativeRecommendationDependencies(api, config);
+  const shared = dependencies();
   const options = {
     scope: "operator.write",
     profileAccess: "required",
@@ -149,13 +164,27 @@ export function registerNativeRecommendations(
   } as const;
   api.registerGatewayMethod(
     "relaymind.recommendations",
-    createNativeActionHandler(dependencies),
+    createNativeActionHandler(shared),
     options,
   );
-  if (qualified("exact_skill_selection", api.runtime.version))
+  if (qualification("exact_skill_selection"))
     api.registerGatewayMethod(
       "relaymind.skill",
-      createNativeSkillHandler(dependencies),
+      createNativeSkillHandler(shared),
+      options,
+    );
+  const mcp = qualification("mcp_use")?.mcp;
+  const route = host.mcpRoute;
+  if (
+    mcp &&
+    route &&
+    route.route === mcp.route &&
+    route.transport === mcp.transport &&
+    route.toolScope === mcp.toolScope
+  )
+    api.registerGatewayMethod(
+      "relaymind.mcp",
+      createNativeMcpHandler({ ...shared, qualification, route }),
       options,
     );
 }
