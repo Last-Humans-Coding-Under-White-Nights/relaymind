@@ -303,26 +303,26 @@ def _font_paths(font_dir: Path) -> list[Path]:
     return paths
 
 
-def _font_entry(path: Path, payload: bytes) -> dict:
-    return dict(
-        name=path.name, sha256=hashlib.sha256(payload).hexdigest(), bytes=len(payload), path=path
-    )
-
-
 def font_files(font_dir: Path) -> list[dict]:
     """The regular font files of ``font_dir`` (no symlinks), with their digests."""
-    return [_font_entry(path, path.read_bytes()) for path in _font_paths(font_dir)]
+    fonts = []
+    for path in _font_paths(font_dir):
+        payload = path.read_bytes()
+        digest = hashlib.sha256(payload).hexdigest()
+        fonts.append(dict(name=path.name, sha256=digest, bytes=len(payload), path=path))
+    return fonts
+
+
+def _copy_fonts(font_dir: Path, target: Path) -> None:
+    for path in _font_paths(font_dir):
+        shutil.copyfile(path, target / path.name)
 
 
 def snapshot_fonts(font_dir: Path, target: Path) -> list[dict]:
     """Copy the fonts once into the new private ``target``; digests are of the copied bytes."""
     target.mkdir(mode=0o700)
-    fonts = []
-    for path in _font_paths(font_dir):
-        payload = path.read_bytes()
-        (target / path.name).write_bytes(payload)
-        fonts.append(_font_entry(target / path.name, payload))
-    return fonts
+    _copy_fonts(font_dir, target)
+    return font_files(target)
 
 
 def install_fonts(font_dir: Path, environment: dict) -> None:
@@ -330,8 +330,7 @@ def install_fonts(font_dir: Path, environment: dict) -> None:
     data = environment.get("XDG_DATA_HOME") or Path(environment["HOME"]) / ".local/share"
     target = Path(data) / "fonts"
     target.mkdir(mode=0o700, parents=True, exist_ok=True)
-    for path in _font_paths(font_dir):
-        shutil.copyfile(path, target / path.name)
+    _copy_fonts(font_dir, target)
 
 
 def walkthrough_composition(language: str, shooter: Shooter, font_dir: Path | None = None):

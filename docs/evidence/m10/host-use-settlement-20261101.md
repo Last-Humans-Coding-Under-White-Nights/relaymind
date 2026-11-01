@@ -16,9 +16,15 @@ pull request review by an org member other than the owner is written into it.
 The MCP record binds the host surface inventory
 `openclaw-host-use-search-20261101-vps.json` and its captures by SHA-256. It
 loads with `relaymind.evaluation.asset_qualification_record.load_record`
-(`tests/test_m10_host_use_records.py`). The inventory also lists the attempted
-routes and controls of every capture (`attempted_routes`) and the candidate
-routes that were not called (`attempted_routes.not_attempted`).
+(`tests/test_m10_host_use_records.py`). The inventory lists the attempted
+routes of the corrected VPS3 run, selected older attempts and loaded-use
+controls (`attempted_routes`), plus candidate routes that were not called
+(`attempted_routes.not_attempted`). It is not a complete list for older runs:
+the committed CI and VPS2 MCP captures each contain three successful
+`tools.effective` reads with the old empty projection, omitted from their
+inventory entries. The capture events retain those attempts; tests check that
+these are the only omitted method/status pairs across bound MCP captures.
+The digest-bound inventory and captures remain unchanged.
 
 ## Where the evidence comes from
 
@@ -69,7 +75,10 @@ routes that were not called (`attempted_routes.not_attempted`).
 
   Before commit, `/home/<user>/` was rewritten to `/home/vps-user/` (same
   length) and the hostname to `sha256:<hostname_sha256>` in all three
-  `*-vps2.json` captures. Their predicates give the same results after this.
+  `*-vps2.json` captures. Here `vps-user` is a fixed redaction placeholder,
+  not the original account name. Their predicates give the same results after
+  this. Privacy tests allow only this placeholder and the standard CI
+  `/home/runner/` path, and reject other Linux, macOS and Windows home paths.
 - **VPS third run, MCP tier only (same machine and private interface,
   checkout bba0cf1, Node 24.22.1).** `openclaw-mcp-use-20261101-vps3.json`
   (SHA-256 `a618b253…c1f`): `blocked`, `exact_route_unqualified`. The
@@ -83,13 +92,18 @@ routes that were not called (`attempted_routes.not_attempted`).
   The current grader (byte-identical to the one in the capture) accepts
   fixture discovery and rejects exact use. All 22 `fixture_plugin_sources`
   rows and the 58 source inventory rows that are tracked files match the
-  bba0cf1 bytes. The other 71 rows are the built `dist` files (68) and three
-  installed package files. A local build at bba0cf1 matched all 68 `dist` rows
-  and gives adapter revision `f3241577…2c6c`, the revision that commit's
-  registry names. The capture holds no home path, user name,
+  bba0cf1 bytes. The other 71 rows are 37 built adapter files and 34
+  installed package files (31 host `dist` files and three other package files).
+  The record tests rebuild bba0cf1 in a disposable directory, compare all 37
+  adapter files, check the 34 installed package files, and recompute adapter
+  revision `f3241577…2c6c`, the revision that commit's registry names. The
+  OpenClaw CI job runs these checks with installed dependencies and also hashes
+  all 26 host files in the surface inventory. Missing or changed files fail.
+  The capture holds no home path, user name,
   hostname or public address; it shows the private `rm0` address, the
-  disposable `example.test` accounts and `/tmp` sandbox paths, as the VPS2
-  captures do. It was committed unmodified. The MCP record's revisions now
+  disposable `example.test` accounts and `/tmp` sandbox paths. The VPS2
+  captures additionally retain the documented `/home/vps-user/` placeholder.
+  The VPS3 capture was committed unmodified. The MCP record's revisions now
   name bba0cf1, that adapter revision and the MCP harness at that commit.
 - **GitHub Actions ubuntu (run 41286397320, head 548588a; harness bytes
   identical at acc4041).** The runner's hostname in the loaded-use capture's
@@ -105,12 +119,26 @@ routes that were not called (`attempted_routes.not_attempted`).
     `sessions.reset`, which needs `operator.admin`. The harness now records that
     exact refusal as `control_refused` (commit "Record the person-scope session
     reset refusal…"). The VPS2 real-host run confirms it (`control_refused`
-    above); no new CI run has confirmed it yet.
+    above); the later CI run below also confirms it.
   - `openclaw-mcp-use-20261101-ci.json`: `status: blocked`,
     `exact_route_unqualified`. `tools.effective` succeeded, but the capture
     shows an empty list (see the erratum below). `mcp.app.listTools` without a
     view was refused. Both disposable stdio servers listed `append`, and no
     server calls were made.
+
+- **GitHub Actions ubuntu, later run ([41340879424](https://github.com/LHCWN/relaymind/actions/runs/41340879424),
+  head ed21e007).** The workflow artifacts were inspected during review; these
+  newer captures are not committed here or bound by the MCP record.
+  - `openclaw-loaded-use-observation-ubuntu-1` contains
+    `openclaw-loaded-use-observation-ubuntu.json`: `status: completed`,
+    `ordinary_skill_loaded_use_observation: true`, reset `control_refused`.
+    This confirms both the reset handling and selected-skill pin predicate in CI.
+  - `openclaw-mcp-use-ubuntu-1` contains `openclaw-mcp-use-ubuntu.json`:
+    `status: blocked`, `reason: exact_route_unqualified`. The current grader
+    accepts fixture discovery: `mcp.app.discover` succeeds and `tools.effective`
+    lists both `alpha-one__append` and `alpha-one-2__append`;
+    `mcp.app.listTools` without a view is refused. This is discovery evidence,
+    not qualified exact use.
 
 ### Erratum: the empty `tools.effective` list
 
@@ -226,8 +254,7 @@ lists neither operation.
 - The MCP search did not call `tools.invoke`, `mcp.app.callTool` or the
   harness tool runtimes; their verdicts rest on the pinned host source. A
   reviewer may ask for bounded attempts of them before approval.
-- A CI run of the current loaded-use harness. The current predicate already
-  accepts the committed VPS2 capture, whose embedded check predates the
-  selected-skill pin fix; no capture made by the current harness exists yet.
-- A CI run of the corrected MCP tier; only the VPS3 run has used it.
+- The later CI captures from run 41340879424 remain workflow artifacts; they
+  have not been committed or added to the record's digest-bound subjects.
+  Both current harnesses have run in CI, with the results recorded above.
 - A later host version reopens both questions.

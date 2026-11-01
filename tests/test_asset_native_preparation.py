@@ -504,7 +504,12 @@ def _pin_runtime_clock(monkeypatch, clock):
         return await prepare_local(self, config, **options)
 
     monkeypatch.setattr(asset_native_runtime.NativeBenchmarkRuntime, "prepare_local", pinned)
-    monkeypatch.setattr(asset_native_runtime, "RunStore", lambda path: RunStore(path, clock=clock))
+
+    def open_store(path, **options):
+        options["clock"] = options.get("clock") or clock
+        return RunStore(path, **options)
+
+    monkeypatch.setattr(asset_native_runtime, "RunStore", open_store)
 
 
 @pytest.mark.parametrize("interrupted", [False, True])
@@ -575,6 +580,7 @@ def test_source_native_runner_reuses_prepared_primary_for_every_row(
     report = asyncio.run(
         asset_diagnostic_runner.run_source_benchmark(
             load(development_input),
+            clock=FakeClock(),
             production_config=development_input / "fixture.toml",
             preparation=local_config(),
             repetitions=2,

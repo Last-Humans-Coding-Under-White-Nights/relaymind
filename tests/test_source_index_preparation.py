@@ -5,6 +5,7 @@ import copy
 
 import pytest
 
+from helpers import FakeClock
 from test_asset_diagnostic import development_input as development_input
 from test_asset_diagnostic import load
 from test_asset_diagnostic_runner import api, english_case, production
@@ -20,7 +21,11 @@ def execute(root, url, preparation, *, repetitions=1):
     )
     return asyncio.run(
         api().run_source_benchmark(
-            load(root), production_config=config, preparation=preparation, repetitions=repetitions
+            load(root),
+            clock=FakeClock(),
+            production_config=config,
+            preparation=preparation,
+            repetitions=repetitions,
         )
     )
 
@@ -92,7 +97,9 @@ def test_rm40_unready_source_preparation_conserves_all_slots(development_input, 
 def test_rm40_source_builtin_none_preparation_has_no_invented_setup(development_input):
     report = asyncio.run(
         api().run_source_benchmark(
-            load(development_input), production_config=production(development_input)
+            load(development_input),
+            clock=FakeClock(),
+            production_config=production(development_input),
         )
     )
     assert report["preparation"]["status"] == "not_applicable"

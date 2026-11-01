@@ -715,7 +715,7 @@ def _local(
                 raise SourceFailure("invalid_data")
             if info.is_directory and stage.exists(f"{name}/SKILL.md"):
                 candidates.append(name)
-    documents, paths, exclusions = [], {}, []
+    documents, paths = [], {}
     for package in candidates:
         context.add_record()
         relative = "SKILL.md" if package == "." else f"{package}/SKILL.md"
@@ -727,15 +727,13 @@ def _local(
             document = _local_candidate(stage, source, package, relative, context)
         except CandidateRejected as exc:
             # Spec 0.66 section 4.6.1: excluded by itself with a fixed reason.
-            exclusion = failure_exclusions(exc.reason, asset_id)[0]
-            exclusions.append(exclusion)
-            context.reject_record(exclusion)
+            context.reject_record(failure_exclusions(exc.reason, asset_id)[0])
             continue
         documents.append(document)
         paths[asset_id] = package
         context.finish_record()
     context.finish_batch()
-    complete = not exclusions
+    complete = not context.rejections
     absent = set()
     # A partial generation applies no removals, so it never checks absence: a
     # retained record of a rejected or otherwise omitted package (such as a
@@ -765,12 +763,11 @@ def _local(
         tuple(documents),
         tuple(stage.files),
         complete,
-        # A partial generation applies no removals; omitted records stay stale.
-        frozenset(absent) if complete else frozenset(),
+        frozenset(absent),
         freeze_json(paths),
         context.received_bytes,
         tuple(context.batch_durations_ms),
-        tuple(exclusions),
+        tuple(context.rejections),
     )
 
 

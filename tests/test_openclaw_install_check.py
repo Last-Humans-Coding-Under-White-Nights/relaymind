@@ -940,6 +940,24 @@ def test_quoted_and_camel_case_default_models_are_redacted(tmp_path, raw, encode
         assert json.loads(shown.removeprefix("invalid config: "))["mode"] == "local"
 
 
+@pytest.mark.parametrize("key", ["default_model", "defaultModel"])
+@pytest.mark.parametrize("separator", [": ", " = ", "="])
+@pytest.mark.parametrize(
+    "value",
+    ["private/provider-model", '"private provider"', "'private provider'", "`private provider`"],
+)
+@pytest.mark.parametrize("encoded", [False, True])
+def test_plain_text_default_model_spellings_are_redacted(tmp_path, key, separator, value, encoded):
+    """RM12/AC24: config/error text must not export the private default model."""
+    ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
+    raw = f"config: {key}{separator}{value} | mode=local\n"
+    text = json.dumps({"error": raw}) if encoded else raw
+    result = install_check._sanitize(text, ctx)
+    assert "private" not in result
+    shown = json.loads(result)["error"] if encoded else result
+    assert shown == f"config: {key}{separator}<default-model> | mode=local\n"
+
+
 def test_a_non_string_default_model_is_left_as_is(tmp_path):
     ctx = SimpleNamespace(home=tmp_path / "host", tarball=tmp_path / "a" / "x.tgz", token="t0k")
     assert install_check._sanitize('{"default_model": null}', ctx) == '{"default_model": null}'

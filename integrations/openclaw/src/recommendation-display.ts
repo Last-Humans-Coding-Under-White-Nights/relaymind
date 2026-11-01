@@ -19,7 +19,7 @@ export function nativeSkillLabel(entry: {
   skillId: string;
   revision: string;
 }): string {
-  return neutralizeControls(
+  return plainText(
     `${String(entry.slug ?? entry.skillId)} (${entry.revision.slice(0, 12)})`,
   );
 }
@@ -65,10 +65,10 @@ const chinese: typeof english = {
 export function chineseLocale(locale: unknown): boolean {
   return typeof locale === "string" && /^zh(?:[-_]|$)/i.test(locale);
 }
-// Text mode doubles a source backslash before neutralizing controls, so a
-// source "\u{202e}" never reads like a neutralized control character.
+// Escape only literal control notation before neutralizing controls, so a
+// source "\u{202e}" stays distinct while ordinary path backslashes stay exact.
 function plainText(value: unknown): string {
-  return neutralizeControls(String(value).replace(/\\/g, "\\\\"));
+  return neutralizeControls(String(value).replace(/\\u\{/g, "\\\\u{"));
 }
 // The native RPC has already validated this scoped receipt. This formatter
 // adds no fields and never treats rendered text as action authority.
