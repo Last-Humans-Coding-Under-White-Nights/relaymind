@@ -8,6 +8,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- #259 early-trial preparation on the owner's Apple M1 8 GiB MacBook (RM16,
+  RM39, RM40, RM44; AC30, AC36; spec 0.66 sections 12.6.5, 12.6.6) in
+  `docs/evidence/m10/early-trial-m1-20261101/`: the passed `trial-install` and
+  `trial-preflight` records, the native validation and inventory captures of
+  the three arm configurations, a draft 8-skill catalog of the admissible
+  OpenClaw 2026.10.7 bundled skills, an example case, blind label templates, a
+  draft rubric, and the `build_trial_inputs.py` / `observe_row.py` evidence
+  helpers. Findings: the kit's install fails on a fresh host until the plugin
+  is configured and enabled; only 8 of 49 bundled skills pass RelayMind's
+  projection; the host's session record is the native usage source. The trial
+  itself is not run: it waits for owner-authored prompts, labels and the
+  signed-in recommendation choice. No row, cost or gate is claimed.
+
 - #255 host use settlement (RM16/RM37/RM39; AC30/AC35; spec 0.66 sections
   7.6.1, 7.6.2, 12.6.6) adds two pending negative `host_operation` records for
   OpenClaw 2026.10.7, with the VPS host surface inventory and the CI/VPS

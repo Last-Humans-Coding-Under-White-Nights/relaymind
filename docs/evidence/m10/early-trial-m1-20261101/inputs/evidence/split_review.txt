@@ -1,0 +1,2 @@
+DRAFT for owner review: the early-trial case is held_out; no selector or
+setting was tuned on it.

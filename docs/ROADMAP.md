@@ -1545,6 +1545,25 @@ SHA-256 digests and graded offline. They are verified over fixture bundles and a
 host double only. The owner-run trial itself (#259), its frozen inputs and genuine
 native row observations remain open; no provisional cost has been recorded.
 
+#259 preparation on the owner's Apple M1 8 GiB MacBook (1 November 2026;
+`docs/evidence/m10/early-trial-m1-20261101/`): the pinned host, the release
+artifact, `trial-install` (passed once the plugin was configured and enabled
+first; on a fresh host the pinned host installs it disabled and the kit's
+inspect fails), the native validation of the three arm configurations, the
+native inventory and `trial-preflight` (all seven checks passed). RelayMind's
+`local_directory` projection admits 8 of the 49 OpenClaw bundled skills (32
+`invalid_markup`, 9 `repeated_line`), so the trial catalog is those 8. The host
+persists provider usage per assistant message in its session record (the spec
+12.6.6 native source); for RelayMind-provider turns that record shows zero, so
+those arms use TraceEvent usage. A draft catalog, an example case, blind label
+templates, a draft rubric and two evidence helpers are committed; a scratch
+rehearsal with synthetic stand-in labels exercised freeze, preflight, plan,
+three live rows, `trial` and the record checker and is not evidence. Still
+open: owner-authored prompts, the owner and machine-annotator labels and
+adjudication, the recommendations arm's signed-in Control UI choice, the frozen
+run, blind success judging, the bundle, the reviewed record and the
+walkthroughs (Linux harness). No trial row, cost result or gate is claimed.
+
 #201 native benchmark contract checkpoint (spec 0.61): explicit local-cold
 preparation records actual gateway worker jobs/readiness, setup and owned cleanup
 without fabricated HTTP or hidden query initialization. Narrow runtime

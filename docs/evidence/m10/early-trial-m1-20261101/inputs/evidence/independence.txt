@@ -1,0 +1,3 @@
+DRAFT for owner review: section 12.6.6 owner_machine profile. The owner and one
+machine annotator each judge from their own blind label template; neither sees
+the other's judgment, tuning results or arm outputs before both are recorded.

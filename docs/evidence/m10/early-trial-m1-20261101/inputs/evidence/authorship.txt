@@ -1,0 +1,4 @@
+DRAFT for owner review: the case prompt in cases.DRAFT.json was drafted during
+the agent session as an example and is marked authorship=generated. The owner
+replaces it with a prompt the owner writes, sets authorship=original and
+author_ids=[owner], and confirms this statement before freezing.
