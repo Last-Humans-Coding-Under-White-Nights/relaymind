@@ -17,7 +17,7 @@ Historical measurement baseline as of 2026-10-23, including the supplied Windows
   [formal JSON/Markdown comparison](ASSET_BENCHMARK.md) and
   [privacy/recovery](asset-privacy-security.md). Catalog discovery, v2 lexical/HTTP
   recommendations and the installed qualified GitHub refresh profile have their
-  current scope in [ROADMAP](ROADMAP.md#m10--multilingual-asset-recommendations-spec-064).
+  current scope in [ROADMAP](ROADMAP.md#m10--multilingual-asset-recommendations-spec-065).
   The exact Linux CPU embedding bundle is registered; other native model and
   platform qualifications, the installed M10 skill/MCP/approval/correction
   walkthrough and whole-task/platform gates are separate pending deliverables.

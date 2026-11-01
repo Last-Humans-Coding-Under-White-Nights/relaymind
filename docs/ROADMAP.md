@@ -1040,7 +1040,7 @@ listed here so the current order can be traced to its reason.
   so it does not wait for the plugin.
 
 
-## M10 — Multilingual asset recommendations (spec 0.64)
+## M10 — Multilingual asset recommendations (spec 0.65)
 
 #207 customer documentation now has [English](asset-selection.md) and
 [简体中文](asset-selection.zh-CN.md) entry guides, v1/v2 migration and third-party
@@ -1112,11 +1112,14 @@ section 1), and 0.52 revised its offer cache and freshness rules
 qualifications #188–#190 per capability. The adapter contracts behind the
 blockers MATRIX-COHORT, MATRIX-OVERLAP, MATRIX-RIGHTS, MATRIX-REFRESH,
 HOST-ACTION-AUTHORITY, HOST-EXACT-SKILL-USE, HOST-MCP-BINDING and
-HOST-MCP-CURRENTNESS are not qualified or implementation-ready, and the core
-fails closed at those boundaries. Host snapshots and host use stay disabled
-until further supported qualification and a later normative adapter revision.
-This revision adds no host upgrade, no alternate dataset, no new milestone,
-and no relaxed or partial acceptance.
+HOST-MCP-CURRENTNESS remain capability-specific gates. The direct-action and
+exact-selection exception is the qualified section 7.6.1 entry below. Spec 0.65
+now defines loaded-use and MCP-use activation conditions in sections 7.6.1–7.6.2;
+it does not qualify or enable either operation. Their separate reviewed entries
+still require actual supported native composition and all negative controls.
+Host snapshots/runtime recommendations remain disabled pending their own later
+normative contract and qualification. Source gates stay unchanged. There is no
+host upgrade, alternate dataset, new milestone or relaxed/partial acceptance.
 
 The customer-approved defaults of 29 October 2026 are in spec section 1.
 
@@ -1298,19 +1301,92 @@ selections are refused: an unmapped skill (`INVALID_REQUEST`), a cross-session
 foreign person (`FORBIDDEN`) and a foreign person on its own session, refused by
 RelayMind's own authority check (`INVALID_REQUEST`). The predicate also binds
 the asset ID, content hash and source version, and requires the saved revision
-in `skills.library.list`. The ordinary installed-host run (OpenClaw 2026.10.7,
-Ubuntu runner, CI run 41295359455, commit de6d5d9, PR merge checkout
-f5e3e39) passed both the
+in `skills.library.list`, whose `session` must be the authenticated target
+session with exactly that skill and revision as its selection. The ordinary
+installed-host run of this stricter harness (OpenClaw 2026.10.7, Ubuntu runner,
+CI run 41317645014, commit 6e11c2d, PR merge checkout 077e402) passed both the
 ordinary-pass and ordinary-skill-pass predicates, with all 15 harness sources
 matching. Its unmodified capture is
 [openclaw-native-actions-20261101-skill.json](evidence/m10/openclaw-native-actions-20261101-skill.json)
-(SHA-256 `06d7e42aa1ea407136c66e1a6d8862cf552f2c88a1b2794391622175f8828793`), which the registry's evidence revision now names for the
+(SHA-256 `3a063ab374119dbe5b04f4c6625519a44f4ea75594525975ba661dfd9f9ff439`), which the registry's evidence revision now names for the
 operations `direct_actions` and `exact_skill_selection`. The receipt records
 `sessionActivation: next-turn` and `instructions: not_observed`: selection is
 not observed loaded instruction use, which stays open as HOST-EXACT-SKILL-USE in
 #239. MCP use and real interactive approvals remain open (#204). As before, this
 is Linux functional evidence with disposable accounts, not macOS/Windows or
 customer acceptance.
+
+Spec 0.65 checkpoint (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;
+AC25/AC28/AC30/AC31/AC35–AC37): the normative contract now distinguishes a
+library head update from invalidating a chosen immutable revision. #239 must
+observe actual native instruction bytes in the next actual model request of the
+same session incarnation, correlate native and RelayMind runs, and enforce the
+later-use fence for removal, choice expiry/erasure/remapping, reset and revoked
+authority. Native pins surviving removal do not satisfy that fence. A real-host
+model-double round trip with every listed control may support a reviewed
+skill_loaded_use registry entry for that exact composition in the
+deterministic-model functional tier; live-model capability and full acceptance
+remain separate. The current selection receipt still says not_observed.
+
+The #239 observation harness
+(`integrations/openclaw/test/host-ordinary-qualification/qualify.py`) now reads
+provider attempt records by their own per-turn file window and retains a
+failure that never reached the gateway with its actual outcome; an
+unexplained record leaves the case incomplete
+(`ordinary_skill_provider_unexplained`). It drains asynchronous evidence until
+every proposed or answered tool call has its native hook, so a failed or
+cancelled tool's late hook is collected; an unresolved call stays incomplete
+(`ordinary_skill_tool_unresolved`), and a refused send is accepted only after
+the same bounded drain. The committed loaded-use observation capture
+(`tests/fixtures/openclaw-loaded-use-observation-20261101-vps2.json`) predates
+this harness change, binds the earlier harness by digest, and must be
+recaptured with this harness before it is cited as evidence for it.
+
+#204 may build a disposable qualification harness against public authenticated
+dispatch and actual native approval paths, but MCP activation remains disabled.
+Section 7.6.2 defines a separate explicit direct-use request and ten qualification
+conditions. Section 14.5 caps native RPC requests at 512 KiB; the 60-second
+preparation/dispatch deadline excludes the separately bounded native approval
+wait, without changing any existing budget. The mcp_use registry operation is
+separate from the platform-report lifecycle step of the same name.
+Neither name-only tools.invoke nor the narrower MCP App view route proves a
+generic independent-tool bridge. Exact native identity/lifetime, post-approval
+and final-I/O currentness, actual server effects and negative
+controls must pass for the exact pinned operation/route/transport. Automated
+native UI allow/deny is functional evidence only; genuine human approval,
+actual Apple M1/macOS and native Windows, and whole-task gates remain open.
+No adapter/registry activation or host-use measurement is supplied by this
+revision; its only code change adds the reviewed specification evidence anchor.
+The #204 harness now projects the pinned host's grouped `tools.effective`
+inventory; its fixture discovery check requires both colliding fixture tools in
+the session inventory, so an empty or malformed inventory fails the run. Earlier
+captures recorded an empty list because of the old flat projection. The person
+probe first starts the session MCP runtime with public `mcp.app.discover`. One
+uncommitted Linux x86-64 VPS run listed both colliding tools; it is discovery
+evidence only, and exact MCP use remains blocked.
+
+#240 host_config evidence must validate with the pinned host's own validator
+and captured schema/validator identities, including the native regex dialect.
+The pinned config validate command is recorded in the
+[host probe](evidence/2026-10-27-openclaw-mac-probe/REPORT.md).
+Provider/sampling/budget documents need their own applicable source-bound
+schema or a verified extraction from a validated parent; otherwise they remain
+unverified. These section 12.6.5 requirements do not implement the verifier or
+make fixture exports qualified.
+
+#240 qualification assessment (spec 0.65 sections 12.6.2/12.6.5; RM16, RM40,
+RM42, RM44; AC31, AC33, AC36, AC37): `asset_whole_task_qualification.py`
+assesses every graded S3 report from its resolved inputs (fixture corpus or
+fixture evidence: fixture; unqualified corpus, unknown artifact provenance,
+non-target platform or any unverified input: provisional), rejects a
+non-fixture label over fixture inputs, and never lets an unqualified tier pass
+a gate. `plan-host` now records the preregistered input/freeze digests and
+`plan-episodes` verifies frozen episodes and writes their probe plan
+(#236/#237 preregistration). The specification still defines no reviewed S3
+qualification record and enables no native configuration verifier, so no
+report can be assessed qualified; that, genuine inputs and the host-validator
+parsing (#250) remain open. The [0.65 rationale](design/2026-11-01-spec-0-65-skill-use-mcp-host-config.md)
+records the decisions and remaining qualification work.
 
 #198/#202/#204/#205/#206 evaluation contract checkpoint (spec 0.60): closed
 adaptation episode, whole-task and platform exports authorize the independent
@@ -1327,7 +1403,8 @@ check the off/on adaptation ablation, and recompute every dispatched probe's
 offer. `asset_episode_driver.py` runs episodes through the real
 recommendation lifecycle on the locked corpus projection (evaluation-only, so
 never qualified). The parsing of native host and section 14.5.2 configurations
-and a qualified-evidence verifier remain open (#229), so qualified acceptance
+and a qualified-evidence verifier remain open (#229/#240); spec 0.65 defines
+the native validation evidence required, so qualified acceptance
 grades blocked, never pass. No new measured gate is claimed; genuine episodes,
 paired host tasks and platform runs still need real corpora, hosts and
 hardware. Read-only native RPC and genuine MCP qualification probes do not

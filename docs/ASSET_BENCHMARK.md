@@ -567,7 +567,7 @@ comparison object. Unknown CPU/memory and incomplete costs remain unknown;
 setup inference is never added to query inference a second time. Historical
 comparison objects retain their original closed shape and are not upgraded.
 
-## Whole-host trials, adaptation episodes and platform exports (spec 0.60/0.64 section 12.6.5)
+## Whole-host trials, adaptation episodes and platform exports (spec 0.60/0.64/0.65 section 12.6.5)
 
 These offline tools serve #198 (early installed-skill trial), #202 (adaptation
 episodes), #204 (host MCP-use rows), #205 (paired whole-host tasks) and #206
@@ -582,7 +582,8 @@ A Simplified Chinese version of this section is in
 
 | Command | What it does |
 | --- | --- |
-| `python scripts/asset_whole_task.py plan-host --tasks T --freeze F --output P` | Verifies `AssetHostTasksV1` against its `HostFreezeV1` and writes the three-arm plan: tasks in frozen UTF-8 order, arms ordered by SHA-256 of `{seed,task_id,arm}` |
+| `python scripts/asset_whole_task.py plan-host --tasks T --freeze F --output P` | Verifies `AssetHostTasksV1` against its `HostFreezeV1` and writes the three-arm plan: tasks in frozen UTF-8 order, arms ordered by SHA-256 of `{seed,task_id,arm}`, with the preregistered `input_digest` and `freeze_digest` |
+| `python scripts/asset_whole_task.py plan-episodes --episodes E --freeze F --output P` | Verifies `AssetEpisodesV1` against its `EpisodeFreezeV1` and writes `input_digest`, `config_digest` and, per episode, the chronological corrections, the paired probes in `(kind,case_id)` order with ordinals from one, and the reset probes |
 | `python scripts/asset_whole_task.py grade-host --report R --inputs M [--resolver X] --output O` | Resolves the companion input manifest, then verifies and regrades an `AssetHostReportV1` |
 | `python scripts/asset_whole_task.py grade-platform --report R --inputs M [--resolver X] --output O` | The same for an `AssetPlatformReportV1` (eleven lifecycle steps in fixed order) |
 | `python scripts/asset_whole_task.py grade-adaptation --report R --inputs M [--resolver X] --output O` | Verifies and regrades an `AssetAdaptationReportV1`; probe labels come from the verified corpus in the manifest |
@@ -593,8 +594,8 @@ failure; `2` the report or an input was rejected (a digest, identity, order,
 binding or arithmetic contradiction); `3` blocked (a required document,
 configuration, corpus document, inventory preimage or evidence is missing).
 Blocked is never reported as a pass. A grading command's output file always
-records `status`, `gate` and a fixed safe `reason`; `plan-host` writes only the
-plan, and on rejection it writes nothing and prints the reason to standard
+records `status`, `gate` and a fixed safe `reason`; `plan-host` and
+`plan-episodes` write only the plan, and on rejection it writes nothing and prints the reason to standard
 error. A graded result also lists `unverified`: for host and platform reports
 `configuration_semantics` (the pinned native host configurations are bound by
 digest but not parsed) and `qualified_evidence_review`; for adaptation reports
@@ -620,6 +621,29 @@ resolve only through an explicit `--resolver`; the runner inventory is the
 whole `src/relaymind` Python package plus `pyproject.toml` and
 `scripts/asset_whole_task.py`, whose package members must equal the running
 grader and whose other files must match reviewed bytes.
+
+**Qualification assessment (spec 0.65 sections 12.6.2 and 12.6.5; #240).** A
+graded result also records `qualification`: the report's `claimed` label, the
+`assessed` tier (`fixture`, `provisional` or `qualified`; `qualified` stands
+for `measured` on a platform report) and its fixed safe `reasons`. The tier is
+assessed from the resolved inputs, never from the label: a fixture corpus
+(`fixture_corpus`) or any report evidence with fixture provenance
+(`fixture_evidence`) makes it `fixture`; an unqualified corpus release
+(`corpus_unqualified`, from the section 12.6.1 assessment), artifact identities
+of unknown provenance (`artifact_provenance_unknown`), a platform other than
+Apple Silicon macOS or native x86-64 Windows (`platform_not_target`) and every
+`unverified` entry make it `provisional`. A report labelled `provisional`,
+`qualified` or `measured` over fixture inputs is rejected
+(`qualification_contradiction`); no gate passes unless the tier is
+`qualified`, and a known failure still fails. The specification defines no
+reviewed S3 qualification record and enables no native configuration
+verifier, so `qualified_evidence_review` is always listed and no report can
+be assessed `qualified` yet; observed provenance labels cannot change that.
+
+**Native configuration validation (spec 0.65; #240).** Host, provider, sampling
+and budget configuration documents stay unverified and cannot establish qualified
+acceptance until the pinned native validation and applicable schema/extraction
+evidence required by section 12.6.5 are supplied and verified.
 
 **Reset evidence (spec 0.64).** The registry entry `reset:<episode_id>` holds,
 as its original bytes, the closed canonical JSON object
@@ -685,3 +709,148 @@ report likewise blocks until it is bound to the `asset_operations` workload
 grader and the actual Apple Silicon macOS / native Windows review. Genuine
 episodes, paired host tasks and platform runs need real independent corpora,
 hosts and hardware; fixture runs establish no measured result.
+
+## Operations and platform run kit (#242)
+
+`scripts/asset_operations_run.py` prepares the real-world AC29 and AC37 runs
+(#241, #235, #234). It does not perform them. Every report it writes is labeled
+`fixture`.
+
+- `startup` generates a bilingual catalog of `--assets` skills (default 300,
+  the AC29 size; the count must be positive). It then starts a real
+  `relaymind serve` process ten times
+  through the existing AC29 startup driver (`measure_startups`) and records each
+  process's memory: `ps` resident set size on POSIX, `tasklist` working set on
+  Windows. `memory_counter` names the counter used.
+  - **Base config.** `--base-config` is your own TOML for the store, skills,
+    sandbox and model tables. A missing file is refused before the catalog is
+    generated or any gateway is launched. Every path in it must be absolute:
+    the kit writes the generated config into the run directory, so it refuses a
+    relative path rather than let its meaning change. The kit adds `[server]`,
+    `[recommendations]` and the catalog source itself, and refuses a base config
+    that already has them.
+  - **Readiness and logs.** A startup counts only once recommendations report
+    `ready`. Each run directory keeps the gateway's `stdout.log` (without the
+    token) and `stderr.log`; both start clean on every launch, so reusing
+    `--work` never mixes separate runs.
+  - **Completeness.** `complete` is true only when all ten startups were useful
+    and every memory sample is known.
+- `platform` turns an install-check record from
+  `scripts/openclaw_install_check.py`, plus an optional ordinary installed-host
+  capture, into an `AssetPlatformReportV1` bound to the companion input manifest
+  given in `--inputs`:
+  - The input digest is the verified host-task digest from that manifest. Each
+    original must be registered in it as `install-check` (or
+    `ordinary-capture`) with matching bytes, and its registered path is used.
+  - The observed `--platform` document must be a JSON object and must agree with
+    the manifest's environment lock.
+  - Install, configure and uninstall come from the lifecycle steps. A failed or
+    timed-out step fails the group, and steps that never ran stay `not_run`. The
+    record's own `remove-credential` step already requires every
+    `after_removal` leftover to be clean.
+  - Recommend, choose, feedback, delete and reset pass only when the
+    installed-host qualification's own `ordinary_pass` accepts the capture.
+  - Skill use stays `not_run` (`skill_use_not_observed`): a selection receipt is
+    not observed instruction use (#239). Restart and MCP use stay `not_run`.
+
+```bash
+python scripts/asset_operations_run.py startup --base-config /abs/base.toml \
+  --work /tmp/ops --output startup.json
+python scripts/asset_operations_run.py platform --install-check install-check.json \
+  --ordinary ordinary.json --inputs inputs.json --platform environment.json \
+  --output platform.json
+```
+
+Both commands create the output's parent directory. A configuration, input or
+write failure prints the reason and exits with code 2 instead of a traceback.
+
+The full 60-second mixed workload (`run_workload`) still needs rescan and
+rebuild hooks into a running process. The AC29 and AC37 numbers that count
+come only from the Apple M1 8 GiB macOS and native x86-64 Windows machines;
+those runs remain open in #241, #235 and #234.
+
+### Native loaded-skill observation tier (#239; RM39/AC30)
+
+The ordinary installed-host harness at
+`integrations/openclaw/test/host-ordinary-qualification/qualify.py` now includes
+an opt-in evidence-only loaded-byte experiment (`--observe-loaded-use`, default off).
+Run it with the same disposable Linux
+person-ingress prerequisites and release tarball used by the ordinary host job:
+
+```sh
+PYTHONPATH=src:tests python integrations/openclaw/test/host-ordinary-qualification/qualify.py \
+  --tarball /absolute/path/to/relaymind-provider.tgz \
+  --work-dir /absolute/path/to/new-private-host \
+  --observe-loaded-use \
+  --out /absolute/path/to/ordinary-observation.json
+```
+
+The installed RelayMind provider sends native turns to a real loopback RelayMind
+client-owned chat API. Its deterministic adapter proposes `skills_read` using
+the selected skill's actually advertised name, then returns a fixed fixture
+answer after receiving the native tool-result bytes. The gateway never executes
+the read. The capture retains the native tool result, the receiving HTTP request,
+its Idempotency-Key and X-RelayMind-Run-Id, the provider's independent response-attempt
+records matched one-to-one by key and run ID, the browser `chat.send` acknowledgement
+and terminal event, and the host session key, ID and lifecycle revision.
+Each turn first obtains a native `sessions.messages.subscribe` receipt on that
+browser socket and retains the receipt and socket ID; subscription, send, and terminal
+evidence must share that socket. It uses a separate observer ID to preserve the UI's subscription. The
+predicate recomputes SHA-256 from retained UTF-8 text and joins the native call
+and receiving tool message by their call ID. Catalog text or a final marker alone
+cannot pass. The retained selected SKILL.md text is capped at 256 KiB; each
+request is read incrementally up to 1 MiB. Four requests plus one retained
+overflow are allowed per turn, with a 24-record global ceiling. The observer
+caps each serialized record at 1 MiB and its file at 8 MiB before appending.
+Waits and generations are bounded. These are component retention limits, not
+a size limit on the complete JSON export. Only an unterminated trailing event
+line may be deferred, after one 50 ms re-read; malformed complete records are
+fixed-reason harness failures.
+
+Four isolated cases record a bridge-selected positive turn and native controls:
+a changed library head after selection, an entry removed after selection, and
+`sessions.reset`. Controls use supported native library/session RPCs on the same
+authenticated browser connection; their direct activation is fixture setup, not
+an additional qualified adapter path. The closed `observed` values distinguish
+`loaded_pinned_revision`, `loaded_other_bytes`, `refused`, `not_loaded`, and
+`control_refused`.
+An unfinished capture uses `incomplete` and fails the observation predicate;
+its already received tool/request evidence is retained. A tool-result request
+without its asynchronous native hook stays `incomplete` after the bounded
+catch-up wait; events are filtered by host run so a late prior event cannot
+contaminate the next case. A fixed per-case failure reason preserves the
+failure while later control turns still run. Controls retain the advertised
+revision and can record a different syntactically valid revision as
+`loaded_other_bytes`; only the positive proof requires the selected path.
+A retained old pin is reported as observed even when the library head changed
+or the entry was removed; it is never relabeled a successful rejection control.
+On the pinned 2026.10.7 host `sessions.reset` requires `operator.admin`, which
+the configured person policy does not grant (the native Control UI itself uses
+`sessions.create` without that scope). Only that exact native
+`FORBIDDEN`/`MISSING_SCOPE` refusal, with the session unchanged, is recorded as
+`control_refused`: no turn runs and any turn evidence fails the predicate. It is
+a host outcome, not a rejection RelayMind performed (#255).
+
+`ordinary_skill_loaded_use_pass` and the capture check
+`ordinary_skill_loaded_use_observation` mean that the positive byte round trip
+and control observations are complete. The capture always keeps
+`qualification: unavailable`. This is not `skill_loaded_use` qualification,
+autonomous model compliance, real-model capability, a platform acceptance
+measurement, or full AC30 acceptance. The selection receipt still says
+`instructions: not_observed`, and no production registry operation is enabled.
+A later normative decision about stale/deleted pins and authority at use time
+is still required. Already loaded conversation text cannot be unloaded by this
+harness; each control uses a fresh session. This change supplies tooling and
+unit/transport checks, not a newly measured native-host evidence record.
+
+The ordinary command without `--observe-loaded-use` keeps its existing exit
+criterion: native person composition, `ordinary_actions`, and `ordinary_skill`.
+CI runs that qualification first, then a separate opt-in observation step with
+a six-minute timeout and its own `openclaw-loaded-use-observation-ubuntu`
+artifact. The second step exits nonzero for a harness/fixture failure (including
+missing or inconsistent evidence), never because a complete truthful observation
+is `refused`, `not_loaded`, or `loaded_other_bytes`, including on the positive
+turn. No `continue-on-error` is used. The separate
+`ordinary_skill_observation_complete` check validates the evidence without
+requiring a positive loaded-byte outcome; `ordinary_skill_loaded_use_observation`
+still requires the positive byte round trip. Neither check qualifies loaded use.

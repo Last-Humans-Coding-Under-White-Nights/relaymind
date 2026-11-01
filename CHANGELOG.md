@@ -6,6 +6,62 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Qualification assessment for the section 12.6.5 exports (#240; RM16, RM40,
+  RM42, RM44; AC31, AC33, AC36, AC37): graded host, platform and adaptation
+  results record the claimed label, the tier assessed from the resolved inputs
+  and fixed safe reasons. A provisional, qualified or measured label over
+  fixture inputs is rejected (`qualification_contradiction`), and no
+  unqualified tier passes a gate. The specification defines no reviewed S3
+  qualification record yet, so no report can be assessed qualified.
+  `plan-host` records the preregistered input and freeze digests, and the new
+  `plan-episodes` command verifies frozen episodes and writes their probe plan
+  (#236, #237). No measured or qualified result is claimed.
+- Native loaded-skill observation harness (#239; RM39/AC30): retain native
+  `skills_read` bytes, their receiving gateway request and host/run correlation,
+  with isolated stale/deleted/reset observations over deterministic inference.
+  This is evidence tooling only; loaded-use qualification remains unavailable.
+  Observation now requires `--observe-loaded-use` (default off); the ordinary
+  direct-action/exact-selection exit criterion is unchanged. CI runs a separate
+  six-minute observation step and artifact: only harness/fixture errors fail it,
+  never truthful observation outcomes, without `continue-on-error`. Native
+  records tolerate only a torn trailing line with one bounded re-read; retained
+  pin names, advertised revisions, socket receipts and independent provider/run
+  records are checked, and incomplete hooks cannot label a turn `not_loaded`.
+  Request and content retention limits preserve later control windows.
+- Add a disposable MCP use capability tier (#204; RM39/AC35), raw-evidence
+  accounting tests, bounded sandbox servers and an optional CI capture. Exact
+  use, native approval trials and human acceptance remain blocked/not_run.
+- Harden the MCP capability tier (#204; RM39/AC35): fail CI on harness or
+  discovery errors, bind source/artifact evidence, join real server call/effect
+  records, observe approval identity and resolution, and rescan final captures
+  for secrets. The CI timeout is four minutes; missing run traces and native
+  exact-use receipts still prevent qualification.
+- Fix the MCP capability tier's `tools.effective` projection (#204; RM39/AC35):
+  the pinned host returns grouped entries (`groups[].tools[].id`), so the old
+  flat `payload.tools` projection always recorded an empty list. The probe now
+  records an explicit `listed`/`empty`/`malformed` outcome, the host's MCP
+  server/original mapping and notice IDs, and discovery requires both colliding
+  fixture tools in the session inventory. Earlier captures' empty
+  `tools.effective` lists came from the projection, not the host. The person
+  probe now starts the session's MCP runtime with public `mcp.app.discover`
+  before the read (MCP Apps enabled, the shipped RelayMind model selected, zero
+  heartbeat). A Linux x86-64 VPS run of the CI command (not committed) listed
+  both colliding tools; exact use stays blocked.
+  A refused `chat.send` retains its request window, correlated provider records
+  and native hooks; any such activity fails the case closed
+  (`ordinary_skill_refusal_contradicted`) instead of an activity-free refusal.
+  Provider attempt records are read by their own per-turn window, so a
+  failure before HTTP reached the gateway is retained with its outcome, and an
+  unexplained record fails the case (`ordinary_skill_provider_unexplained`).
+  The turn drains asynchronous hooks until every tool call is resolved
+  (`ordinary_skill_tool_unresolved` otherwise), including after a refused
+  send. The committed VPS2 observation capture predates this change and must
+  be recaptured.
+
+- Operations and platform run kit (#242, toward #241, #235, #234; RM38, RM39, RM44; AC29, AC37):
+  - `scripts/asset_operations_run.py startup` measures ten real `relaymind serve` startups over a generated 300-skill bilingual catalog, using the existing AC29 driver. It waits for recommendations to be ready and samples memory on POSIX and Windows.
+  - `platform` builds an `AssetPlatformReportV1` from install-check and ordinary installed-host records, bound to the companion input manifest. Skill use is never inferred from a selection receipt.
+  - All output is labeled `fixture`.
 - Exact native Skill Library selection through the ordinary installed host
   (#197; RM39, AC30): the qualification saves a skill with
   `skills.library.save`, maps it to the chosen asset, selects it with
@@ -13,7 +69,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   binds skill ID, revision, asset ID, content hash and source version, and
   requires the unmapped-skill, cross-session and own-session foreign-person
   refusals with their exact error codes. Browser failures and the overall
-  deadline remain failures through skill selection.
+  deadline remain failures through skill selection. The listing must show the
+  selection itself: its `session.sessionKey` is the authenticated target
+  session and its `session.selections` are exactly the selected skill at the
+  selected revision, both when the harness captures it and in the predicate,
+  so a no-op or wrong-session activation fails. The committed capture is a
+  recapture with this harness (CI run 41317645014, SHA-256 `3a063ab37411…`),
+  which the registry's evidence revision names.
 
 - CI: the core `check` job runs tests in parallel with pytest-xdist, one file per worker at a time, and caches the Chromium shell per OS and Playwright version. The Windows test step took about 29 minutes in one process. Tests that build real recommendation or native-preparation evidence from timing use fixed clocks or synthetic timestamps, so a loaded runner cannot turn them into a deadline error.
 - CI: the shared asset benchmark fixture uses a deterministic recommendation
@@ -56,6 +118,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Specification 0.64 → 0.65 (#239/#204/#240; RM16/RM34/RM37/RM39/RM40/RM44;
+  AC25/AC28/AC30/AC31/AC35–AC37): defines native skill loaded-byte delivery,
+  immutable-pin versus removal semantics and the later-use authority fence;
+  separates the deterministic-model functional tier from live-model capability
+  and allows a reviewed exact-composition entry only after all controls pass.
+  Defines the conditional direct MCP-use request, exact native binding,
+  lifecycle/approval fences and qualification gates without activating it;
+  automated native UI decisions remain functional evidence, never human approval.
+  Reconciles registration with the existing qualified direct-action exception,
+  places the 512 KiB native request cap in section 14.5, and bounds approval
+  waiting separately from the 60-second preparation/dispatch deadline without
+  changing existing budgets. Clarifies pre-dispatch timeout/cancellation
+  receipts, the native RPC error envelope for pre-admission refusals, and
+  that the outer native request cap applies before the inner create-body cap;
+  both bounds hold. Repairs roadmap links and aligns the bilingual validation
+  notices and historical qualification notes with these unreleased rules.
+  Requires source-bound pinned native host configuration validation with
+  the captured native regex dialect and explicit provider/sampling/budget
+  schema binding.
+  Runtime snapshots and all outstanding acceptance gates remain closed.
 - Specification 0.63 → 0.64 (RM42/RM44; AC33/AC36): names the reset evidence
   document of section 12.6.5 (`reset:<episode_id>`, holding the before/after
   preimages), so adaptation reports can be graded offline end to end.

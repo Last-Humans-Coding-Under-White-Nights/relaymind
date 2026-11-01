@@ -2,6 +2,7 @@
 
 import hashlib
 import importlib.util
+import json
 import threading
 from pathlib import Path
 
@@ -280,7 +281,14 @@ def skill_fixture(api):
             ),
         ),
         library_list=dict(
-            ok=True, payload=dict(entries=[dict(skillId=SKILL_ID, revision=REVISION)])
+            ok=True,
+            payload=dict(
+                entries=[dict(skillId=SKILL_ID, revision=REVISION)],
+                session=dict(
+                    sessionKey=capture["accounts"][0]["session_key"],
+                    selections=[dict(skillId=SKILL_ID, revision=REVISION)],
+                ),
+            ),
         ),
         ui_status="selected",
         negatives=[
@@ -295,6 +303,17 @@ def skill_fixture(api):
 def test_exact_skill_selection_evidence_passes():
     api = module()
     assert api.ordinary_skill_pass(skill_fixture(api))
+
+
+def test_committed_real_skill_capture_passes_the_session_selection_check():
+    """RM16/RM39 AC30: the committed host capture shows the exact revision selected in the
+    authenticated target session, not only listed in the person's library."""
+    api = module()
+    path = ROOT / "docs/evidence/m10/openclaw-native-actions-20261101-skill.json"
+    capture = json.loads(path.read_text(encoding="utf-8"))
+    session = capture["ordinary_skill"]["library_list"]["payload"]["session"]
+    assert session["sessionKey"] == capture["accounts"][0]["session_key"]
+    assert api.ordinary_skill_pass(capture)
 
 
 @pytest.mark.parametrize(
@@ -336,9 +355,21 @@ def test_exact_skill_selection_evidence_passes():
         "mapping_missing_source_version",
         "mapping_other_source_version",
         "library_entry_removed",
+        "list_session_missing",
+        "list_session_null",
+        "list_selections_missing",
+        "list_selections_empty",
+        "list_session_other_key",
+        "list_session_foreign_key",
+        "list_selection_other_revision",
+        "list_selection_other_skill",
+        "list_selection_extra",
+        "list_selection_duplicate",
     ],
 )
 def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
+    """RM16/RM39 AC30: a listing proves selection only when the authenticated target
+    session holds exactly the selected skill at the selected revision."""
     api = module()
     capture = skill_fixture(api)
     value = capture["ordinary_skill"]
@@ -357,6 +388,30 @@ def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
         value["mapping"]["sourceVersion"] = "v2"
     elif change == "library_entry_removed":
         value["library_list"]["payload"]["entries"][0]["removed"] = True
+    elif change.startswith(("list_session_", "list_selection")):
+        session = value["library_list"]["payload"]["session"]
+        if change == "list_session_missing":
+            value["library_list"]["payload"].pop("session")
+        elif change == "list_session_null":
+            value["library_list"]["payload"]["session"] = None
+        elif change == "list_selections_missing":
+            session.pop("selections")
+        elif change == "list_selections_empty":
+            session["selections"] = []
+        elif change == "list_session_other_key":
+            session["sessionKey"] = "agent:main:person-other"
+        elif change == "list_session_foreign_key":
+            session["sessionKey"] = capture["accounts"][1]["session_key"]
+        elif change == "list_selection_other_revision":
+            session["selections"][0]["revision"] = "b" * 64
+        elif change == "list_selection_other_skill":
+            session["selections"][0]["skillId"] = "1b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a"
+        elif change == "list_selection_extra":
+            session["selections"].append(
+                dict(skillId="1b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a", revision="b" * 64)
+            )
+        else:
+            session["selections"].append(dict(session["selections"][0]))
     elif change.startswith("mapping_") and change.endswith("_asset"):
         value["mapping"]["assetId"] = {
             "mapping_empty_asset": "",
@@ -421,27 +476,1057 @@ def test_incomplete_or_contradictory_skill_evidence_cannot_pass(change):
     assert not api.ordinary_skill_pass(capture)
 
 
-def test_the_browser_observer_allows_every_method_the_ordinary_run_calls():
-    """#197: a method missing from the observer allowlist never reaches the host."""
+@pytest.mark.parametrize("observe", [False, True])
+def test_the_browser_observer_allows_every_method_the_ordinary_run_calls(tmp_path, observe):
+    """RM39/AC30 N5: ordinary runs retain the base grants; observation grants are opt-in."""
     import re
 
-    root = Path(__file__).resolve().parents[1] / "integrations/openclaw/test"
-    ordinary = (root / "host-ordinary-qualification/qualify.py").read_text(encoding="utf-8")
-    person = (root / "host-person-qualification/qualify.py").read_text(encoding="utf-8")
-    wire = (root / "host-person-qualification/browser-wire.mjs").read_text(encoding="utf-8")
-    called = set(re.findall(r'rpc\(\s*[^,]+,\s*"([a-z.]+)"', ordinary))
-    assert {
-        "skills.library.save",
-        "skills.library.list",
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    if observe:
+        extension.observation = api.LoadedUseGatewayObservation()
+    person = api.BASE.person_module()
+    plugin = ROOT / "integrations/openclaw/test/host-person-qualification"
+    script = person.socket_observer_script(plugin, extension)
+    requested = re.search(r"installNativeSocketObserver\(window, (\[.*?\])\);", script)
+    import json
+
+    extras = set(json.loads(requested.group(1)))
+    ordinary = {
         "relaymind.recommendations",
         "relaymind.skill",
-    } <= called
-    requested = re.search(r"installNativeSocketObserver\(window, \[(.*?)\]\)", person, re.S)
-    extras = set(re.findall(r'"([a-z.]+)"', requested.group(1)))
-    base = {"rmqualification.person", "sessions.create", "sessions.reset"}
-    assert called <= base | extras
+        "skills.library.save",
+        "skills.library.list",
+    }
+    observation = {
+        "sessions.messages.subscribe",
+        "chat.send",
+        "skills.library.read",
+        "skills.library.mutate",
+        "skills.library.activate",
+    }
+    assert extras == ordinary | (observation if observe else set())
+    assert "installNativeSocketObserver();" in person.socket_observer_script(plugin)
+    source = Path(api.__file__).read_text()
+    called = set(re.findall(r'rpc\(\s*[^,]+,\s*"([a-z.]+)"', source))
+    assert ordinary | observation <= called
+    assert (
+        called
+        <= {"rmqualification.person", "sessions.create", "sessions.reset"} | ordinary | observation
+    )
+    wire = (plugin / "browser-wire.mjs").read_text()
     allowed = re.search(r"some\(method => !\[(.*?)\]\.includes", wire).group(1)
     assert extras <= set(re.findall(r'"([a-z.]+)"', allowed))
+
+
+def loaded_fixture(api):
+    """RM39/AC30: retained byte witnesses, never a producer-supplied pass flag."""
+    import copy
+    import hashlib
+
+    capture = skill_fixture(api)
+    cases = []
+    for index, name in enumerate(("positive", "stale", "deleted", "reset")):
+        scope = dict(
+            sessionKey=f"session-{name}", sessionId=f"session-id-{name}", lifecycleRevision="L0"
+        )
+        if name == "positive":
+            person = capture["ordinary_actions"]["ui_person"]["frame"]["payload"]
+            scope = {
+                field: person[field] for field in ("sessionKey", "sessionId", "lifecycleRevision")
+            }
+        current = dict(scope, lifecycleRevision="L1") if name == "reset" else dict(scope)
+        skill_id = SKILL_ID if index == 0 else f"{index}b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a"
+        selected = dict(
+            skillId=skill_id,
+            revision=REVISION,
+            content=CONTENT,
+            content_sha256=hashlib.sha256(CONTENT.encode()).hexdigest(),
+            name="Hello World",
+            read=dict(
+                ok=True,
+                payload=dict(
+                    entry=dict(skillId=skill_id, revision=REVISION, name="Hello World"),
+                    content=CONTENT,
+                ),
+            ),
+        )
+        run_id, task = f"host-{name}", f"task-{name}"
+        call_id = f"call{name}"
+        request = dict(
+            model="relaymind-client-tools",
+            messages=[
+                dict(
+                    role="system",
+                    content=(
+                        "<available_skills><skill><name>Hello World</name>"
+                        f"<location>/skill-library/{skill_id}/revisions/{REVISION}/SKILL.md"
+                        "</location></skill></available_skills>"
+                    ),
+                ),
+                dict(role="user", content=task),
+            ],
+        )
+        receiving = copy.deepcopy(request)
+        receiving["messages"].extend(
+            [
+                dict(
+                    role="assistant",
+                    content=None,
+                    tool_calls=[
+                        dict(
+                            id=call_id,
+                            type="function",
+                            function=dict(name="skills_read", arguments='{"name":"Hello World"}'),
+                        )
+                    ],
+                ),
+                dict(role="tool", tool_call_id=call_id, content=CONTENT),
+            ]
+        )
+        attempts = [
+            dict(
+                request_id=f"request-{name}-{i}",
+                idempotency_key=f"key-{name}-{i}",
+                body=body,
+                run_id=f"relay-{name}-{i}",
+                status=200,
+            )
+            for i, body in enumerate((request, receiving))
+        ]
+        tool = dict(
+            context=dict(current, runId=run_id, toolCallId=call_id),
+            event=dict(
+                toolName="skills_read",
+                toolCallId=call_id,
+                runId=run_id,
+                params=dict(name="Hello World"),
+                result=dict(content=[dict(type="text", text=CONTENT)]),
+            ),
+        )
+        intervention = None
+        if name == "stale":
+            intervention = dict(
+                method="skills.library.save",
+                params=dict(
+                    skillId=skill_id, expectedRevision=REVISION, content=CONTENT + "\nChanged."
+                ),
+                frame=dict(ok=True, payload=dict(entry=dict(skillId=skill_id, revision="b" * 64))),
+            )
+        elif name == "deleted":
+            intervention = dict(
+                method="skills.library.mutate",
+                params=dict(skillId=skill_id, expectedRevision=REVISION, action="remove"),
+                frame=dict(
+                    ok=True,
+                    payload=dict(
+                        state="removed",
+                        entry=dict(skillId=skill_id, revision=REVISION, removed=True),
+                    ),
+                ),
+            )
+        elif name == "reset":
+            intervention = dict(
+                method="sessions.reset",
+                params=dict(
+                    key=scope["sessionKey"], expectedSessionId=scope["sessionId"], reason="reset"
+                ),
+                frame=dict(
+                    ok=True,
+                    payload=dict(
+                        entry=dict(sessionId=current["sessionId"], lifecycleRevision="L1")
+                    ),
+                ),
+            )
+        cases.append(
+            dict(
+                case=name,
+                task=task,
+                before=scope,
+                current=current,
+                selected=selected,
+                selection=dict(
+                    ok=True,
+                    payload=dict(
+                        skillId=skill_id,
+                        revision=REVISION,
+                        sessionActivation="next-turn",
+                        instructions="not_observed",
+                    ),
+                ),
+                intervention=intervention,
+                chat=dict(
+                    socket_id="socket",
+                    params=dict(
+                        sessionKey=current["sessionKey"], message=task, idempotencyKey=run_id
+                    ),
+                    frame=dict(ok=True, payload=dict(runId=run_id)),
+                ),
+                tools=[tool],
+                requests=attempts,
+                provider_attempts=[
+                    dict(
+                        idempotencyKey=a["idempotency_key"],
+                        runId=a["run_id"],
+                        event="relaymind.inference_attempt",
+                    )
+                    for a in attempts
+                ],
+                advertised_revision=REVISION,
+                failure_reason=None,
+                subscription=dict(
+                    ok=True, subscribed=True, key=current["sessionKey"], socket_id="socket"
+                ),
+                terminal=dict(
+                    socket_id="socket",
+                    runId=run_id,
+                    sessionKey=current["sessionKey"],
+                    state="final",
+                    message=dict(
+                        role="assistant",
+                        content=[dict(type="text", text="Native skill observation complete.")],
+                    ),
+                ),
+                observed="loaded_pinned_revision",
+            )
+        )
+    for case in cases[1:]:
+        case["selection"] = dict(
+            ok=True,
+            payload=dict(
+                sessionKey=case["before"]["sessionKey"],
+                sessionActivation="next-turn",
+                selections=[
+                    dict(skillId=case["selected"]["skillId"], revision=REVISION, name="Hello World")
+                ],
+            ),
+        )
+    capture["ordinary_skill_loaded_use"] = dict(
+        tier="deterministic_native_observation", qualification="unavailable", cases=cases
+    )
+    return capture
+
+
+def test_loaded_byte_round_trip_is_observation_only():
+    """RM39/AC30: even retained stale/deleted pins do not qualify loaded use."""
+    api = module()
+    assert api.ordinary_skill_loaded_use_pass(loaded_fixture(api))
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "ordinary_actions",
+        "ordinary_skill",
+        "ordinary_skill_loaded_use.cases",
+        "ordinary_skill_loaded_use.cases.0.selected.content",
+        "ordinary_skill_loaded_use.cases.0.selected.content_sha256",
+        "ordinary_skill_loaded_use.cases.0.selected.revision",
+        "ordinary_skill_loaded_use.cases.0.selected.read",
+        "ordinary_skill_loaded_use.cases.0.selection",
+        "ordinary_skill_loaded_use.cases.0.before.lifecycleRevision",
+        "ordinary_skill_loaded_use.cases.0.current.sessionId",
+        "ordinary_skill_loaded_use.cases.0.chat",
+        "ordinary_skill_loaded_use.cases.0.tools.0.event.result",
+        "ordinary_skill_loaded_use.cases.0.tools.0.event.params",
+        "ordinary_skill_loaded_use.cases.0.tools.0.context.runId",
+        "ordinary_skill_loaded_use.cases.0.requests.1.run_id",
+        "ordinary_skill_loaded_use.cases.0.requests.1.idempotency_key",
+        "ordinary_skill_loaded_use.cases.0.requests.1.body.messages.3",
+        "ordinary_skill_loaded_use.cases.0.terminal",
+        "ordinary_skill_loaded_use.cases.1.intervention",
+        "ordinary_skill_loaded_use.cases.2.intervention",
+        "ordinary_skill_loaded_use.cases.3.intervention",
+    ],
+)
+def test_loaded_use_missing_proof_fails(path):
+    """RM39/AC30: each independent proof is mandatory."""
+    api = module()
+    capture = loaded_fixture(api)
+    parts = path.split(".")
+    value = capture
+    for part in parts[:-1]:
+        value = value[int(part)] if isinstance(value, list) else value[part]
+    del value[int(parts[-1]) if isinstance(value, list) else parts[-1]]
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "duplicate_case",
+        "duplicate_session",
+        "duplicate_run",
+        "empty_attempts",
+        "no_receiving_request",
+        "catalog_only",
+        "changed_bytes",
+        "changed_digest",
+        "wrong_tool",
+        "wrong_call",
+        "wrong_name",
+        "wrong_session",
+        "wrong_lifecycle",
+        "wrong_host_run",
+        "wrong_terminal",
+        "failed_terminal",
+        "changed_revision",
+        "changed_skill",
+        "false_observation",
+        "qualified",
+        "control_claims_pass",
+        "stale_no_change",
+        "reset_no_change",
+        "failed_intervention",
+        "unrelated_task",
+        "unrelated_proposal",
+    ],
+)
+def test_loaded_use_mutated_proof_fails(change):
+    """RM39/AC30: correlation and actual UTF-8 bytes must survive hostile mutations."""
+    api = module()
+    capture = loaded_fixture(api)
+    value = capture["ordinary_skill_loaded_use"]
+    case = value["cases"][0]
+    if change == "duplicate_case":
+        value["cases"].append(value["cases"][1])
+    elif change == "duplicate_session":
+        value["cases"][1]["before"] = case["before"]
+    elif change == "duplicate_run":
+        value["cases"][1]["requests"][0]["run_id"] = case["requests"][0]["run_id"]
+    elif change == "empty_attempts":
+        case["requests"] = []
+    elif change == "no_receiving_request":
+        case["requests"].pop()
+    elif change == "catalog_only":
+        case["requests"][1]["body"]["messages"][-1]["role"] = "system"
+    elif change == "changed_bytes":
+        case["tools"][0]["event"]["result"]["content"][0]["text"] += " altered"
+    elif change == "changed_digest":
+        case["selected"]["content_sha256"] = "0" * 64
+    elif change == "wrong_tool":
+        case["tools"][0]["event"]["toolName"] = "read"
+    elif change == "wrong_call":
+        case["requests"][1]["body"]["messages"][-1]["tool_call_id"] = "foreign"
+    elif change == "wrong_name":
+        case["tools"][0]["event"]["params"]["name"] = "foreign"
+    elif change == "wrong_session":
+        case["tools"][0]["context"]["sessionKey"] = "foreign"
+    elif change == "wrong_lifecycle":
+        case["current"]["lifecycleRevision"] = "foreign"
+    elif change == "wrong_host_run":
+        case["chat"]["frame"]["payload"]["runId"] = "foreign"
+    elif change == "wrong_terminal":
+        case["terminal"]["runId"] = "foreign"
+    elif change == "failed_terminal":
+        case["terminal"]["state"] = "error"
+    elif change == "changed_revision":
+        case["selected"]["revision"] = "b" * 64
+    elif change == "changed_skill":
+        case["selected"]["skillId"] = "foreign"
+    elif change == "false_observation":
+        case["observed"] = "refused"
+    elif change == "qualified":
+        value["qualification"] = "qualified"
+    elif change == "control_claims_pass":
+        value["cases"][1]["passed"] = True
+    elif change == "stale_no_change":
+        value["cases"][1]["intervention"]["frame"]["payload"]["entry"]["revision"] = REVISION
+    elif change == "reset_no_change":
+        value["cases"][3]["current"]["lifecycleRevision"] = "L0"
+    elif change == "failed_intervention":
+        value["cases"][2]["intervention"]["frame"]["ok"] = False
+    elif change == "unrelated_task":
+        case["requests"][1]["body"]["messages"][1]["content"] = "foreign"
+    elif change == "unrelated_proposal":
+        case["requests"][1]["body"]["messages"][2]["tool_calls"][0]["function"]["name"] = "foreign"
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+@pytest.mark.parametrize("observed", ["not_loaded", "refused"])
+def test_controls_are_observations_without_rejection_requirement(observed):
+    """RM39/AC30: a completed control may refuse or omit loading; neither qualifies it."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][3]
+    case["tools"] = []
+    case["requests"] = case["requests"][:1]
+    case["provider_attempts"] = case["provider_attempts"][:1]
+    case["observed"] = observed
+    if observed == "refused":
+        case["terminal"]["state"] = "error"
+    assert api.ordinary_skill_loaded_use_pass(capture)
+
+
+# The pinned 2026.10.7 refusal of `sessions.reset` for the configured person
+# policy (CI run 41286397320): the method needs operator.admin, which the person
+# policy does not grant; the native Control UI itself falls back to
+# sessions.create without that scope.
+RESET_SCOPE_REFUSAL = dict(
+    type="res",
+    id="reset",
+    ok=False,
+    error=dict(
+        code="FORBIDDEN",
+        message="missing scope: operator.admin",
+        details=dict(
+            code="MISSING_SCOPE",
+            missingScope="operator.admin",
+            requiredScopes=["operator.admin"],
+        ),
+    ),
+)
+
+
+def refused_reset(case):
+    """A reset control the host refused before any turn: no turn evidence at all."""
+    import copy
+
+    case["intervention"]["frame"] = copy.deepcopy(RESET_SCOPE_REFUSAL)
+    case["current"] = dict(case["before"])
+    case.update(
+        chat={},
+        tools=[],
+        requests=[],
+        terminal={},
+        subscription={},
+        provider_attempts=[],
+        advertised_revision=None,
+        observed="control_refused",
+    )
+
+
+@pytest.mark.parametrize("require_positive", [True, False])
+def test_reset_refused_for_person_scope_is_a_complete_observation(require_positive):
+    """RM16/RM39 AC30 (#255): the host's person-scope reset refusal is recorded, not an error."""
+    api = module()
+    capture = loaded_fixture(api)
+    refused_reset(capture["ordinary_skill_loaded_use"]["cases"][3])
+    assert api.ordinary_skill_loaded_use_pass(capture, require_positive=require_positive)
+    assert capture["ordinary_skill_loaded_use"]["qualification"] == "unavailable"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "other_error_code",
+        "other_missing_scope",
+        "extra_detail",
+        "ok_true",
+        "session_changed",
+        "turn_evidence",
+        "tool_evidence",
+        "claims_loaded",
+        "stale_refused",
+        "deleted_refused",
+        "positive_refused",
+    ],
+)
+def test_only_the_exact_reset_scope_refusal_skips_the_turn(change):
+    """RM16/RM39 AC30 (#255): no other refusal, mutation or claim is a refused control."""
+    import copy
+
+    api = module()
+    capture = loaded_fixture(api)
+    cases = capture["ordinary_skill_loaded_use"]["cases"]
+    reset = cases[3]
+    refused_reset(reset)
+    error = reset["intervention"]["frame"]["error"]
+    if change == "other_error_code":
+        error["code"] = "UNAVAILABLE"
+    elif change == "other_missing_scope":
+        error["details"]["missingScope"] = "operator.write"
+    elif change == "extra_detail":
+        error["details"]["granted"] = True
+    elif change == "ok_true":
+        reset["intervention"]["frame"]["ok"] = True
+    elif change == "session_changed":
+        reset["current"]["lifecycleRevision"] = "L1"
+    elif change == "turn_evidence":
+        reset["chat"] = copy.deepcopy(cases[2]["chat"])
+    elif change == "tool_evidence":
+        reset["tools"] = copy.deepcopy(cases[2]["tools"])
+    elif change == "claims_loaded":
+        reset["observed"] = "loaded_pinned_revision"
+    elif change in ("stale_refused", "deleted_refused"):
+        target = cases[1 if change == "stale_refused" else 2]
+        target["intervention"]["frame"] = copy.deepcopy(RESET_SCOPE_REFUSAL)
+        target.update(
+            chat={},
+            tools=[],
+            requests=[],
+            terminal={},
+            subscription={},
+            provider_attempts=[],
+            observed="control_refused",
+        )
+    elif change == "positive_refused":
+        cases[0]["observed"] = "control_refused"
+    assert not api.ordinary_skill_loaded_use_pass(capture, require_positive=False)
+
+
+def test_driver_records_a_person_scope_reset_refusal_without_a_turn(tmp_path, monkeypatch):
+    """RM16/RM39 AC30 (#255): CI run 41286397320 raised here; record the refusal instead."""
+    api = module()
+    capture = loaded_fixture(api)
+    expected = capture["ordinary_skill_loaded_use"]["cases"]
+    refused_reset(expected[3])
+    extension = extension_fixture(api, tmp_path)
+    current = [0]
+    visited = []
+
+    def rpc(page, method, params):
+        if method == "sessions.create":
+            current[0] += 1
+        case = expected[current[0]]
+        selected = case["selected"]
+        if method == "sessions.create":
+            scope = case["before"]
+            return dict(
+                id="create",
+                socket_id="socket",
+                frame=dict(
+                    id="create",
+                    ok=True,
+                    payload=dict(
+                        key=scope["sessionKey"],
+                        sessionId=scope["sessionId"],
+                        entry=dict(lifecycleRevision=scope["lifecycleRevision"]),
+                    ),
+                ),
+            )
+        if method == "rmqualification.person":
+            return dict(frame=dict(ok=True, payload=case["before"]))
+        if method == "skills.library.read":
+            selected["read"]["payload"]["entry"]["slug"] = "fixture"
+            return dict(frame=selected["read"])
+        if method == "skills.library.save" and params["expectedRevision"] is None:
+            return dict(
+                frame=dict(ok=True, payload=dict(entry=selected["read"]["payload"]["entry"]))
+            )
+        if method == "skills.library.list":
+            pin = dict(skillId=selected["skillId"], revision=REVISION, name=selected["name"])
+            return dict(frame=dict(ok=True, payload=dict(session=dict(selections=[pin]))))
+        if method == "skills.library.activate":
+            return dict(frame=case["selection"])
+        return dict(frame=case["intervention"]["frame"])
+
+    def turn(rpc, page, session, case):
+        visited.append(case["case"])
+        case.update(expected[current[0]])
+
+    monkeypatch.setattr(extension, "loaded_use_turn", turn)
+    extension.observe_loaded_use(rpc, None, {}, capture)
+    assert visited == ["positive", "stale", "deleted"]
+    reset = capture["ordinary_skill_loaded_use"]["cases"][3]
+    assert reset["observed"] == "control_refused"
+    assert reset["failure_reason"] is None
+    assert reset["intervention"]["frame"] == RESET_SCOPE_REFUSAL
+    assert reset["chat"] == {} and reset["requests"] == [] and reset["tools"] == []
+    assert api.ordinary_skill_loaded_use_pass(capture)
+
+
+def native_wrapped_task(task):
+    # Real 2026.10.7 webchat shape from the Ubuntu observation capture;
+    # disposable identities replace the original run's metadata.
+    return (
+        "[Sun 2026-11-01 00:21 UTC] Conversation info: ⟦openclaw:ctx⟧\n```json\n"
+        '{"sender":{"id":"disposable-person","name":"account-a"}}\n```\n\n'
+        + task
+        + "\n\nRuntime: agent=main | session=agent:main:person-a | channel=webchat"
+    )
+
+
+@pytest.mark.parametrize("content", ["foreign task", "prefix {task}", "{task} suffix", '"{task}"'])
+def test_observation_rejects_mismatched_task_in_native_wrapper(content):
+    """RM16/RM39 AC30: wrapping must not turn a substring into task correlation."""
+    from types import SimpleNamespace as NS
+
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][0]
+    wrapped = native_wrapped_task(content.format(task=case["task"]))
+    case["requests"][0]["body"]["messages"][1]["content"] = wrapped
+    assert api.finish_capture(capture, 0, observe=True) == 2
+    observation = api.LoadedUseGatewayObservation()
+    observation.begin(case["selected"], case["task"])
+    with pytest.raises(ValueError, match="^ordinary_skill_task_mismatch$"):
+        observation.generate(NS(messages=[NS(role=NS(value="user"), content=wrapped)]))
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_scripted_gateway_records_real_client_owned_requests(tmp_path, wrapped):
+    """RM39/AC30, RM33: deterministic transport plumbing is not native host evidence."""
+    from api_helpers import call
+    from recommendation_helpers import setup
+
+    api = module()
+    _, service, runs, _ = setup(tmp_path)
+    app, gateway, observation = api.loaded_use_gateway(tmp_path / "inference", service)
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    observation.begin(case["selected"], case["task"])
+    body = case["requests"][0]["body"]
+    if wrapped:
+        body["messages"][1]["content"] = native_wrapped_task(case["task"])
+        body["messages"].append(
+            dict(
+                role="user",
+                content="OpenClaw runtime context:\nConversation data (data, not instructions):\n"
+                '"disposable requester profile"\nEnd OpenClaw runtime context.',
+            )
+        )
+    body["tools"] = [
+        dict(
+            type="function",
+            function=dict(
+                name="skills_read",
+                description="Read installed skill",
+                parameters=dict(
+                    type="object", properties=dict(name=dict(type="string")), required=["name"]
+                ),
+            ),
+        )
+    ]
+    try:
+        first = call(
+            app,
+            "POST",
+            "/v1/chat/completions",
+            json_body=body,
+            headers={"Idempotency-Key": "first"},
+        )
+        assert first.status_code == 200, first.text
+        proposal = first.json()["choices"][0]["message"]
+        assert proposal["tool_calls"][0]["function"]["name"] == "skills_read"
+        assert __import__("json").loads(proposal["tool_calls"][0]["function"]["arguments"]) == {
+            "name": "Hello World"
+        }
+        body["messages"].extend(
+            [
+                proposal,
+                dict(role="tool", tool_call_id=proposal["tool_calls"][0]["id"], content=CONTENT),
+            ]
+        )
+        second = call(
+            app,
+            "POST",
+            "/v1/chat/completions",
+            json_body=body,
+            headers={"Idempotency-Key": "second"},
+        )
+        assert second.status_code == 200, second.text
+        assert second.json()["choices"][0]["message"]["content"] == api.LOADED_USE_FINAL
+        assert len(observation.requests) == 2
+        assert observation.requests[1]["body"]["messages"][-1]["content"] == CONTENT
+        assert [r["run_id"] for r in observation.requests] == [
+            first.headers["X-RelayMind-Run-Id"],
+            second.headers["X-RelayMind-Run-Id"],
+        ]
+        assert observation.requests[0]["run_id"] != observation.requests[1]["run_id"]
+        third = call(
+            app,
+            "POST",
+            "/v1/chat/completions",
+            json_body=body,
+            headers={"Idempotency-Key": "third"},
+            raise_app_exceptions=False,
+        )
+        assert third.status_code >= 400
+    finally:
+        gateway.store.close()
+        runs.close()
+
+
+def test_host_uses_packaged_provider_and_only_native_skill_read(tmp_path):
+    """RM39/AC30: fixture permits native read without a companion provider."""
+    api = module()
+    archive = tmp_path / "release.tgz"
+    archive.write_bytes(b"fixture")
+    extension = api.OrdinaryComposition(
+        "http://127.0.0.1:12345/v1",
+        "app",
+        "action",
+        *[threading.Event() for _ in range(3)],
+        archive=archive,
+        runs=None,
+        skill_text=CONTENT,
+        skill_asset={},
+        observation=api.LoadedUseGatewayObservation(),
+    )
+    config = dict(
+        plugins=dict(allow=[], load=dict(paths=[]), entries={}),
+        agents=dict(defaults=dict(workspace=str(tmp_path))),
+        gateway=dict(controlUi={}),
+    )
+    extension.configure(config, tmp_path, "https://fixture.test")
+    assert config["agents"]["defaults"]["model"]["primary"] == "relaymind/relaymind-client-tools"
+    assert config["tools"]["allow"] == ["skills_read"]
+    assert extension.environment()["RELAYMIND_APP_TOKEN"] == "app"
+    assert "hooks" not in config["plugins"]["entries"]["relaymind-ordinary-observer"]
+    assert all(path.name != "probe.test.ts" for path in extension.source_paths())
+
+    assert extension.config["diagnosticsPath"] == str(tmp_path / "provider-attempts.jsonl")
+
+
+def profile_pin_fixture(api):
+    """RM39/AC30: owner-profile listing shape from the 20261101-vps2 capture."""
+    capture = loaded_fixture(api)
+    cases = capture["ordinary_skill_loaded_use"]["cases"]
+    pins = [
+        dict(
+            skillId=case["selected"]["skillId"],
+            revision=case["selected"]["revision"],
+            name=case["selected"]["name"],
+            ownerProfileId="fixture-owner-profile",
+        )
+        for case in cases
+    ]
+    # Native listings retain earlier sessions' pins, including the stale
+    # skill at its new head in the deleted/reset sessions. Preserve order.
+    advanced = dict(pins[1], revision="b" * 64)
+    for case, listing in zip(
+        cases[1:],
+        ([pins[1], pins[0]], [advanced, pins[0], pins[2]], [advanced, pins[0], pins[3]]),
+        strict=True,
+    ):
+        case["selection"]["payload"]["selections"] = listing
+    return capture
+
+
+@pytest.mark.parametrize("case_index", [1, 2, 3])
+@pytest.mark.parametrize(
+    "mutation", [None, "duplicate", "additional_revision", "wrong_revision", "missing"]
+)
+def test_loaded_use_profile_pins_require_one_selected_skill_revision(case_index, mutation):
+    """RM39/AC30: unrelated profile pins never invalidate the exact selected pin."""
+    api = module()
+    capture = profile_pin_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][case_index]
+    pins = case["selection"]["payload"]["selections"]
+    selected = next(pin for pin in pins if pin["skillId"] == case["selected"]["skillId"])
+    if mutation == "duplicate":
+        pins.append(dict(selected))
+    elif mutation == "additional_revision":
+        pins.append(dict(selected, revision="c" * 64))
+    elif mutation == "wrong_revision":
+        selected["revision"] = "c" * 64
+    elif mutation == "missing":
+        pins.remove(selected)
+    assert api.ordinary_skill_loaded_use_pass(capture) is (mutation is None)
+    listed = dict(frame=dict(ok=True, payload=dict(session=dict(selections=pins))))
+    if mutation is None:
+        assert api.selected_pin(listed, case["selected"]) == selected
+    else:
+        with pytest.raises(ValueError, match="^ordinary_skill_control_failed$"):
+            api.selected_pin(listed, case["selected"])
+
+
+def test_profile_pins_reach_the_independent_refused_reset_control(monkeypatch):
+    """RM39/AC30: the vps2 pin listings pass before its refused reset blocks proof."""
+    api = module()
+    capture = profile_pin_fixture(api)
+    reset = capture["ordinary_skill_loaded_use"]["cases"][3]
+    reset["current"] = dict(reset["before"])
+    reset["intervention"]["frame"] = dict(
+        ok=False, error=dict(code="FORBIDDEN", message="missing scope: operator.admin")
+    )
+    observed = []
+    control_observed = api._control_observed
+
+    def record_control(case):
+        result = control_observed(case)
+        observed.append((case["case"], result))
+        return result
+
+    monkeypatch.setattr(api, "_control_observed", record_control)
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+    assert observed == [("positive", True), ("stale", True), ("deleted", True), ("reset", False)]
+
+
+def test_control_native_activation_is_retained_as_native_not_bridge_receipt():
+    """RM39/AC30: direct activation is isolated control setup, never adapter qualification."""
+    api = module()
+    capture = loaded_fixture(api)
+    for case in capture["ordinary_skill_loaded_use"]["cases"][1:]:
+        case["selection"] = dict(
+            ok=True,
+            payload=dict(
+                sessionKey=case["before"]["sessionKey"],
+                sessionActivation="next-turn",
+                selections=[
+                    dict(skillId=case["selected"]["skillId"], revision=REVISION, name="Hello World")
+                ],
+            ),
+        )
+    assert api.ordinary_skill_loaded_use_pass(capture)
+    capture["ordinary_skill_loaded_use"]["cases"][1]["selection"]["payload"]["selections"][0][
+        "revision"
+    ] = "b" * 64
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+@pytest.mark.parametrize("incomplete_request", [False, True])
+def test_native_turn_collects_socket_terminal_tool_hook_and_gateway_window(
+    tmp_path, incomplete_request
+):
+    """RM39/AC30: the turn collector retains boundary observations, not generated tool bytes."""
+    import copy
+    import json
+    from types import SimpleNamespace
+
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    if incomplete_request:
+        case["requests"][0].update(
+            body=None, status=None, run_id=None, failure_reason="invalid_json"
+        )
+        case["requests"][1].pop("status")
+        case["requests"][1].pop("run_id")
+        # The provider records no gateway run for these attempts either.
+        for attempt in case["provider_attempts"]:
+            attempt["runId"] = "unavailable"
+    archive = tmp_path / "release.tgz"
+    archive.write_bytes(b"fixture")
+    extension = api.OrdinaryComposition(
+        "http://127.0.0.1:1/v1",
+        "app",
+        "action",
+        *[threading.Event() for _ in range(3)],
+        archive=archive,
+        runs=None,
+        skill_text=CONTENT,
+        skill_asset={},
+    )
+    extension.event_file = tmp_path / "events.jsonl"
+    extension.event_file.write_text("")
+    extension.provider_attempt_file = tmp_path / "attempts.jsonl"
+    extension.provider_attempt_file.write_text("")
+    records = []
+    extension.observation = SimpleNamespace(requests=records, begin=lambda selected, task: None)
+    terminal = {}
+    calls = []
+
+    def rpc(page, method, params):
+        calls.append((method, params))
+        if method == "sessions.messages.subscribe":
+            return dict(
+                socket_id="socket",
+                frame=dict(ok=True, payload=dict(subscribed=True, key=params["key"])),
+            )
+        if method == "chat.send":
+            assert calls[0][0] == "sessions.messages.subscribe"
+            run_id = params["idempotencyKey"]
+            tool = copy.deepcopy(case["tools"][0])
+            tool["context"]["runId"] = tool["event"]["runId"] = run_id
+            extension.event_file.write_text(
+                json.dumps(dict(kind="native_skill_tool", **tool)) + "\n"
+            )
+            records.extend(copy.deepcopy(case["requests"]))
+            extension.provider_attempt_file.write_text(
+                "".join(json.dumps(a) + "\n" for a in case["provider_attempts"])
+            )
+            terminal.update(case["terminal"], runId=run_id)
+            return dict(socket_id="socket", frame=dict(ok=True, payload=dict(runId=run_id)))
+        assert method == "rmqualification.person"
+        return dict(frame=dict(ok=True, payload=case["current"]))
+
+    page = SimpleNamespace(evaluate=lambda *args: [terminal], wait_for_timeout=lambda ms: None)
+    result = copy.deepcopy(case)
+    result.update(tools=[], requests=[], terminal={}, chat={})
+    params = dict(
+        sessionKey=case["current"]["sessionKey"],
+        expectedSessionId=case["current"]["sessionId"],
+        expectedLifecycleRevision=case["current"]["lifecycleRevision"],
+    )
+    extension.loaded_use_turn(rpc, page, params, result)
+    assert result["observed"] == (
+        "loaded_other_bytes" if incomplete_request else "loaded_pinned_revision"
+    )
+    assert result["tools"][0]["event"]["result"]["content"][0]["text"] == CONTENT
+    assert result["requests"] == records
+    assert [method for method, _ in calls] == [
+        "sessions.messages.subscribe",
+        "chat.send",
+        "rmqualification.person",
+    ]
+
+
+def test_native_turn_wait_is_bounded(tmp_path):
+    """RM39/AC30: an unobserved terminal result cannot become a synthetic success."""
+    from types import SimpleNamespace
+
+    api = module()
+    archive = tmp_path / "release.tgz"
+    archive.write_bytes(b"fixture")
+    extension = api.OrdinaryComposition(
+        "http://127.0.0.1:1/v1",
+        "app",
+        "action",
+        *[threading.Event() for _ in range(3)],
+        archive=archive,
+        runs=None,
+        skill_text=CONTENT,
+        skill_asset={},
+    )
+    extension.event_file = tmp_path / "events.jsonl"
+    extension.event_file.write_text("")
+    extension.observation = SimpleNamespace(requests=[], begin=lambda *args: None)
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    with pytest.raises(ValueError, match="ordinary_skill_turn_timeout"):
+        extension.loaded_use_turn(
+            lambda page, method, params: dict(
+                socket_id="socket",
+                frame=dict(
+                    ok=True,
+                    payload=(
+                        dict(subscribed=True, key=params["key"])
+                        if method == "sessions.messages.subscribe"
+                        else dict(runId=params["idempotencyKey"])
+                    ),
+                ),
+            ),
+            SimpleNamespace(evaluate=lambda *args: []),
+            {},
+            case,
+            timeout=0,
+        )
+
+
+@pytest.mark.parametrize(
+    "change", ["host_run", "session", "call", "missing_result", "missing_receiving", "wrong_role"]
+)
+def test_controls_cannot_relabel_broken_correlation_as_an_observation(change):
+    """RM39/AC30: an observation label never repairs a missing native/request witness."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][1]
+    if change == "host_run":
+        case["tools"][0]["context"]["runId"] = "unrelated"
+    elif change == "session":
+        case["tools"][0]["context"]["sessionId"] = "unrelated"
+    elif change == "call":
+        case["requests"][1]["body"]["messages"][-1]["tool_call_id"] = "unrelated"
+    elif change == "missing_result":
+        case["tools"] = []
+    elif change == "missing_receiving":
+        case["requests"].pop()
+    else:
+        case["requests"][1]["body"]["messages"][-1]["role"] = "system"
+    case["observed"] = "not_loaded" if change == "missing_result" else "loaded_other_bytes"
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+def test_positive_turn_must_belong_to_original_bridge_session():
+    """RM39/AC30: another internally consistent native session is not the selected session."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][0]
+    case["before"]["lifecycleRevision"] = case["current"]["lifecycleRevision"] = "another-life"
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+def test_control_refusal_before_inference_is_observed_without_inventing_a_gateway_request():
+    """RM39/AC30: a native terminal refusal may legitimately precede any model request."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][3]
+    case.update(tools=[], requests=[], provider_attempts=[], observed="refused")
+    case["terminal"]["state"] = "error"
+    assert api.ordinary_skill_loaded_use_pass(capture)
+
+
+def test_timeout_retains_received_gateway_attempts(tmp_path):
+    """RM16/RM39: an incomplete native turn must not discard observed inference."""
+    import json
+    from types import SimpleNamespace
+
+    api = module()
+    archive = tmp_path / "release.tgz"
+    archive.write_bytes(b"fixture")
+    extension = api.OrdinaryComposition(
+        "http://127.0.0.1:1/v1",
+        "app",
+        "action",
+        *[threading.Event() for _ in range(3)],
+        archive=archive,
+        runs=None,
+        skill_text=CONTENT,
+        skill_asset={},
+    )
+    extension.event_file = tmp_path / "events.jsonl"
+    extension.event_file.write_text("")
+    extension.provider_attempt_file = tmp_path / "attempts.jsonl"
+    extension.provider_attempt_file.write_text("")
+    requests = []
+    extension.observation = SimpleNamespace(requests=requests, begin=lambda *args: None)
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    observed_tool = case["tools"][0]
+
+    def send(page, method, params):
+        if method == "sessions.messages.subscribe":
+            return dict(
+                socket_id="socket",
+                frame=dict(ok=True, payload=dict(subscribed=True, key=params["key"])),
+            )
+        observed_tool["context"]["runId"] = observed_tool["event"]["runId"] = params[
+            "idempotencyKey"
+        ]
+        requests.append(dict(request_id="retained-attempt"))
+        extension.event_file.write_text(
+            json.dumps(dict(kind="native_skill_tool", **observed_tool)) + "\n"
+        )
+        return dict(
+            socket_id="socket", frame=dict(ok=True, payload=dict(runId=params["idempotencyKey"]))
+        )
+
+    with pytest.raises(ValueError, match="ordinary_skill_turn_timeout"):
+        extension.loaded_use_turn(
+            send, SimpleNamespace(evaluate=lambda *args: []), {}, case, timeout=0
+        )
+    assert case["requests"] == requests
+    assert case["tools"] == [observed_tool]
+    assert case["observed"] == "incomplete"
+
+
+def test_deleted_control_requires_native_removal_receipt():
+    """RM39/AC30: dispatching remove is not evidence that removal happened."""
+    api = module()
+    capture = loaded_fixture(api)
+    capture["ordinary_skill_loaded_use"]["cases"][2]["intervention"]["frame"]["payload"] = {}
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+def test_native_turn_refuses_to_run_when_session_subscription_is_denied(tmp_path):
+    """RM39/AC30: Control UI session-scoped events need an actual native subscription."""
+    from types import SimpleNamespace
+
+    api = module()
+    archive = tmp_path / "release.tgz"
+    archive.write_bytes(b"fixture")
+    extension = api.OrdinaryComposition(
+        "http://127.0.0.1:1/v1",
+        "app",
+        "action",
+        *[threading.Event() for _ in range(3)],
+        archive=archive,
+        runs=None,
+        skill_text=CONTENT,
+        skill_asset={},
+    )
+    extension.event_file = tmp_path / "events.jsonl"
+    extension.event_file.write_text("")
+    extension.observation = SimpleNamespace(requests=[], begin=lambda *args: None)
+    calls = []
+
+    def denied(page, method, params):
+        calls.append(method)
+        return dict(frame=dict(ok=False, error=dict(code="FORBIDDEN")))
+
+    with pytest.raises(ValueError, match="ordinary_skill_subscription_failed"):
+        extension.loaded_use_turn(
+            denied, None, {}, loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+        )
+    assert calls == ["sessions.messages.subscribe"]
 
 
 FAILURE_STEPS = {
@@ -613,8 +1698,8 @@ def test_library_selection_wait_cannot_swallow_browser_failure(tmp_path, monkeyp
     assert extension.failure_diagnostics()["ordinary_failure_step"] == "select_library_skill"
 
 
-@pytest.mark.parametrize("arrives", [True, False])
-def test_retirement_wait_allows_loaded_runner_but_stays_bounded(tmp_path, monkeypatch, arrives):
+@pytest.mark.parametrize("missing", [None, "fetch_abort", "ui_retirement"])
+def test_retirement_wait_allows_loaded_runner_but_stays_bounded(tmp_path, monkeypatch, missing):
     """RM16/RM39 AC30: delayed original abort evidence passes; absent evidence times out."""
     import json
 
@@ -637,13 +1722,17 @@ def test_retirement_wait_allows_loaded_runner_but_stays_bounded(tmp_path, monkey
 
     def sleep(seconds):
         clock[0] += seconds
-        if arrives and clock[0] >= 4:
+        if missing != "fetch_abort" and clock[0] >= 4:
             extension.event_file.write_text(json.dumps(retirement["fetch_failures"][0]) + "\n")
 
     monkeypatch.setattr(api.time, "sleep", sleep)
-    monkeypatch.setattr(extension, "native_events", lambda: [retirement["ui_retired"]])
+    monkeypatch.setattr(
+        extension,
+        "native_events",
+        lambda: [] if missing == "ui_retirement" else [retirement["ui_retired"]],
+    )
     capture = {"ordinary_actions": {}}
-    if arrives:
+    if missing is None:
         extension.after_retirement(capture)
         assert (
             capture["ordinary_actions"]["retirement"]["fetch_failures"]
@@ -658,6 +1747,95 @@ def test_retirement_wait_allows_loaded_runner_but_stays_bounded(tmp_path, monkey
             "ordinary_failure_step": "retirement_abort",
             "ordinary_error_class": "value_error",
         }
+
+
+@pytest.mark.parametrize("partial", [False, True])
+def test_retirement_holds_backend_until_ui_abort_is_observed(tmp_path, monkeypatch, partial):
+    """RM16/RM39 AC30: the account socket retiring does not retire the UI socket."""
+    import json
+
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    retirement = fixture(api)["ordinary_actions"]["retirement"]
+    extension.work = tmp_path
+    native = tmp_path / "native-events.jsonl"
+    # Run 41284215222 observed prepared + connection_retired for the base
+    # account probe, on a different socket from ordinary_actions.ui_person.
+    base_events = [
+        dict(phase="prepared", requestId="account-probe", connectionId="account-connection"),
+        dict(
+            phase="connection_retired",
+            requestId="account-probe",
+            connectionId="account-connection",
+            connection_aborted=True,
+        ),
+        retirement["ui_guard_events"][0],
+    ]
+    prefix = "".join(json.dumps(event) + "\n" for event in base_events)
+    native.write_text(prefix)
+    extension.event_file = tmp_path / "ordinary-events.jsonl"
+    # Earlier requests must not be attributed to the held request.
+    prior = json.dumps(dict(retirement["fetch_failures"][0], attempt_id="prior")) + "\n"
+    extension.event_file.write_text(prior)
+    extension.retirement_start = len(prior.encode())
+    extension.held_attempt = retirement["attempt"]
+    extension.held_request = "held"
+    extension.ui_guard_request = retirement["ui_guard_request"]
+    extension.ui_person = {
+        "frame": {"payload": {"connectionId": retirement["connection_id"]}},
+        "socket_id": retirement["native_socket_id"],
+    }
+    extension.entered.set()
+    clock = [0.0]
+    monkeypatch.setattr(api.time, "monotonic", lambda: clock[0])
+
+    def sleep(seconds):
+        clock[0] += seconds
+        # Releasing before the UI abort lets HTTP succeed; no later polling
+        # can recover the required http_error for that physical attempt.
+        if extension.release.is_set():
+            event = dict(
+                kind="http", path="/relay/v1/feedback", status=200, attempt_id="physical-1"
+            )
+            extension.event_file.write_text(prior + json.dumps(event) + "\n")
+        elif clock[0] >= 4:
+            line = json.dumps(retirement["fetch_failures"][0]) + "\n"
+            extension.event_file.write_text(
+                prior + (line[:30] if partial and clock[0] < 5 else line)
+            )
+        if clock[0] >= 2:
+            line = json.dumps(retirement["ui_retired"]) + "\n"
+            native.write_text(prefix + (line[:30] if partial and clock[0] < 3 else line))
+
+    monkeypatch.setattr(api.time, "sleep", sleep)
+    capture = {"ordinary_actions": {}}
+    extension.after_retirement(capture)
+    observed = capture["ordinary_actions"]["retirement"]
+    assert observed["fetch_failures"] == retirement["fetch_failures"]
+    assert observed["ui_retired"] == retirement["ui_retired"]
+    assert extension.release.is_set()
+    assert 4 <= clock[0] < 10
+
+
+@pytest.mark.parametrize("released", [True, False])
+def test_backend_hold_covers_sequential_retirement_waits_and_fails_closed(released):
+    """RM16/RM39 AC30: a hold timeout must not turn into a successful HTTP response."""
+    api = module()
+    elapsed = []
+
+    class Release:
+        def wait(self, timeout):
+            # The base socket takes 8s, then the UI socket and fetch take 6s.
+            elapsed.append(min(14, timeout) if released else timeout)
+            return released and timeout >= 14
+
+    if released:
+        api.wait_for_backend_release(Release())
+        assert elapsed == [14]
+    else:
+        with pytest.raises(TimeoutError, match="^ordinary_abort_unobserved$"):
+            api.wait_for_backend_release(Release())
+        assert 20 <= elapsed[0] < 570
 
 
 @pytest.mark.parametrize("stage", ["retirement_prepared", "retirement_attempt"])
@@ -842,7 +2020,13 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
         elif method == "rmqualification.person":
             payload = person
         elif method == "skills.library.list":
-            payload = dict(entries=[dict(skillId=SKILL_ID, revision=REVISION)])
+            payload = dict(
+                entries=[dict(skillId=SKILL_ID, revision=REVISION)],
+                session=dict(
+                    sessionKey=params["sessionKey"],
+                    selections=[dict(skillId=SKILL_ID, revision=REVISION)],
+                ),
+            )
         elif method == "relaymind.skill" and (
             page is pages[1] or params.get("skillId") != SKILL_ID
         ):
@@ -865,6 +2049,515 @@ def test_persons_ready_attributes_failures_at_the_actual_browser_boundary(
         "ordinary_error_class": "other" if stage == "cleanup_deadline" else "playwright_error",
         **({"ordinary_ui_action": "open"} if stage in {"ui_actions", "cleanup_deadline"} else {}),
     }
+
+
+@pytest.mark.parametrize("observe", [False, True])
+@pytest.mark.parametrize("outcome", ["not_loaded", "refused", "loaded_other_bytes"])
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_observation_outcome_does_not_change_ordinary_exit(observe, outcome, wrapped):
+    """RM39/AC30 F2: opt-in observations never change ordinary qualification."""
+    api = module()
+    capture = loaded_fixture(api)
+    if wrapped:
+        for item in capture["ordinary_skill_loaded_use"]["cases"]:
+            for attempt in item["requests"]:
+                attempt["body"]["messages"][1]["content"] = native_wrapped_task(item["task"])
+    case = capture["ordinary_skill_loaded_use"]["cases"][0]
+    case["observed"] = outcome
+    if outcome == "loaded_other_bytes":
+        case["tools"][0]["event"]["result"]["content"][0]["text"] = "other bytes"
+        case["requests"][1]["body"]["messages"][-1]["content"] = "other bytes"
+    else:
+        case["tools"] = []
+        case["requests"] = case["requests"][:1]
+        case["provider_attempts"] = case["provider_attempts"][:1]
+        if outcome == "refused":
+            case["terminal"]["state"] = "error"
+    assert api.finish_capture(capture, 0, observe=observe) == 0
+    assert ("ordinary_skill_loaded_use_observation" in capture["checks"]) is observe
+    assert api.finish_capture(capture, 2, observe=observe) == 2
+
+
+def test_observation_is_opt_in_cli_and_separate_ci_step():
+    """RM39/AC30 F2: ordinary CI retains its criterion; observation has its own artifact."""
+    root = Path(__file__).resolve().parents[1]
+    source = Path(module().__file__).read_text()
+    assert 'parser.add_argument("--observe-loaded-use", action="store_true")' in source
+    ci = (root / ".github/workflows/ci.yml").read_text()
+    assert "--observe-loaded-use" in ci
+    assert "openclaw-loaded-use-observation-ubuntu" in ci
+    assert "continue-on-error" not in ci
+    # The observation and its upload are the final steps of the existing job.
+    observation = ci.index("      - name: Native loaded skill observation")
+    assert observation > ci.index("      - name: Transport, plugin, and artifact tiers")
+    assert observation > ci.index("      - name: Pinned host lifecycle")
+    assert observation > ci.index("          name: openclaw-plugin-${{ matrix.os }}")
+    assert ci[observation:].count("      - ") == 2
+    assert "timeout-minutes: 6" in ci[observation:]
+
+
+@pytest.mark.parametrize("tail", [b'{"kind":', b'{"kind":"late"}'])
+def test_event_reader_rereads_only_unterminated_tail(tmp_path, monkeypatch, tail):
+    """RM39/AC30 F1: one bounded reread completes a concurrent append."""
+    api = module()
+    path = tmp_path / "events"
+    path.write_bytes(b'{"kind":"first"}\n' + tail)
+    waits = []
+
+    def wait(seconds):
+        waits.append(seconds)
+        path.write_bytes(b'{"kind":"first"}\n{"kind":"late"}\n')
+
+    monkeypatch.setattr(api.time, "sleep", wait)
+    assert api.read_observer_events(path) == [dict(kind="first"), dict(kind="late")]
+    assert waits == [0.05]
+
+
+@pytest.mark.parametrize("data", [b"bad\n", b"{}\nbad\n", b"bad\n{", b"\xff\n", b"[]\n"])
+def test_event_reader_refuses_every_malformed_complete_record(tmp_path, data):
+    """RM39/AC30 F1: malformed committed records cannot be skipped."""
+    api = module()
+    path = tmp_path / "events"
+    path.write_bytes(data)
+    with pytest.raises(ValueError, match="^ordinary_skill_native_event_invalid$"):
+        api.read_observer_events(path)
+
+
+def test_event_reader_never_retries_an_unfinished_tail_more_than_once(tmp_path, monkeypatch):
+    """RM39/AC30 F1: a still-torn tail is ignored for this poll only."""
+    api = module()
+    path = tmp_path / "events"
+    path.write_bytes(b'{}\n{"kind":')
+    waits = []
+    monkeypatch.setattr(api.time, "sleep", waits.append)
+    assert api.read_observer_events(path) == [{}]
+    assert waits == [0.05]
+
+
+def test_other_advertised_revision_is_a_correlated_control_observation():
+    """RM39/AC30 F3: a changed head is observed without claiming rejection."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][1]
+    case["advertised_revision"] = "b" * 64
+    for attempt in case["requests"]:
+        attempt["body"]["messages"][0]["content"] = attempt["body"]["messages"][0][
+            "content"
+        ].replace(REVISION, "b" * 64)
+    case["tools"][0]["event"]["result"]["content"][0]["text"] = "new head"
+    case["requests"][1]["body"]["messages"][-1]["content"] = "new head"
+    case["observed"] = "loaded_other_bytes"
+    assert api.ordinary_skill_loaded_use_pass(capture)
+    case["advertised_revision"] = "invalid"
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+def test_swapped_gateway_run_ids_fail_provider_bijection():
+    """RM39/AC30 F4: independently recorded response IDs bind each HTTP attempt."""
+    api = module()
+    capture = loaded_fixture(api)
+    first, second = [c["requests"][0] for c in capture["ordinary_skill_loaded_use"]["cases"][:2]]
+    first["run_id"], second["run_id"] = second["run_id"], first["run_id"]
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+def test_forged_advertised_name_cannot_replace_native_pin_name():
+    """RM39/AC30 F5: consistent advertisement forgery cannot alter native evidence."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][0]
+    case["selected"]["name"] = "forged"
+    case["tools"][0]["event"]["params"]["name"] = "forged"
+    for attempt in case["requests"]:
+        for message in attempt["body"]["messages"]:
+            if message["role"] == "system":
+                message["content"] = message["content"].replace("Hello World", "forged")
+            for call in message.get("tool_calls", []):
+                call["function"]["arguments"] = '{"name":"forged"}'
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+@pytest.mark.parametrize("field", ["subscription", "chat", "terminal"])
+def test_turn_socket_provenance_cannot_be_swapped(field):
+    """RM39/AC30 F7: subscribe, send, and terminal share the native socket."""
+    api = module()
+    capture = loaded_fixture(api)
+    capture["ordinary_skill_loaded_use"]["cases"][0][field]["socket_id"] = "foreign"
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+def test_observation_failure_reasons_are_closed(tmp_path):
+    """RM39/AC30 F10: harness failures retain useful fixed safe reasons."""
+    api = module()
+    assert {
+        "ordinary_skill_generation_bound",
+        "ordinary_skill_task_mismatch",
+        "ordinary_skill_native_event_invalid",
+    } <= extension_fixture(api, tmp_path).failure_reasons()
+
+
+def turn_fixture(api, tmp_path, monkeypatch, *, deliver):
+    """Drive the real collector around a terminal and asynchronous native hook."""
+    import copy
+    import json
+    from types import SimpleNamespace
+
+    extension = extension_fixture(api, tmp_path)
+    extension.event_file = tmp_path / "events.jsonl"
+    extension.event_file.write_text("")
+    extension.provider_attempt_file = tmp_path / "attempts.jsonl"
+    extension.provider_attempt_file.write_text("")
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    expected = copy.deepcopy(case)
+    observation = api.LoadedUseGatewayObservation()
+    extension.observation = observation
+    clock = [0.0]
+    monkeypatch.setattr(api.time, "monotonic", lambda: clock[0])
+
+    def rpc(page, method, params):
+        if method == "sessions.messages.subscribe":
+            return dict(
+                socket_id="socket",
+                frame=dict(ok=True, payload=dict(subscribed=True, key=params["key"])),
+            )
+        if method == "rmqualification.person":
+            return dict(frame=dict(ok=True, payload=case["current"]))
+        host_id = params["idempotencyKey"]
+        expected["terminal"]["runId"] = host_id
+        expected["tools"][0]["event"]["runId"] = host_id
+        expected["tools"][0]["context"]["runId"] = host_id
+        observation.requests.extend(expected["requests"])
+        extension.provider_attempt_file.write_text(
+            "".join(json.dumps(a) + "\n" for a in expected["provider_attempts"])
+        )
+        foreign = copy.deepcopy(expected["tools"][0])
+        foreign["context"]["runId"] = "previous-case"
+        events = [dict(kind="native_skill_tool", **foreign)]
+        if deliver:
+            events.append(dict(kind="native_skill_tool", **expected["tools"][0]))
+        extension.event_file.write_text("".join(json.dumps(e) + "\n" for e in events))
+        return dict(socket_id="socket", frame=dict(ok=True, payload=dict(runId=host_id)))
+
+    def wait(ms):
+        clock[0] += ms / 1000
+
+    page = SimpleNamespace(evaluate=lambda *a: [expected["terminal"]], wait_for_timeout=wait)
+    return extension, case, rpc, page, expected
+
+
+def test_missing_async_hook_stays_incomplete_and_preserves_requests(tmp_path, monkeypatch):
+    """RM39/AC30 F6: a missing hook is not a truthful not_loaded control."""
+    api = module()
+    extension, case, rpc, page, _ = turn_fixture(api, tmp_path, monkeypatch, deliver=False)
+    with pytest.raises(ValueError, match="^ordinary_skill_tool_unresolved$"):
+        extension.loaded_use_turn(rpc, page, {}, case)
+    assert case["observed"] == "incomplete"
+    assert len(case["requests"]) == 2
+    assert case["tools"] == []
+
+
+def test_late_foreign_hook_does_not_poison_next_case(tmp_path, monkeypatch):
+    """RM39/AC30 F6/F7: collect by host run and retain socket receipts."""
+    api = module()
+    extension, case, rpc, page, expected = turn_fixture(api, tmp_path, monkeypatch, deliver=True)
+    extension.loaded_use_turn(rpc, page, {}, case)
+    assert case["tools"] == expected["tools"]
+    assert case["subscription"] == expected["subscription"]
+    assert case["provider_attempts"] == expected["provider_attempts"]
+    assert case["observed"] == "loaded_pinned_revision"
+
+
+def refusing_turn(rpc, activity):
+    """A chat.send refusal after the host may already have dispatched part of the turn."""
+
+    def send(page, method, params):
+        if method != "chat.send" or activity:
+            reply = rpc(page, method, params)
+        if method != "chat.send":
+            return reply
+        return dict(
+            socket_id="socket",
+            frame=dict(ok=False, error=dict(code="UNAVAILABLE", message="refused")),
+        )
+
+    return send
+
+
+@pytest.mark.parametrize("activity", ["request", "tool", "all"])
+def test_refused_send_retains_and_rejects_partial_dispatch(tmp_path, monkeypatch, activity):
+    """RM16/RM39/AC30: a refused chat.send never discards activity the host already began.
+
+    Requests in the window, provider records correlated by request keys and
+    native hooks of the submitted idempotency key are retained; any of them
+    contradicts the refusal, so the case fails closed and the observation
+    capture exits non-zero.
+    """
+    import json
+
+    api = module()
+    extension, case, rpc, page, expected = turn_fixture(api, tmp_path, monkeypatch, deliver=True)
+
+    def dispatched(page, method, params):
+        reply = rpc(page, method, params)
+        if method == "chat.send" and activity == "request":
+            extension.event_file.write_text("")
+            extension.provider_attempt_file.write_text("")
+            del extension.observation.requests[1:]
+        elif method == "chat.send" and activity == "tool":
+            extension.provider_attempt_file.write_text("")
+            extension.observation.requests.clear()
+        return reply
+
+    with pytest.raises(ValueError, match="^ordinary_skill_refusal_contradicted$"):
+        extension.loaded_use_turn(refusing_turn(dispatched, True), page, {}, case)
+    assert case["observed"] == "incomplete"
+    if activity == "request":
+        assert case["requests"] == expected["requests"][:1]
+        assert case["tools"] == []
+        assert case["provider_attempts"] == []
+    elif activity == "tool":
+        assert case["requests"] == []
+        assert case["tools"] == expected["tools"]
+    else:
+        assert case["requests"] == expected["requests"]
+        assert case["tools"] == expected["tools"]
+        assert case["provider_attempts"] == expected["provider_attempts"]
+    assert "ordinary_skill_refusal_contradicted" in extension.failure_reasons()
+    # The step failure is recorded as observe_loaded_use records it.
+    case["failure_reason"] = "ordinary_skill_refusal_contradicted"
+    capture = loaded_fixture(api)
+    capture["ordinary_skill_loaded_use"]["cases"][0] = json.loads(json.dumps(case))
+    assert api.finish_capture(capture, 0, observe=True) == 2
+    assert capture["checks"]["ordinary_skill_observation_complete"] is False
+    # Even without the step failure, retained activity contradicts a refusal.
+    capture["ordinary_skill_loaded_use"]["cases"][0].update(failure_reason=None, observed="refused")
+    assert api.finish_capture(capture, 0, observe=True) == 2
+
+
+def test_activity_free_refused_send_remains_a_complete_observation(tmp_path, monkeypatch):
+    """RM16/RM39/AC30: a genuine refusal with no dispatched activity stays observed."""
+    api = module()
+    extension, case, rpc, page, _ = turn_fixture(api, tmp_path, monkeypatch, deliver=True)
+    extension.loaded_use_turn(refusing_turn(rpc, False), page, {}, case)
+    assert case["observed"] == "refused"
+    assert case["requests"] == case["tools"] == case["provider_attempts"] == []
+    assert case["terminal"] == {}
+    capture = loaded_fixture(api)
+    capture["ordinary_skill_loaded_use"]["cases"][0] = case
+    assert api.finish_capture(capture, 0, observe=True) == 0
+    assert capture["checks"]["ordinary_skill_observation_complete"] is True
+    assert capture["checks"]["ordinary_skill_loaded_use_observation"] is False
+
+
+def test_one_turn_request_overflow_does_not_starve_later_controls(tmp_path):
+    """RM39/AC30 F9: each turn gets a fresh bounded HTTP window."""
+    from api_helpers import call
+    from recommendation_helpers import setup
+
+    api = module()
+    _, service, runs, _ = setup(tmp_path)
+    app, gateway, observation = api.loaded_use_gateway(tmp_path / "inference", service)
+    try:
+        for case in loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"]:
+            observation.begin(case["selected"], case["task"])
+            for i in range(5):
+                response = call(
+                    app,
+                    "POST",
+                    "/v1/chat/completions",
+                    json_body=case["requests"][0]["body"],
+                    headers={"Idempotency-Key": case["case"]},
+                    raise_app_exceptions=False,
+                )
+                assert response.status_code == (429 if i == 4 else 200)
+            assert observation.requests[-1]["status"] == 429
+    finally:
+        gateway.store.close()
+        runs.close()
+
+
+def test_scripted_model_does_not_write_native_selected_evidence():
+    """RM39/AC30 F5: the model may propose an advertised name, never rewrite the pin."""
+    import copy
+    from types import SimpleNamespace as NS
+
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    before = copy.deepcopy(case["selected"])
+    observation = api.LoadedUseGatewayObservation()
+    observation.begin(case["selected"], case["task"])
+    messages = [
+        NS(role=NS(value=m["role"]), content=m["content"].replace("Hello World", "advertised"))
+        for m in case["requests"][0]["body"]["messages"]
+    ]
+    observation.generate(NS(messages=messages, tool_schemas=[NS(name="skills_read")]))
+    assert case["selected"] == before
+
+
+def test_observation_fixture_error_is_not_silenced():
+    """RM39/AC30 F2: separate CI fails a broken harness, never a truthful outcome."""
+    api = module()
+    capture = loaded_fixture(api)
+    capture["ordinary_skill_loaded_use"]["cases"][1]["tools"] = []
+    assert api.finish_capture(capture, 0, observe=True) == 2
+
+
+def test_native_content_retention_is_bounded():
+    """RM39/AC30 F11: retain at most the bounded native SKILL.md text."""
+    api = module()
+    assert api.bounded_skill_content("中文") == "中文"
+    with pytest.raises(ValueError, match="^ordinary_skill_read_failed$"):
+        api.bounded_skill_content("中" * (256 * 1024))
+
+
+@pytest.mark.parametrize("pins", [[], [dict(skillId=SKILL_ID, revision="b" * 64, name="other")]])
+def test_missing_native_pin_has_a_fixed_control_failure(pins):
+    """RM39/AC30 F10: absent pinned revision never leaks StopIteration."""
+    api = module()
+    with pytest.raises(ValueError, match="^ordinary_skill_control_failed$"):
+        api.selected_pin(
+            dict(frame=dict(ok=True, payload=dict(session=dict(selections=pins)))),
+            dict(skillId=SKILL_ID, revision=REVISION),
+        )
+
+
+@pytest.mark.parametrize("failure", [None, "ordinary_skill_turn_timeout", "not_text_content"])
+@pytest.mark.parametrize(
+    "reset_failure",
+    [
+        None,
+        "missing_frame",
+        "missing_entry",
+        "invalid_entry",
+        "person_refused",
+        "person_payload",
+        "person_scope",
+    ],
+)
+def test_observation_saves_controls_after_a_completed_or_incomplete_turn(
+    tmp_path, monkeypatch, failure, reset_failure
+):
+    """RM39/AC30: the real save helper must reach controls after the captured positive turn."""
+    api = module()
+    capture = loaded_fixture(api)
+    expected = capture["ordinary_skill_loaded_use"]["cases"]
+    extension = extension_fixture(api, tmp_path)
+    current = [0]
+    visited = []
+
+    def rpc(page, method, params):
+        if method == "sessions.create":
+            current[0] += 1
+        case = expected[current[0]]
+        selected = case["selected"]
+        if method == "sessions.create":
+            scope = case["before"]
+            return dict(
+                id="create",
+                socket_id="socket",
+                frame=dict(
+                    id="create",
+                    ok=True,
+                    payload=dict(
+                        key=scope["sessionKey"],
+                        sessionId=scope["sessionId"],
+                        entry=dict(lifecycleRevision=scope["lifecycleRevision"]),
+                    ),
+                ),
+            )
+        if method == "rmqualification.person":
+            scope = (
+                case["current"]
+                if "expectedLifecycleRevision" in params
+                and params["expectedLifecycleRevision"] == "L1"
+                else case["before"]
+            )
+            if case["case"] == "reset" and scope is case["current"]:
+                if reset_failure == "person_refused":
+                    return dict(frame=dict(ok=False))
+                if reset_failure == "person_payload":
+                    return dict(frame=dict(ok=True, payload=None))
+                if reset_failure == "person_scope":
+                    return dict(frame=dict(ok=True, payload={}))
+            return dict(frame=dict(ok=True, payload=scope))
+        if method == "skills.library.read":
+            selected["read"]["payload"]["entry"]["slug"] = "fixture"
+            return dict(frame=selected["read"])
+        if method == "skills.library.save" and params["expectedRevision"] is None:
+            return dict(
+                frame=dict(ok=True, payload=dict(entry=selected["read"]["payload"]["entry"]))
+            )
+        if method == "skills.library.list":
+            return dict(
+                frame=dict(
+                    ok=True,
+                    payload=dict(
+                        session=dict(
+                            selections=[
+                                dict(
+                                    skillId=selected["skillId"],
+                                    revision=REVISION,
+                                    name=selected["name"],
+                                )
+                            ]
+                        )
+                    ),
+                )
+            )
+        if method == "skills.library.activate":
+            return dict(frame=case["selection"])
+        if method == "sessions.reset":
+            if reset_failure == "missing_frame":
+                return {}
+            if reset_failure == "missing_entry":
+                return dict(frame=dict(ok=True, payload={}))
+            if reset_failure == "invalid_entry":
+                return dict(frame=dict(ok=True, payload=dict(entry=[])))
+        return dict(frame=case["intervention"]["frame"])
+
+    def turn(rpc, page, session, case):
+        visited.append(case["case"])
+        if failure is None:
+            # CI run 41283633023 retained this completed positive case before
+            # the first control's save failed; keep that capture shape.
+            case.update(expected[current[0]])
+            return
+        case["requests"] = [dict(status=429)]
+        if case["case"] == "positive":
+            if failure == "not_text_content":
+                malformed = expected[0]
+                malformed["tools"][0]["event"]["result"]["content"] = [{"type": "image"}]
+                api.loaded_use_observation(malformed)
+            raise ValueError(failure)
+
+    monkeypatch.setattr(extension, "loaded_use_turn", turn)
+    if reset_failure is not None:
+        with pytest.raises(ValueError, match="^ordinary_skill_control_failed$"):
+            extension.observe_loaded_use(rpc, None, {}, capture)
+        assert visited == ["positive", "stale", "deleted"]
+        return
+    extension.observe_loaded_use(rpc, None, {}, capture)
+    assert visited == ["positive", "stale", "deleted", "reset"]
+    assert extension.failure_diagnostics() == {}
+    if failure is None:
+        assert (
+            capture["ordinary_skill_loaded_use"]["cases"][0]["observed"] == "loaded_pinned_revision"
+        )
+        assert api.ordinary_skill_loaded_use_pass(capture)
+        return
+    partial = capture["ordinary_skill_loaded_use"]["cases"][0]
+    assert partial["observed"] == "incomplete"
+    assert partial["failure_reason"] == failure
+    assert partial["requests"] == [dict(status=429)]
+
+
+def test_task_substring_does_not_bind_a_different_native_user_message():
+    """RM39/AC30: a quoted or embedded task is not the dispatched task identity."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][0]
+    case["requests"][0]["body"]["messages"][1]["content"] = "Quoted task: " + case["task"]
+    assert not api.ordinary_skill_loaded_use_pass(capture)
 
 
 def test_backend_observation_times_out_while_a_real_transaction_owns_the_lock(
@@ -1101,6 +2794,219 @@ def test_real_dom_run_ui_accepts_the_native_reset_dialog():
             browser.close()
 
 
+def test_flag_off_host_configuration_matches_base_harness(tmp_path):
+    """RM39/AC30 N1: exact base b175f31 config, operator config, and environment."""
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    config = dict(
+        plugins=dict(allow=[], load=dict(paths=[]), entries={}),
+        agents=dict(defaults=dict(workspace=str(tmp_path))),
+        gateway=dict(controlUi={}),
+    )
+    extension.configure(config, tmp_path, "https://fixture.test")
+    # Captured from the base harness before loaded-use observation was added.
+    assert config == {
+        "agents": {"defaults": {"workspace": str(tmp_path)}},
+        "gateway": {"controlUi": {"experimental": {"customPlugins": True}}},
+        "plugins": {
+            "allow": ["relaymind-ordinary-observer"],
+            "load": {
+                "paths": [
+                    str(ROOT / "integrations/openclaw/test/host-ordinary-qualification/observer")
+                ]
+            },
+            "entries": {
+                "relaymind-ordinary-observer": {
+                    "enabled": True,
+                    "config": {"eventFile": str(tmp_path / "action-events.jsonl")},
+                }
+            },
+        },
+    }
+    assert extension.config == {
+        "baseUrl": "http://127.0.0.1:12345/v1",
+        "recommendations": {
+            "controlUiOrigin": "https://fixture.test",
+            "applicationTokenEnv": "RM_QUALIFICATION_APP_TOKEN",
+            "bindings": [],
+        },
+    }
+    assert extension.environment() == {
+        "RM_QUALIFICATION_APP_TOKEN": "app",
+        "RM_QUALIFICATION_ACTION_TOKEN": "action",
+    }
+    assert not (tmp_path / "provider-attempts.jsonl").exists()
+
+
+@pytest.mark.parametrize("observe", [False, True])
+def test_main_only_replaces_base_gateway_when_observation_is_requested(
+    tmp_path, monkeypatch, observe
+):
+    """RM39/AC30 N1: flag-off serves the exact recommendation-only base app."""
+    import json
+
+    import api_helpers
+    import recommendation_helpers
+
+    api = module()
+    setup = recommendation_helpers.setup
+    base_apps = []
+    tokens = []
+    random_token = api.secrets.token_urlsafe
+    generated = []
+
+    def token_urlsafe(size):
+        token = random_token(size)
+        generated.append((size, token))
+        return token
+
+    monkeypatch.setattr(api.secrets, "token_urlsafe", token_urlsafe)
+
+    def base_setup(*args, **kwargs):
+        result = setup(*args, **kwargs)
+        base_apps.append(result[0])
+        return result
+
+    monkeypatch.setattr(recommendation_helpers, "setup", base_setup)
+
+    served = []
+
+    class Server:
+        base_url = "http://127.0.0.1:12345"
+
+        def __init__(self, app):
+            served.append(app)
+            assert (app is base_apps[-1]) is (not observe)
+            assert (
+                any(getattr(route, "path", None) == "/v1/chat/completions" for route in app.routes)
+                is observe
+            )
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(api_helpers, "RunningServer", Server)
+    person = api.BASE.person_module()
+
+    def run(work, out, *, extension):
+        assert (extension.observation is not None) is observe
+        tokens.append(extension.application_token)
+        assert extension.application_token != "a" * 40
+        if observe:
+            # The served app must accept exactly the token the plugin is given.
+            from fastapi.testclient import TestClient
+
+            client = TestClient(served[-1])
+            good = {"Authorization": "Bearer " + extension.application_token}
+            assert client.get("/v1/models", headers=good).status_code == 200
+            bad = {"Authorization": "Bearer " + "b" * 40}
+            assert client.get("/v1/models", headers=bad).status_code == 401
+        else:
+            assert (48, extension.application_token) in generated
+        out.write_text(json.dumps(loaded_fixture(api)))
+        return 0
+
+    monkeypatch.setattr(person, "run_qualification", run)
+    monkeypatch.setattr(api.BASE, "person_module", lambda: person)
+    archive = tmp_path / "release.tgz"
+    archive.write_bytes(b"fixture")
+    for index in range(2):
+        assert (
+            api.main(
+                [
+                    "--tarball",
+                    str(archive),
+                    "--work-dir",
+                    str(tmp_path / f"host-{index}"),
+                    "--out",
+                    str(tmp_path / "capture.json"),
+                ]
+                + (["--observe-loaded-use"] if observe else [])
+            )
+            == 0
+        )
+
+    assert len(set(tokens)) == 2
+
+
+def test_observer_source_inventory_includes_runtime_package_metadata(tmp_path):
+    """RM39/AC30 N3: changing the host entry resolver must change source provenance."""
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    observer = Path(api.__file__).parent / "observer"
+    assert {p.name for p in extension.source_paths() if p.parent == observer} == {
+        "probe.mjs",
+        "openclaw.plugin.json",
+        "package.json",
+    }
+
+
+@pytest.mark.parametrize("tail_length", [8, 11, 17])
+def test_observer_window_resumes_from_consumed_bytes_after_torn_tail(
+    tmp_path, monkeypatch, tail_length
+):
+    """RM39/AC30 N2: deferred tails cannot move a later window into the middle of JSON."""
+    api = module()
+    path = tmp_path / "events.jsonl"
+    complete = '{"kind":"已读"}\n'.encode()
+    pending = '{"kind":"后来"}\n'.encode()
+    path.write_bytes(complete + pending[:tail_length])
+    monkeypatch.setattr(api.time, "sleep", lambda _: None)
+    events, offset = api.read_observer_events(path, with_offset=True)
+    assert events == [{"kind": "已读"}]
+    assert offset == len(complete)
+    with path.open("ab") as writer:
+        writer.write(pending[tail_length:] + b'{"kind":"next"}\n')
+    events, end = api.read_observer_events(path, offset, with_offset=True)
+    assert events == [{"kind": "后来"}, {"kind": "next"}]
+    assert end == path.stat().st_size
+    assert api.read_observer_events(path, end) == []
+
+
+def test_retirement_window_keeps_deferred_tail_at_record_boundary(tmp_path, monkeypatch):
+    """RM39/AC30 N2: the actual retirement window never starts inside a deferred record."""
+    import json
+
+    api = module()
+    extension = extension_fixture(api, tmp_path)
+    extension.event_file = tmp_path / "events.jsonl"
+    complete = b'{"kind":"earlier"}\n'
+    extension.event_file.write_bytes(complete + b'{"kind":"deferred"')
+    monkeypatch.setattr(api.time, "sleep", lambda _: None)
+    monkeypatch.setattr(
+        extension, "native_events", lambda: [{"requestId": "guard", "phase": "prepared"}]
+    )
+
+    class Page:
+        def evaluate(self, expression, params):
+            return "guard" if "rmqualification.person" in expression else "action"
+
+    class Entered:
+        def wait(self, timeout):
+            with extension.event_file.open("ab") as writer:
+                writer.write(
+                    b"}\n"
+                    + json.dumps(
+                        {
+                            "kind": "http_attempt",
+                            "path": "/relay/v1/feedback",
+                            "attempt_id": "original",
+                        }
+                    ).encode()
+                    + b"\n"
+                )
+            return True
+
+    extension.ui_page = Page()
+    extension.entered = Entered()
+    extension.before_retirement(Page(), {})
+    assert extension.retirement_start == len(complete)
+    assert extension.held_attempt["attempt_id"] == "original"
+
+
 class SelectionPage:
     """No browser process is needed to exercise the harness's RPC decisions."""
 
@@ -1133,6 +3039,7 @@ def selection_fixture(api, tmp_path, monkeypatch):
         dict(sessionKey="person-a", expectedSessionId="id-a", expectedLifecycleRevision="rev-a"),
         dict(sessionKey="person-b", expectedSessionId="id-b", expectedLifecycleRevision="rev-b"),
     ]
+    capture["ordinary_skill"]["library_list"]["payload"]["session"]["sessionKey"] = "person-a"
     return extension, capture["ordinary_skill"], pages, sessions
 
 
@@ -1152,30 +3059,53 @@ def test_library_selection_stops_after_primary_rpc_refusal(tmp_path, monkeypatch
     assert skill["receipt"]["ok"] is False
 
 
-@pytest.mark.parametrize("listing", ["failed", "empty", "other_revision", "removed", "saved"])
+@pytest.mark.parametrize(
+    "listing",
+    [
+        "failed",
+        "empty",
+        "other_revision",
+        "removed",
+        "no_session",
+        "no_selection",
+        "other_session",
+        "selection_other_revision",
+        "selection_other_skill",
+        "saved",
+    ],
+)
 def test_library_selection_requires_the_saved_revision_in_listing(tmp_path, monkeypatch, listing):
-    """RM16/RM39 AC30: record selection only with a successful exact native listing."""
+    """RM16/RM39 AC30: record selection only with a successful exact native listing whose
+    authenticated target session holds exactly the selected skill at the selected revision."""
     api = module()
     extension, skill, pages, sessions = selection_fixture(api, tmp_path, monkeypatch)
 
     def rpc(page, method, params):
         if method == "skills.library.list":
-            return dict(
-                frame=dict(
-                    ok=listing != "failed",
-                    payload=dict(
-                        entries=[]
-                        if listing == "empty"
-                        else [
-                            dict(
-                                skillId=SKILL_ID,
-                                revision="b" * 64 if listing == "other_revision" else REVISION,
-                                removed=listing == "removed",
-                            )
-                        ]
-                    ),
-                )
+            selection = dict(
+                skillId="1b6b8e2a-3a1f-4c2e-9d7b-1f2e3d4c5b6a"
+                if listing == "selection_other_skill"
+                else SKILL_ID,
+                revision="b" * 64 if listing == "selection_other_revision" else REVISION,
             )
+            payload = dict(
+                entries=[]
+                if listing == "empty"
+                else [
+                    dict(
+                        skillId=SKILL_ID,
+                        revision="b" * 64 if listing == "other_revision" else REVISION,
+                        removed=listing == "removed",
+                    )
+                ],
+                session=dict(
+                    sessionKey="person-b" if listing == "other_session" else params["sessionKey"],
+                    selections=[] if listing == "no_selection" else [selection],
+                ),
+            )
+            if listing == "no_session":
+                payload.pop("session")
+            return dict(frame=dict(ok=listing != "failed", payload=payload))
         if page is pages[1] or params.get("skillId") != SKILL_ID:
             return dict(frame=dict(ok=False, error=dict(code="INVALID_REQUEST")))
         return dict(frame=dict(ok=True, payload=skill["receipt"]["payload"]))
@@ -1249,3 +3179,705 @@ def test_skill_evidence_requires_foreign_person_own_session_refusal():
         if item["case"] != "foreign_person_own_session"
     ]
     assert not api.ordinary_skill_pass(capture)
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        (("tools", 0, "event", "result"), None),
+        (("tools", 0, "event", "result"), {}),
+        (("tools", 0, "event", "result", "content"), None),
+        (("tools", 0, "event", "result", "content"), [{"type": "image"}]),
+        (("requests", 1, "body", "messages", 3), {"role": "tool"}),
+        (("requests", 1, "body", "messages", 2, "tool_calls", 0), {}),
+        (("requests", 1, "body", "messages", 2, "tool_calls", 0, "function"), None),
+        (("requests", 1, "body", "messages", 2, "tool_calls", 0, "function", "arguments"), "{"),
+        (("requests", 1, "body", "messages", 2, "tool_calls", 0, "function", "arguments"), []),
+        (("requests", 0, "body"), {}),
+        (("requests", 0, "body", "messages"), None),
+        (("tools", 0, "context"), []),
+    ],
+)
+def test_loaded_round_trip_rejects_malformed_wire_shapes(path, value):
+    """RM39/AC30: incomplete native evidence must fail closed during collection."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    target = case
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    assert api._loaded_round_trip(case) is False
+    assert api.loaded_use_observation(case) in {"loaded_other_bytes", "not_loaded"}
+
+
+@pytest.mark.parametrize("name", ["stale", "deleted", "reset"])
+@pytest.mark.parametrize(
+    "frame",
+    [
+        {},
+        None,
+        [],
+        {"ok": True},
+        {"ok": True, "payload": None},
+        {"ok": True, "payload": []},
+        {"ok": True, "payload": {}},
+        {"ok": True, "payload": {"entry": None}},
+        {"ok": True, "payload": {"entry": {"revision": None}}},
+    ],
+)
+def test_control_observation_rejects_malformed_receipts(name, frame):
+    """RM39/AC30: malformed native control receipts cannot crash the collector."""
+    api = module()
+    case = next(
+        c for c in loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"] if c["case"] == name
+    )
+    case["intervention"]["frame"] = frame
+    assert api._control_observed(case) is False
+
+
+@pytest.mark.parametrize("content", [None, [], [{"type": "image"}], 5])
+def test_advertised_skill_ignores_nontext_content(content):
+    """RM39/AC30: missing native advertisement is an observation, not an exception."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    case["requests"][0]["body"]["messages"][0]["content"] = content
+    assert api.advertised_skill(case["requests"], case["selected"]) is None
+
+
+@pytest.mark.parametrize("body", [{}, None, [], {"messages": None}, {"messages": [None]}])
+def test_advertised_skill_ignores_incomplete_requests(body):
+    """RM39/AC30: failed HTTP captures do not invent advertisements."""
+    assert module().advertised_skill([{"body": body}], {"skillId": SKILL_ID}) is None
+
+
+def test_advertised_skill_joins_native_text_parts():
+    """RM39/AC30: native structured text retains the exact advertisement."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    message = case["requests"][0]["body"]["messages"][0]
+    content = message["content"]
+    message["content"] = [
+        {"type": "text", "text": content[:50]},
+        {"type": "text", "text": content[50:]},
+    ]
+    assert api.advertised_skill(case["requests"], case["selected"]) == ("Hello World", REVISION)
+    assert api._loaded_round_trip(case) is True
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_model_request_capture_retains_closed_failure(tmp_path, cancelled):
+    """RM16/RM39/AC30: exceptions and cancellation leave complete, private records."""
+    import asyncio
+
+    from starlette.requests import Request
+
+    from recommendation_helpers import setup
+
+    api = module()
+    _, service, runs, _ = setup(tmp_path)
+    app, gateway, observation = api.loaded_use_gateway(tmp_path / "inference", service)
+    middleware = app.user_middleware[0].kwargs["dispatch"]
+
+    async def exercise():
+        async def receive():
+            return {"type": "http.request", "body": b'{"messages":[]}', "more_body": False}
+
+        request = Request({"type": "http", "path": "/v1/chat/completions", "headers": []}, receive)
+
+        async def fail(request):
+            raise asyncio.CancelledError("private") if cancelled else RuntimeError("private")
+
+        with pytest.raises(asyncio.CancelledError if cancelled else RuntimeError):
+            await middleware(request, fail)
+
+    try:
+        asyncio.run(exercise())
+        record = observation.requests[0]
+        assert record["status"] is None
+        assert record["run_id"] is None
+        assert record["failure_reason"] == ("request_cancelled" if cancelled else "request_failed")
+        assert "private" not in str(record)
+        capture = loaded_fixture(api)
+        capture["ordinary_skill_loaded_use"]["cases"][0]["requests"] = [record]
+        assert api.ordinary_skill_loaded_use_pass(capture) is False
+    finally:
+        gateway.store.close()
+        runs.close()
+
+
+def test_model_request_capture_passes_malformed_json_to_validation(tmp_path):
+    """RM16/RM39/AC30: malformed client input is not a model request or HTTP 500."""
+    import asyncio
+
+    import httpx
+
+    from recommendation_helpers import setup
+
+    api = module()
+    _, service, runs, _ = setup(tmp_path)
+    app, gateway, observation = api.loaded_use_gateway(tmp_path / "inference", service)
+
+    async def exercise():
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+            base_url="http://test",
+        ) as client:
+            return await client.post(
+                "/v1/chat/completions",
+                content="{",
+                headers={
+                    "Authorization": f"Bearer {app.state.application_token}",
+                    "Content-Type": "application/json",
+                },
+            )
+
+    try:
+        response = asyncio.run(exercise())
+        assert response.status_code in {400, 422}
+        record = observation.requests[0]
+        assert record["body"] is None
+        assert record["failure_reason"] == "invalid_json"
+        assert record["status"] == response.status_code
+        assert record["run_id"] is None
+        assert api.advertised_skill(observation.requests, {"skillId": SKILL_ID}) is None
+    finally:
+        gateway.store.close()
+        runs.close()
+
+
+BAD_WIRE_VALUES = [None, {}, [], "malformed", 7, True]
+
+
+@pytest.mark.parametrize("value", BAD_WIRE_VALUES)
+@pytest.mark.parametrize(
+    "method,reason",
+    [
+        ("sessions.messages.subscribe", "ordinary_skill_subscription_failed"),
+        ("chat.send", "ordinary_skill_turn_timeout"),
+        ("rmqualification.person", "ordinary_skill_scope_changed"),
+    ],
+)
+@pytest.mark.parametrize("level", ["reply", "frame", "payload"])
+def test_loaded_turn_malformed_reply_is_closed(tmp_path, monkeypatch, value, method, reason, level):
+    """RM39/AC30: review 4435312419/2424/2438, malformed replies stop at their step."""
+    api = module()
+    extension, case, rpc, page, _ = turn_fixture(api, tmp_path, monkeypatch, deliver=True)
+
+    def malformed(page, called, params):
+        reply = rpc(page, called, params)
+        if called != method:
+            return reply
+        if level == "reply":
+            return value
+        if level == "frame":
+            reply["frame"] = value
+        else:
+            reply["frame"]["payload"] = value
+        return reply
+
+    with pytest.raises(ValueError, match=f"^{reason}$"):
+        extension.loaded_use_turn(malformed, page, {}, case)
+
+
+@pytest.mark.parametrize("terminal", [None, {}, [None], [7], ["bad"], [{"state": []}]])
+def test_loaded_turn_malformed_terminal_is_closed(tmp_path, monkeypatch, terminal):
+    """RM39/AC30: malformed browser terminal records cannot escape or prove a turn."""
+    api = module()
+    extension, case, rpc, page, _ = turn_fixture(api, tmp_path, monkeypatch, deliver=True)
+    page.evaluate = lambda *args: terminal
+    with pytest.raises(ValueError, match="^ordinary_skill_(turn_timeout|terminal_ambiguous)$"):
+        extension.loaded_use_turn(rpc, page, {}, case, timeout=0.1)
+
+
+@pytest.mark.parametrize("field", ["event", "context"])
+@pytest.mark.parametrize("value", BAD_WIRE_VALUES)
+@pytest.mark.parametrize("terminal", [True, False])
+def test_loaded_turn_malformed_tool_record_is_closed(tmp_path, monkeypatch, field, value, terminal):
+    """RM39/AC30: review 4435312431, both collector branches reject malformed hooks."""
+    import json
+
+    api = module()
+    extension, case, rpc, page, _ = turn_fixture(api, tmp_path, monkeypatch, deliver=True)
+
+    def malformed(page, method, params):
+        reply = rpc(page, method, params)
+        if method == "chat.send":
+            records = [json.loads(line) for line in extension.event_file.read_text().splitlines()]
+            records[-1][field] = value
+            extension.event_file.write_text("".join(json.dumps(r) + "\n" for r in records))
+        return reply
+
+    if not terminal:
+        page.evaluate = lambda *args: []
+    with pytest.raises(ValueError, match="^ordinary_skill_native_event_invalid$"):
+        extension.loaded_use_turn(malformed, page, {}, case, timeout=0.1)
+
+
+@pytest.mark.parametrize("value", BAD_WIRE_VALUES)
+@pytest.mark.parametrize(
+    "field", ["intervention", "before", "current", "chat", "terminal", "tools"]
+)
+def test_partial_loaded_observations_are_closed(field, value):
+    """RM39/AC30: review 4435312403/2414, partial cases never raise indexing errors."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][3]
+    case[field] = value
+    assert api._reset_refused(case) is False
+    assert api.loaded_use_observation(case) in {
+        "incomplete",
+        "refused",
+        "not_loaded",
+        "loaded_other_bytes",
+        "loaded_pinned_revision",
+    }
+
+
+@pytest.mark.parametrize("value", BAD_WIRE_VALUES)
+@pytest.mark.parametrize(
+    "method,reason",
+    [
+        ("rmqualification.person", "ordinary_skill_scope_changed"),
+        ("skills.library.read", "ordinary_skill_read_failed"),
+        ("skills.library.list", "ordinary_skill_control_failed"),
+    ],
+)
+@pytest.mark.parametrize("level", ["reply", "frame", "payload"])
+def test_loaded_observe_malformed_initial_reply_is_closed(tmp_path, value, method, reason, level):
+    """RM39/AC30: review 4435312442, initial scope/read/list failures stay attributed."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][0]
+    extension = extension_fixture(api, tmp_path)
+
+    def rpc(page, called, params):
+        replies = {
+            "rmqualification.person": dict(frame=dict(ok=True, payload=case["current"])),
+            "skills.library.read": dict(frame=case["selected"]["read"]),
+            "skills.library.list": dict(
+                frame=dict(
+                    ok=True,
+                    payload=dict(
+                        session=dict(
+                            selections=[
+                                dict(skillId=SKILL_ID, revision=REVISION, name="Hello World")
+                            ]
+                        )
+                    ),
+                )
+            ),
+        }
+        reply = replies[called]
+        if called == method:
+            if level == "reply":
+                return value
+            if level == "frame":
+                reply["frame"] = value
+            else:
+                reply["frame"]["payload"] = value
+        return reply
+
+    with pytest.raises(ValueError, match=f"^{reason}$"):
+        extension.observe_loaded_use(rpc, None, {}, capture)
+
+
+def wire_mutations(value):
+    """One deleted/retyped node at a time; exercise every captured JSON boundary."""
+    import copy
+
+    yield (), None
+    yield (), []
+    yield (), "malformed"
+    if isinstance(value, (dict, list)):
+        for key, child in value.items() if isinstance(value, dict) else enumerate(value):
+            removed = copy.deepcopy(value)
+            del removed[key]
+            yield (key, "missing"), removed
+            for path, replacement in wire_mutations(child):
+                changed = copy.deepcopy(value)
+                changed[key] = replacement
+                yield (key, *path), changed
+
+
+def test_loaded_predicates_are_total_over_malformed_capture_nodes():
+    """RM16/RM39/AC30: malformed native evidence yields closed observations, never a crash."""
+    api = module()
+    capture = loaded_fixture(api)
+    for original in capture["ordinary_skill_loaded_use"]["cases"]:
+        for path, case in wire_mutations(original):
+            try:
+                assert isinstance(api._reset_refused(case), bool)
+                assert isinstance(api._control_observed(case), bool)
+                assert isinstance(api._loaded_round_trip(case), bool)
+                assert api.loaded_use_observation(case) in {
+                    "incomplete",
+                    "control_refused",
+                    "refused",
+                    "loaded_pinned_revision",
+                    "loaded_other_bytes",
+                    "not_loaded",
+                }
+            except Exception as error:
+                pytest.fail(f"{original['case']} {path}: {type(error).__name__}")
+    for path, changed in wire_mutations(capture):
+        try:
+            assert isinstance(api.ordinary_skill_loaded_use_pass(changed), bool)
+        except Exception as error:
+            pytest.fail(f"capture {path}: {type(error).__name__}")
+
+
+@pytest.mark.parametrize("selected", BAD_WIRE_VALUES + [{"skillId": SKILL_ID}])
+def test_scripted_observer_rejects_partial_selection(selected):
+    """RM39/AC30: an invalid script selection is a closed generation failure."""
+    observer = module().LoadedUseGatewayObservation()
+    with pytest.raises(ValueError, match="^ordinary_skill_generation_bound$"):
+        observer.begin(selected, "task")
+
+
+@pytest.mark.parametrize("model_request", BAD_WIRE_VALUES)
+def test_scripted_observer_rejects_malformed_request(model_request):
+    """RM39/AC30: missing normalized messages cannot leak AttributeError."""
+    api = module()
+    observer = api.LoadedUseGatewayObservation()
+    observer.begin(loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]["selected"], "task")
+    with pytest.raises(ValueError, match="^ordinary_skill_task_mismatch$"):
+        observer.generate(model_request)
+
+
+def test_redacted_vps_capture_preserves_all_three_predicates():
+    """RM16/RM39/AC30: genuine VPS2 capture remains evidence, not a synthetic substitute."""
+    import json
+
+    capture = json.loads(
+        (ROOT / "tests/fixtures/openclaw-loaded-use-observation-20261101-vps2.json").read_text()
+    )
+    api = module()
+    assert api.ordinary_pass(capture)
+    assert api.ordinary_skill_pass(capture)
+    assert api.ordinary_skill_loaded_use_pass(capture)
+
+
+@pytest.mark.parametrize("reply", BAD_WIRE_VALUES + [{"frame": None}, {"frame": []}])
+def test_control_library_save_malformed_reply_is_closed(tmp_path, reply):
+    """RM39/AC30: isolated controls share the save boundary's closed failure reason."""
+    extension = extension_fixture(module(), tmp_path)
+    with pytest.raises(ValueError, match="^ordinary_skill_save_failed$"):
+        extension.save_library_skill(lambda *args: reply, None)
+
+
+@pytest.mark.parametrize("scope", BAD_WIRE_VALUES)
+def test_control_cannot_prove_equal_malformed_scopes(scope):
+    """RM39/AC30: two absent or malformed scopes do not prove an unchanged session."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][0]
+    case.update(before=scope, current=scope)
+    assert api._control_observed(case) is False
+
+
+@pytest.mark.parametrize(
+    "method",
+    [
+        "sessions.create",
+        "skills.library.save",
+        "skills.library.activate",
+        "skills.library.mutate",
+        "sessions.reset",
+    ],
+)
+@pytest.mark.parametrize("reply", BAD_WIRE_VALUES + [{"frame": None}, {"frame": []}])
+def test_loaded_control_driver_malformed_reply_is_closed(tmp_path, monkeypatch, method, reply):
+    """RM39/AC30: every control RPC is structurally closed, including replies before a turn."""
+    api = module()
+    capture = loaded_fixture(api)
+    expected = capture["ordinary_skill_loaded_use"]["cases"]
+    extension = extension_fixture(api, tmp_path)
+    current = [0]
+
+    def rpc(page, called, params):
+        if called == method:
+            return reply
+        if called == "sessions.create":
+            current[0] += 1
+        case = expected[current[0]]
+        selected = case["selected"]
+        if called == "sessions.create":
+            scope = case["before"]
+            return dict(
+                id="create",
+                socket_id="socket",
+                frame=dict(
+                    id="create",
+                    ok=True,
+                    payload=dict(
+                        key=scope["sessionKey"],
+                        sessionId=scope["sessionId"],
+                        entry=dict(lifecycleRevision=scope["lifecycleRevision"]),
+                    ),
+                ),
+            )
+        if called == "rmqualification.person":
+            return dict(frame=dict(ok=True, payload=case["before"]))
+        if called == "skills.library.read":
+            selected["read"]["payload"]["entry"]["slug"] = "fixture"
+            return dict(frame=selected["read"])
+        if called == "skills.library.save" and params["expectedRevision"] is None:
+            return dict(
+                frame=dict(ok=True, payload=dict(entry=selected["read"]["payload"]["entry"]))
+            )
+        if called == "skills.library.list":
+            return dict(
+                frame=dict(
+                    ok=True,
+                    payload=dict(
+                        session=dict(
+                            selections=[
+                                dict(
+                                    skillId=selected["skillId"],
+                                    revision=REVISION,
+                                    name=selected["name"],
+                                )
+                            ]
+                        )
+                    ),
+                )
+            )
+        if called == "skills.library.activate":
+            return dict(frame=case["selection"])
+        return dict(frame=case["intervention"]["frame"])
+
+    monkeypatch.setattr(extension, "loaded_use_turn", lambda *args: None)
+    reason = {
+        "sessions.create": "native_session_create_binding",
+        "skills.library.save": "ordinary_skill_save_failed",
+    }.get(method, "ordinary_skill_control_failed")
+    with pytest.raises(ValueError, match=f"^{reason}$"):
+        extension.observe_loaded_use(rpc, None, {}, capture)
+
+
+def pre_http_failure(key="relaymind-openclaw-v1-unreached"):
+    """The provider record of an attempt whose HTTP request never reached the gateway."""
+    return dict(
+        event="relaymind.inference_attempt",
+        turn="turn-0000000000000000",
+        attempt=1,
+        idempotencyKey=key,
+        runId="unavailable",
+        runIdSource=None,
+        outcome="failed",
+        status=None,
+        code=None,
+        reasonCode=None,
+        replayed=False,
+        retried=False,
+        nativeRunUrl=None,
+        uiUrl=None,
+        usage="unknown",
+    )
+
+
+def drained_turn(api, tmp_path, case, *, frame_ok=True, on_send=None, on_wait=None):
+    """Drive loaded_use_turn over files the test writes; returns the extension."""
+    import json
+    from types import SimpleNamespace
+
+    extension = extension_fixture(api, tmp_path)
+    extension.turn_drain_seconds = 0.3
+    extension.turn_settle_seconds = 0.05
+    extension.event_file = tmp_path / "events.jsonl"
+    extension.event_file.write_text("")
+    extension.provider_attempt_file = tmp_path / "attempts.jsonl"
+    # A record of an earlier turn precedes this turn's window.
+    extension.provider_attempt_file.write_text(json.dumps(pre_http_failure("earlier")) + "\n")
+    requests = []
+    extension.observation = SimpleNamespace(requests=requests, begin=lambda *args: None)
+    terminal = {}
+    run = {}
+
+    def write(kind, value):
+        path = extension.provider_attempt_file if kind == "provider" else extension.event_file
+        with path.open("a") as output:
+            output.write(json.dumps(value) + "\n")
+
+    def rpc(page, method, params):
+        if method == "sessions.messages.subscribe":
+            return dict(
+                socket_id="socket",
+                frame=dict(ok=True, payload=dict(subscribed=True, key=params["key"])),
+            )
+        if method == "chat.send":
+            run["id"] = params["idempotencyKey"]
+            if on_send:
+                on_send(write, requests, run["id"], terminal)
+            if not frame_ok:
+                return dict(socket_id="socket", frame=dict(ok=False, error=dict(code="DENIED")))
+            return dict(socket_id="socket", frame=dict(ok=True, payload=dict(runId=run["id"])))
+        return dict(frame=dict(ok=True, payload=case["current"]))
+
+    waits = [0]
+
+    def wait(ms):
+        waits[0] += 1
+        if on_wait:
+            on_wait(waits[0], write, run["id"])
+
+    page = SimpleNamespace(
+        evaluate=lambda *args: [terminal] if terminal else [], wait_for_timeout=wait
+    )
+    extension.loaded_use_turn(rpc, page, {}, case)
+    return extension
+
+
+def error_terminal(case, run_id):
+    return dict(
+        socket_id="socket",
+        runId=run_id,
+        sessionKey=case["current"]["sessionKey"],
+        state="error",
+    )
+
+
+def test_provider_failure_before_http_is_retained_not_filtered(tmp_path):
+    """RM16/RM39/AC30 (#247 review): a failure before HTTP stays in the turn evidence."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][1]
+    failure = pre_http_failure()
+
+    def send(write, requests, run_id, terminal):
+        write("provider", failure)
+        terminal.update(error_terminal(case, run_id))
+
+    drained_turn(api, tmp_path, case, on_send=send)
+    assert case["provider_attempts"] == [failure]
+    assert case["requests"] == [] and case["tools"] == []
+    assert case["observed"] == "refused"
+
+
+def test_unexplained_provider_record_makes_the_turn_incomplete(tmp_path):
+    """RM16/RM39/AC30: a provider record no received request explains is not filtered away."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][1]
+    stray = dict(pre_http_failure(), outcome="answer", runId="run_unexplained", status=200)
+
+    def send(write, requests, run_id, terminal):
+        write("provider", stray)
+        terminal.update(error_terminal(case, run_id))
+
+    with pytest.raises(ValueError, match="^ordinary_skill_provider_unexplained$"):
+        drained_turn(api, tmp_path, case, on_send=send)
+    assert case["provider_attempts"] == [stray]
+    assert case["observed"] == "incomplete"
+
+
+@pytest.mark.parametrize("stray", ["answer", "reached_gateway", "unmatched_run"])
+def test_predicate_accepts_only_explained_pre_http_provider_failures(stray):
+    """RM16/RM39/AC30: retained pre-HTTP failures pass; any other unmatched record fails."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][1]
+    case.update(tools=[], requests=[], provider_attempts=[pre_http_failure()], observed="refused")
+    case["terminal"]["state"] = "error"
+    assert api.ordinary_skill_loaded_use_pass(capture)
+    if stray == "answer":
+        case["provider_attempts"][0]["outcome"] = "answer"
+    elif stray == "reached_gateway":
+        case["provider_attempts"][0]["status"] = 502
+    else:
+        case["provider_attempts"][0]["runId"] = "run_elsewhere"
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+def tool_call_turn(case, *, error_hook):
+    """One gateway tool-call attempt, then a native error terminal with no receiving request."""
+    import copy
+
+    request = copy.deepcopy(case["requests"][0])
+    provider = dict(
+        pre_http_failure(request["idempotency_key"]),
+        runId=request["run_id"],
+        runIdSource="header",
+        outcome="tool_call",
+        status=200,
+    )
+    hook = copy.deepcopy(case["tools"][0])
+    hook["event"].pop("result")
+    hook["event"]["error"] = "skill read failed" if error_hook else "cancelled"
+
+    def send(write, requests, run_id, terminal):
+        requests.append(request)
+        write("provider", provider)
+        terminal.update(error_terminal(case, run_id))
+
+    def native_hook(run_id):
+        value = copy.deepcopy(hook)
+        value["context"]["runId"] = value["event"]["runId"] = run_id
+        return dict(kind="native_skill_tool", **value)
+
+    return send, native_hook
+
+
+@pytest.mark.parametrize("error_hook", [True, False])
+def test_delayed_failed_tool_hook_after_terminal_is_collected(tmp_path, error_hook):
+    """RM16/RM39/AC30 (#247 review): an outstanding tool call waits for its native hook."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][1]
+    send, native_hook = tool_call_turn(case, error_hook=error_hook)
+
+    def late(count, write, run_id):
+        if count == 3:
+            write("event", native_hook(run_id))
+
+    drained_turn(api, tmp_path, case, on_send=send, on_wait=late)
+    assert len(case["tools"]) == 1 and case["tools"][0]["event"]["error"]
+    assert case["observed"] == "refused"
+
+
+def test_unresolved_tool_call_is_incomplete_not_closed(tmp_path):
+    """RM16/RM39/AC30: a tool call without its native hook stays incomplete."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][1]
+    send, _ = tool_call_turn(case, error_hook=True)
+    with pytest.raises(ValueError, match="^ordinary_skill_tool_unresolved$"):
+        drained_turn(api, tmp_path, case, on_send=send)
+    assert case["tools"] == [] and len(case["provider_attempts"]) == 1
+    assert case["observed"] == "incomplete"
+
+
+def test_predicate_rejects_a_tool_call_without_its_native_hook():
+    """RM16/RM39/AC30: an attempt that returned a tool call needs a retained native hook."""
+    api = module()
+    capture = loaded_fixture(api)
+    case = capture["ordinary_skill_loaded_use"]["cases"][1]
+    case["requests"] = case["requests"][:1]
+    case["provider_attempts"] = case["provider_attempts"][:1]
+    case["provider_attempts"][0]["outcome"] = "tool_call"
+    case["tools"] = []
+    case["terminal"]["state"] = "error"
+    case["observed"] = "refused"
+    assert not api.ordinary_skill_loaded_use_pass(capture)
+
+
+@pytest.mark.parametrize("late", ["hook", "provider"])
+def test_refused_send_drains_before_accepting_the_refusal(tmp_path, late):
+    """RM16/RM39/AC30 (#247 review): late activity behind a refused send contradicts it."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][1]
+    _, native_hook = tool_call_turn(case, error_hook=True)
+
+    def arrive(count, write, run_id):
+        if count == 2:
+            if late == "hook":
+                write("event", native_hook(run_id))
+            else:
+                write("provider", pre_http_failure())
+
+    with pytest.raises(ValueError, match="^ordinary_skill_refusal_contradicted$"):
+        drained_turn(api, tmp_path, case, frame_ok=False, on_wait=arrive)
+    assert case["tools"] or case["provider_attempts"]
+
+
+def test_refused_send_without_activity_is_refused_after_the_drain(tmp_path):
+    """RM16/RM39/AC30: a quiet refusal is still recorded as refused."""
+    api = module()
+    case = loaded_fixture(api)["ordinary_skill_loaded_use"]["cases"][1]
+    drained_turn(api, tmp_path, case, frame_ok=False)
+    assert case["observed"] == "refused"
+    assert case["provider_attempts"] == [] and case["tools"] == []

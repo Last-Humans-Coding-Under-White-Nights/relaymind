@@ -459,6 +459,15 @@ def write_capture(path: Path, capture: dict) -> None:
     path.write_bytes((json.dumps(capture, ensure_ascii=True, indent=2) + "\n").encode("utf-8"))
 
 
+def check_capture_secrets(capture: dict, forbidden: list[str], *, extension=None) -> None:
+    """Keep the same private exclusions available to a composition's final export."""
+    remember = getattr(extension, "remember_capture_secrets", None)
+    if remember is not None:
+        remember(forbidden)
+    if any(secret in json.dumps(capture) for secret in forbidden):
+        raise ValueError("credential_export_refused")
+
+
 def click_proceed(page) -> None:
     """Use the pinned portal's unique role control, whose name includes an icon."""
     page.get_by_role("button", name="Proceed").click()
@@ -1108,17 +1117,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     finally:
                         context.close()
                 mark("proxy_signature_controls")
-                script = (plugin / "browser-wire.mjs").read_text(encoding="utf-8").replace(
-                    "export function installNativeSocketObserver",
-                    "function installNativeSocketObserver",
-                    1,
-                ) + "\ninstallNativeSocketObserver();\n"
-                if extension is not None:
-                    script = script.replace(
-                        "installNativeSocketObserver();",
-                        'installNativeSocketObserver(window, ["relaymind.recommendations", '
-                        '"relaymind.skill", "skills.library.save", "skills.library.list"]);',
-                    )
+                script = socket_observer_script(plugin, extension)
                 pages, sessions = [], []
 
                 def rpc(page, method, params):
@@ -1368,8 +1367,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                     "programmatic fixture RPC on native authenticated Control UI socket"
                 )
                 capture["status"], capture["reason"] = "completed", None
-                if any(secret in json.dumps(capture) for secret in secrets_to_exclude):
-                    raise ValueError("credential_export_refused")
+                check_capture_secrets(capture, secrets_to_exclude, extension=extension)
             finally:
                 if held_request_id is not None:
                     capture["held_native_observations"] = project_held_native_events(
@@ -1388,8 +1386,7 @@ def _run_private_trial(work: Path, address: str, capture: dict, *, extension=Non
                 process.wait(timeout=5)
         for log in files:
             log.close()
-        if any(secret in json.dumps(capture) for secret in secrets_to_exclude):
-            raise ValueError("credential_export_refused")
+        check_capture_secrets(capture, secrets_to_exclude, extension=extension)
 
 
 def session_create_params() -> dict:
@@ -1455,6 +1452,36 @@ SAFE_REASONS = frozenset(
         "unknown_step",
     }
 )
+
+
+def socket_observer_script(plugin: Path, extension: object | None = None) -> str:
+    """RM39/AC30: grant loaded-use RPCs only to the opt-in observation run."""
+    script = (
+        (plugin / "browser-wire.mjs")
+        .read_text(encoding="utf-8")
+        .replace(
+            "export function installNativeSocketObserver",
+            "function installNativeSocketObserver",
+            1,
+        )
+    )
+    if extension is None:
+        return script + "\ninstallNativeSocketObserver();\n"
+    methods = [
+        "relaymind.recommendations",
+        "relaymind.skill",
+        "skills.library.save",
+        "skills.library.list",
+    ]
+    if getattr(extension, "observation", None) is not None:
+        methods += [
+            "sessions.messages.subscribe",
+            "chat.send",
+            "skills.library.read",
+            "skills.library.mutate",
+            "skills.library.activate",
+        ]
+    return script + "\ninstallNativeSocketObserver(window, " + json.dumps(methods) + ");\n"
 
 
 def run_qualification(work: Path, output: Path, *, extension=None) -> int:

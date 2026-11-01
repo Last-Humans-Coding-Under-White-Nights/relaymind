@@ -125,3 +125,40 @@ it("#197 permits the Skill Library methods the ordinary qualification calls", as
   await expect(f.target.__rmPersonWire.rpc("skills.library.delete", {})).rejects.toThrow();
   expect(() => installNativeSocketObserver(f.target, ["skills.library.delete"])).toThrow("invalid_fixture_method");
 });
+
+it("RM39/AC30 observes terminal chat events only for turns sent by this fixture", async () => {
+  const methods = ["sessions.messages.subscribe", "chat.send", "skills.library.read", "skills.library.mutate", "skills.library.activate"];
+  const f = await fixture(methods);
+  for (const method of methods) await f.target.__rmPersonWire.rpc(method, method === "chat.send" ? { sessionKey: "s", idempotencyKey: "owned-run" } : {});
+  const emit = (payload: unknown) => f.socket.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "event", event: "chat", payload }) }));
+  emit({ runId: "foreign", sessionKey: "s", state: "final" });
+  emit({ runId: "owned-run", sessionKey: "foreign", state: "final" });
+  emit({ runId: "owned-run", sessionKey: "s", state: "delta" });
+  emit({ runId: "owned-run", sessionKey: "s", state: "final", message: { role: "assistant", content: "done" } });
+  expect(f.target.__rmPersonWire.turnEvents("owned-run")).toEqual([{ socket_id: expect.any(String), runId: "owned-run", sessionKey: "s", state: "final", message: { role: "assistant", content: "done" } }]);
+  expect(f.target.__rmPersonWire.turnEvents("foreign")).toEqual([]);
+});
+
+it("RM39/AC30 caps native observation at four turns and refuses unused chat history", async () => {
+  const f = await fixture(["chat.send"]);
+  for (let i = 0; i < 4; i++) await f.target.__rmPersonWire.rpc("chat.send", { sessionKey: `s${i}`, idempotencyKey: `run${i}` });
+  await expect(f.target.__rmPersonWire.rpc("chat.send", { sessionKey: "s4", idempotencyKey: "run4" })).rejects.toThrow("native_turn_bound");
+  expect(f.requests).toHaveLength(4);
+  expect(() => installNativeSocketObserver(f.target, ["chat.history"])).toThrow("invalid_fixture_method");
+});
+
+it("RM39/AC30 bounds terminal records by UTF-8 bytes including multibyte content", async () => {
+  const f = await fixture(["chat.send"]);
+  await f.target.__rmPersonWire.rpc("chat.send", { sessionKey: "s", idempotencyKey: "run" });
+  const emit = (content: string) => f.socket.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "event", event: "chat", payload: { runId: "run", sessionKey: "s", state: "final", message: { content } } }) }));
+  emit("中".repeat(400000));
+  expect(f.target.__rmPersonWire.turnEvents("run").length).toBe(0);
+  emit("中文");
+  expect(f.target.__rmPersonWire.turnEvents("run")).toHaveLength(1);
+});
+
+it.each([undefined, null, 1, "text", []])("RM39/AC30 refuses malformed chat params %s with a closed error", async params => {
+  const f = await fixture(["chat.send"]);
+  await expect(f.target.__rmPersonWire.rpc("chat.send", params)).rejects.toThrow("native_turn_bound");
+  expect(f.requests).toEqual([]);
+});
