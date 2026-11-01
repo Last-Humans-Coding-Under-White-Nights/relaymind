@@ -398,7 +398,7 @@ async def execute_asset_slot(service, provider, normal, case, slot, label, *, ke
             reason="cancelled",
             observed_ms=budget.elapsed_ms(),
         )
-        if cancel.recommendation_id is not None:
+        if cancel is not None and cancel.recommendation_id is not None:
             terminal = terminal_payload(
                 service,
                 provider.scope,
