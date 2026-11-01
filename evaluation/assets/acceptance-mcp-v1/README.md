@@ -50,6 +50,37 @@ repository.
   `freeze_mcp_capture.py` (writes the capture document, the selection and the
   lock). Both need a RelayMind checkout on the import path.
 
+## Reproduce
+
+Both scripts are kept exactly as they ran: the lock binds their bytes, and
+`capture.v1.json` binds `capture_mcp_tools.py`. Two things are needed that the
+scripts do not say:
+
+- `servers.json` is not committed, because it held local install paths. It is
+  a JSON list with one object per server: `id`, `package` (`ecosystem`,
+  `name`, `version`), `source_url`, `license_spdx`, `license_file` (the
+  installed file kept in `licenses/`, named in `license.evidence`), `argv`, and
+  optional `cwd` and `env`. `servers[].launch` in `capture.v1.json` is that
+  `argv` with local paths replaced by `<node>`, `<npm>`, `<python>`,
+  `<fsroot>` and `<gitrepo>`. The capture does not record `cwd` or `env`.
+- `freeze_mcp_capture.py` hashes and locks the scripts it finds in `OUT_DIR`,
+  so copy both scripts into OUT_DIR before the freeze. Without them it stops
+  with `FileNotFoundError` after the quota check.
+
+```bash
+export PYTHONPATH=<relaymind checkout>/src
+python capture_mcp_tools.py --servers servers.json --out CAPTURE_DIR
+mkdir OUT_DIR && cp capture_mcp_tools.py freeze_mcp_capture.py OUT_DIR/
+python freeze_mcp_capture.py CAPTURE_DIR servers.json OUT_DIR CAPTURED_AT
+```
+
+Given a capture directory with these originals, the freeze writes these
+`capture.v1.json` and `lock.v1.json` byte for byte
+(`tests/test_acceptance_mcp_capture.py` replays it from the committed
+originals). A new capture is not a replay: servers can answer with other
+bytes, and any change needs a new capture version and review, never a
+replacement of these files (spec section 12.6.6).
+
 ## What this is not
 
 This is not yet an `AssetCatalogSetV1` acceptance release. Still missing for

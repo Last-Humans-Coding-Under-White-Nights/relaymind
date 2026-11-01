@@ -17,7 +17,10 @@ silent substitution. These checks recompute, from the committed bytes:
 
 import hashlib
 import json
+import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -186,3 +189,86 @@ def test_a_changed_capture_script_is_found(copy):
     script = copy / "freeze_mcp_capture.py"
     script.write_bytes(script.read_bytes() + b"\n")
     assert "file_digest:freeze_mcp_capture.py" in capture_problems(copy)
+
+
+def _replay_inputs(root: Path, capture_dir: Path) -> Path:
+    """A capture directory and servers.json as capture_mcp_tools.py writes them.
+
+    Rebuilt from the committed originals and licenses; launch arguments are
+    the recorded placeholders, which the freeze keeps unchanged.
+    """
+    document = json.loads((CAPTURE / "capture.v1.json").read_bytes())
+    for name in ("originals", "licenses"):
+        shutil.copytree(CAPTURE / name, capture_dir / name)
+    tools = {}
+    for tool in document["tools"]:
+        tools.setdefault(tool["server_id"], []).append(
+            dict(
+                name=tool["name"],
+                original=tool["original"],
+                schema_hash=tool["schema_hash"],
+                product_schema_check=tool["product_schema_check"],
+                product_schema_refusal=None,
+            )
+        )
+    raw = [
+        dict(
+            id=s["id"],
+            package=s["package"],
+            source_url=s["source_url"],
+            license=s["license"],
+            server_info=s["server_info"],
+            protocol_version=s["protocol_version"],
+            originals=s["originals"],
+            tools=tools[s["id"]],
+        )
+        for s in document["servers"]
+    ]
+    (capture_dir / "capture.raw.json").write_text(json.dumps(raw), encoding="utf-8")
+    servers = [
+        dict(
+            id=s["id"],
+            package=s["package"],
+            source_url=s["source_url"],
+            license_spdx=s["license"]["spdx"],
+            license_file=f"<license>/{s['license']['evidence']}",
+            argv=s["launch"],
+        )
+        for s in document["servers"]
+    ]
+    servers_json = root / "servers.json"
+    servers_json.write_text(json.dumps(servers), encoding="utf-8")
+    return servers_json
+
+
+def test_the_documented_freeze_reproduces_the_committed_capture_and_lock(tmp_path):
+    """README "Reproduce": copy both scripts into OUT_DIR, then freeze (#261; AC31)."""
+    capture_dir, out = tmp_path / "capture", tmp_path / "out"
+    capture_dir.mkdir()
+    servers_json = _replay_inputs(tmp_path, capture_dir)
+    out.mkdir()
+    for name in ("capture_mcp_tools.py", "freeze_mcp_capture.py"):
+        shutil.copyfile(CAPTURE / name, out / name)
+    document = json.loads((CAPTURE / "capture.v1.json").read_bytes())
+    env = dict(os.environ, PYTHONPATH=str(CAPTURE.parents[2] / "src"))
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(out / "freeze_mcp_capture.py"),
+            str(capture_dir),
+            str(servers_json),
+            str(out),
+            document["captured_at"],
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stderr
+    for name in ("capture.v1.json", "lock.v1.json"):
+        written = (out / name).read_bytes()
+        if os.name == "nt":  # write_text uses CRLF there; the capture tool is POSIX-only.
+            written = written.replace(b"\r\n", b"\n")
+        assert written == (CAPTURE / name).read_bytes(), name
+    assert "copy both scripts into OUT_DIR" in (CAPTURE / "README.md").read_text(encoding="utf-8")
