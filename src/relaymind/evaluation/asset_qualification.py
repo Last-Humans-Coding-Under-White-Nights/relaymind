@@ -11,6 +11,11 @@ from relaymind.evaluation.asset_judgments import OWNER_MACHINE
 from relaymind.evaluation.asset_splits import input_identity
 from relaymind.schema_util import freeze_json
 
+# Spec 0.66 section 12.6.6: owner-approved machine-drafted prompts count in
+# the cohort under the owner-run profile; translated or generated never do.
+DRAFTED = "machine_drafted_owner_approved"
+COUNTED_AUTHORSHIP = ("original", DRAFTED)
+
 if TYPE_CHECKING:
     from relaymind.evaluation.asset_corpus import VerifiedAssetRelease
 
@@ -108,6 +113,12 @@ def _claim_requirements(documents, need, reasons: set[str]) -> None:
     need(lock["qualification_evidence_ids"], "access_control")
     for case in cases["cases"]:
         need(case["authorship_evidence_ids"], "authorship", ("authorship",))
+        if case["authorship"] == DRAFTED:
+            # Spec 0.66 section 12.6.6: the recorded drafter and the owner's
+            # approval replace the author competence rule.
+            if not case["author_ids"]:
+                reasons.add("authorship_unqualified")
+            continue
         if case["authorship"] != "original":
             continue
         competencies = {v for p in case["author_ids"] for v in people[p]["competencies"]}
@@ -224,7 +235,7 @@ def _assess_asset_release(
     seen_inputs, repeated_inputs = set(), []
     for case in cases["cases"]:
         final = finals[case["id"]]
-        if case["authorship"] != "original" or case["split"] == "diagnostic":
+        if case["authorship"] not in COUNTED_AUTHORSHIP or case["split"] == "diagnostic":
             continue
         if purpose == "acceptance" and case["split"] != "held_out":
             continue

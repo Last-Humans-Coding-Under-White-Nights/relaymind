@@ -14,9 +14,11 @@ known gate failure still takes precedence.
 
 Spec 0.66 section 12.6.6 defines the reviewed record: an approved
 QualificationRecordV1 whose digests bind this report's exact bytes lifts the
-``qualified_evidence_review`` reason, and its labelling (``owner_machine`` or
-``independent``) is reported beside the tier. Without such a record the review
-stays unverified. A record never lifts a fixture input or another unverified
+``qualified_evidence_review`` reason, and its labelling (``owner_machine``,
+``machine_dual_owner_approved`` or ``independent``) is reported beside the
+tier, with its ``prompt_authorship`` (``original`` or
+``machine_drafted_owner_approved``). Without such a record the review stays
+unverified. A record never lifts a fixture input or another unverified
 input, and software still cannot establish authenticity, human observation or
 actual hardware from labels or hashes: the record is the reviewed assertion.
 """
@@ -45,6 +47,7 @@ class WholeTaskQualification:
     assessed: str
     reasons: tuple[str, ...]
     labelling: str | None = None
+    prompt_authorship: str | None = None
 
     def as_output(self) -> dict:
         return dict(
@@ -52,6 +55,7 @@ class WholeTaskQualification:
             assessed=self.assessed,
             reasons=list(self.reasons),
             labelling=self.labelling,
+            prompt_authorship=self.prompt_authorship,
         )
 
 
@@ -78,7 +82,7 @@ def assess_qualification(
     report's exact bytes; a record for another report or scope rejects.
     """
     reasons = set(unverified)
-    labelling = None
+    labelling = prompt_authorship = None
     if record is None:
         reasons.add(REVIEW_UNDEFINED)
     else:
@@ -93,6 +97,7 @@ def assess_qualification(
         else:
             reasons.add(REVIEW_UNDEFINED)
         labelling = record.labelling
+        prompt_authorship = record.prompt_authorship
     fixture = False
     if corpus_purpose == "fixture" or corpus_status == "fixture":
         reasons.add("fixture_corpus")
@@ -107,7 +112,9 @@ def assess_qualification(
     if kind == "platform" and (platform["os"], platform["architecture"]) not in TARGET_PLATFORMS:
         reasons.add("platform_not_target")
     assessed = "fixture" if fixture else ("provisional" if reasons else "qualified")
-    return WholeTaskQualification(kind, claimed, assessed, tuple(sorted(reasons)), labelling)
+    return WholeTaskQualification(
+        kind, claimed, assessed, tuple(sorted(reasons)), labelling, prompt_authorship
+    )
 
 
 def _check_platform_machine(machine: Mapping, platform: Mapping, reasons: set[str]) -> None:
@@ -153,6 +160,7 @@ def assess_inputs(
     release = inputs.release
     if record is not None:
         record.check_labels(release.labels)
+        record.check_cases(release.cases)
         if custodian_review is None:
             custodian_review = record.custodian_review()
     status = assess_asset_release(release, custodian_review=custodian_review).status

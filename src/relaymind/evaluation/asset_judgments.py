@@ -50,9 +50,14 @@ def check_references(ids, available: Collection[str]) -> None:
         raise AssetCorpusError("unknown_reference")
 
 
-# Spec 0.66 section 12.6.6: the owner-run profile's agreement method.
+# Spec 0.66 section 12.6.6: the owner-run profiles' agreement methods.
 OWNER_MACHINE = "owner_machine.v1"
-METHODS = {"independent": "double_annotation.v1", "owner_machine": OWNER_MACHINE}
+MACHINE_DUAL = "machine_dual.v1"
+METHODS = {
+    "independent": "double_annotation.v1",
+    "owner_machine": OWNER_MACHINE,
+    "machine_dual_owner_approved": MACHINE_DUAL,
+}
 
 
 def check_person(person_id: str, people: Mapping, role: str, *, owner_machine=False) -> None:
@@ -61,6 +66,20 @@ def check_person(person_id: str, people: Mapping, role: str, *, owner_machine=Fa
     roles = people[person_id]["roles"]
     conflict = role in ("annotator", "adjudicator") and "tuner" in roles
     if role not in roles or (conflict and not owner_machine):
+        raise AssetCorpusError("role_conflict")
+
+
+def check_machine_dual(annotator_ids, adjudicator_ids, people: Mapping) -> None:
+    """Spec 12.6.6 machine_dual: two annotator-only machines and one adjudicator-only machine."""
+    annotators, adjudicators = set(annotator_ids), set(adjudicator_ids)
+    if len(annotators) != 2:
+        raise AssetCorpusError("raw_judgment_coverage")
+    if (
+        any(people[i]["roles"] != ["annotator"] for i in annotators)
+        or len(adjudicators) > 1
+        or adjudicators & annotators
+        or any(people[i]["roles"] != ["adjudicator"] for i in adjudicators)
+    ):
         raise AssetCorpusError("role_conflict")
 
 
@@ -109,6 +128,12 @@ def validate_judgments(catalog: dict, cases: dict, labels: dict) -> dict:
             check_person(author, people, "author")
     if owner_machine:
         check_owner_machine_pair((j["annotator_id"] for j in labels["judgments"]), people)
+    if labels["agreement"]["method"] == MACHINE_DUAL:
+        check_machine_dual(
+            (j["annotator_id"] for j in labels["judgments"]),
+            (a["adjudicator_id"] for a in labels["adjudications"]),
+            people,
+        )
     actual = agreement(case_map, rows)
     recorded = id_map(labels["agreement"]["groups"], "lane")
     if set(recorded) != set(actual):

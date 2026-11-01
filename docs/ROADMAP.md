@@ -1054,6 +1054,10 @@ owner; a negative record closes the `skill_loaded_use` or `mcp_use` gate on
 the pinned host with the operation disabled and listed as a known host
 limitation. The verifier support is implemented (`--qualification-record`,
 `--labelling owner_machine`) and fixture-tested only. No gate has passed.
+A later 0.66 addition for #260 adds `machine_drafted_owner_approved`
+prompts and `machine_dual_owner_approved` labels (two machine annotators and a
+machine adjudicator; the owner approves by PR review). Their verifier support
+is fixture-tested only.
 #255 has committed two **pending** negative `host_operation` records for the
 pinned 2026.10.7 host: `m10-negative-skill-loaded-use-openclaw-2026.10.7`
 (`stop_point_absent`) and `m10-negative-mcp-use-openclaw-2026.10.7`

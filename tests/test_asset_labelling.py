@@ -222,3 +222,76 @@ def test_owner_machine_labelling_still_needs_one_non_tuner_annotator(tmp_path):
     ]
     with pytest.raises(AssetCorpusError, match="role_conflict"):
         raw_judgments(catalog, cases, templates, labelling="owner_machine")
+
+
+# --- spec 0.66 section 12.6.6 machine_dual_owner_approved labelling (#260) ----------
+
+
+def _machine_dual(tmp_path, adjudicator_roles=("adjudicator",)):
+    """Two machine annotators and a distinct machine adjudicator; no human labeller."""
+    catalog, cases, labels = corpus(tmp_path)
+    catalog["people"].append(
+        dict(
+            id="machine-adjudicator",
+            roles=sorted(adjudicator_roles),
+            competencies=[],
+            evidence_ids=["adjudication", "independence"],
+        )
+    )
+    catalog["people"].sort(key=lambda p: p["id"].encode())
+    for row in labels["adjudications"]:
+        row["adjudicator_id"] = "machine-adjudicator"
+    return catalog, cases, labels
+
+
+def _dual_round_trip(catalog, cases, labels):
+    templates = [
+        filled(
+            label_template(catalog, cases, a, labelling="machine_dual_owner_approved"), labels, a
+        )
+        for a in ("judge-a", "judge-b")
+    ]
+    judgments = raw_judgments(catalog, cases, templates, labelling="machine_dual_owner_approved")
+    worksheet = adjudication_worksheet(
+        catalog, cases, judgments, labelling="machine_dual_owner_approved"
+    )
+    return freeze_labels(
+        catalog,
+        cases,
+        judgments,
+        adjudicated(worksheet, labels),
+        labelling="machine_dual_owner_approved",
+    )
+
+
+def test_machine_dual_labelling_freezes_with_its_own_method(tmp_path):
+    """Spec 12.6.6: two machine annotators, a third machine adjudicator, machine_dual.v1."""
+    frozen = _dual_round_trip(*_machine_dual(tmp_path))
+    assert frozen["agreement"]["method"] == "machine_dual.v1"
+    assert {a["adjudicator_id"] for a in frozen["adjudications"]} == {"machine-adjudicator"}
+
+
+def test_machine_dual_adjudicator_is_a_distinct_adjudicator_only_person(tmp_path):
+    """The third pass is neither an annotator nor a tuner (spec 12.6.6)."""
+    catalog, cases, labels = _machine_dual(tmp_path)
+    for row in labels["adjudications"]:
+        row["adjudicator_id"] = "judge-a"
+    next(p for p in catalog["people"] if p["id"] == "judge-a")["roles"] = [
+        "adjudicator",
+        "annotator",
+    ]
+    with pytest.raises(AssetCorpusError, match="role_conflict"):
+        _dual_round_trip(catalog, cases, labels)
+
+
+@pytest.mark.parametrize("roles", [("adjudicator", "tuner"), ("adjudicator", "custodian")])
+def test_machine_dual_adjudicator_holds_no_other_role(tmp_path, roles):
+    with pytest.raises(AssetCorpusError, match="role_conflict"):
+        _dual_round_trip(*_machine_dual(tmp_path, adjudicator_roles=roles))
+
+
+def test_machine_dual_annotators_hold_the_annotator_role_only(tmp_path):
+    catalog, cases, labels = _machine_dual(tmp_path)
+    next(p for p in catalog["people"] if p["id"] == "judge-b")["roles"] = ["annotator", "author"]
+    with pytest.raises(AssetCorpusError, match="role_conflict"):
+        _dual_round_trip(catalog, cases, labels)
