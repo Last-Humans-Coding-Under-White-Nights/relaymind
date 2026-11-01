@@ -18,3 +18,18 @@ def test_platform_record_loads_with_the_current_schema(path):
 
 def test_the_windows_platform_record_is_present():
     assert any("windows" in path.name for path in RECORDS)
+
+
+# Raw captured output, kept byte for byte as the capturing tool wrote it and
+# bound by digest in the release archive. Everything else under
+# docs/evidence/m10 is authored here and must be plain UTF-8 without a BOM.
+RAW_CAPTURED_WITH_BOM = frozenset({"windows-platform-run-2026-11-01/verify.txt"})
+
+
+def test_authored_m10_evidence_files_have_no_byte_order_mark():
+    with_bom = {
+        path.relative_to(EVIDENCE).as_posix()
+        for path in EVIDENCE.rglob("*")
+        if path.is_file() and path.read_bytes().startswith(b"\xef\xbb\xbf")
+    }
+    assert with_bom == RAW_CAPTURED_WITH_BOM
