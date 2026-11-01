@@ -1111,7 +1111,12 @@ host availability or execution authority.
 #193 selection and #194's partial lifecycle implementation are recorded below.
 The AC25 live host subcases, full 300-asset measurements, Windows/macOS
 qualification, Matrix rights/cohort/refresh and formal independent corpus gates
-remain separate from #192's completed catalog criteria.
+remain separate from #192's completed catalog criteria. #268 (spec 0.66
+amendment) admits each local SKILL.md candidate on its own: a rejected file is
+an exclusion in a partial generation, not a whole-folder failure, and body text
+is no longer markup/repetition checked. A local scan of the pinned OpenClaw
+2026.10.7 package admits all 49 bundled skills; this is a developer
+observation, not an AC25 live host subcase.
 
 The #193 selection component implements RM35/AC26: separate closed selection
 v2 and recommendation-result schemas, projection-only lexical ranking, strict
