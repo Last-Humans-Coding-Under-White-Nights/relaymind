@@ -649,6 +649,47 @@ def test_rm40_ac31_tuner_is_not_an_independent_heldout_custodian(release_root):
     assert "custodian_unqualified" in assessment.reasons
 
 
+def _owner_machine_release(release_root):
+    """Spec 12.6.6 owner_machine: judge-a is the machine, reviewer the owner and tuner."""
+    catalog = read(release_root, "catalog")
+    catalog["purpose"] = "development"
+    for person in catalog["people"]:
+        if person["id"] == "reviewer":
+            person["roles"] = sorted({*person["roles"], "annotator", "tuner"})
+    catalog["people"].append(
+        dict(
+            id="third-party",
+            roles=["custodian", "tuner"],
+            competencies=[],
+            evidence_ids=["access_control"],
+        )
+    )
+    catalog["people"].sort(key=lambda p: p["id"])
+    write(release_root, "catalog", catalog)
+    labels = read(release_root, "labels")
+    labels["agreement"]["method"] = "owner_machine.v1"
+    for row in labels["judgments"]:
+        if row["annotator_id"] == "judge-b":
+            row["annotator_id"] = "reviewer"
+    write(release_root, "labels", labels)
+    lock = read(release_root, "lock")
+    lock["purpose"] = "development"
+    write(release_root, "lock", lock)
+    relock(release_root)
+    return load(release_root)
+
+
+@pytest.mark.parametrize(("custodian", "qualified"), [("reviewer", True), ("third-party", False)])
+def test_owner_machine_waives_the_tuner_exclusion_for_the_owner_only(
+    release_root, custodian, qualified
+):
+    """Spec 0.66 section 12.6.6: only the owner may be custodian and tuner."""
+    release = _owner_machine_release(release_root)
+    review = api().CustodianReview(release.lock["digest"], custodian, ("access_control",), {})
+    assessment = api().assess_asset_release(release, custodian_review=review)
+    assert ("custodian_unqualified" in assessment.reasons) is not qualified
+
+
 def test_rm40_ac31_conflicting_same_dataset_release_is_not_a_new_release(release_root, tmp_path):
     related = tmp_path / "conflicting"
     shutil.copytree(release_root, related)

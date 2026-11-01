@@ -16,6 +16,7 @@ They invoke the host CLI only for ``--version``, ``plugins install`` and
 """
 
 import argparse
+import hashlib
 import json
 import signal
 import sys
@@ -37,6 +38,7 @@ from relaymind.evaluation.asset_episode_export import (
 )
 from relaymind.evaluation.asset_evidence import OfflineResolver
 from relaymind.evaluation.asset_platform_export import grade_platform_report
+from relaymind.evaluation.asset_qualification_record import load_record
 from relaymind.evaluation.asset_run_kit_cli import COMMANDS as RUN_KIT_COMMANDS
 from relaymind.evaluation.asset_run_kit_cli import add_commands as add_run_kit_commands
 from relaymind.evaluation.asset_run_kit_cli import run as run_kit
@@ -67,7 +69,7 @@ _REPORTS = {
 
 
 def _grade(args) -> tuple[str, dict]:
-    report, _ = read_json_path(args.report, REPORT_BYTES)
+    report, payload = read_json_path(args.report, REPORT_BYTES)
     # Check the report's own shape before following any of its references.
     validate_whole_task(_REPORTS[args.command], report)
     resolver = OfflineResolver(args.resolver) if args.resolver else None
@@ -77,9 +79,17 @@ def _grade(args) -> tuple[str, dict]:
     )
     # Qualification is assessed from the inputs, never taken from the label
     # (#240): a known fixture contradiction rejects before grading.
-    assessment = assess_inputs(kind, report, inputs)
+    record = load_record(args.qualification_record) if args.qualification_record else None
+    assessment = assess_inputs(
+        kind,
+        report,
+        inputs,
+        record=record,
+        report_sha256=hashlib.sha256(payload).hexdigest(),
+    )
     check_claim(assessment)
-    extra = dict(unverified=list(inputs.unverified), qualification=assessment.as_output())
+    unverified = [item for item in inputs.unverified if item in assessment.reasons]
+    extra = dict(unverified=unverified, qualification=assessment.as_output())
     if kind == "adaptation":
         summary = grade_adaptation_report(
             report,
@@ -302,6 +312,11 @@ def main(argv: list[str] | None = None) -> int:
                 "protocol inventory preimages, without it grading exits 3 "
                 "(blocked: inventory_preimage_unresolved)"
             ),
+        )
+        grade.add_argument(
+            "--qualification-record",
+            type=Path,
+            help="spec 12.6.6 QualificationRecordV1 binding this report's bytes",
         )
         grade.add_argument("--output", type=Path, required=True)
     _trial_parsers(sub)

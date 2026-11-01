@@ -180,7 +180,7 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 不共享拉丁标识的中文内存泄漏请求仍未命中英文原始目标；这些诊断不证明翻译能力、
 语义质量或独立人工标注达标。开始使用工具不要求客户提供外部数据集或人工评审组。
 生产语义模型资格验证，以及已安装宿主的 M10 执行、审批、纠正演练仍是单独的工作；
-参见[当前状态](ROADMAP.md#m10--multilingual-asset-recommendations-spec-065)。
+参见[当前状态](ROADMAP.md#m10--multilingual-asset-recommendations-spec-066)。
 
 ## 整任务试验、适配回合与平台导出
 
@@ -267,7 +267,7 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 
 ## 已安装宿主上的早期试验与双语演示
 
-**早期已安装技能试验（#234）。** 在客户的 Apple M1 8 GiB 机器上运行
+**早期已安装技能试验（#234）。** 由所有者作为运营者在自己的 Apple M1 8 GiB MacBook 上运行
 `python scripts/asset_whole_task.py trial ... -- openclaw`。它依次完成以下步骤：
 
 1. 预检：macOS arm64、Apple M1、8 GiB 内存、环境锁、固定版本 OpenClaw 2026.10.7，
@@ -278,9 +278,9 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 5. 用现有 `grade-host` 离线评分。
 
 没有观测的行导出为 `not_run`（`observation_missing`）。`--interactive` 会先询问，输入 `skip` 得到
-`operator_skipped`。`provisional` 需要预检和安装都通过；工具从不产生 `qualified`。早期试验至多评为阻塞，
+`operator_skipped`。`provisional` 需要预检和安装都通过；工具自身从不产生 `qualified`，只有经评审批准的规范 0.66 第 12.6.6 节资格记录（`--qualification-record`）才能解除评审原因。早期试验至多评为阻塞，
 不能通过验收；`grade.json` 中各组的令牌与调用合计只是临时（provisional）基线成本。
-客户机器与会话、冻结的试验输入，以及从原生宿主记录得到的真实观测仍待提供。完整说明见英文版
+所有者机器上的会话、冻结的试验输入，以及从原生宿主记录得到的真实观测仍待提供。完整说明见英文版
 [试验工具](ASSET_BENCHMARK.md#early-installed-skill-trial-kit-234)。
 
 **双语演示录制（#238）。** `integrations/openclaw/test/host-walkthrough/record.py record`
@@ -293,5 +293,5 @@ en→en、zh→zh、zh→en、en→zh、混合查询、相近替代项、干扰�
 只有测试脚本自身的判定接受捕获、且该步骤有截图时，步骤才记为 `recorded`。录制的步骤包括推荐、选择、
 准确技能选择、纠正、查看、删除和清除。加载后的技能使用（#239）、MCP 使用和宿主 MCP 审批（#204）始终记为
 `blocked` 并给出固定原因，从不执行。级别为 `functional_fixture`：确定性网关与一次性夹具账号，
-不是客户或真人演示。截图与视频在评审前须保持私有。完整说明见英文版
+不是所有者或真人演示。截图与视频在评审前须保持私有。完整说明见英文版
 [录制工具](ASSET_BENCHMARK.md#bilingual-packaged-walkthrough-recorder-238)。

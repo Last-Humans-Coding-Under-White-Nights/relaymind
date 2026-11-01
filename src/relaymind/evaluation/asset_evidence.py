@@ -191,6 +191,17 @@ _GENERATOR_ANCHORS = {
     ),
     "docs/SPECIFICATION.md": frozenset(
         {
+            # Reviewed 0.66: platform records carry the corpus review; owner-only tuner waiver.
+            ("6b0c6ee476412a109db89cbbdd35648c0a4425ad03a8e4e0d9715711b722491a", 623442),
+            # Reviewed 0.66 with the precise negative-finding definitions.
+            ("8c00f5154b64da1f1ad00352aadea9cee419e4b96e24f757ec1cd812259abf13", 623250),
+            # Reviewed 0.66 with the #266 record input, scope and identity rules.
+            ("f4f70b0640207baf78442bd8c7596f23461c9319920adfd37effa29e1148ed51", 622923),
+            # Reviewed 0.66 with the LHCWN repository rename.
+            ("b5c3327b138e5bfedc3e9a5c3b5c1453509643a562f5ec6f324288672b9ca70d", 622172),
+            # Reviewed 0.66 owner-run acceptance profile and qualification record
+            # (with the 0.65 review clarifications of 7.6.2 and 14.5).
+            ("a5893a7de59a796319ba96788f0d4002174413acc3049b34e88ce1ac8741f1cc", 622204),
             # Reviewed 0.65 with the LHCWN repository rename.
             ("9d50d4a079999d9eee98772f9916f1f61c1b0c84440b0ecf2b8106be7dd87095", 610440),
             # Reviewed 0.65 skill-use/MCP fences and native configuration evidence.
