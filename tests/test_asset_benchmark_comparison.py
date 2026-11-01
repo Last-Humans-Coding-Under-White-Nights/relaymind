@@ -80,6 +80,32 @@ def test_confident_coverage_difference_uses_b_minus_a(tmp_path, http_example):
     assert overall["confident_coverage_difference"] == -1
 
 
+def test_confident_coverage_survives_a_modeled_slow_selector(tmp_path, http_example):
+    """RM40/AC31: fixture latency, not host scheduling, decides the primary timeout.
+
+    The fixture grants the configured deterministic budget, so a selector that
+    takes 0.3 s is still measured. With the production 150 ms primary phase
+    this run would time out on every host, not only on a loaded runner.
+    """
+    api = module("asset_benchmark")
+    url, captured = http_example
+    captured.mode = "confident"
+    captured.delay = 0.3
+    config = fixture_config(tmp_path, primary="http", url=url, repetitions=1, warmups=0)
+    report = asyncio.run(api.run_asset_benchmark(config))
+    row = report.data["results"][0]
+    assert row["status"] == "ready", row["reason"]
+    assert row["attempts"][0]["outcome"] == "ranked"
+    result = comparison(report, report, quality_only=True)
+    overall = next(
+        pair
+        for pair in result["paired"]
+        if pair["dimensions"]["lane"] == pair["dimensions"]["kind"] == "all"
+        and pair["dimensions"]["retrieval_mode"] == "service"
+    )
+    assert overall["a"]["confident_coverage"]["value"] == 1
+
+
 def test_confident_coverage_difference_stays_null_without_positive_cases(tmp_path):
     """RM40/AC31: absent coverage denominator cannot become a zero difference."""
     from test_asset_corpus import read, relock, write
@@ -741,10 +767,19 @@ def test_actual_failed_primary_floor_and_rejected_raw_result_remain_comparable(
     api = module("asset_benchmark")
     url, captured = http_example
     captured.mode = mode
+    # The timeout case owns its small primary deadline; the other modes must
+    # not be able to time out because the runner lost the CPU.
+    budget = {"total_ms": 500, "primary_ms": 150} if mode == "timeout" else {}
     report = asyncio.run(
         api.run_asset_benchmark(
             fixture_config(
-                tmp_path, primary="http", url=url, fallback=True, repetitions=1, warmups=0
+                tmp_path,
+                primary="http",
+                url=url,
+                fallback=True,
+                repetitions=1,
+                warmups=0,
+                **budget,
             )
         )
     )

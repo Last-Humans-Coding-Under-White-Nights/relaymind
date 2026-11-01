@@ -13,7 +13,6 @@ the real gateway over model doubles, without the checkout's sources or its
 import hashlib
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -367,24 +366,28 @@ CI_FILE = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ci
         ("pull_request", "feature", ["ubuntu-latest"]),
     ],
 )
-def test_ci_platform_matrix_for_each_event(job_name, event_name, base_ref, expected):
+def test_ci_platform_matrix_for_each_event(job_name, event_name, base_ref, expected, tmp_path):
     """RM33/AC24: stacked PRs save capacity; master PRs and pushes cover every OS."""
     import yaml
 
-    job = yaml.safe_load(CI_FILE.read_text("utf-8"))["jobs"][job_name]
-    # Parse the supported expression shape completely, including both JSON arms,
-    # then evaluate its condition with each event's actual context.
-    expression = re.fullmatch(
-        r"\$\{\{\s*fromJSON\(github\.event_name == '([^']+)'\s*"
-        r"&& github\.base_ref != '([^']+)'\s*&& '([^']+)'\s*"
-        r"\|\| '([^']+)'\)\s*\}\}",
-        job["strategy"]["matrix"]["os"],
-    )
-    assert expression is not None
-    event, base, if_true, if_false = expression.groups()
-    stacked, full = json.loads(if_true), json.loads(if_false)
-    actual = stacked if event_name == event and base_ref != base else full
-    assert actual == expected
+    workflow = yaml.safe_load(CI_FILE.read_text("utf-8"))
+    job = workflow["jobs"][job_name]
+    # Both jobs take their platforms from the plan job's output ...
+    assert job["needs"] == "plan"
+    assert job["strategy"]["matrix"]["os"] == "${{ fromJSON(needs.plan.outputs.os) }}"
+    # ... and the plan step's own script decides them for each event.
+    (step,) = workflow["jobs"]["plan"]["steps"]
+    assert step["env"] == {"EVENT": "${{ github.event_name }}", "BASE": "${{ github.base_ref }}"}
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash is required to run the plan step")
+    output = tmp_path / "github_output"
+    env = dict(os.environ, EVENT=event_name, BASE=base_ref, GITHUB_OUTPUT=str(output))
+    subprocess.run([bash, "-c", step["run"]], env=env, check=True, capture_output=True)
+    (line,) = output.read_text("utf-8").splitlines()
+    key, value = line.split("=", 1)
+    assert key == "os"
+    assert json.loads(value) == expected
 
 
 def test_ci_plugin_browser_is_cached_before_install():
